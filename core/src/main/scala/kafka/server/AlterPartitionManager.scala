@@ -29,7 +29,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.AlterPartitionRequestData
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
@@ -77,25 +76,14 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
+    alterPartitionChannelManager: BrokerToControllerChannelManager,
     scheduler: KafkaScheduler,
     time: Time,
-    metrics: Metrics,
-    threadNamePrefix: Option[String],
-    brokerEpochSupplier: () => Long,
+    brokerEpochSupplier: () => Long
   ): AlterPartitionManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
-    val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
-      time = time,
-      metrics = metrics,
-      config = config,
-      channelName = "alterPartition",
-      threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = Long.MaxValue
-    )
     new DefaultAlterPartitionManager(
-      controllerChannelManager = channelManager,
+      controllerChannelManager = alterPartitionChannelManager,
       scheduler = scheduler,
       time = time,
       brokerId = config.brokerId,

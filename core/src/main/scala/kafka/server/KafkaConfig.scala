@@ -1637,6 +1637,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     distinctRoles
   }
 
+  def isKRaftCoResidentMode: Boolean = {
+    processRoles == Set(BrokerRole, ControllerRole)
+  }
+
   def metadataLogDir: String = {
     Option(getString(KafkaConfig.MetadataLogDirProp)) match {
       case Some(dir) => dir
@@ -2164,7 +2168,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else if (processRoles == Set(BrokerRole, ControllerRole)) {
+    } else if (isKRaftCoResidentMode) {
       // KRaft colocated broker and controller
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()

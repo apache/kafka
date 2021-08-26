@@ -34,14 +34,14 @@ import kafka.security.CredentialProvider
 import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils, NodeApiVersions}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiVersionsResponse, ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
@@ -140,7 +140,7 @@ class KafkaServer(
 
   var clientToControllerChannelManager: BrokerToControllerChannelManager = null
 
-  var alterIsrManager: AlterPartitionManager = null
+  var alterPartitionManager: AlterPartitionManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -228,6 +228,9 @@ class KafkaServer(
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
+        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+        val currentNodeControllerApiVersions = Some(NodeApiVersions.create(ApiKeys.zkBrokerApis.asScala.map(ApiVersionsResponse.toApiVersion).asJava))
+
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
         config.dynamicConfig.initialize(Some(zkClient))
@@ -276,13 +279,15 @@ class KafkaServer(
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
         clientToControllerChannelManager = BrokerToControllerChannelManager(
-          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          controllerNodeProvider = controllerNodeProvider,
           time = time,
           metrics = metrics,
           config = config,
           channelName = "forwarding",
           threadNamePrefix = threadNamePrefix,
-          retryTimeoutMs = config.requestTimeoutMs.longValue)
+          retryTimeoutMs = config.requestTimeoutMs.longValue,
+          currentNodeControllerApiVersions
+        )
         clientToControllerChannelManager.start()
 
         /* start forwarding manager */
@@ -309,20 +314,29 @@ class KafkaServer(
         socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
         // Start alter partition manager based on the IBP version
-        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterPartitionSupported) {
+        alterPartitionManager = if (config.interBrokerProtocolVersion.isAlterPartitionSupported) {
+          val alterPartitionChannelManager = BrokerToControllerChannelManager(
+            controllerNodeProvider,
+            time = time,
+            metrics = metrics,
+            config = config,
+            channelName = "alterIsr",
+            threadNamePrefix = threadNamePrefix,
+            retryTimeoutMs = Long.MaxValue,
+            currentNodeControllerApiVersions
+          )
           AlterPartitionManager(
             config = config,
             metadataCache = metadataCache,
+            alterPartitionChannelManager,
             scheduler = kafkaScheduler,
             time = time,
-            metrics = metrics,
-            threadNamePrefix = threadNamePrefix,
             brokerEpochSupplier = () => kafkaController.brokerEpoch
           )
         } else {
           AlterPartitionManager(kafkaScheduler, time, zkClient)
         }
-        alterIsrManager.start()
+        alterPartitionManager.start()
 
         // Start replica manager
         _replicaManager = createReplicaManager(isShuttingDown)
@@ -478,7 +492,7 @@ class KafkaServer(
       quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = logDirFailureChannel,
-      alterPartitionManager = alterIsrManager,
+      alterPartitionManager = alterPartitionManager,
       brokerTopicStats = brokerTopicStats,
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
@@ -755,8 +769,8 @@ class KafkaServer(
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)
 
-        if (alterIsrManager != null)
-          CoreUtils.swallow(alterIsrManager.shutdown(), this)
+        if (alterPartitionManager != null)
+          CoreUtils.swallow(alterPartitionManager.shutdown(), this)
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
