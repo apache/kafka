@@ -19,7 +19,7 @@ package kafka.utils
 import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-import kafka.log.{LoadLogParams, LocalLog, Log, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
+import kafka.log.{LoadLogParams, LocalLog, UnifiedLog, LogConfig, LogLoader, LogManager, LogSegments, ProducerStateManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.TestUtils.retry
 import org.junit.jupiter.api.Assertions._
@@ -119,10 +119,10 @@ class SchedulerTest {
     val logConfig = LogConfig(new Properties())
     val brokerTopicStats = new BrokerTopicStats
     val maxProducerIdExpirationMs = 60 * 60 * 1000
-    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
@@ -140,7 +140,7 @@ class SchedulerTest {
       producerStateManager))
     val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
-    val log = new Log(logStartOffset = offsets.logStartOffset,
+    val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
       localLog = localLog,
       brokerTopicStats, LogManager.ProducerIdExpirationCheckIntervalMs,
       leaderEpochCache, producerStateManager,

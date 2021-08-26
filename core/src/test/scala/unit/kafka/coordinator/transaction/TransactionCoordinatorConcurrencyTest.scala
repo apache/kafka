@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.{Log, LogConfig}
+import kafka.log.{UnifiedLog, LogConfig}
 import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -458,7 +458,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
-    val logMock: Log =  EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog =  EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(logMock.config).andStubReturn(new LogConfig(Collections.emptyMap()))
 
     val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
