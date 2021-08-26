@@ -141,6 +141,9 @@ public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
 
+    private static final Set<Class<? extends Throwable>> EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS =
+        new HashSet<>(Arrays.asList(IllegalStateException.class, IllegalArgumentException.class));
+
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
     // of the co-location of stream thread's consumers. It is for internal
@@ -495,9 +498,25 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse getActionForThrowable(final Throwable throwable,
+                                                                                        final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action;
+        // Exception might we wrapped within a StreamsException one
+        if (EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getClass())
+            || (throwable.getCause() != null && EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getCause().getClass()))) {
+            // The exception should not be passed over to the user defined uncaught exception handler.
+            // Something unexpected happened, we should shut down the client
+            log.warn("Exception bypassed the user defined uncaught exception handler."); // No need to print the exception, it will be printed in the next log line.
+            action = SHUTDOWN_CLIENT;
+        } else {
+            action = streamsUncaughtExceptionHandler.handle(throwable);
+        }
+        return action;
+    }
+
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = getActionForThrowable(throwable, streamsUncaughtExceptionHandler);
         if (oldHandler) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                     "The old handler will be ignored as long as a new handler is set.");
