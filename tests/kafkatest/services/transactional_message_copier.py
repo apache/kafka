@@ -161,14 +161,14 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
-        wait_until(lambda: self.alive(node), timeout_sec=60, err_msg="Message Copier failed to start")
+        wait_until(lambda: self.alive(node), timeout_sec=60, err_msg="Node %s: Message Copier failed to start" % str(node.account))
 
     def kill_node(self, node, clean_shutdown=True):
         pids = self.pids(node)
         sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
         for pid in pids:
             node.account.signal(pid, sig)
-        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Message Copier failed to stop")
+        wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=60, err_msg="Node %s: Message Copier failed to stop" % str(node.account))
 
     def stop_node(self, node, clean_shutdown=True):
         self.kill_node(node, clean_shutdown)
