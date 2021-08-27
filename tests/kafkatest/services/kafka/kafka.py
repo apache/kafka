@@ -1148,13 +1148,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
 
         node = self.nodes[0]
-        force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
+        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --describe --under-replicated-partitions" % \
             self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection)
 
-        self.logger.debug("Running topic command to describe under-replicated-partitions\n%s" % cmd)
+        self.logger.debug("Running topic command to describe under-replicated partitions\n%s" % cmd)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
