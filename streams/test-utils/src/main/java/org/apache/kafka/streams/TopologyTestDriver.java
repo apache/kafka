@@ -512,7 +512,6 @@ public class TopologyTestDriver implements Closeable {
                 processorTopology,
                 consumer,
                 taskConfig,
-                StreamThread.eosEnabled(streamsConfig),
                 streamsMetrics,
                 stateDirectory,
                 cache,

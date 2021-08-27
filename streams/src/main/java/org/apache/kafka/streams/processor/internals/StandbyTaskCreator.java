@@ -161,7 +161,6 @@ class StandbyTaskCreator {
             inputPartitions,
             topology,
             topologyMetadata.getTaskConfigFor(taskId),
-            StreamThread.eosEnabled(applicationConfig),
             streamsMetrics,
             stateManager,
             stateDirectory,

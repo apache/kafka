@@ -1075,8 +1075,8 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
-    public StreamsConfig(final Map<?, ?> props,
-                         final boolean doLog) {
+    protected StreamsConfig(final Map<?, ?> props,
+                            final boolean doLog) {
         super(CONFIG, props, doLog);
         eosEnabled = StreamThread.eosEnabled(this);
 

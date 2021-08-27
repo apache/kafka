@@ -265,7 +265,6 @@ class ActiveTaskCreator {
             topology,
             consumer,
             topologyMetadata.getTaskConfigFor(taskId),
-            StreamThread.eosEnabled(applicationConfig),
             streamsMetrics,
             stateDirectory,
             cache,

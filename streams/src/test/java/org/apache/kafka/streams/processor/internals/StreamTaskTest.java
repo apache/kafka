@@ -57,6 +57,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
@@ -83,6 +85,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -99,6 +102,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_LATEST;
 import static org.apache.kafka.streams.processor.internals.StreamTask.encodeTimestamp;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
@@ -1593,7 +1597,7 @@ public class StreamTaskTest {
             mkSet(partition1, repartition),
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2179,7 +2183,7 @@ public class StreamTaskTest {
                 partitions,
                 topology,
                 consumer,
-                createConfig("100"),
+                new TopologyConfig(createConfig("100"), new Properties()).getTaskConfig(),
                 metrics,
                 stateDirectory,
                 cache,
@@ -2246,7 +2250,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2287,7 +2291,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2320,7 +2324,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2358,7 +2362,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2398,7 +2402,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, time),
             stateDirectory,
             cache,
@@ -2439,7 +2443,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
@@ -2478,7 +2482,7 @@ public class StreamTaskTest {
             singleton(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
@@ -2512,7 +2516,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,

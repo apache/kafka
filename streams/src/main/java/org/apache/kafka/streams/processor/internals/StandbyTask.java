@@ -57,7 +57,6 @@ public class StandbyTask extends AbstractTask implements Task {
                 final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
                 final TaskConfig config,
-                final boolean eosEnabled,
                 final StreamsMetricsImpl streamsMetrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory,
@@ -78,7 +77,7 @@ public class StandbyTask extends AbstractTask implements Task {
         processorContext.transitionToStandby(cache);
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
-        this.eosEnabled = eosEnabled;
+        this.eosEnabled = config.eosEnabled;
     }
 
     @Override

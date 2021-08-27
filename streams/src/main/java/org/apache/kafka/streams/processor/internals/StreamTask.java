@@ -118,7 +118,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
                       final TaskConfig config,
-                      final boolean eosEnabled,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
@@ -144,7 +143,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        this.eosEnabled = eosEnabled;
+        this.eosEnabled = config.eosEnabled;
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;
