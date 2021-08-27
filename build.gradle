@@ -751,6 +751,7 @@ project(':core') {
     compile libs.nettyTransportNativeEpoll
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
+    compile libs.guava
 
     compileOnly libs.log4j
 
