@@ -270,13 +270,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(false);
+        buildAndOptimizeTopology(null);
     }
 
-    public void buildAndOptimizeTopology(final boolean optimize) {
+    public void buildAndOptimizeTopology(final Properties props) {
 
         mergeDuplicateSourceNodes();
-        maybePerformOptimizations(optimize);
+        maybePerformOptimizations(props);
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
 
@@ -346,8 +346,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    private void maybePerformOptimizations(final boolean optimize) {
-        if (optimize) {
+    private void maybePerformOptimizations(final Properties props) {
+
+        if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG))) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             optimizeKTableSourceTopics();
             maybeOptimizeRepartitionOperations();
