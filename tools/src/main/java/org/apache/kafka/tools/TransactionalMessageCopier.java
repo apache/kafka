@@ -33,7 +33,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Exit;
@@ -361,7 +360,7 @@ public class TransactionalMessageCopier {
                             numMessagesProcessedSinceLastRebalance.getAndAdd(messagesSentWithinCurrentTxn);
                             totalMessageProcessed.getAndAdd(messagesSentWithinCurrentTxn);
                         }
-                    } catch (ProducerFencedException | OutOfOrderSequenceException e) {
+                    } catch (ProducerFencedException e) {
                         // We cannot recover from these errors, so just rethrow them and let the process fail
                         throw e;
                     } catch (KafkaException e) {
