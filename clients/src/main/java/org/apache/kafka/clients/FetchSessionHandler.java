@@ -280,9 +280,6 @@ public class FetchSessionHandler {
         }
 
         public FetchRequestData build() {
-            // For incremental sessions we don't have to worry about removed partitions when using topic IDs because we will either
-            //   a) already be using topic IDs and have the ID in the session
-            //   b) not be using topic IDs before and will close the session upon trying to use them
             boolean canUseTopicIds = partitionsWithoutTopicIds == 0;
 
             if (nextMetadata.isFull()) {
@@ -332,6 +329,9 @@ public class FetchSessionHandler {
                     iter.remove();
                     // Indicate that we no longer want to listen to this partition.
                     removed.add(topicPartition);
+                    // If we do not have this topic ID in the builder or the session, we can not use topic IDs.
+                    if (canUseTopicIds && !topicIds.containsKey(topicPartition.topic()) && !sessionTopicIds.containsKey(topicPartition.topic()))
+                        canUseTopicIds = false;
                 }
             }
             // Add any new partitions to the session.
