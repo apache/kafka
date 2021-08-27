@@ -107,45 +107,51 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
-  val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
 
-  val localRetentionMs: Long = {
-    val localLogRetentionMs = getLong(LogConfig.LocalLogRetentionMsProp)
+  class RemoteLogConfig {
+    val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
 
-    // -2 indicates to derive value from retentionMs property.
-    if(localLogRetentionMs == -2) retentionMs
-    else {
-      // Added validation here to check the effective value should not be more than RetentionMs.
-      if(localLogRetentionMs == -1 && retentionMs != -1) {
-        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+    val localRetentionMs: Long = {
+      val localLogRetentionMs = getLong(LogConfig.LocalLogRetentionMsProp)
+
+      // -2 indicates to derive value from retentionMs property.
+      if(localLogRetentionMs == -2) retentionMs
+      else {
+        // Added validation here to check the effective value should not be more than RetentionMs.
+        if(localLogRetentionMs == -1 && retentionMs != -1) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+        }
+
+        if (localLogRetentionMs > retentionMs) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be more than property: ${LogConfig.RetentionMsProp} value.")
+        }
+
+        localLogRetentionMs
       }
+    }
 
-      if (localLogRetentionMs > retentionMs) {
-        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be more than property: ${LogConfig.RetentionMsProp} value.")
+    val localRetentionBytes: Long = {
+      val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
+
+      // -2 indicates to derive value from retentionSize property.
+      if(localLogRetentionBytes == -2) retentionSize
+      else {
+        // Added validation here to check the effective value should not be more than RetentionBytes.
+        if(localLogRetentionBytes == -1 && retentionSize != -1) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
+        }
+
+        if (localLogRetentionBytes > retentionSize) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
+        }
+
+        localLogRetentionBytes
       }
-
-      localLogRetentionMs
     }
   }
 
-  val localRetentionBytes: Long = {
-    val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
-
-    // -2 indicates to derive value from retentionSize property.
-    if(localLogRetentionBytes == -2) retentionSize;
-    else {
-      // Added validation here to check the effective value should not be more than RetentionBytes.
-      if(localLogRetentionBytes == -1 && retentionSize != -1) {
-        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
-      }
-
-      if (localLogRetentionBytes > retentionSize) {
-        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
-      }
-
-      localLogRetentionBytes
-    }
-  }
+  private val _remoteLogConfig = new RemoteLogConfig()
+  def remoteLogConfig = _remoteLogConfig
 
   @nowarn("cat=deprecation")
   def recordVersion = messageFormatVersion.recordVersion
