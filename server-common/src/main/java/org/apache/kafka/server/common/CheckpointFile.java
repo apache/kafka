@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * This class represents a utility to capture a snapshot in a file. It writes down to the file in the below format.
+ * This class represents a utility to capture a checkpoint in a file. It writes down to the file in the below format.
  *
  * ========= File beginning =========
  * version: int
@@ -45,12 +45,12 @@ import java.util.Optional;
  * entry-as-string-on-each-line
  * ========= File end ===============
  *
- * Each entry is represented as a string on each line in the snapshot file. {@link EntryFormatter} is used
+ * Each entry is represented as a string on each line in the checkpoint file. {@link EntryFormatter} is used
  * to convert the entry into a string and vice versa.
  *
  * @param <T> entry type.
  */
-public class SnapshotFile<T> {
+public class CheckpointFile<T> {
 
     private final int version;
     private final EntryFormatter<T> formatter;
@@ -58,9 +58,9 @@ public class SnapshotFile<T> {
     private final Path absolutePath;
     private final Path tempPath;
 
-    public SnapshotFile(File file,
-                        int version,
-                        EntryFormatter<T> formatter) {
+    public CheckpointFile(File file,
+                          int version,
+                          EntryFormatter<T> formatter) {
         this.version = version;
         this.formatter = formatter;
         try {

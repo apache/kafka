@@ -18,23 +18,23 @@ package kafka.server.checkpoints
 
 import kafka.server.LogDirFailureChannel
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.server.common.SnapshotFile
-import org.apache.kafka.server.common.SnapshotFile.EntryFormatter
+import org.apache.kafka.server.common.CheckpointFile
+import CheckpointFile.EntryFormatter
 
 import java.io._
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
-class CheckpointFile[T](val file: File,
-                        version: Int,
-                        formatter: EntryFormatter[T],
-                        logDirFailureChannel: LogDirFailureChannel,
-                        logDir: String) {
-  private val snapshotFile = new SnapshotFile[T](file, version, formatter)
+class CheckpointFileWithFailureHandler[T](val file: File,
+                                          version: Int,
+                                          formatter: EntryFormatter[T],
+                                          logDirFailureChannel: LogDirFailureChannel,
+                                          logDir: String) {
+  private val checkpointFile = new CheckpointFile[T](file, version, formatter)
 
   def write(entries: Iterable[T]): Unit = {
       try {
-        snapshotFile.write(entries.toSeq.asJava);
+        checkpointFile.write(entries.toSeq.asJava)
       } catch {
         case e: IOException =>
           val msg = s"Error while writing to checkpoint file ${file.getAbsolutePath}"
@@ -45,7 +45,7 @@ class CheckpointFile[T](val file: File,
 
   def read(): Seq[T] = {
       try {
-        snapshotFile.read().asScala
+        checkpointFile.read().asScala
       } catch {
         case e: IOException =>
           val msg = s"Error while reading checkpoint file ${file.getAbsolutePath}"
