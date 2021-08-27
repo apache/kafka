@@ -628,9 +628,9 @@ class KafkaController(val config: KafkaConfig,
       topicDeletionManager.failReplicaDeletion(newOfflineReplicasForDeletion)
     }
 
-    // If replica failure did not require leader re-election, inform brokers of the offline brokers
+    // If no partitions are affected, inform brokers of the offline brokers
     // Note that during leader re-election, brokers update their metadata
-    if (newOfflineReplicas.isEmpty) {
+    if (newOfflineReplicas.isEmpty || (newOfflineReplicasNotForDeletion.isEmpty && partitionsWithOfflineLeader.isEmpty)) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
   }
