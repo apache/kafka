@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -937,16 +938,23 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldOverrideGlobalStreamsConfigWithTopologyProps() {
+    public void shouldOverrideGlobalStreamsConfigWithNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
+        topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
+        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        builder.setNamedTopology(new NamedTopology("test-topology"));
         builder.setTopologyProperties(topologyOverrides);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
 
         assertThat(topologyBuilder.topologyConfig().getTaskConfig().maxTaskIdleMs, equalTo(500L));
+        assertThat(topologyBuilder.topologyConfig().getTaskConfig().taskTimeoutMs, equalTo(1000L));
+        assertThat(topologyBuilder.topologyConfig().getTaskConfig().maxBufferedSize, equalTo(15));
+        assertThat(topologyBuilder.topologyConfig().getTaskConfig().timestampExtractor.getClass(), equalTo(MockTimestampExtractor.class));
         assertThat(topologyBuilder.topologyConfig().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
     }
 

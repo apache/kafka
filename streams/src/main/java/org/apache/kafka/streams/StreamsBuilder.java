@@ -75,13 +75,13 @@ public class StreamsBuilder {
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {
-        topology = getNewTopology();
-        internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        this(new Topology());
     }
 
-    protected Topology getNewTopology() {
-        return new Topology();
+    protected StreamsBuilder(final Topology topology) {
+        this.topology = topology;
+        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
     /**

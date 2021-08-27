@@ -17,21 +17,17 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Properties;
 
 public class NamedTopologyStreamsBuilder extends StreamsBuilder {
-    final String topologyName;
-
     /**
      * @param topologyName  any string representing your NamedTopology, all characters allowed except for "__"
      * @throws IllegalArgumentException if the name contains the character sequence "__"
      */
     public NamedTopologyStreamsBuilder(final String topologyName) {
-        super();
-        this.topologyName = topologyName;
+        super(new NamedTopology(topologyName));
         if (topologyName.contains(TaskId.NAMED_TOPOLOGY_DELIMITER)) {
             throw new IllegalArgumentException("The character sequence '__' is not allowed in a NamedTopology, please select a new name");
         }
@@ -39,13 +35,6 @@ public class NamedTopologyStreamsBuilder extends StreamsBuilder {
 
     public synchronized NamedTopology buildNamedTopology(final Properties props) {
         super.build(props);
-        final NamedTopology namedTopology = (NamedTopology) super.topology;
-        namedTopology.setTopologyName(topologyName);
-        return namedTopology;
-    }
-
-    @Override
-    public Topology getNewTopology() {
-        return new NamedTopology();
+        return (NamedTopology) super.topology;
     }
 }

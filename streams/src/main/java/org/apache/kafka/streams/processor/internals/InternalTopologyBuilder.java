@@ -342,7 +342,6 @@ public class InternalTopologyBuilder {
         }
     }
 
-
     public void setNamedTopology(final NamedTopology topology) {
         final String topologyName = topology.name();
         Objects.requireNonNull(topologyName, "topology name can't be null");
