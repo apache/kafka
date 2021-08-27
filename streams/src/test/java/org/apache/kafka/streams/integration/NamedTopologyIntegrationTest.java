@@ -73,7 +73,7 @@ import static java.util.Collections.singletonList;
 public class NamedTopologyIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    // TODO KAFKA-12648: Pt.4
+    // TODO KAFKA-12648:
     //  1) full test coverage for add/removeNamedTopology, covering:
     //      - the "last topology removed" case
     //      - test using multiple clients, with standbys
