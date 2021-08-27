@@ -30,7 +30,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Collections;
-import java.util.Properties;
 
 /**
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
@@ -83,7 +82,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String topicName;
         if (topicNames().isPresent()) {
             final Iterator<String> topicNames = topicNames().get().iterator();
