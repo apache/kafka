@@ -1126,7 +1126,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.ssh(cmd)
 
     def has_under_replicated_partitions(self):
-        """Check whether the cluster has under-replicated partitions.
+        """
+        Check whether the cluster has under-replicated partitions.
+
         :return True if there are under-replicated partitions, False otherwise.
         """
         return len(self.describe_under_replicated_partitions()) > 0
@@ -1134,6 +1136,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def await_no_under_replicated_partitions(self, timeout_sec=30):
         """
         Wait for all under-replicated partitions to clear.
+
         :param timeout_sec: the maximum time in seconds to wait
         """
         wait_until(lambda: not self.has_under_replicated_partitions(),
@@ -1143,6 +1146,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_under_replicated_partitions(self):
         """
         Use the topic tool to find the under-replicated partitions in the cluster.
+
         :return the under-replicated partitions as a list of dictionaries
                 (e.g. [{"topic": "foo", "partition": 1}, {"topic": "bar", "partition": 0}, ... ])
         """
