@@ -54,22 +54,27 @@ public class TopologyConfig extends AbstractConfig {
         CONFIG = new ConfigDef()
              .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                      Type.INT,
+                     null,
                      Importance.LOW,
                      BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
              .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                      Type.CLASS,
+                     null,
                      Importance.MEDIUM,
                      DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
              .define(MAX_TASK_IDLE_MS_CONFIG,
                      Type.LONG,
+                     null,
                      Importance.MEDIUM,
                      MAX_TASK_IDLE_MS_DOC)
              .define(TASK_TIMEOUT_MS_CONFIG,
                      Type.LONG,
+                     null,
                      Importance.MEDIUM,
                      TASK_TIMEOUT_MS_DOC);
     }
