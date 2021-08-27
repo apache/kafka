@@ -84,7 +84,7 @@ public class DescribeTopicsResult {
      * @return a map from topic names to futures which can be used to check the status of
      *         individual topics if the request used topic names, otherwise return null.
      *
-     * @deprecated Since 3.0 use {@link #topicNameValues} instead
+     * @deprecated Since 3.1.0 use {@link #topicNameValues} instead
      */
     @Deprecated
     public Map<String, KafkaFuture<TopicDescription>> values() {
@@ -97,7 +97,7 @@ public class DescribeTopicsResult {
      *         topic names, otherwise return null, this request succeeds only if all the
      *         topic descriptions succeed
      *
-     * @deprecated Since 3.0 use {@link #allTopicNames()} instead
+     * @deprecated Since 3.1.0 use {@link #allTopicNames()} instead
      */
     @Deprecated
     public KafkaFuture<Map<String, TopicDescription>> all() {
