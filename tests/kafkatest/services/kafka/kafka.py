@@ -1136,7 +1136,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Wait for all under-replicated partitions to clear.
         :param timeout_sec: the maximum time in seconds to wait
         """
-        wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
+        wait_until(lambda: not self.has_under_replicated_partitions(),
                    timeout_sec = timeout_sec,
                    err_msg="Timed out waiting for under-replicated-partitions to clear")
 
