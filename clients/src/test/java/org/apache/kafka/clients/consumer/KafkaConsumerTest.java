@@ -1938,7 +1938,7 @@ public class KafkaConsumerTest {
 
         final Metric metric = consumer.metrics()
             .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
-        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test
@@ -1967,7 +1967,7 @@ public class KafkaConsumerTest {
 
         final Metric metric = consumer.metrics()
             .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
-        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test
@@ -1982,7 +1982,7 @@ public class KafkaConsumerTest {
 
         final Metric metric = consumer.metrics()
             .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
-        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test
@@ -2013,7 +2013,7 @@ public class KafkaConsumerTest {
 
         final Metric metric = consumer.metrics()
             .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
-        assertTrue((Double)metric.metricValue() >= Duration.ofMillis(999).toNanos());
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test
