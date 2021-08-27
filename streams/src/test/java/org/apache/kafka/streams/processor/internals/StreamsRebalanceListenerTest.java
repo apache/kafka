@@ -79,6 +79,7 @@ public class StreamsRebalanceListenerTest {
     @Test
     public void shouldSwallowVersionProbingError() {
         expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(State.PARTITIONS_REVOKED);
+        expect(taskManager.overwroteMaxBufferSize()).andStubReturn(false);
         streamThread.setPartitionAssignedTime(time.milliseconds());
         taskManager.handleRebalanceComplete();
         replay(taskManager, streamThread);
@@ -131,6 +132,8 @@ public class StreamsRebalanceListenerTest {
     public void shouldHandleAssignedPartitions() {
         taskManager.handleRebalanceComplete();
         expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andReturn(State.RUNNING);
+        expect(taskManager.overwroteMaxBufferSize()).andStubReturn(false);
+
         streamThread.setPartitionAssignedTime(time.milliseconds());
 
         replay(taskManager, streamThread);

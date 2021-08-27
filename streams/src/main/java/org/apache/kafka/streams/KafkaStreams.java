@@ -84,6 +84,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -157,7 +159,7 @@ public class KafkaStreams implements AutoCloseable {
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
-    private final long totalCacheSize;
+    protected long totalCacheSize;
     private final StreamStateListener streamStateListener;
     private final StateRestoreListener delegatingStateRestoreListener;
     private final Map<Long, StreamThread.State> threadState;
@@ -172,6 +174,7 @@ public class KafkaStreams implements AutoCloseable {
     private boolean oldHandler;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
+    private ConcurrentMap<String, Long> totalThreadCache;
 
     // container states
     /**
@@ -839,7 +842,7 @@ public class KafkaStreams implements AutoCloseable {
                          final Time time) throws StreamsException {
         this.config = config;
         this.time = time;
-
+        this.totalThreadCache = new ConcurrentHashMap<>();
         this.topologyMetadata = topologyMetadata;
         this.topologyMetadata.buildAndRewriteTopology();
 
@@ -1204,9 +1207,15 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void resizeThreadCache(final long cacheSizePerThread) {
-        processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
-        if (globalStreamThread != null) {
-            globalStreamThread.resize(cacheSizePerThread);
+        if (!topologyMetadata.overwroteMaxBufferSize()) {
+            processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
+            if (globalStreamThread != null) {
+                globalStreamThread.resize(cacheSizePerThread);
+            }
+        } else {
+            //cache already resized at each rebalance, just need to pick up the changes
+            processStreamThread(thread -> totalThreadCache.put(thread.getName(), thread.cacheSize()));
+            totalCacheSize = totalThreadCache.values().stream().reduce(0L, Long::sum);
         }
     }
 

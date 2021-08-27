@@ -93,6 +93,7 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
+    private Map<String, Long> tasksTotalMaxBuffer;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -114,7 +115,7 @@ public class TaskManager {
         this.stateDirectory = stateDirectory;
         this.processingMode = processingMode;
         this.tasks = new Tasks(logPrefix, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
-
+        this.tasksTotalMaxBuffer = new HashMap<>();
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
     }
@@ -151,7 +152,24 @@ public class TaskManager {
 
         releaseLockedUnassignedTaskDirectories();
 
+        if (topologyMetadata.hasNamedTopologies()) {
+            for (final Task task : tasks.allTasks()) {
+                tasksTotalMaxBuffer.put(
+                    task.id().topologyName(),
+                    task.maxBuffer() + tasksTotalMaxBuffer.getOrDefault(task.id().topologyName(), 0L)
+                );
+            }
+        }
+
         rebalanceInProgress = false;
+    }
+
+    boolean overwroteMaxBufferSize() {
+        return topologyMetadata.overwroteMaxBufferSize();
+    }
+
+    Map<String, Long> tasksTotalMaxBuffer() {
+        return tasksTotalMaxBuffer;
     }
 
     /**

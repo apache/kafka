@@ -29,6 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
@@ -43,7 +44,7 @@ public class ThreadCache {
     // internal stats
     private long numPuts = 0;
     private long numGets = 0;
-    private long numEvicts = 0;
+    private AtomicLong numEvicts = new AtomicLong(0);
     private long numFlushes = 0;
 
     public interface DirtyEntryFlushListener {
@@ -65,7 +66,7 @@ public class ThreadCache {
     }
 
     public long evicts() {
-        return numEvicts;
+        return numEvicts.get();
     }
 
     public long flushes() {
@@ -84,10 +85,31 @@ public class ThreadCache {
             while (sizeBytes() > maxCacheSizeBytes) {
                 final NamedCache cache = circularIterator.next();
                 cache.evict();
-                numEvicts++;
+                numEvicts.incrementAndGet();
             }
         } else {
             log.debug("Cache size was expanded to {}", newCacheSizeBytes);
+        }
+    }
+
+    public synchronized void resize(final Map<String, Long> newCacheSizes) {
+        maxCacheSizeBytes = newCacheSizes.values().stream().reduce(0L, Long::sum);
+        log.debug("Cache size was changed to {}", newCacheSizes);
+        for (final Map.Entry<String, Long> taskMaxSize: newCacheSizes.entrySet()) {
+            for (final Map.Entry<String, NamedCache> cache: caches.entrySet()) {
+                if (cache.getKey().contains(taskMaxSize.getKey())) {
+                    cache.getValue().setMaxBytes(taskMaxSize.getValue());
+                }
+            }
+        }
+        if (caches.values().isEmpty()) {
+            return;
+        }
+        final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+        while (sizeBytes() > maxCacheSizeBytes) {
+            final NamedCache cache = circularIterator.next();
+            cache.evict();
+            numEvicts.incrementAndGet();
         }
     }
 
@@ -270,7 +292,7 @@ public class ThreadCache {
                 return;
             }
             cache.evict();
-            numEvicts++;
+            numEvicts.incrementAndGet();
             numEvicted++;
         }
         if (log.isTraceEnabled()) {

@@ -1225,6 +1225,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return timeCurrentIdlingStarted;
     }
 
+    @Override
+    public long maxBuffer() {
+        return 0;
+    }
+
     public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
         committedOffsets.put(topicPartition, offset);
     }

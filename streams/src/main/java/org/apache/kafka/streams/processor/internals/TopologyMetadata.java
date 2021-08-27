@@ -65,6 +65,7 @@ public class TopologyMetadata {
     private ProcessorTopology globalTopology;
     private final Map<String, StateStore> globalStateStores = new HashMap<>();
     private final Set<String> allInputTopics = new HashSet<>();
+    private final boolean maxBufferSize = false;
 
     public static class TopologyVersion {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
@@ -231,6 +232,14 @@ public class TopologyMetadata {
      */
     public boolean hasNamedTopologies() {
         return !builders.containsKey(UNNAMED_TOPOLOGY);
+    }
+
+    /**
+     * @return true iff the app is using named topologies, or was started up with no topology at all
+     * and the max buffer was set for the named topologies
+     */
+    public boolean overwroteMaxBufferSize() {
+        return hasNamedTopologies() && maxBufferSize;
     }
 
     Set<String> namedTopologiesView() {

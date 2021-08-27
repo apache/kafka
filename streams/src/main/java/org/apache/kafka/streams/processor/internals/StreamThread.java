@@ -59,6 +59,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -296,7 +297,7 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
     private final TopologyMetadata topologyMetadata;
-    private final java.util.function.Consumer<Long> cacheResizer;
+    private final ThreadCache threadCache;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private final Runnable shutdownErrorHook;
@@ -309,6 +310,7 @@ public class StreamThread extends Thread {
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
+    private Map<String, Long> cacheSizes;
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -422,7 +424,7 @@ public class StreamThread extends Thread {
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize
+            cache
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -482,7 +484,7 @@ public class StreamThread extends Thread {
                         final AtomicLong nextProbingRebalanceMs,
                         final Runnable shutdownErrorHook,
                         final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final ThreadCache threadCache) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -502,7 +504,8 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.cacheResizer = cacheResizer;
+        this.threadCache = threadCache;
+        cacheSizes = new ConcurrentHashMap<>();
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -582,7 +585,11 @@ public class StreamThread extends Thread {
                 maybeSendShutdown();
                 final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
-                    cacheResizer.accept(size);
+                    if (taskManager.overwroteMaxBufferSize()) {
+                        threadCache.resize(cacheSizes);
+                    } else {
+                        threadCache.resize(size);
+                    }
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -696,6 +703,15 @@ public class StreamThread extends Thread {
 
     public void resizeCache(final long size) {
         cacheResizeSize.set(size);
+    }
+
+    public void resizeCache(final Map<String, Long> sizes) {
+        cacheResizeSize.set(sizes.values().stream().reduce(0L, Long::sum));
+        cacheSizes = sizes;
+    }
+
+    public long cacheSize() {
+        return cacheResizeSize.get();
     }
 
     /**

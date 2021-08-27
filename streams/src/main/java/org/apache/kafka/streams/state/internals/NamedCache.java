@@ -45,6 +45,7 @@ class NamedCache {
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
+    private long maxBytes;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor hitRatioSensor;
@@ -55,7 +56,7 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
+    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics, final long maxBytes) {
         this.name = name;
         this.streamsMetrics = streamsMetrics;
         storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
@@ -66,6 +67,22 @@ class NamedCache {
             taskName,
             storeName
         );
+        this.maxBytes = maxBytes;
+    }
+
+    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
+        this(name, streamsMetrics, -1);
+    }
+
+    synchronized void setMaxBytes(final long maxBytes) {
+        this.maxBytes = maxBytes;
+        maybeEvict();
+    }
+
+    private void maybeEvict() {
+        while (currentSizeBytes < maxBytes && maxBytes >= 0) {
+            evict();
+        }
     }
 
     synchronized final String name() {
@@ -182,6 +199,7 @@ class NamedCache {
             dirtyKeys.add(key);
         }
         currentSizeBytes += node.size();
+        maybeEvict();
     }
 
     synchronized long sizeInBytes() {

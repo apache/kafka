@@ -247,4 +247,6 @@ public interface Task {
      * @return This returns the time the task started idling. If it is not idling it returns empty.
      */
     Optional<Long> timeCurrentIdlingStarted();
+
+    long maxBuffer();
 }

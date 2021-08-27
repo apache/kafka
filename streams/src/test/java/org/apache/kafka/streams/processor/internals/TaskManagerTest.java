@@ -3480,6 +3480,11 @@ public class TaskManagerTest {
         }
 
         @Override
+        public long maxBuffer() {
+            return 0;
+        }
+
+        @Override
         public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
             if (isActive()) {
                 final Deque<ConsumerRecord<byte[], byte[]>> partitionQueue =
