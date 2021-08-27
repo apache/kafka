@@ -472,6 +472,32 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   }
 
   @Test
+  def testDescribeSortByName(): Unit = {
+    //topic1 -> topic-03, topic2 -> topic-02, topic3 -> topic-01
+    //Create topics in the order of 03 02 01
+    val topic1 = "topic-03"
+    val topic2 = "topic-02"
+    val topic3 = "topic-01"
+    adminClient.createTopics(
+      List (new NewTopic(topic1, 1, 2.toShort),
+        new NewTopic(topic2, 1, 2.toShort),
+        new NewTopic(topic3, 1, 2.toShort)).asJavaCollection)
+      .all().get()
+    waitForTopicCreated(topic1)
+    waitForTopicCreated(topic2)
+    waitForTopicCreated(topic3)
+
+    val output = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array())))
+    val rows = output.split("\n")
+    assertEquals(6, rows.size)
+    //Output in the order of 01 02 03
+    assertTrue(rows(0).startsWith(s"Topic: topic-01"))
+    assertTrue(rows(2).startsWith(s"Topic: topic-02"))
+    assertTrue(rows(4).startsWith(s"Topic: topic-03"))
+  }
+
+  @Test
   def testDescribeWhenTopicDoesntExist(): Unit = {
     assertThrows(classOf[IllegalArgumentException],
       () => topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
@@ -680,8 +706,8 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
-      assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
-      assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
+      assertTrue(rows(0).startsWith(s"\tTopic: $offlineTopic"))
+      assertTrue(rows(1).startsWith(s"\tTopic: $underMinIsrTopic"))
       assertEquals(2, rows.length)
     } finally {
       restartDeadBrokers()
