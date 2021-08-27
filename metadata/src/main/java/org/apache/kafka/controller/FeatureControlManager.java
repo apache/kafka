@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -28,9 +29,13 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.UpdateFeaturesRequest;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.FeatureMap;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
@@ -42,10 +47,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 
 
 public class FeatureControlManager {
-    /**
-     * An immutable map containing the features supported by this controller's software.
-     */
-    private final Map<String, VersionRange> supportedFeatures;
 
     /**
      * Maps feature names to finalized version ranges.
@@ -54,18 +55,34 @@ public class FeatureControlManager {
 
     FeatureControlManager(Map<String, VersionRange> supportedFeatures,
                           SnapshotRegistry snapshotRegistry) {
-        this.supportedFeatures = supportedFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
+        finalizedVersions.putAll(supportedFeatures);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
-            Map<String, VersionRange> updates, Set<String> downgradeables,
-            Map<Integer, Map<String, VersionRange>> brokerFeatures) {
+        UpdateFeaturesRequestData.FeatureUpdateKeyCollection updates,
+        Map<Integer, Map<String, VersionRange>> brokerFeatures
+    ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : updates.entrySet()) {
-            results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                downgradeables.contains(entry.getKey()), brokerFeatures, records));
+
+        for (UpdateFeaturesRequestData.FeatureUpdateKey update : updates) {
+            VersionRange existingVersionRange = finalizedVersions.get(update.feature());
+            if (update.feature().isEmpty())
+                // Check that the feature name is not empty.
+                results.put(update.feature(),
+                    new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."));
+            else if (existingVersionRange == null)
+                results.put(update.feature(), new ApiError(Errors.INVALID_UPDATE_VERSION,
+                    "The controller does not support the given feature range."));
+            else
+                results.put(update.feature(), updateFeature(
+                    update.feature(),
+                    new VersionRange(existingVersionRange.min(), update.maxVersionLevel()),
+                    update.allowDowngrade(),
+                    brokerFeatures,
+                    records
+                ));
         }
 
         return ControllerResult.atomicOf(records, results);
@@ -84,7 +101,7 @@ public class FeatureControlManager {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The upper value for the new range cannot be less than 1.");
         }
-        VersionRange localRange = supportedFeatures.get(featureName);
+        VersionRange localRange = finalizedVersions.get(featureName);
         if (localRange == null || !localRange.contains(newRange)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The controller does not support the given feature range.");

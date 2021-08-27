@@ -40,6 +40,10 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -54,6 +58,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
@@ -83,6 +88,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -201,7 +207,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
@@ -1323,6 +1328,30 @@ public final class QuorumController implements Controller {
             .thenApply(result -> new AllocateProducerIdsResponseData()
                     .setProducerIdStart(result.producerIdStart())
                     .setProducerIdLen(result.producerIdLen()));
+    }
+
+    @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(UpdateFeaturesRequestData request) {
+        Map<Integer, Map<String, VersionRange>> brokerFeatures = new HashMap<>();
+        clusterControl.brokerRegistrations().forEach((key, value) -> brokerFeatures.put(key, value.supportedFeatures()));
+
+        return appendWriteEvent("updateFeatures",
+            () -> featureControl.updateFeatures(request.featureUpdates(), brokerFeatures)
+        ).thenApply(updateErrors -> {
+            UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+            for (Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+                String feature = updateError.getKey();
+                ApiError error = updateError.getValue();
+                UpdatableFeatureResult result = new UpdatableFeatureResult();
+                result.setFeature(feature)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message());
+                results.add(result);
+            }
+            return new UpdateFeaturesResponseData()
+                .setResults(results);
+            }
+        );
     }
 
     @Override

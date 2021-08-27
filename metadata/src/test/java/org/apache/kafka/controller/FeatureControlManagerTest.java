@@ -23,6 +23,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKeyCollection;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -41,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
-    @SuppressWarnings("unchecked")
+
     private static Map<String, VersionRange> rangeMap(Object... args) {
         Map<String, VersionRange> result = new HashMap<>();
         for (int i = 0; i < args.length; i += 3) {
@@ -49,6 +52,20 @@ public class FeatureControlManagerTest {
             Integer low = (Integer) args[i + 1];
             Integer high = (Integer) args[i + 2];
             result.put(feature, new VersionRange(low.shortValue(), high.shortValue()));
+        }
+        return result;
+    }
+
+    private static FeatureUpdateKeyCollection featureUpdateKeys(Object... args) {
+        FeatureUpdateKeyCollection result = new FeatureUpdateKeyCollection();
+        for (int i = 0; i < args.length; i += 3) {
+            String feature = (String) args[i];
+            Integer max = (Integer) args[i + 1];
+            Boolean downgradable = (Boolean) args[i + 2];
+            result.add(new FeatureUpdateKey()
+                .setFeature(feature)
+                .setMaxVersionLevel(max.shortValue())
+                .setAllowDowngrade(downgradable));
         }
         return result;
     }
@@ -64,12 +81,10 @@ public class FeatureControlManagerTest {
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature range."))),
-            manager.updateFeatures(rangeMap("foo", 1, 3),
-                Collections.singleton("foo"),
+            manager.updateFeatures(featureUpdateKeys("foo", 3, true),
                 Collections.emptyMap()));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
-            rangeMap("foo", 1, 2, "bar", 1, 1), Collections.emptySet(),
-                Collections.emptyMap());
+            featureUpdateKeys("foo", 2, false, "bar", 1, false), Collections.emptyMap());
         Map<String, ApiError> expectedMap = new HashMap<>();
         expectedMap.put("foo", ApiError.NONE);
         expectedMap.put("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -106,6 +121,23 @@ public class FeatureControlManagerTest {
             ControllerResult.atomicOf(
                 Collections.emptyList(),
                 Collections.singletonMap(
+                    "",
+                    new ApiError(
+                        Errors.INVALID_REQUEST,
+                        "Feature name can not be empty."
+                    )
+                )
+            ),
+            manager.updateFeatures(
+                featureUpdateKeys("", 3, true),
+                Collections.singletonMap(5, rangeMap())
+            )
+        );
+
+        assertEquals(
+            ControllerResult.atomicOf(
+                Collections.emptyList(),
+                Collections.singletonMap(
                     "foo",
                     new ApiError(
                         Errors.INVALID_UPDATE_VERSION,
@@ -114,14 +146,13 @@ public class FeatureControlManagerTest {
                 )
             ),
             manager.updateFeatures(
-                rangeMap("foo", 1, 3),
-                Collections.singleton("foo"),
+                featureUpdateKeys("foo", 3, true),
                 Collections.singletonMap(5, rangeMap())
             )
         );
 
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
-            rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
+            featureUpdateKeys("foo", 3, true), Collections.emptyMap());
         assertEquals(Collections.singletonMap("foo", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
         snapshotRegistry.getOrCreateSnapshot(3);
@@ -130,8 +161,8 @@ public class FeatureControlManagerTest {
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "Can't downgrade the maximum version of this feature without " +
                     "setting downgradable to true."))),
-            manager.updateFeatures(rangeMap("foo", 1, 2),
-                Collections.emptySet(), Collections.emptyMap()));
+            manager.updateFeatures(featureUpdateKeys("foo", 2, false),
+                Collections.emptyMap()));
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -147,8 +178,7 @@ public class FeatureControlManagerTest {
                 Collections.singletonMap("foo", ApiError.NONE)
             ),
             manager.updateFeatures(
-                rangeMap("foo", 1, 2),
-                Collections.singleton("foo"),
+                featureUpdateKeys("foo", 2, true),
                 Collections.emptyMap()
             )
         );
@@ -160,8 +190,8 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
         ControllerResult<Map<String, ApiError>> result = manager.
-            updateFeatures(rangeMap("foo", 1, 5, "bar", 1, 1),
-                Collections.emptySet(), Collections.emptyMap());
+            updateFeatures(featureUpdateKeys("foo", 5, false, "bar", 1, true),
+                Collections.emptyMap());
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -174,4 +204,6 @@ public class FeatureControlManagerTest {
                 setMaxFeatureLevel((short) 1), (short) 0))),
             manager.iterator(Long.MAX_VALUE));
     }
+
+    // TODO test
 }

@@ -108,6 +108,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
+        case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -183,7 +184,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         throw new TopicDeletionDisabledException()
       }
     }
-    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
+    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS)
     // The first step is to load up the names and IDs that have been provided by the
     // request.  This is a bit messy because we support multiple ways of referring to
     // topics (both by name and by id) and because we need to check for duplicates or
@@ -686,7 +687,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                        hasClusterAuth: Boolean,
                        getCreatableTopics: Iterable[String] => Set[String])
                        : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
-    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
+    val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS)
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
     val topicNames = new util.HashSet[String]()
@@ -753,6 +754,22 @@ class ControllerApis(val requestChannel: RequestChannel,
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
             results.setThrottleTimeMs(requestThrottleMs)
             new AllocateProducerIdsResponse(results)
+          })
+        }
+      })
+  }
+
+  def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
+    val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    controller.updateFeatures(updateFeaturesRequest.data())
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            results.setThrottleTimeMs(requestThrottleMs)
+            new UpdateFeaturesResponse(results)
           })
         }
       })

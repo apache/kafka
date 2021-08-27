@@ -92,8 +92,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(topLevelError.error().code())
             .setErrorMessage(topLevelError.message())
-            .setResults(results)
-            .setThrottleTimeMs(throttleTimeMs);
+            .setResults(results);
         return new UpdateFeaturesResponse(responseData);
     }
 }
