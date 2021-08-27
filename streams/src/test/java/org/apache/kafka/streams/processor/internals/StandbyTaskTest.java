@@ -36,6 +36,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -56,6 +58,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -611,7 +614,8 @@ public class StandbyTaskTest {
             taskId,
             Collections.singleton(partition),
             topology,
-            config,
+            new TopologyConfig(config, new Properties()).getTaskConfig(),
+            StreamThread.eosEnabled(config),
             streamsMetrics,
             stateManager,
             stateDirectory,

@@ -23,12 +23,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -47,6 +50,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -927,10 +931,24 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldSetStreamsConfigOnRewriteTopology() {
+    public void shouldSetTopologyConfigWithoutOverridesOnRewriteTopology() {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
-        assertThat(topologyBuilder.getStreamsConfig(), equalTo(config));
+        assertThat(topologyBuilder.topologyConfig(), equalTo(new TopologyConfig(config, new Properties())));
+    }
+
+    @Test
+    public void shouldSetTopologyConfigWithOverridesOnRewriteTopology() {
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
+        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        builder.setTopologyProperties(topologyOverrides);
+
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
+
+        assertThat(topologyBuilder.topologyConfig().getTaskConfig().maxTaskIdleMs, equalTo(500L));
+        assertThat(topologyBuilder.topologyConfig().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
     }
 
     @Test

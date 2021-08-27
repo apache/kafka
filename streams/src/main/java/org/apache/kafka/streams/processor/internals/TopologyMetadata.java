@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -159,6 +160,10 @@ public class TopologyMetadata {
         } finally {
             unlock();
         }
+    }
+
+    public TaskConfig getTaskConfigFor(final TaskId taskId) {
+        return lookupBuilderForTask(taskId).topologyConfig().getTaskConfig();
     }
 
     public void buildAndRewriteTopology() {

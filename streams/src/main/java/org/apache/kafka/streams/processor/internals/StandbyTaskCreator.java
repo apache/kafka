@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.apache.kafka.streams.processor.internals.namedtopology.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -161,7 +160,7 @@ class StandbyTaskCreator {
             taskId,
             inputPartitions,
             topology,
-            new TaskConfig(applicationConfig, topologyMetadata.getConfigForTask(taskId)),
+            topologyMetadata.getTaskConfigFor(taskId),
             StreamThread.eosEnabled(applicationConfig),
             streamsMetrics,
             stateManager,

@@ -30,7 +30,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.apache.kafka.streams.processor.internals.namedtopology.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -265,7 +264,7 @@ class ActiveTaskCreator {
             inputPartitions,
             topology,
             consumer,
-            new TaskConfig(applicationConfig, topologyMetadata.getConfigForTask(taskId)),
+            topologyMetadata.getTaskConfigFor(taskId),
             StreamThread.eosEnabled(applicationConfig),
             streamsMetrics,
             stateDirectory,

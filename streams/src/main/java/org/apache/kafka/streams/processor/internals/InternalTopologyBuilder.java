@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -133,7 +135,9 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private StreamsConfig config = null;
+    private StreamsConfig applicationConfig = null;  // the global streams configs and default topology props
+    private Properties topologyProperties = null;    // this topology's config overrides
+    private TopologyConfig topologyConfigs = null;           // the configs for tasks in this topology
 
     // The name of the topology this builder belongs to, or null if none
     private String topologyName;
@@ -359,15 +363,18 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final InternalTopologyBuilder setStreamsConfig(final StreamsConfig config) {
-        Objects.requireNonNull(config, "config can't be null");
-        this.config = config;
-
-        return this;
+    public synchronized final void setTopologyProperties(final Properties props) {
+        this.topologyProperties = props;
     }
 
-    public synchronized final StreamsConfig getStreamsConfig() {
-        return config;
+    public synchronized final void setStreamsConfig(final StreamsConfig config) {
+        Objects.requireNonNull(config, "config can't be null");
+        this.applicationConfig = config;
+        topologyConfigs = new TopologyConfig(applicationConfig, topologyProperties);
+    }
+
+    public synchronized final TopologyConfig topologyConfig() {
+        return topologyConfigs;
     }
 
     public String topologyName() {
