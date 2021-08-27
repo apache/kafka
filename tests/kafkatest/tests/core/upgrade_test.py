@@ -42,11 +42,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-    def wait_until_rejoin(self):
-        wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
-                   timeout_sec = 60,
-                   err_msg="Timed out waiting for under-replicated-partitions to clear")
-
     def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
         self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
         self.zk.set_version(DEV_BRANCH)
@@ -74,7 +69,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = from_kafka_version
             node.config[config_property.MESSAGE_FORMAT_VERSION] = from_kafka_version
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.await_no_under_replicated_partitions(timeout_sec=60)
 
         self.logger.info("Third pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
@@ -88,7 +83,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
                     node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0)
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.await_no_under_replicated_partitions(timeout_sec=60)
 
     @cluster(num_nodes=6)
     @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["none"])

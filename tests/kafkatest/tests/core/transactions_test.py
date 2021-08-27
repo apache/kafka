@@ -108,9 +108,7 @@ class TransactionsTest(Test):
                     time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
                 self.kafka.start_node(node)
 
-            wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
-                       timeout_sec = 30,
-                       err_msg="Timed out waiting for under-replicated-partitions to clear after bouncing broker %s" % str(node.account))
+            self.kafka.await_no_under_replicated_partitions()
 
     def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id, use_group_metadata):
         message_copier = TransactionalMessageCopier(

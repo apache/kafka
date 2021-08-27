@@ -41,7 +41,7 @@ class TestDowngrade(EndToEndTest):
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(kafka_version)
             node.config[config_property.MESSAGE_FORMAT_VERSION] = str(kafka_version)
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.await_no_under_replicated_partitions(timeout_sec=60)
 
     def downgrade_to(self, kafka_version):
         for node in self.kafka.nodes:
@@ -50,7 +50,7 @@ class TestDowngrade(EndToEndTest):
             del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
             del node.config[config_property.MESSAGE_FORMAT_VERSION]
             self.kafka.start_node(node)
-            self.wait_until_rejoin()
+            self.kafka.await_no_under_replicated_partitions(timeout_sec=60)
 
     def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
         self.create_zookeeper_if_necessary()
@@ -72,11 +72,6 @@ class TestDowngrade(EndToEndTest):
                              static_membership=static_membership)
 
         self.consumer.start()
-
-    def wait_until_rejoin(self):
-        wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
-                   timeout_sec = 60,
-                   err_msg="Timed out waiting for under-replicated-partitions to clear")
 
     @cluster(num_nodes=7)
     @parametrize(version=str(LATEST_2_8), compression_types=["snappy"])
