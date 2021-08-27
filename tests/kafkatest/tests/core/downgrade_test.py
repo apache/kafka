@@ -74,9 +74,9 @@ class TestDowngrade(EndToEndTest):
         self.consumer.start()
 
     def wait_until_rejoin(self):
-        for partition in range(0, self.PARTITIONS):
-            wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.REPLICATION_FACTOR, 
-                    timeout_sec=60, backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
+        wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
+                   timeout_sec = 60,
+                   err_msg="Timed out waiting for under-replicated-partitions to clear")
 
     @cluster(num_nodes=7)
     @parametrize(version=str(LATEST_2_8), compression_types=["snappy"])

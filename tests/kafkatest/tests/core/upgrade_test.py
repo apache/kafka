@@ -43,9 +43,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.num_consumers = 1
 
     def wait_until_rejoin(self):
-        for partition in range(0, self.partitions):
-            wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
-                    backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
+        wait_until(lambda: not self.kafka.has_under_replicated_partitions(),
+                   timeout_sec = 60,
+                   err_msg="Timed out waiting for under-replicated-partitions to clear")
 
     def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
         self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
