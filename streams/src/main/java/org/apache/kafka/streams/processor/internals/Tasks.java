@@ -99,6 +99,7 @@ class Tasks {
             activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
             standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
         );
+    }
 
     double totalProducerBlockedTime() {
         return activeTaskCreator.totalProducerBlockedTime();
