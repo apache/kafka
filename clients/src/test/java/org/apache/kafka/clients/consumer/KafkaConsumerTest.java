@@ -1937,7 +1937,7 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -1966,7 +1966,7 @@ public class KafkaConsumerTest {
         consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("commit-sync-time-total", "consumer-metrics"));
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -1981,7 +1981,7 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
@@ -2012,7 +2012,7 @@ public class KafkaConsumerTest {
         consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("committed-time-total", "consumer-metrics"));
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 

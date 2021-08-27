@@ -28,8 +28,8 @@ class KafkaConsumerMetricsTest {
     private static final long METRIC_VALUE = 123L;
     private static final String CONSUMER_GROUP_PREFIX = "consumer";
     private static final String CONSUMER_METRIC_GROUP = "consumer-metrics";
-    private static final String COMMIT_SYNC_TIME_TOTAL = "commit-sync-time-total";
-    private static final String COMMITTED_TIME_TOTAL = "committed-time-total";
+    private static final String COMMIT_SYNC_TIME_TOTAL = "commit-sync-time-ns-total";
+    private static final String COMMITTED_TIME_TOTAL = "committed-time-ns-total";
 
     private final Metrics metrics = new Metrics();
     private final KafkaConsumerMetrics consumerMetrics

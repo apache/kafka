@@ -124,7 +124,7 @@ public class ActiveTaskCreatorTest {
         final double blockedTime = 123.0;
         createTasks();
         final MockProducer<?, ?> producer = mockClientSupplier.producers.get(0);
-        addMetric(producer, "flush-time-total", blockedTime);
+        addMetric(producer, "flush-time-ns-total", blockedTime);
 
         assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(blockedTime, 0.01));
     }
@@ -245,7 +245,7 @@ public class ActiveTaskCreatorTest {
         double total = 0.0;
         double blocked = 1.0;
         for (final MockProducer<?, ?> producer : mockClientSupplier.producers) {
-            addMetric(producer, "flush-time-total", blocked);
+            addMetric(producer, "flush-time-ns-total", blocked);
             total += blocked;
             blocked += 1.0;
         }

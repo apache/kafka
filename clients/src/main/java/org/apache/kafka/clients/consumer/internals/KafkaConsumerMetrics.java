@@ -67,15 +67,23 @@ public class KafkaConsumerMetrics implements AutoCloseable {
                 "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());
 
-        this.commitSyncSensor = metrics.sensor("commit-sync-time-total");
+        this.commitSyncSensor = metrics.sensor("commit-sync-time-ns-total");
         this.commitSyncSensor.add(
-            metrics.metricName("commit-sync-time-total", metricGroupName),
+            metrics.metricName(
+                "commit-sync-time-ns-total",
+                "The total time the consumer has spent in commitSync in nanoseconds",
+                metricGroupName
+            ),
             new CumulativeSum()
         );
 
-        this.committedSensor = metrics.sensor("committed-time-total");
+        this.committedSensor = metrics.sensor("committed-time-ns-total");
         this.committedSensor.add(
-            metrics.metricName("committed-time-total", metricGroupName),
+            metrics.metricName(
+                "committed-time-ns-total",
+                "The total time the consumer has spent in committed in nanoseconds",
+                metricGroupName
+            ),
             new CumulativeSum()
         );
     }

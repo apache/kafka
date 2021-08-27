@@ -843,10 +843,10 @@ public class KafkaProducerTest {
             time
         )) {
             producer.flush();
-            double first = getMetricValue(producer, "flush-time-total");
+            double first = getMetricValue(producer, "flush-time-ns-total");
             assertTrue(first > 0);
             producer.flush();
-            assertTrue(getMetricValue(producer, "flush-time-total") > first);
+            assertTrue(getMetricValue(producer, "flush-time-ns-total") > first);
         }
     }
 
@@ -1007,13 +1007,13 @@ public class KafkaProducerTest {
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
             producer.abortTransaction();
-            double first = getMetricValue(producer, "txn-abort-time-total");
+            double first = getMetricValue(producer, "txn-abort-time-ns-total");
             assertTrue(first > 0);
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
             producer.abortTransaction();
-            assertTrue(getMetricValue(producer, "txn-abort-time-total") > first);
+            assertTrue(getMetricValue(producer, "txn-abort-time-ns-total") > first);
         }
     }
 
@@ -1083,7 +1083,7 @@ public class KafkaProducerTest {
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
             new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
-            assertDurationAtLeast(producer, "txn-init-time-total", tick.toNanos());
+            assertDurationAtLeast(producer, "txn-init-time-ns-total", tick.toNanos());
 
             client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
             client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
@@ -1091,22 +1091,22 @@ public class KafkaProducerTest {
                 new TopicPartition("topic", 0), Errors.NONE)));
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            double beginFirst = getAndAssertDurationAtLeast(producer, "txn-begin-time-total", tick.toNanos());
+            double beginFirst = getAndAssertDurationAtLeast(producer, "txn-begin-time-ns-total", tick.toNanos());
             producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
-            double sendOffFirst = getAndAssertDurationAtLeast(producer, "txn-send-offsets-time-total", tick.toNanos());
+            double sendOffFirst = getAndAssertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", tick.toNanos());
             producer.commitTransaction();
-            double commitFirst = getAndAssertDurationAtLeast(producer, "txn-commit-time-total", tick.toNanos());
+            double commitFirst = getAndAssertDurationAtLeast(producer, "txn-commit-time-ns-total", tick.toNanos());
 
             client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
             client.prepareResponse(txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            assertDurationAtLeast(producer, "txn-begin-time-total", beginFirst + tick.toNanos());
+            assertDurationAtLeast(producer, "txn-begin-time-ns-total", beginFirst + tick.toNanos());
             producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
-            assertDurationAtLeast(producer, "txn-send-offsets-time-total", sendOffFirst + tick.toNanos());
+            assertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", sendOffFirst + tick.toNanos());
             producer.commitTransaction();
-            assertDurationAtLeast(producer, "txn-commit-time-total", commitFirst + tick.toNanos());
+            assertDurationAtLeast(producer, "txn-commit-time-ns-total", commitFirst + tick.toNanos());
         }
     }
 

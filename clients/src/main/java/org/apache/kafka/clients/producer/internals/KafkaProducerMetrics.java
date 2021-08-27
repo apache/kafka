@@ -47,12 +47,30 @@ public class KafkaProducerMetrics implements AutoCloseable {
     public KafkaProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
         tags = this.metrics.config().tags();
-        flushTimeSensor = newLatencySensor(FLUSH);
-        initTimeSensor = newLatencySensor(TXN_INIT);
-        beginTxnTimeSensor = newLatencySensor(TXN_BEGIN);
-        sendOffsetsSensor = newLatencySensor(TXN_SEND_OFFSETS);
-        commitTxnSensor = newLatencySensor(TXN_COMMIT);
-        abortTxnSensor = newLatencySensor(TXN_ABORT);
+        flushTimeSensor = newLatencySensor(
+            FLUSH,
+            "Total time producer has spent in flush in nanoseconds."
+        );
+        initTimeSensor = newLatencySensor(
+            TXN_INIT,
+            "Total time producer has spent in initTransactions in nanoseconds."
+        );
+        beginTxnTimeSensor = newLatencySensor(
+            TXN_BEGIN,
+            "Total time producer has spent in beginTransaction in nanoseconds."
+        );
+        sendOffsetsSensor = newLatencySensor(
+            TXN_SEND_OFFSETS,
+            "Total time producer has spent in sendOffsetsToTransaction."
+        );
+        commitTxnSensor = newLatencySensor(
+            TXN_COMMIT,
+            "Total time producer has spent in commitTransaction."
+        );
+        abortTxnSensor = newLatencySensor(
+            TXN_ABORT,
+            "Total time producer has spent in abortTransaction."
+        );
     }
 
     @Override
@@ -89,18 +107,17 @@ public class KafkaProducerMetrics implements AutoCloseable {
         abortTxnSensor.record(duration);
     }
 
-    private Sensor newLatencySensor(String name) {
+    private Sensor newLatencySensor(String name, String description) {
         Sensor sensor = metrics.sensor(name + TOTAL_TIME_SUFFIX);
-        sensor.add(metricName(name), new CumulativeSum());
+        sensor.add(metricName(name, description), new CumulativeSum());
         return sensor;
     }
 
-    private MetricName metricName(final String name) {
+    private MetricName metricName(final String name, final String description) {
         return metrics.metricName(name + TOTAL_TIME_SUFFIX, GROUP, tags);
     }
 
     private void removeMetric(final String name) {
         metrics.removeSensor(name + TOTAL_TIME_SUFFIX);
-        metrics.removeMetric(metricName(name));
     }
 }

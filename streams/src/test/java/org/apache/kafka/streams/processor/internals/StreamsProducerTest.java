@@ -1245,11 +1245,11 @@ public class StreamsProducerTest {
         final double txnCommitTime,
         final double txnAbortTime) {
         addMetric(producer, "bufferpool-wait-time-total", bufferPoolWaitTime);
-        addMetric(producer, "flush-time-total", flushTime);
-        addMetric(producer, "txn-init-time-total", txnInitTime);
-        addMetric(producer, "txn-begin-time-total", txnBeginTime);
-        addMetric(producer, "txn-send-offsets-time-total", txnSendOffsetsTime);
-        addMetric(producer, "txn-commit-time-total", txnCommitTime);
-        addMetric(producer, "txn-abort-time-total", txnAbortTime);
+        addMetric(producer, "flush-time-ns-total", flushTime);
+        addMetric(producer, "txn-init-time-ns-total", txnInitTime);
+        addMetric(producer, "txn-begin-time-ns-total", txnBeginTime);
+        addMetric(producer, "txn-send-offsets-time-ns-total", txnSendOffsetsTime);
+        addMetric(producer, "txn-commit-time-ns-total", txnCommitTime);
+        addMetric(producer, "txn-abort-time-ns-total", txnAbortTime);
     }
 }

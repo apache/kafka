@@ -50,8 +50,8 @@ public class StreamThreadTotalBlockedTime {
     public double compute() {
         return metricValue(consumer.metrics(), "io-waittime-total")
             + metricValue(consumer.metrics(), "iotime-total")
-            + metricValue(consumer.metrics(), "committed-time-total")
-            + metricValue(consumer.metrics(), "commit-sync-time-total")
+            + metricValue(consumer.metrics(), "committed-time-ns-total")
+            + metricValue(consumer.metrics(), "commit-sync-time-ns-total")
             + metricValue(restoreConsumer.metrics(), "io-waittime-total")
             + metricValue(restoreConsumer.metrics(), "iotime-total")
             + producerTotalBlockedTime.get();

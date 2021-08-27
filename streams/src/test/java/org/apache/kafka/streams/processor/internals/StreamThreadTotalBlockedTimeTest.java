@@ -62,8 +62,8 @@ public class StreamThreadTotalBlockedTimeTest {
         when(consumer.metrics()).thenAnswer(a -> new MetricsBuilder()
             .addMetric("iotime-total", IOTIME_TOTAL)
             .addMetric("io-waittime-total", IO_WATTIME_TOTAL)
-            .addMetric("committed-time-total", COMMITTED_TIME_TOTAL)
-            .addMetric("commit-sync-time-total", COMMIT_SYNC_TIME_TOTAL)
+            .addMetric("committed-time-ns-total", COMMITTED_TIME_TOTAL)
+            .addMetric("commit-sync-time-ns-total", COMMIT_SYNC_TIME_TOTAL)
             .build()
         );
         when(restoreConsumer.metrics()).thenAnswer(a -> new MetricsBuilder()

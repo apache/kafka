@@ -214,12 +214,12 @@ public class StreamsProducer {
 
     private double totalBlockedTime(final Producer<?, ?> producer) {
         return getMetricValue(producer.metrics(), "bufferpool-wait-time-total")
-            + getMetricValue(producer.metrics(), "flush-time-total")
-            + getMetricValue(producer.metrics(), "txn-init-time-total")
-            + getMetricValue(producer.metrics(), "txn-begin-time-total")
-            + getMetricValue(producer.metrics(), "txn-send-offsets-time-total")
-            + getMetricValue(producer.metrics(), "txn-commit-time-total")
-            + getMetricValue(producer.metrics(), "txn-abort-time-total");
+            + getMetricValue(producer.metrics(), "flush-time-ns-total")
+            + getMetricValue(producer.metrics(), "txn-init-time-ns-total")
+            + getMetricValue(producer.metrics(), "txn-begin-time-ns-total")
+            + getMetricValue(producer.metrics(), "txn-send-offsets-time-ns-total")
+            + getMetricValue(producer.metrics(), "txn-commit-time-ns-total")
+            + getMetricValue(producer.metrics(), "txn-abort-time-ns-total");
     }
 
     public double totalBlockedTime() {

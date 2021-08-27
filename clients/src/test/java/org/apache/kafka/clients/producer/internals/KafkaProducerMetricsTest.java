@@ -26,12 +26,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class KafkaProducerMetricsTest {
     private static final long METRIC_VALUE = 123L;
-    private static final String FLUSH_TIME_TOTAL = "flush-time-total";
-    private static final String TXN_INIT_TIME_TOTAL = "txn-init-time-total";
-    private static final String TXN_BEGIN_TIME_TOTAL = "txn-begin-time-total";
-    private static final String TXN_COMMIT_TIME_TOTAL = "txn-commit-time-total";
-    private static final String TXN_ABORT_TIME_TOTAL = "txn-abort-time-total";
-    private static final String TXN_SEND_OFFSETS_TIME_TOTAL = "txn-send-offsets-time-total";
+    private static final String FLUSH_TIME_TOTAL = "flush-time-ns-total";
+    private static final String TXN_INIT_TIME_TOTAL = "txn-init-time-ns-total";
+    private static final String TXN_BEGIN_TIME_TOTAL = "txn-begin-time-ns-total";
+    private static final String TXN_COMMIT_TIME_TOTAL = "txn-commit-time-ns-total";
+    private static final String TXN_ABORT_TIME_TOTAL = "txn-abort-time-ns-total";
+    private static final String TXN_SEND_OFFSETS_TIME_TOTAL = "txn-send-offsets-time-ns-total";
 
     private final Metrics metrics = new Metrics();
     private final KafkaProducerMetrics producerMetrics = new KafkaProducerMetrics(metrics);

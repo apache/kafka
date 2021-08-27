@@ -46,7 +46,7 @@ public class ThreadMetrics {
     private static final String CREATE_TASK = "task-created";
     private static final String CLOSE_TASK = "task-closed";
     private static final String SKIP_RECORD = "skipped-records";
-    private static final String BLOCKED_TIME = "blocked-time-total";
+    private static final String BLOCKED_TIME = "blocked-time-ns-total";
     private static final String THREAD_START_TIME = "thread-start-time";
 
     private static final String COMMIT_DESCRIPTION = "calls to commit";
