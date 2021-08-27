@@ -37,6 +37,12 @@ public class DescribeTopicsResult {
     private final Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures;
     private final Map<String, KafkaFuture<TopicDescription>> nameFutures;
 
+    @Deprecated
+    protected DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
+        this(null, futures);
+    }
+
+    // VisibleForTesting
     protected DescribeTopicsResult(Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures, Map<String, KafkaFuture<TopicDescription>> nameFutures) {
         if (topicIdFutures != null && nameFutures != null)
             throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be specified.");
@@ -75,8 +81,10 @@ public class DescribeTopicsResult {
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual topics.
+     * @return a map from topic names to futures which can be used to check the status of
+     *         individual topics if the request used topic names, otherwise return null.
+     *
+     * @deprecated Since 3.0 use {@link #topicNameValues} instead
      */
     @Deprecated
     public Map<String, KafkaFuture<TopicDescription>> values() {
@@ -84,7 +92,12 @@ public class DescribeTopicsResult {
     }
 
     /**
-     * Return a future which succeeds only if all the topic descriptions succeed.
+     * @return A future map from topic names to descriptions which can be used to check
+     *         the status of individual description if the describe topic request used
+     *         topic names, otherwise return null, this request succeeds only if all the
+     *         topic descriptions succeed
+     *
+     * @deprecated Since 3.0 use {@link #allTopicNames()} instead
      */
     @Deprecated
     public KafkaFuture<Map<String, TopicDescription>> all() {
@@ -92,14 +105,20 @@ public class DescribeTopicsResult {
     }
 
     /**
-     * Return a future which succeeds only if all the topic descriptions succeed.
+     * @return A future map from topic names to descriptions which can be used to check
+     *         the status of individual description if the describe topic request used
+     *         topic names, otherwise return null, this request succeeds only if all the
+     *         topic descriptions succeed
      */
     public KafkaFuture<Map<String, TopicDescription>> allTopicNames() {
         return all(nameFutures);
     }
 
     /**
-     * Return a future which succeeds only if all the topic descriptions succeed.
+     * @return A future map from topic ids to descriptions which can be used to check the
+     *         status of individual description if the describe topic request used topic
+     *         ids, otherwise return null, this request succeeds only if all the topic
+     *         descriptions succeed
      */
     public KafkaFuture<Map<Uuid, TopicDescription>> allTopicIds() {
         return all(topicIdFutures);

@@ -92,7 +92,7 @@ public class MetadataResponse extends AbstractResponse {
         Map<String, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
             if (metadata.name() == null) {
-                throw new IllegalStateException("Use errorsByTopicId() when manage topic using topic id");
+                throw new IllegalStateException("Use errorsByTopicId() when managing topic using topic id");
             }
             if (metadata.errorCode() != Errors.NONE.code())
                 errors.put(metadata.name(), Errors.forCode(metadata.errorCode()));
@@ -108,7 +108,7 @@ public class MetadataResponse extends AbstractResponse {
         Map<Uuid, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
             if (metadata.topicId() == Uuid.ZERO_UUID) {
-                throw new IllegalStateException("Use errors() when manage topic using topic name");
+                throw new IllegalStateException("Use errors() when managing topic using topic name");
             }
             if (metadata.errorCode() != Errors.NONE.code())
                 errors.put(metadata.topicId(), Errors.forCode(metadata.errorCode()));

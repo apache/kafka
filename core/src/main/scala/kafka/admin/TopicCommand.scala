@@ -617,11 +617,11 @@ object TopicCommand extends Logging {
       // check required args
       if (!has(bootstrapServerOpt))
         throw new IllegalArgumentException("--bootstrap-server must be specified")
-      if (has(describeOpt) && has(ifExistsOpt))
-        CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
-      if(has(describeOpt) && has(ifExistsOpt)) {
-        if (has(topicOpt) == has(topicIdOpt))
-          println("Only topic id will be used when both --topic and --topic-id are specified and topicId is not UUID.ZERO_UUID")
+      if (has(describeOpt) && has(ifExistsOpt)) {
+        if (!has(topicOpt) && !has(topicIdOpt))
+          CommandLineUtils.printUsageAndDie(parser, "--topic or --topic-id is required to describe a topic")
+        if (has(topicOpt) && has(topicIdOpt))
+          println("Only topic id will be used when both --topic and --topic-id are specified and topicId is not Uuid.ZERO_UUID")
       }
       if (!has(listOpt) && !has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)

@@ -1247,7 +1247,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
         Set.empty[MetadataResponseTopic]
       else if (useTopicId) {
-        // Topic IDs are not considered sensitive information, so we TOPIC_AUTHORIZATION_FAILED is OK
+        // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
           metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
       } else {
