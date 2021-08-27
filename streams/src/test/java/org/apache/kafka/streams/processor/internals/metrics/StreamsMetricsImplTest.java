@@ -1246,7 +1246,51 @@ public class StreamsMetricsImplTest {
             (c, t) -> measuredValue
         );
 
-        streamsMetrics.removeAllThreadLevelSensors("t1");
+        streamsMetrics.removeAllThreadLevelMetrics("t1");
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), nullValue());
+    }
+
+    @Test
+    public void shouldAddThreadLevelImmutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+
+        streamsMetrics.addThreadLevelImmutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            measuredValue
+        );
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+    }
+
+    @Test
+    public void shouldCleanupThreadLevelImmutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+        streamsMetrics.addThreadLevelImmutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            measuredValue
+        );
+
+        streamsMetrics.removeAllThreadLevelMetrics("t1");
 
         final MetricName name = metrics.metricName(
             "foobar",

@@ -300,6 +300,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 metrics.removeSensor(sensors.pop());
             }
         }
+    }
+
+    public final void removeAllThreadLevelMetrics(final String threadId) {
         synchronized (threadLevelMetrics) {
             final Deque<MetricName> names = threadLevelMetrics.remove(threadSensorPrefix(threadId));
             while (names != null && !names.isEmpty()) {

@@ -1142,6 +1142,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
+        streamsMetrics.removeAllThreadLevelMetrics(getName());
 
         setState(State.DEAD);
 
