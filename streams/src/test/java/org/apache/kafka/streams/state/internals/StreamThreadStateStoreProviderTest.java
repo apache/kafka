@@ -443,7 +443,7 @@ public class StreamThreadStateStoreProviderTest {
             partitions,
             topology,
             clientSupplier.consumer,
-            new TopologyConfig(streamsConfig, new Properties()).getTaskConfig(),
+            new TopologyConfig(null, streamsConfig, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             EasyMock.createNiceMock(ThreadCache.class),

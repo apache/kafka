@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
-import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -931,14 +930,14 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldSetTopologyConfigWithoutOverridesOnRewriteTopology() {
+    public void shouldSetTopologyConfigOnRewriteTopology() {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
-        assertThat(topologyBuilder.topologyConfig(), equalTo(new TopologyConfig(config, new Properties())));
+        assertThat(topologyBuilder.topologyConfig(), equalTo(new TopologyConfig(null, config, new Properties())));
     }
 
     @Test
-    public void shouldSetTopologyConfigWithOverridesOnRewriteTopology() {
+    public void shouldOverrideGlobalStreamsConfigWithTopologyProps() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);

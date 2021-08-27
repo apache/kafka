@@ -37,7 +37,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -614,7 +613,7 @@ public class StandbyTaskTest {
             taskId,
             Collections.singleton(partition),
             topology,
-            new TopologyConfig(config, new Properties()).getTaskConfig(),
+            new TopologyConfig(null, config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateManager,
             stateDirectory,

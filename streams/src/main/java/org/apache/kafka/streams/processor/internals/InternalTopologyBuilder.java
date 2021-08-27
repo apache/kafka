@@ -370,7 +370,13 @@ public class InternalTopologyBuilder {
     public synchronized final void setStreamsConfig(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
         this.applicationConfig = config;
-        topologyConfigs = new TopologyConfig(applicationConfig, topologyProperties);
+        topologyConfigs = new TopologyConfig(
+            topologyName,
+            applicationConfig,
+            topologyProperties == null ?
+                new Properties() :
+                topologyProperties
+        );
     }
 
     public synchronized final TopologyConfig topologyConfig() {
