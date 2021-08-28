@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.BufferedReader;
@@ -60,7 +59,7 @@ public class CheckpointFile<T> {
 
     public CheckpointFile(File file,
                           int version,
-                          EntryFormatter<T> formatter) {
+                          EntryFormatter<T> formatter) throws IOException {
         this.version = version;
         this.formatter = formatter;
         try {
@@ -68,8 +67,6 @@ public class CheckpointFile<T> {
             Files.createFile(file.toPath());
         } catch (FileAlreadyExistsException ex) {
             // Ignore if file already exists.
-        } catch (IOException ex) {
-            throw new KafkaException(ex);
         }
         absolutePath = file.toPath().toAbsolutePath();
         tempPath = Paths.get(absolutePath.toString() + ".tmp");
