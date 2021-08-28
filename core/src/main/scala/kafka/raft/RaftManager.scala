@@ -21,9 +21,10 @@ import java.nio.file.Files
 import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
@@ -180,6 +181,12 @@ class KafkaRaftManager[T](
     val expirationService = new TimingWheelExpirationService(expirationTimer)
     val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
+    val nodeId = if (config.processRoles.contains(ControllerRole)) {
+      OptionalInt.of(config.nodeId)
+    } else {
+      OptionalInt.empty()
+    }
+
     val client = new KafkaRaftClient(
       recordSerde,
       netChannel,
@@ -190,7 +197,7 @@ class KafkaRaftManager[T](
       expirationService,
       logContext,
       metaProperties.clusterId,
-      OptionalInt.of(config.nodeId),
+      nodeId,
       raftConfig
     )
     client.initialize()
@@ -203,7 +210,7 @@ class KafkaRaftManager[T](
   }
 
   private def createDataDir(): File = {
-    val logDirName = Log.logDirName(topicPartition)
+    val logDirName = UnifiedLog.logDirName(topicPartition)
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 

@@ -37,6 +37,7 @@ class StorageToolTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.NodeIdProp, "2")
+    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     properties
   }

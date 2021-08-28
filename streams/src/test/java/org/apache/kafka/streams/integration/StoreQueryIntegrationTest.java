@@ -71,10 +71,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.matchesRegex;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
-import static org.hamcrest.Matchers.oneOf;
+import static org.hamcrest.Matchers.anyOf;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -149,16 +148,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                        "Unexpected exception thrown while getting the value from store.",
-                        exception.getMessage(),
-                        is(
-                                oneOf(
-                                        containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                                        containsString("The state store, source-table, may have migrated to another instance")
-                                )
-                        )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -242,11 +232,8 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    exception.getMessage(),
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING")
-                );
-                LOG.info("Streams wasn't running. Will try again.");
+                verifyRetrievableException(exception);
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
@@ -508,11 +495,8 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                        exception.getMessage(),
-                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
-                );
-                LOG.info("Streams wasn't running. Will try again.");
+                verifyRetrievableException(exception);
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
@@ -532,14 +516,25 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                        exception.getMessage(),
-                        matchesRegex("Cannot get state store source-table because the stream thread is (PARTITIONS_ASSIGNED|STARTING|PARTITIONS_REVOKED), not RUNNING")
-                );
-                LOG.info("Streams wasn't running. Will try again.");
+                verifyRetrievableException(exception);
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
+    }
+
+    private void verifyRetrievableException(final Exception exception) {
+        assertThat(
+            "Unexpected exception thrown while getting the value from store.",
+            exception.getMessage(),
+            is(
+                anyOf(
+                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                    containsString("The state store, source-table, may have migrated to another instance"),
+                    containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING")
+                )
+            )
+        );
     }
 
     private static void until(final TestCondition condition) {

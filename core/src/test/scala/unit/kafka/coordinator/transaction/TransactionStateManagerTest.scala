@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 
 import javax.management.ObjectName
-import kafka.log.{AppendOrigin, Defaults, Log, LogConfig}
+import kafka.log.{AppendOrigin, Defaults, UnifiedLog, LogConfig}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{MockScheduler, Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -150,7 +150,7 @@ class TransactionStateManagerTest {
     val endOffset = 1L
 
     val fileRecordsMock = EasyMock.mock[FileRecords](classOf[FileRecords])
-    val logMock = EasyMock.mock[Log](classOf[Log])
+    val logMock = EasyMock.mock[UnifiedLog](classOf[UnifiedLog])
     EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
@@ -813,7 +813,7 @@ class TransactionStateManagerTest {
     val startOffset = 0L
     val endOffset = 10L
 
-    val logMock: Log = EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
@@ -986,7 +986,7 @@ class TransactionStateManagerTest {
                             records: MemoryRecords): Unit = {
     EasyMock.reset(replicaManager)
 
-    val logMock: Log = EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
     val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val endOffset = startOffset + records.records.asScala.size

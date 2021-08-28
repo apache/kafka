@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
@@ -61,6 +62,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -94,8 +96,10 @@ import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRES
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,6 +109,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(40)
 public class ReplicationControlManagerTest {
     private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
+    private final static int BROKER_SESSION_TIMEOUT_MS = 1000;
 
     private static class ReplicationControlTestContext {
         final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
@@ -112,7 +117,7 @@ public class ReplicationControlManagerTest {
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
         final ClusterControlManager clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, 1000,
+            logContext, time, snapshotRegistry, BROKER_SESSION_TIMEOUT_MS,
             new StripedReplicaPlacer(random));
         final ControllerMetrics metrics = new MockControllerMetrics();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
@@ -206,6 +211,24 @@ public class ReplicationControlManagerTest {
                     result.response());
                 replay(result.records());
             }
+        }
+
+        void fenceBrokers(Set<Integer> brokerIds) throws Exception {
+            time.sleep(BROKER_SESSION_TIMEOUT_MS);
+
+            Set<Integer> unfencedBrokerIds = clusterControl.brokerRegistrations().keySet().stream()
+                .filter(brokerId -> !brokerIds.contains(brokerId))
+                .collect(Collectors.toSet());
+            unfenceBrokers(unfencedBrokerIds.toArray(new Integer[0]));
+
+            Optional<Integer> staleBroker = clusterControl.heartbeatManager().findOneStaleBroker();
+            while (staleBroker.isPresent()) {
+                ControllerResult<Void> fenceResult = replicationControl.maybeFenceOneStaleBroker();
+                replay(fenceResult.records());
+                staleBroker = clusterControl.heartbeatManager().findOneStaleBroker();
+            }
+
+            assertEquals(brokerIds, clusterControl.fencedBrokerIds());
         }
 
         long currentBrokerEpoch(int brokerId) {
@@ -1027,6 +1050,36 @@ public class ReplicationControlManagerTest {
         assertEquals(new PartitionRegistration(new int[] {2, 4, 5},
                 new int[] {2}, Replicas.NONE, Replicas.NONE, 2, 0, 0),
             ctx.replicationControl.getPartition(fooId, 1));
+    }
+
+    @Test
+    public void testFenceMultipleBrokers() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
+
+        assertTrue(ctx.clusterControl.fencedBrokerIds().isEmpty());
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+
+        PartitionRegistration partition0 = replication.getPartition(fooId, 0);
+        PartitionRegistration partition1 = replication.getPartition(fooId, 1);
+        PartitionRegistration partition2 = replication.getPartition(fooId, 2);
+
+        assertArrayEquals(new int[]{1, 2, 3}, partition0.replicas);
+        assertArrayEquals(new int[]{1}, partition0.isr);
+        assertEquals(1, partition0.leader);
+
+        assertArrayEquals(new int[]{2, 3, 4}, partition1.replicas);
+        assertArrayEquals(new int[]{4}, partition1.isr);
+        assertEquals(4, partition1.leader);
+
+        assertArrayEquals(new int[]{0, 2, 1}, partition2.replicas);
+        assertArrayEquals(new int[]{0, 1}, partition2.isr);
+        assertNotEquals(2, partition2.leader);
     }
 
     @Test

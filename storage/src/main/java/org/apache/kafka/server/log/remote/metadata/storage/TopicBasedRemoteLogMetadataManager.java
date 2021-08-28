@@ -399,7 +399,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                                                       String topicName) throws InterruptedException, ExecutionException {
         log.debug("Getting topic details to check for partition count and replication factor.");
         TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topicName))
-                                                       .values().get(topicName).get();
+                                                       .topicNameValues().get(topicName).get();
         int expectedPartitions = rlmmConfig.metadataTopicPartitionsCount();
         int topicPartitionsSize = topicDescription.partitions().size();
 

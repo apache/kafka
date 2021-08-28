@@ -143,6 +143,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      */
     @Override
     public Branched<K, V> withName(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new Branched<>(name, chainFunction, chainConsumer);
     }
 }
