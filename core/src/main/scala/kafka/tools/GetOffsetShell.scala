@@ -247,7 +247,7 @@ object GetOffsetShell {
                                  topicPartitionFilter: PartitionInfo => Boolean,
                                  excludeInternalTopics: Boolean): Seq[PartitionInfo] = {
     val topics = client.listTopics(new ListTopicsOptions().listInternal(!excludeInternalTopics)).names().get().asScala.filter(topicFilter)
-    client.describeTopics(topics.asJavaCollection).all().get().asScala.flatMap { case (topic, description) =>
+    client.describeTopics(topics.asJavaCollection).allTopicNames().get().asScala.flatMap { case (topic, description) =>
       description
         .partitions()
         .asScala
