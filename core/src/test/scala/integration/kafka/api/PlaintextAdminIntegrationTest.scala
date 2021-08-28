@@ -40,17 +40,17 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 /**
@@ -145,7 +145,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
     controller.shutdown()
     controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).all.get()
+    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
@@ -161,10 +161,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, Seq(existingTopic), List())
 
     val nonExistingTopic = "non-existing"
-    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).values
+    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).topicNameValues()
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
     assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
+  }
+
+  @Test
+  def testDescribeTopicsWithIds(): Unit = {
+    client = Admin.create(createConfig)
+
+    val existingTopic = "existing-topic"
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
+    waitForTopics(client, Seq(existingTopic), List())
+    val existingTopicId = zkClient.getTopicIdsForTopics(Set(existingTopic)).values.head
+
+    val nonExistingTopicId = Uuid.randomUuid()
+
+    val results = client.describeTopics(TopicCollection.ofTopicIds(Seq(existingTopicId, nonExistingTopicId).asJava)).topicIdValues()
+    assertEquals(existingTopicId, results.get(existingTopicId).get.topicId())
+    assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopicId).get).getCause.isInstanceOf[UnknownTopicIdException]
   }
 
   @Test

@@ -393,7 +393,7 @@ class KRaftClusterTest {
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
         TestUtils.waitUntilTrue( () => {
-          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).all().get()
+          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).allTopicNames().get()
           if (topicInfoMap.containsKey("foo")) {
             currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
             expectedMapping.equals(currentMapping)

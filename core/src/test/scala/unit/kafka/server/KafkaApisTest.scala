@@ -2232,6 +2232,117 @@ class KafkaApisTest {
     assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
+  @Test
+  def testUnauthorizedTopicMetadataRequest(): Unit = {
+    // 1. Set up broker information
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val broker = new UpdateMetadataBroker()
+      .setId(0)
+      .setRack("rack")
+      .setEndpoints(Seq(
+        new UpdateMetadataEndpoint()
+          .setHost("broker0")
+          .setPort(9092)
+          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+          .setListener(plaintextListener.value)
+      ).asJava)
+
+    // 2. Set up authorizer
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val unauthorizedTopic = "unauthorized-topic"
+    val authorizedTopic = "authorized-topic"
+
+    val expectedActions = Seq(
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
+    )
+
+    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], AuthHelperTest.matchSameElements(expectedActions.asJava)))
+      .andAnswer { () =>
+      val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
+      actions.map { action =>
+        if (action.resourcePattern().name().equals(authorizedTopic))
+          AuthorizationResult.ALLOWED
+        else
+          AuthorizationResult.DENIED
+      }.asJava
+    }.times(2)
+
+    // 3. Set up MetadataCache
+    val authorizedTopicId = Uuid.randomUuid()
+    val unauthorizedTopicId = Uuid.randomUuid();
+
+    val topicIds = new util.HashMap[String, Uuid]()
+    topicIds.put(authorizedTopic, authorizedTopicId)
+    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
+
+    def createDummyPartitionStates(topic: String) = {
+      new UpdateMetadataPartitionState()
+        .setTopicName(topic)
+        .setPartitionIndex(0)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setReplicas(Collections.singletonList(0))
+        .setZkVersion(0)
+        .setIsr(Collections.singletonList(0))
+    }
+
+    // Send UpdateMetadataReq to update MetadataCache
+    val partitionStates = Seq(unauthorizedTopic, authorizedTopic).map(createDummyPartitionStates)
+
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, 0, partitionStates.asJava, Seq(broker).asJava, topicIds).build()
+    metadataCache.asInstanceOf[ZkMetadataCache].updateMetadata(correlationId = 0, updateMetadataRequest)
+
+    // 4. Send TopicMetadataReq using topicId
+    val metadataReqByTopicId = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopicId, unauthorizedTopicId)).build()
+    val repByTopicId = buildRequest(metadataReqByTopicId, plaintextListener)
+    val capturedMetadataByTopicIdResp = expectNoThrottling(repByTopicId)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel, authorizer)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleTopicMetadataRequest(repByTopicId)
+    val metadataByTopicIdResp = capturedMetadataByTopicIdResp.getValue.asInstanceOf[MetadataResponse]
+
+    val metadataByTopicId = metadataByTopicIdResp.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
+
+    metadataByTopicId.foreach{ case (topicId, metadataResponseTopic) =>
+      if (topicId == unauthorizedTopicId) {
+        // Return an TOPIC_AUTHORIZATION_FAILED on unauthorized error regardless of leaking the existence of topic id
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        // Do not return topic information on unauthorized error
+        assertNull(metadataResponseTopic.name())
+      } else {
+        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
+        assertEquals(authorizedTopic, metadataResponseTopic.name())
+      }
+    }
+
+    // 4. Send TopicMetadataReq using topic name
+    EasyMock.reset(clientRequestQuotaManager, requestChannel)
+    val metadataReqByTopicName = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopic, unauthorizedTopic), false).build()
+    val repByTopicName = buildRequest(metadataReqByTopicName, plaintextListener)
+    val capturedMetadataByTopicNameResp = expectNoThrottling(repByTopicName)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleTopicMetadataRequest(repByTopicName)
+    val metadataByTopicNameResp = capturedMetadataByTopicNameResp.getValue.asInstanceOf[MetadataResponse]
+
+    val metadataByTopicName = metadataByTopicNameResp.data().topics().asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
+
+    metadataByTopicName.foreach{ case (topicName, metadataResponseTopic) =>
+      if (topicName == unauthorizedTopic) {
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        // Do not return topic Id on unauthorized error
+        assertEquals(Uuid.ZERO_UUID, metadataResponseTopic.topicId())
+      } else {
+        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
+        assertEquals(authorizedTopicId, metadataResponseTopic.topicId())
+      }
+    }
+  }
+
   /**
    * Verifies that sending a fetch request with version 9 works correctly when
    * ReplicaManager.getLogConfig returns None.

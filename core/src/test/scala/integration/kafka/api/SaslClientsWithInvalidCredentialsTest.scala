@@ -136,7 +136,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
     def describeTopic(): Unit = {
       try {
-        val response = adminClient.describeTopics(Collections.singleton(topic)).all.get
+        val response = adminClient.describeTopics(Collections.singleton(topic)).allTopicNames.get
         assertEquals(1, response.size)
         response.forEach { (topic, description) =>
           assertEquals(numPartitions, description.partitions.size)

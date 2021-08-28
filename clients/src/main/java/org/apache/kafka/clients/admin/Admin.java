@@ -17,14 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
@@ -41,6 +33,14 @@ import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -303,7 +303,33 @@ public interface Admin extends AutoCloseable {
      * @param options    The options to use when describing the topic.
      * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
+    default DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+        return describeTopics(TopicCollection.ofTopicNames(topicNames), options);
+    }
+
+    /**
+     * This is a convenience method for {@link #describeTopics(TopicCollection, DescribeTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics The topics to describe.
+     * @return The DescribeTopicsResult.
+     */
+    default DescribeTopicsResult describeTopics(TopicCollection topics) {
+        return describeTopics(topics, new DescribeTopicsOptions());
+    }
+
+    /**
+     * Describe some topics in the cluster.
+     *
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics  The topics to describe.
+     * @param options The options to use when describing the topics.
+     * @return The DescribeTopicsResult.
+     */
+    DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);
 
     /**
      * Get information about the nodes in the cluster, using the default options.

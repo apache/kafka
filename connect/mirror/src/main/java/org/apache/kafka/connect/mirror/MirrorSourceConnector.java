@@ -399,7 +399,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return adminClient.describeTopics(topics).all().get().values();
+        return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
 
     static Map<String, String> configToMap(Config config) {

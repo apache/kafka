@@ -221,7 +221,7 @@ object ReplicaVerificationTool extends Logging {
 
   private def listTopicsMetadata(adminClient: Admin): Seq[TopicDescription] = {
     val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get
-    adminClient.describeTopics(topics).all.get.values.asScala.toBuffer
+    adminClient.describeTopics(topics).allTopicNames.get.values.asScala.toBuffer
   }
 
   private def brokerDetails(adminClient: Admin): Map[Int, Node] = {
