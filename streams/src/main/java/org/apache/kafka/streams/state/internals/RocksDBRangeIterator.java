@@ -45,26 +45,33 @@ class RocksDBRangeIterator extends RocksDbIterator {
         super(storeName, iter, openIterators, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;
-        ByteBuffer directByteBuffer;
         if (forward) {
             if (from == null) {
                 iter.seekToFirst();
             } else {
-                directByteBuffer = ByteBuffer.allocateDirect(from.get().length);
-                directByteBuffer.order(ByteOrder.BIG_ENDIAN);
-                iter.seek(directByteBuffer);
-                rawLastKey = to == null ? null : to.get();
+                allocateDirectByteBufferAndSeek(iter, from, true);
             }
+            rawLastKey = to == null ? null : to.get();
         } else {
             if (to == null) {
                 iter.seekToLast();
             } else {
-                directByteBuffer = ByteBuffer.allocateDirect(to.get().length);
-                directByteBuffer.order(ByteOrder.BIG_ENDIAN);
-                iter.seekForPrev(directByteBuffer);
-                rawLastKey = from == null ? null : from.get();
+                allocateDirectByteBufferAndSeek(iter, to, false);
             }
+            rawLastKey = from == null ? null : from.get();
         }
+    }
+
+    private void allocateDirectByteBufferAndSeek(final RocksIterator iter, final Bytes bytes, final boolean forward) {
+        final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(bytes.get().length);
+        directByteBuffer.order(ByteOrder.nativeOrder());
+        directByteBuffer.clear();
+        directByteBuffer.put(bytes.get());
+        directByteBuffer.flip();
+        if (forward)
+            iter.seek(directByteBuffer);
+        else
+            iter.seekForPrev(directByteBuffer);
     }
 
     @Override

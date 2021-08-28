@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -151,9 +152,24 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
                                  final WriteBatch batch) throws RocksDBException {
+            int keyCapacity = 0, valueCapacity = 0;
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                keyCapacity = Math.max(keyCapacity, entry.key.get().length);
+                if (entry.value != null) valueCapacity = Math.max(valueCapacity, entry.value.length);
+            }
+            final ByteBuffer keyDirectBuffer = ByteBuffer.allocateDirect(keyCapacity);
+            final ByteBuffer valueDirectBuffer = ByteBuffer.allocateDirect(valueCapacity);
+
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                addToBatch(entry.key.get(), entry.value, batch);
+                keyDirectBuffer.clear();
+                valueDirectBuffer.clear();
+                keyDirectBuffer.put(entry.key.get());
+                if (entry.value != null)
+                    valueDirectBuffer.put(entry.value);
+                keyDirectBuffer.flip();
+                valueDirectBuffer.flip();
+                addToBatch(keyDirectBuffer, valueDirectBuffer, batch);
             }
         }
 
@@ -265,8 +281,26 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                            final WriteBatch batch) throws RocksDBException {
+            int keyCapacity = 0, valueCapacity = 0;
+            for (final KeyValue<byte[], byte[]> entry : records) {
+                keyCapacity = Math.max(keyCapacity, entry.key.length);
+                if (entry.value != null) valueCapacity = Math.max(valueCapacity, entry.value.length);
+            }
+            final ByteBuffer keyDirectBuffer = ByteBuffer.allocateDirect(keyCapacity);
+            final ByteBuffer valueDirectBuffer = ByteBuffer.allocateDirect(valueCapacity);
+
+            keyDirectBuffer.order(ByteOrder.nativeOrder());
+            valueDirectBuffer.order(ByteOrder.nativeOrder());
+
             for (final KeyValue<byte[], byte[]> record : records) {
-                addToBatch(record.key, record.value, batch);
+                keyDirectBuffer.clear();
+                valueDirectBuffer.clear();
+                keyDirectBuffer.put(record.key);
+                if (record.value != null)
+                    valueDirectBuffer.put(record.value);
+                keyDirectBuffer.flip();
+                valueDirectBuffer.flip();
+                addToBatch(keyDirectBuffer, valueDirectBuffer, batch);
             }
         }
 
@@ -284,8 +318,14 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public void addToBatchDirect(ByteBuffer key, ByteBuffer value, WriteBatch batch) throws RocksDBException {
-
+        public void addToBatch(final ByteBuffer key, final ByteBuffer value, final WriteBatch batch) throws RocksDBException {
+            if (!value.hasRemaining()) {
+                batch.delete(oldColumnFamily, key.array());
+                batch.delete(newColumnFamily, key.array());
+            } else {
+                batch.delete(oldColumnFamily, key.array());
+                batch.put(newColumnFamily, key, value);
+            }
         }
 
         @Override
@@ -436,20 +476,32 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                     iterWithTimestamp.seekToFirst();
                     iterNoTimestamp.seekToFirst();
                 } else {
-                    iterWithTimestamp.seek(from.get());
-                    iterNoTimestamp.seek(from.get());
+                    allocateDirectByteBufferAndSeek(iterWithTimestamp, from, true);
+                    allocateDirectByteBufferAndSeek(iterNoTimestamp, from, true);
                 }
                 rawLastKey = to == null ? null : to.get();
             } else {
-                if (to == null) {
-                    iterWithTimestamp.seekToLast();
-                    iterNoTimestamp.seekToLast();
-                } else {
-                    iterWithTimestamp.seekForPrev(to.get());
-                    iterNoTimestamp.seekForPrev(to.get());
-                }
+                    if (to == null) {
+                        iterWithTimestamp.seekToLast();
+                        iterNoTimestamp.seekToLast();
+                    } else {
+                        allocateDirectByteBufferAndSeek(iterWithTimestamp, to, false);
+                        allocateDirectByteBufferAndSeek(iterNoTimestamp, to, false);
+                    }
                 rawLastKey = from == null ? null : from.get();
             }
+        }
+
+        private void allocateDirectByteBufferAndSeek(final RocksIterator iter, final Bytes bytes, final boolean forward) {
+            final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(bytes.get().length);
+            directByteBuffer.order(ByteOrder.nativeOrder());
+            directByteBuffer.clear();
+            directByteBuffer.put(bytes.get());
+            directByteBuffer.flip();
+            if (forward)
+                iter.seek(directByteBuffer);
+            else
+                iter.seekForPrev(directByteBuffer);
         }
 
         @Override
