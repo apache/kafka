@@ -199,7 +199,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
         case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
-        case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
+        case ApiKeys.ALTER_CONFIGS => {
+          request.isForwarded match {
+            case true =>
+              handleAlterConfigsRequest(request)
+            case false =>
+              validateThenMaybeForwardAlterConfigsRequest(request)
+          }
+        }
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
@@ -211,7 +218,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal)
         case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
-        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
+        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => {
+          request.isForwarded match {
+            case true =>
+              handleIncrementalAlterConfigsRequest(request)
+            case false =>
+              validateThenMaybeForwardIncrementalAlterConfigsRequest(request)
+          }
+        }
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request, requestLocal)
@@ -2600,93 +2614,78 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    val alterConfigsRequest = request.body[AlterConfigsRequest]
+    val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
+      resource.`type` match {
+        case ConfigResource.Type.BROKER_LOGGER =>
+          throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
+        case ConfigResource.Type.BROKER =>
+          authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+        case ConfigResource.Type.TOPIC =>
+          authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      }
+    }
+    val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+      resource -> configsAuthorizationApiError(resource)
+    }
+    def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+      val data = new AlterConfigsResponseData()
+        .setThrottleTimeMs(requestThrottleMs)
+      (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+        data.responses().add(new AlterConfigsResourceResponse()
+          .setErrorCode(error.error.code)
+          .setErrorMessage(error.message)
+          .setResourceName(resource.name)
+          .setResourceType(resource.`type`.id))
+      }
+      new AlterConfigsResponse(data)
+    }
+    requestHelper.sendResponseMaybeThrottle(request, responseCallback)
+  }
+
+  def validateThenMaybeForwardAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[AlterConfigsRequest]
 
-    if (!request.isForwarded) {
-      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
-      val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
+    // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
+    val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
 
-      // Validate per-broker dynamic configs
-      val results = brokerConfigs.map { case (resource, config) =>
-        try {
-          val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+    // Validate per-broker dynamic configs
+    val results = brokerConfigs.map { case (resource, config) =>
+      try {
+        val configProps = new Properties
+        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+          configProps.setProperty(configEntry.name, configEntry.value)
+        }
+        configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps)
+      } catch {
+        case e @ (_: ConfigException | _: IllegalArgumentException) =>
+          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+          info(message)
+          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+        case e: Throwable =>
           val configProps = new Properties
           config.entries.asScala.filter(_.value != null).foreach { configEntry =>
             configProps.setProperty(configEntry.name, configEntry.value)
           }
-          configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps, configEntriesMap)
-        } catch {
-          case e @ (_: ConfigException | _: IllegalArgumentException) =>
-            val message = s"Invalid config value for resource $resource: ${e.getMessage}"
-            info(message)
-            resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
-          case e: Throwable =>
-            val configProps = new Properties
-            config.entries.asScala.filter(_.value != null).foreach { configEntry =>
-              configProps.setProperty(configEntry.name, configEntry.value)
-            }
-            // Log client errors at a lower level than unexpected exceptions
-            val message = s"Error processing alter configs request for resource $resource, config ${configHelper.toLoggableProps(resource, configProps).mkString(",")}"
-            if (e.isInstanceOf[ApiException])
-              info(message, e)
-            else
-              error(message, e)
-            resource -> ApiError.fromThrowable(e)
-        }
-      }.toMap
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing alter configs request for resource $resource, config ${configHelper.toLoggableProps(resource, configProps).mkString(",")}"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> ApiError.fromThrowable(e)
+      }
+    }.toMap
 
-      if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.validateOnly) {
-        // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
-        def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
-          val data = new AlterConfigsResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-          results.foreach{ case (resource, error) =>
-            data.responses().add(new AlterConfigsResourceResponse()
-              .setErrorCode(error.error.code)
-              .setErrorMessage(error.message)
-              .setResourceName(resource.name)
-              .setResourceType(resource.`type`.id))
-          }
-          new AlterConfigsResponse(data)
-        }
-        requestHelper.sendResponseMaybeThrottle(request, responseCallback)
-      } else {
-        metadataSupport match {
-          case ZkSupport(_, controller, _, _, _) =>
-            if (!controller.isActive &&  isForwardingEnabled(request)) {
-              forwardToControllerOrFail(request)
-              return
-            }
-          case RaftSupport(_,_) =>
-            forwardToControllerOrFail(request)
-        }
-      }
-    } 
-
-    if (config.requiresZookeeper) {
-      // Forwarding to the controller is being enabled by default in IBP >= 3.0 to maintain a single ZK writer.
-      // Note that authorization and persisting of configs will not occur on a zkBroker if the request was forwarding enabled and forwarded to the active controller
-      // This method returns after a zkBroker forwards the request so that configs are not persisted from this broker after being forwarded to the controller
-      val zkSupport = metadataSupport.asInstanceOf[ZkSupport]
-      val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
-        resource.`type` match {
-          case ConfigResource.Type.BROKER_LOGGER =>
-            throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-          case ConfigResource.Type.BROKER =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-          case ConfigResource.Type.TOPIC =>
-            authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
-        }
-      }
-      val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
-      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-        resource -> configsAuthorizationApiError(resource)
-      }
+    if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.validateOnly) {
+      // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
       def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
         val data = new AlterConfigsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-        (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+        results.foreach{ case (resource, error) =>
           data.responses().add(new AlterConfigsResourceResponse()
             .setErrorCode(error.error.code)
             .setErrorMessage(error.message)
@@ -2696,6 +2695,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         new AlterConfigsResponse(data)
       }
       requestHelper.sendResponseMaybeThrottle(request, responseCallback)
+    } else {
+      metadataSupport match {
+        case ZkSupport(_, controller, _, _, _) =>
+          if (!controller.isActive &&  isForwardingEnabled(request)) {
+            forwardToControllerOrFail(request)
+          }
+        case RaftSupport(_,_) =>
+          forwardToControllerOrFail(request)
+      }
     }
   }
 
@@ -2838,68 +2846,61 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toBuffer
     }.toMap
 
-    if (!request.isForwarded) {
-      // Config alterations should be validated on the broker that the config(s) are for before forwarding them
-      val results = configs.map { case (resource, alterConfigOps) =>
-        try {
-          if (resource.`type` == ConfigResource.Type.BROKER) {
-            val brokerId = getAndValidateBrokerId(resource)
-            val perBrokerConfig = brokerId.nonEmpty
-            val configProps = metadataSupport match {
-              case ZkSupport(adminManager, _, _, _, _) =>
-                val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
-                this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-              case RaftSupport(_,_) =>
-                if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
-                else this.config.dynamicConfig.currentDynamicDefaultConfigs
-            }
-
-            configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
-            configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps)
-          } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
-              configHelper.getAndValidateBrokerId(resource)
-              configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
-              resource -> ApiError.NONE
-          } else {
-              resource -> ApiError.NONE
+    // Config alterations should be validated on the broker that the config(s) are for before forwarding them
+    val results = configs.map { case (resource, alterConfigOps) =>
+      try {
+        if (resource.`type` == ConfigResource.Type.BROKER) {
+          val brokerId = configHelper.getAndValidateBrokerId(resource)
+          val perBrokerConfig = brokerId.nonEmpty
+          val configProps = metadataSupport match {
+            case ZkSupport(adminManager, _, _, _, _) =>
+              val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
+              this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            case RaftSupport(_,_) =>
+              val persistentProps = if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
+              else this.config.dynamicConfig.currentDynamicDefaultConfigs
+              val configProps = new Properties()
+              configProps.putAll(persistentProps.asJava)
+              configProps
           }
-        } catch {
-          case e @ (_: ConfigException | _: IllegalArgumentException) =>
-            val message = s"Invalid config value for resource $resource: ${e.getMessage}"
-            info(message)
-            resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
-          case e: Throwable =>
-            // Log client errors at a lower level than unexpected exceptions
-            val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
-            if (e.isInstanceOf[ApiException])
-              info(message, e)
-            else
-              error(message, e)
-            resource -> ApiError.fromThrowable(e)
+          configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
+          configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps)
+        } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
+            configHelper.getAndValidateBrokerId(resource)
+            configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
+            resource -> ApiError.NONE
+        } else {
+            resource -> ApiError.NONE
         }
-      }.toMap
-
-      if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.data.validateOnly) {
-        // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
-          requestThrottleMs, results.asJava))
-      } else {
-        // Calling forwardToControllerOrFail in either case never fails
-        metadataSupport match {
-          case ZkSupport(_, controller, _, _, _) =>
-            if (!controller.isActive &&  isForwardingEnabled(request)) {
-              forwardToControllerOrFail(request)
-            }
-          case RaftSupport(_,_) =>
-            forwardToControllerOrFail(request)
-        }
+      } catch {
+        case e @ (_: ConfigException | _: IllegalArgumentException) =>
+          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+          info(message)
+          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> ApiError.fromThrowable(e)
       }
-    } else if (config.requiresZookeeper) {
+    }.toMap
 
-      val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-      // If this is the zookeeper controller, authorize and then persist the configs
-      if (zkSupport.controller.isActive) {
-        handleIncrementalAlterConfigsRequest(request)
+    if (results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.data.validateOnly) {
+      // If validation fails for any reason or if validateOnly is true, send response back to the client and don't forward the request to the controller.
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
+        requestThrottleMs, results.asJava))
+    } else {
+      // Calling forwardToControllerOrFail in either case never fails
+      metadataSupport match {
+        case ZkSupport(_, controller, _, _, _) =>
+          if (!controller.isActive &&  isForwardingEnabled(request)) {
+            forwardToControllerOrFail(request)
+          }
+        case RaftSupport(_,_) =>
+          forwardToControllerOrFail(request)
       }
     }
   }

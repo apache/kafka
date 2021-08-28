@@ -449,14 +449,20 @@ class ZkAdminManager(val config: KafkaConfig,
                                  configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val brokerId = configHelper.getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
 
-    if (perBrokerConfig)
-      info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
-    else
-      info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+      if (perBrokerConfig)
+        info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+      else
+        info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
 
-    adminZkClient.changeBrokerConfig(brokerId,
-      this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
+      adminZkClient.changeBrokerConfig(brokerId,
+        this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
+    }
 
     resource -> ApiError.NONE
   }
