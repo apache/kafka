@@ -2850,7 +2850,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         val brokerId = configHelper.getAndValidateBrokerId(resource)
         if (resource.`type` == ConfigResource.Type.BROKER) {
-          val dynamicConfigs = if (brokerId.nonEmpty) config.dynamicConfig.overrideDynamicDefaultWithBrokerConfigs 
+          val dynamicConfigs = if (brokerId.nonEmpty) config.dynamicConfig.currentDynamicBrokerConfigs
           else config.dynamicConfig.currentDynamicDefaultConfigs
           val configProps = new Properties()
           configProps.putAll(dynamicConfigs.asJava)
