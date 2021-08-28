@@ -2796,6 +2796,38 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+    val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
+
+    val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
+      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
+        alterConfigResource.resourceName)
+      configResource -> alterConfigResource.configs.iterator.asScala.map {
+        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
+          OpType.forId(alterConfig.configOperation))
+      }.toBuffer
+    }.toMap
+
+    val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
+      resource.`type` match {
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
+          authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+        case ConfigResource.Type.TOPIC =>
+          authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      }
+    }
+
+    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+      resource -> configsAuthorizationApiError(resource)
+    }
+
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
+      requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
+  }
+
+  def validateThenMaybeForwardIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
     val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
       val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
@@ -2807,26 +2839,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }.toMap
 
     if (!request.isForwarded) {
-      // If using KRaft, per broker config alterations should be validated on the broker that the config(s) is for before forwarding them to the controller
+      // Config alterations should be validated on the broker that the config(s) are for before forwarding them
       val results = configs.map { case (resource, alterConfigOps) =>
         try {
           if (resource.`type` == ConfigResource.Type.BROKER) {
-              // In ZK case, the old config is retrieved, altered then validated
-              // val persistentProps = if (perBrokerConfig) adminKRaftClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
-              // else adminKRaftClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
-              // val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            val brokerId = getAndValidateBrokerId(resource)
+            val perBrokerConfig = brokerId.nonEmpty
+            val configProps = metadataSupport match {
+              case ZkSupport(adminManager, _, _, _, _) =>
+                val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
+                this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+              case RaftSupport(_,_) =>
+                if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
+                else this.config.dynamicConfig.currentDynamicDefaultConfigs
+            }
 
-              // For now in the KRaft case, just validate new configs without retrieving the old config
-              val configProps = metadataSupport match {
-                case ZkSupport(adminManager, _, _, _, _) =>
-                  adminManager.fetchBrokerConfigOrDefault(configHelper.getAndValidateBrokerId(resource))
-                case RaftSupport(_,_) =>
-                  new Properties
-              }
-
-              val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
-              configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
-              configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps, configEntriesMap)
+            configHelper.prepareIncrementalConfigs(alterConfigOps.toSeq, configProps, KafkaConfig.configKeys)
+            configHelper.validateBrokerConfigs(resource, alterConfigsRequest.data.validateOnly, configProps)
           } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
               configHelper.getAndValidateBrokerId(resource)
               configHelper.validateLogLevelConfigs(alterConfigOps.toSeq)
@@ -2860,37 +2889,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           case ZkSupport(_, controller, _, _, _) =>
             if (!controller.isActive &&  isForwardingEnabled(request)) {
               forwardToControllerOrFail(request)
-              return
             }
           case RaftSupport(_,_) =>
             forwardToControllerOrFail(request)
         }
       }
     } else if (config.requiresZookeeper) {
-      // Forwarding to the controller is being enabled by default in IBP >= 3.0 to maintain a single ZK writer.
-      // Note that authorization and persisting of configs will not occur on a zkBroker if the request was forwarding enabled and forwarded to the active controller
-      // This method returns after a zkBroker forwards the request so that configs are not persisted from this broker after being forwarded to the controller
+
       val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-      if (!request.isForwarded && isForwardingEnabled(request) && !zkSupport.controller.isActive) {
-        forwardToControllerOrFail(request)
-      } else {
-        val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
-          resource.`type` match {
-            case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
-              authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-            case ConfigResource.Type.TOPIC =>
-              authHelper.authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-            case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
-          }
-        }
-
-        val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
-        val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-          resource -> configsAuthorizationApiError(resource)
-        }
-
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
-          requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
+      // If this is the zookeeper controller, authorize and then persist the configs
+      if (zkSupport.controller.isActive) {
+        handleIncrementalAlterConfigsRequest(request)
       }
     }
   }
