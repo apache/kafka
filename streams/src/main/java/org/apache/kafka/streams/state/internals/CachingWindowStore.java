@@ -266,8 +266,8 @@ class CachingWindowStore
             new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, true) :
             context.cache().range(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
+                keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
@@ -310,8 +310,8 @@ class CachingWindowStore
             new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, false) :
             context.cache().reverseRange(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
+                keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
