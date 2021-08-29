@@ -22,7 +22,7 @@ import java.util.{Collections, Properties}
 import kafka.log.LogConfig
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse, IncrementalAlterConfigsRequest}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
 import scala.collection.{Map, mutable, Seq}
@@ -142,6 +142,17 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     resource -> ApiError.NONE
   }
 
+  def unmarshalIncrementalRequest(incrementalRequest: IncrementalAlterConfigsRequest): (Map[ConfigResource, Seq[AlterConfigOp]], Boolean) = {
+    (incrementalRequest.data.resources.iterator.asScala.map { alterConfigResource =>
+      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
+        alterConfigResource.resourceName)
+      configResource -> alterConfigResource.configs.iterator.asScala.map {
+        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
+          OpType.forId(alterConfig.configOperation))
+      }.toBuffer
+    }.toMap, incrementalRequest.data.validateOnly)
+  }
+
   def handleValidateAlterConfigsError(exception: Throwable, resource: ConfigResource, configProps: Option[Properties], alterOps: Option[Seq[AlterConfigOp]]): (ConfigResource, ApiError) = {
     exception match {
       case e @ (_: ConfigException | _: IllegalArgumentException) =>
@@ -159,7 +170,6 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
         resource -> ApiError.fromThrowable(e)
     }
   }
-
 
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,

@@ -30,8 +30,7 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.{AlterConfigOp}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
@@ -2820,14 +2819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
 
-    val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
-        alterConfigResource.resourceName)
-      configResource -> alterConfigResource.configs.iterator.asScala.map {
-        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
-          OpType.forId(alterConfig.configOperation))
-      }.toBuffer
-    }.toMap
+    val (configs, validateOnly) = configHelper.unmarshalIncrementalRequest(alterConfigsRequest)
 
     val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
       resource.`type` match {
@@ -2839,7 +2831,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
@@ -2882,19 +2874,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
-    val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
-        alterConfigResource.resourceName)
-      configResource -> alterConfigResource.configs.iterator.asScala.map {
-        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
-          OpType.forId(alterConfig.configOperation))
-      }.toBuffer
-    }.toMap
+    val (configs, validateOnly) = configHelper.unmarshalIncrementalRequest(alterConfigsRequest)
 
     // Config alterations should be validated on the broker that the config(s) are for before forwarding them to the Zk or KRaft controller.
     val results = configs.map { case (resource, alterConfigOps) =>
         if (resource.`type` == ConfigResource.Type.BROKER) {
-          tryValidateBrokerConfigs(resource, alterConfigOps.toSeq, alterConfigsRequest.data.validateOnly) match {
+          tryValidateBrokerConfigs(resource, alterConfigOps.toSeq, validateOnly) match {
             case Success(i) => i
             case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, None, Some(alterConfigOps.toSeq))
           }
@@ -2908,7 +2893,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
     }.toMap
 
-    val shouldNotForward = results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.data.validateOnly
+    val shouldNotForward = results.filterNot(_._2 == ApiError.NONE).nonEmpty || validateOnly
     if (shouldNotForward) {
       // If validation fails for any reason or if validateOnly is true, send response back to the client and return false indicating that validation has failed.
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
