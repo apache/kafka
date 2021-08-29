@@ -2627,26 +2627,23 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDynamicConfigs(request: RequestChannel.Request, persist: RequestChannel.Request => Unit, 
     validate: RequestChannel.Request => Boolean): Unit = {
-    request.isForwarded match {
-      case true =>
-        val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-        if (zkSupport.controller.isActive)
-          // Only persist the configs here if the request ended up at a zookeeper controller after validation and being forwarded.
-          // In KRaft, the configs are persisted in ControllerApis.
-          persist(request)
-      case false =>
-        // Validate the configs on the broker that the configs are for
-        if (validate(request)) {
-          metadataSupport match {
-           case ZkSupport(_, _, _, _, _) =>
-             // A zookeeper broker may also be the active controller. If this is the case, persist the configs.
-             // If this broker is not the active controller, forward the request to the controller.
-             maybeForwardToController(request, persist)
-           case RaftSupport(_,_) =>
-             // This will never fail since the request hasn't been forwarded already and since this is a KRaft broker.
-             forwardToControllerOrFail(request)
-          }
-        }
+    val isZkController = if (config.requiresZookeeper) {
+      val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
+      zkSupport.controller.isActive
+    } else {
+      false
+    }
+    if (request.isForwarded) {
+      if (isZkController)
+        // Only persist the configs here if the request ended up at the active zookeeper controller after validation and 
+        // being forwarded. In KRaft, the configs are persisted in ControllerApis.
+        persist(request)
+    } else {
+      // Validate the configs on the broker that the configs are for
+      if (validate(request))
+        // It is possible that a zookeeper broker is also the active controller. If that is the case persist the configs. 
+        // Otherwise, forward the request.
+        if (isZkController) persist(request) else forwardToControllerOrFail(request)
     }
   }
 
