@@ -387,8 +387,12 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-    def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
+      val configProps = new Properties
+      config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+        configProps.setProperty(configEntry.name, configEntry.value)
+      }
 
       try {
         val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
@@ -397,34 +401,14 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
-        val configProps = new Properties
-        config.entries.asScala.filter(_.value != null).foreach { configEntry =>
-          configProps.setProperty(configEntry.name, configEntry.value)
-        }
-
         resource.`type` match {
           case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
-          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
       } catch {
-        case e @ (_: ConfigException | _: IllegalArgumentException) =>
-          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
-          info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
-        case e: Throwable =>
-          val configProps = new Properties
-          config.entries.asScala.filter(_.value != null).foreach { configEntry =>
-            configProps.setProperty(configEntry.name, configEntry.value)
-          }
-          // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource, config ${configHelper.toLoggableProps(resource, configProps).mkString(",")}"
-          if (e.isInstanceOf[ApiException])
-            info(message, e)
-          else
-            error(message, e)
-          resource -> ApiError.fromThrowable(e)
+        case e: Throwable => configHelper.handleValidateAlterConfigsError(e, resource, Some(configProps), None)
       }
     }.toMap
   }
@@ -446,19 +430,15 @@ class ZkAdminManager(val config: KafkaConfig,
   }
 
   private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
-                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+                                 configProps: Properties): (ConfigResource, ApiError) = {
     val brokerId = configHelper.getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
-    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-    validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
-      if (perBrokerConfig)
-        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
 
       if (perBrokerConfig)
-        info(s"Updating broker ${brokerId.get} with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+        info(s"Persisting new configuration for broker ${brokerId.get} from the controller: ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
       else
-        info(s"Updating brokers with new configuration : ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
+        info(s"Persisting new configuration for brokers from the controller: ${configHelper.toLoggableProps(resource, configProps).mkString(",")}")
 
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
@@ -530,7 +510,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             configHelper.prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
-            alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+            alterBrokerConfigs(resource, validateOnly, configProps)
 
           case ConfigResource.Type.BROKER_LOGGER =>
             if (!validateOnly)
@@ -540,18 +520,7 @@ class ZkAdminManager(val config: KafkaConfig,
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
       } catch {
-        case e @ (_: ConfigException | _: IllegalArgumentException) =>
-          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
-          info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
-        case e: Throwable =>
-          // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
-          if (e.isInstanceOf[ApiException])
-            info(message, e)
-          else
-            error(message, e)
-          resource -> ApiError.fromThrowable(e)
+        case e: Throwable => configHelper.handleValidateAlterConfigsError(e, resource, None, Some(alterConfigOps))
       }
     }.toMap
   }

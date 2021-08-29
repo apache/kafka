@@ -54,21 +54,6 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     id
   }
 
-  def validateBrokerConfigs(resource: ConfigResource, 
-                            validateOnly: Boolean, 
-                            configProps: Properties): (ConfigResource, ApiError) = {
-    val brokerId = getAndValidateBrokerId(resource)
-    val perBrokerConfig = brokerId.nonEmpty
-    // Validate and process the reconfiguration
-    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-    if (!validateOnly) {
-      if (perBrokerConfig)
-        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
-    }
-
-    resource -> ApiError.NONE
-  }
-
   def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
 
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
@@ -139,6 +124,39 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
   def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
     configProps.asScala.map {
       case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
+  def validateBrokerConfigs(resource: ConfigResource, 
+                            validateOnly: Boolean, 
+                            configProps: Properties): (ConfigResource, ApiError) = {
+    val brokerId = getAndValidateBrokerId(resource)
+    val perBrokerConfig = brokerId.nonEmpty
+    // Validate and process the reconfiguration
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  def handleValidateAlterConfigsError(exception: Throwable, resource: ConfigResource, configProps: Option[Properties], alterOps: Option[Seq[AlterConfigOp]]): (ConfigResource, ApiError) = {
+    exception match {
+      case e @ (_: ConfigException | _: IllegalArgumentException) =>
+        val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+        info(message)
+        resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+      case e: Throwable =>
+        // Log client errors at a lower level than unexpected exceptions
+        val configs = if (configProps.nonEmpty) toLoggableProps(resource, configProps.get).mkString(",") else alterOps.getOrElse("No incremental alter config operations define")
+        val message = s"Error processing alter configs request for resource $resource, config $configs"
+        if (e.isInstanceOf[ApiException])
+          info(message, e)
+        else
+          error(message, e)
+        resource -> ApiError.fromThrowable(e)
     }
   }
 
