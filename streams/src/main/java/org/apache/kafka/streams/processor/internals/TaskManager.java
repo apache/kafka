@@ -124,6 +124,10 @@ public class TaskManager {
         tasks.setMainConsumer(mainConsumer);
     }
 
+    public double totalProducerBlockedTime() {
+        return tasks.totalProducerBlockedTime();
+    }
+
     public UUID processId() {
         return processId;
     }
