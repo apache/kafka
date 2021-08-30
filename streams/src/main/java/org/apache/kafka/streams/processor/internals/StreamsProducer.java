@@ -203,11 +203,13 @@ public class StreamsProducer {
             return 0.0;
         }
         if (found.size() > 1) {
-            log.warn(
-                "found {} values for metric {}. total blocked time computation may be incorrect",
+            final String err = String.format(
+                "found %d values for metric %s. total blocked time computation may be incorrect",
                 found.size(),
                 name
             );
+            log.error(err);
+            throw new IllegalStateException(err);
         }
         return (Double) metrics.get(found.get(0)).metricValue();
     }

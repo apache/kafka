@@ -33,7 +33,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private static final String TXN_SEND_OFFSETS = "txn-send-offsets";
     private static final String TXN_COMMIT = "txn-commit";
     private static final String TXN_ABORT = "txn-abort";
-    private static final String TOTAL_TIME_SUFFIX = "-time-total";
+    private static final String TOTAL_TIME_SUFFIX = "-time-ns-total";
 
     private final Map<String, String> tags;
     private final Metrics metrics;
@@ -114,7 +114,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
     }
 
     private MetricName metricName(final String name, final String description) {
-        return metrics.metricName(name + TOTAL_TIME_SUFFIX, GROUP, tags);
+        return metrics.metricName(name + TOTAL_TIME_SUFFIX, GROUP, description, tags);
     }
 
     private void removeMetric(final String name) {

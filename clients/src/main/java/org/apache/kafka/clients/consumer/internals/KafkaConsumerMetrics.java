@@ -71,8 +71,8 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         this.commitSyncSensor.add(
             metrics.metricName(
                 "commit-sync-time-ns-total",
-                "The total time the consumer has spent in commitSync in nanoseconds",
-                metricGroupName
+                metricGroupName,
+                "The total time the consumer has spent in commitSync in nanoseconds"
             ),
             new CumulativeSum()
         );
@@ -81,8 +81,8 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         this.committedSensor.add(
             metrics.metricName(
                 "committed-time-ns-total",
-                "The total time the consumer has spent in committed in nanoseconds",
-                metricGroupName
+                metricGroupName,
+                "The total time the consumer has spent in committed in nanoseconds"
             ),
             new CumulativeSum()
         );
