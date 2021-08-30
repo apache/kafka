@@ -502,11 +502,9 @@ public class KafkaStreams implements AutoCloseable {
                                                                                         final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action;
         // Exception might we wrapped within a StreamsException one
-        if (EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getClass())
-            || (throwable.getCause() != null && EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getCause().getClass()))) {
+        if (throwable.getCause() != null && EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getCause().getClass())) {
             // The exception should not be passed over to the user defined uncaught exception handler.
             // Something unexpected happened, we should shut down the client
-            log.warn("Exception bypassed the user defined uncaught exception handler."); // No need to print the exception, it will be printed in the next log line.
             action = SHUTDOWN_CLIENT;
         } else {
             action = streamsUncaughtExceptionHandler.handle(throwable);
@@ -528,7 +526,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
-                        "and the registered exception handler opted to " + action + "." +
+                        "and Kafka Streams opted to " + action + "." +
                         " The streams client is going to shut down now. ", throwable);
                 closeToError();
                 break;
