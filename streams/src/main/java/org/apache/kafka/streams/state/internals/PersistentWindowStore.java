@@ -19,7 +19,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.state.WindowStore;
 
-public interface PersistentWindowStore<K, V>  extends WindowStore<K, V>  {
+/**
+ * A persistent window store which keeps track of last observed stream time.
+ */
+public interface PersistentWindowStore<K, V> extends WindowStore<K, V>  {
     /**
      * Gets the last observed stream time for the given Store.
      * @return

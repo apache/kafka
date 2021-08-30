@@ -19,7 +19,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.state.SessionStore;
 
-public interface PersistentSessionStore<K, AGG>  extends SessionStore<K, AGG> {
+/**
+ * A persistent session store which keeps track of last observed stream time.
+ */
+public interface PersistentSessionStore<K, AGG> extends SessionStore<K, AGG> {
     /**
      * Gets the last observed stream time for the given Store.
      * @return
