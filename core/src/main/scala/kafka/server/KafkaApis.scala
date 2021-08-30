@@ -2699,8 +2699,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }.toMap
 
-    val shouldNotForward = results.filterNot(_._2 == ApiError.NONE).nonEmpty || alterConfigsRequest.validateOnly
-    if (shouldNotForward) {
+    val shouldForwardRequest = results.filterNot(_._2 == ApiError.NONE).isEmpty && !alterConfigsRequest.validateOnly
+    if (!shouldForwardRequest) {
       // If validation fails for any reason or if validateOnly is true, send response back to the client and return false indicating that validation has failed.
       def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
         val data = new AlterConfigsResponseData()
@@ -2716,7 +2716,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       requestHelper.sendResponseMaybeThrottle(request, responseCallback)
     } 
-    !shouldNotForward // equivalent to `shouldForward`
+    shouldForwardRequest
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
@@ -2893,13 +2893,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
     }.toMap
 
-    val shouldNotForward = results.filterNot(_._2 == ApiError.NONE).nonEmpty || validateOnly
-    if (shouldNotForward) {
+    val shouldForwardRequest = results.filterNot(_._2 == ApiError.NONE).isEmpty && !validateOnly
+    if (!shouldForwardRequest) {
       // If validation fails for any reason or if validateOnly is true, send response back to the client and return false indicating that validation has failed.
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
         requestThrottleMs, results.asJava))
     } 
-    !shouldNotForward // equivalent to `shouldForward`
+    shouldForwardRequest
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
