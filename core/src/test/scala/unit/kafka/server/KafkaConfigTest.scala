@@ -615,6 +615,9 @@ class KafkaConfigTest {
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.HeapDumpFolderProp => //ignore string
         case KafkaConfig.HeapDumpTimeoutProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.UnofficialClientLoggingEnableProp => // ignore
+        case KafkaConfig.UnofficialClientCacheTtlProp => // ignore
+        case KafkaConfig.ExpectedClientSoftwareNamesProp => //ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
