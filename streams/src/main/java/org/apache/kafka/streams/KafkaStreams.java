@@ -498,13 +498,14 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private boolean wrappedExceptionIsIn(final Throwable throwable, final Set<Class<? extends Throwable>> exceptionsOfInterest) {
+        return throwable.getCause() != null && exceptionsOfInterest.contains(throwable.getCause().getClass());
+    }
+
     private StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse getActionForThrowable(final Throwable throwable,
-                                                                                        final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+                                                                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action;
-        // Exception might we wrapped within a StreamsException one
-        if (throwable.getCause() != null && EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS.contains(throwable.getCause().getClass())) {
-            // The exception should not be passed over to the user defined uncaught exception handler.
-            // Something unexpected happened, we should shut down the client
+        if (wrappedExceptionIsIn(throwable, EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS)) {
             action = SHUTDOWN_CLIENT;
         } else {
             action = streamsUncaughtExceptionHandler.handle(throwable);

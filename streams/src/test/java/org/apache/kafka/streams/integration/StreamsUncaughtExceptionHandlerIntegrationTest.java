@@ -93,8 +93,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private static Properties properties;
     private static List<String> processorValueCollector;
     private static String appId = "";
-    private static AtomicBoolean throwError = new AtomicBoolean(true);
-    private static AtomicBoolean throwIllegalStateException = new AtomicBoolean(false);
+    private static final AtomicBoolean throwError = new AtomicBoolean(true);
+    private static final AtomicBoolean throwIllegalStateException = new AtomicBoolean(false);
+    private static final AtomicBoolean throwIllegalArgumentException = new AtomicBoolean(false);
 
     @Before
     public void setup() {
@@ -186,6 +187,26 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
+    public void shouldShutdownClientWhenIllegalArgumentException() throws InterruptedException {
+        throwIllegalArgumentException.compareAndSet(false, true);
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+
+            kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD); // if the user defined uncaught exception handler would be hit we would be replacing the thread
+
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
+            produceMessages(0L, inputTopic, "A");
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
+
+            assertThat(processorValueCollector.size(), equalTo(1));
+        } finally {
+            throwIllegalArgumentException.compareAndSet(true, false);
+        }
+
+    }
+
+    @Test
     public void shouldReplaceThreads() throws InterruptedException {
         testReplaceThreads(2);
     }
@@ -260,6 +281,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             if (throwError.get()) {
                 if (throwIllegalStateException.get()) {
                     throw new IllegalStateException("Something unexpected happened in " + Thread.currentThread().getName());
+                } else if (throwIllegalArgumentException.get()) {
+                    throw new IllegalArgumentException("Something unexpected happened in " + Thread.currentThread().getName());
                 } else {
                     throw new StreamsException(Thread.currentThread().getName());
                 }
