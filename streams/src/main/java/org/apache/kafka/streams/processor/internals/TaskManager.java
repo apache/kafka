@@ -158,10 +158,6 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
-    Set<Task> anyActiveTasksCorrupted(Set<TaskId> corruptedTasks) {
-        return corruptedTasks.stream().map(tasks::task).filter(Task::isActive).collect(Collectors.toSet());
-    }
-
     /**
      * Stop all tasks and consuming after the last named topology is removed to prevent further processing
      */
@@ -174,7 +170,7 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException
      */
-    void handleCorruption(final Set<TaskId> corruptedTasks) {
+    boolean handleCorruption(final Set<TaskId> corruptedTasks) {
         final Set<Task> corruptedActiveTasks = new HashSet<>();
         final Set<Task> corruptedStandbyTasks = new HashSet<>();
 
@@ -214,6 +210,7 @@ public class TaskManager {
         }
 
         closeDirtyAndRevive(corruptedActiveTasks, true);
+        return !corruptedActiveTasks.isEmpty();
     }
 
     private void closeDirtyAndRevive(final Collection<Task> taskWithChangelogs, final boolean markAsCorrupted) {

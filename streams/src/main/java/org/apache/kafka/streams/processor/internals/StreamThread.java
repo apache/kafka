@@ -310,6 +310,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -547,6 +548,7 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+        this.eosEnabled = eosEnabled(config);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -611,10 +613,9 @@ public class StreamThread extends Thread {
                 try {
                     // check if any active task got corrupted. We will trigger a rebalance in that case.
                     // once the task corruptions have been handled
-                    Set<Task> corruptedActiveTasks = taskManager.anyActiveTasksCorrupted(e.corruptedTasks());
-                    taskManager.handleCorruption(e.corruptedTasks());
-                    if (!corruptedActiveTasks.isEmpty()) {
-                        log.info("Active task(s) got corrupted {}. Triggering a rebalance", corruptedActiveTasks);
+                    boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
+                    if (enforceRebalance && eosEnabled) {
+                        log.info("Active task(s) got corrupted. Triggering a rebalance.");
                         mainConsumer.enforceRebalance();
                     }
                 } catch (final TaskMigratedException taskMigrated) {

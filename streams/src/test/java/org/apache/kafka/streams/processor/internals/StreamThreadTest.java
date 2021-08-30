@@ -148,6 +148,7 @@ public class StreamThreadTest {
     private final String stateDir = TestUtils.tempDirectory().getPath();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
     private final StreamsConfig config = new StreamsConfig(configProps(false));
+    private final StreamsConfig eosEnabledConfig = new StreamsConfig(configProps(true));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
     private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true, false);
@@ -2287,7 +2288,7 @@ public class StreamThreadTest {
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasks);
+        expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2493,10 +2494,7 @@ public class StreamThreadTest {
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.CREATED).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
-
-        expect(taskManager.anyActiveTasksCorrupted(corruptedTasks)).andReturn(mkSet(task1));
-
-        taskManager.handleCorruption(corruptedTasks);
+        expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
         consumer.enforceRebalance();
         expectLastCall();
@@ -2507,7 +2505,7 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
         final StreamThread thread = new StreamThread(
             mockTime,
-            config,
+            eosEnabledConfig,
             null,
             consumer,
             consumer,
@@ -2564,10 +2562,7 @@ public class StreamThreadTest {
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.CLOSED).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
-
-        expect(taskManager.anyActiveTasksCorrupted(corruptedTasks)).andReturn(mkSet());
-
-        taskManager.handleCorruption(corruptedTasks);
+        expect(taskManager.handleCorruption(corruptedTasks)).andReturn(false);
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2575,7 +2570,7 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
         final StreamThread thread = new StreamThread(
             mockTime,
-            config,
+            eosEnabledConfig,
             null,
             consumer,
             consumer,
