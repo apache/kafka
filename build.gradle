@@ -829,6 +829,7 @@ project(':core') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
+    implementation libs.jose4j
     implementation libs.metrics
     implementation libs.scalaCollectionCompat
     implementation libs.scalaJava8Compat
@@ -1200,6 +1201,7 @@ project(':clients') {
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
+    compileOnly libs.jose4j
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
@@ -1208,6 +1210,8 @@ project(':clients') {
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
+    testRuntimeOnly libs.jose4j
+    testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
   }
 
