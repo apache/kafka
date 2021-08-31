@@ -146,6 +146,7 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />
+      <allow pkg="org.apache.kafka.common.quota" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.common.record" />
@@ -163,6 +164,10 @@
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
       <allow class="com.sun.management.HotSpotDiagnosticMXBean" />
+    </subpackage>
+
+    <subpackage name="quotas">
+      <allow pkg="org.apache.kafka.common" />
     </subpackage>
   </subpackage>
 

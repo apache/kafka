@@ -119,6 +119,8 @@ object DynamicConfig {
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
       .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
 
+    def configKeys = clientConfigs.configKeys
+
     def names = clientConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
@@ -131,6 +133,8 @@ object DynamicConfig {
       .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
       .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
       .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
+
+    def configKeys = userConfigs.configKeys
 
     def names = userConfigs.names
 

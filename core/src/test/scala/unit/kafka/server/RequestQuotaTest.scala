@@ -17,7 +17,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, LinkedHashMap, Optional, Properties}
-
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
@@ -33,6 +32,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
@@ -501,6 +501,12 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setPartitions(Collections.singletonList(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                       .setPartitionIndex(0)))).iterator())))
+
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS =>
+          new DescribeClientQuotasRequest.Builder(ClientQuotaFilter.all())
+
+        case ApiKeys.ALTER_CLIENT_QUOTAS =>
+          new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
 
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK =>
           new LiControlledShutdownSkipSafetyCheckRequest.Builder(

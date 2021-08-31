@@ -176,6 +176,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new ListPartitionReassignmentsResponse(struct, version);
             case OFFSET_DELETE:
                 return new OffsetDeleteResponse(struct, version);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return new DescribeClientQuotasResponse(struct, version);
+            case ALTER_CLIENT_QUOTAS:
+                return new AlterClientQuotasResponse(struct, version);
             case LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK:
                 return new LiControlledShutdownSkipSafetyCheckResponse(struct, version);
             case LI_COMBINED_CONTROL:

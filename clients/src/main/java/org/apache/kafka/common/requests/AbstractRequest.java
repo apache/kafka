@@ -239,6 +239,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new ListPartitionReassignmentsRequest(struct, apiVersion);
             case OFFSET_DELETE:
                 return new OffsetDeleteRequest(struct, apiVersion);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return new DescribeClientQuotasRequest(struct, apiVersion);
+            case ALTER_CLIENT_QUOTAS:
+                return new AlterClientQuotasRequest(struct, apiVersion);
             case LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK:
                 return new LiControlledShutdownSkipSafetyCheckRequest(struct, apiVersion);
             case LI_COMBINED_CONTROL:
