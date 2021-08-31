@@ -577,14 +577,6 @@ class Log(@volatile private var _dir: File,
     partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
-  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
-  def assignTopicId(topicId: Uuid): Unit = {
-    if (keepPartitionMetadataFile) {
-      partitionMetadataFile.write(topicId)
-      this.topicId = topicId
-    }
-  }
-
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
@@ -606,6 +598,29 @@ class Log(@volatile private var _dir: File,
       leaderEpochCache = None
     } else {
       leaderEpochCache = Some(newLeaderEpochFileCache())
+    }
+  }
+
+  private def maybeFlushMetadataFile(): Unit = {
+    partitionMetadataFile.maybeFlush()
+  }
+
+  /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
+  def assignTopicId(topicId: Uuid): Unit = {
+    if (!this.topicId.equals(Uuid.ZERO_UUID)) {
+      if (!this.topicId.equals(topicId)) {
+        // we should never get here as the topic IDs should have been checked in becomeLeaderOrFollower
+        throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+          s"but log already contained topic ID ${this.topicId}")
+      }
+    }
+
+    if (keepPartitionMetadataFile) {
+      this.topicId = topicId
+      if (!partitionMetadataFile.exists()) {
+        partitionMetadataFile.record(topicId)
+        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+      }
     }
   }
 
@@ -1056,6 +1071,7 @@ class Log(@volatile private var _dir: File,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      maybeFlushMetadataFile()
       checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
@@ -1076,6 +1092,8 @@ class Log(@volatile private var _dir: File,
   def renameDir(name: String): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+        // Flush partitionMetadata file before initializing again
+        maybeFlushMetadataFile()
         val renamedDir = new File(dir.getParent, name)
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {
@@ -1160,6 +1178,9 @@ class Log(@volatile private var _dir: File,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
+    // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
+    // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
+    maybeFlushMetadataFile()
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
 
