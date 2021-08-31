@@ -199,7 +199,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
         case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
         case ApiKeys.ALTER_CONFIGS => handleDynamicConfigs(request, handleAlterConfigsRequest, 
-          validateAlterConfigsRequest)
+          validateAlterBrokerConfigs)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
@@ -212,7 +212,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal)
         case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleDynamicConfigs(request, handleIncrementalAlterConfigsRequest, 
-          validateIncrementalAlterConfigsRequest)
+          validateIncrementalAlterBrokerConfigs)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request, requestLocal)
@@ -2679,7 +2679,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestHelper.sendResponseMaybeThrottle(request, responseCallback)
   }
 
-  def validateAlterConfigsRequest(request: RequestChannel.Request): Boolean = {
+  def validateAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
     def tryValidateBrokerConfigs(resource: ConfigResource, validateOnly: Boolean, configProps: Properties): Try[(ConfigResource, ApiError)] = {
       Try(configHelper.validateBrokerConfigs(resource, validateOnly, configProps))
     }
@@ -2840,7 +2840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
   }
 
-  def validateIncrementalAlterConfigsRequest(request: RequestChannel.Request): Boolean = {
+  def validateIncrementalAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
     def tryValidateBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): Try[(ConfigResource, ApiError)] = {
       def validateBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): (ConfigResource, ApiError) = {
         val brokerId = configHelper.getAndValidateBrokerId(resource)
