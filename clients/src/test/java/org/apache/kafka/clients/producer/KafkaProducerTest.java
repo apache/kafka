@@ -1061,7 +1061,7 @@ public class KafkaProducerTest {
 
     private double getAndAssertDurationAtLeast(KafkaProducer<?, ?> producer, String name, double floor) {
         double value = getMetricValue(producer, name);
-        assertTrue(value > floor);
+        assertTrue(value >= floor);
         return value;
     }
 

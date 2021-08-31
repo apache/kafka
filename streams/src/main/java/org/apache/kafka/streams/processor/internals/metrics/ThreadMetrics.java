@@ -95,7 +95,7 @@ public class ThreadMetrics {
     private static final String COMMIT_RATIO_DESCRIPTION =
         "The fraction of time the thread spent on committing all tasks";
     private static final String BLOCKED_TIME_DESCRIPTION =
-        "The total time the thread spent blocked on kafka";
+        "The total time the thread spent blocked on kafka in nanoseconds";
     private static final String THREAD_START_TIME_DESCRIPTION =
         "The time that the thread was started";
 

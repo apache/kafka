@@ -433,7 +433,7 @@ public class ThreadMetricsTest {
         final ArgumentCaptor<Gauge<Double>> captor = gaugeCaptor();
         verify(streamsMetrics).addThreadLevelMutableMetric(
             eq("blocked-time-ns-total"),
-            eq("The total time the thread spent blocked on kafka"),
+            eq("The total time the thread spent blocked on kafka in nanoseconds"),
             eq("burger"),
             captor.capture()
         );
