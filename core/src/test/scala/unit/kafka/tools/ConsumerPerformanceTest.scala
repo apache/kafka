@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
+import java.util.concurrent.atomic.AtomicLong
 
 import kafka.utils.Exit
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
@@ -37,8 +38,8 @@ class ConsumerPerformanceTest {
 
   @Test
   def testNonDetailedHeaderMatchBody(): Unit = {
-    testHeaderMatchContent(detailed = false, 2, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
-      s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0, 1, 1, 1.1, 1.1"))
+    testHeaderMatchContent(detailed = false, 2,
+      () => ConsumerPerformance.printBody(new AtomicLong(1024 * 1024), new AtomicLong(1), new AtomicLong(1), 0, 1, dateFormat))
   }
 
   @Test
