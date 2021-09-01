@@ -489,26 +489,19 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleElectLeaders(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+
     val electLeadersRequest = request.body[ElectLeadersRequest]
-
-    def sendErrorResponse(exception: Throwable): Unit = {
-      requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
-        electLeadersRequest.getErrorResponse(throttleMs, exception)
-      })
-    }
-
-    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
-    } else {
-      val future = controller.electLeaders(electLeadersRequest.data)
-      future.whenComplete { (responseData, exception) =>
-        if (exception != null) {
-          sendErrorResponse(exception)
-        } else {
-          requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
-            new ElectLeadersResponse(responseData.setThrottleTimeMs(throttleMs))
-          })
-        }
+    val future = controller.electLeaders(electLeadersRequest.data)
+    future.whenComplete { (responseData, exception) =>
+      if (exception != null) {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          electLeadersRequest.getErrorResponse(throttleMs, exception)
+        })
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          new ElectLeadersResponse(responseData.setThrottleTimeMs(throttleMs))
+        })
       }
     }
   }
