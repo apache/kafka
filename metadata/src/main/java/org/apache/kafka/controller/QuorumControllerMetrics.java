@@ -73,25 +73,25 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.globalTopicCountGauge = registry.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return globalTopicCount;
+                return active ? globalTopicCount : 0;
             }
         });
         this.globalPartitionCountGauge = registry.newGauge(GLOBAL_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return globalPartitionCount;
+                return active ? globalPartitionCount : 0;
             }
         });
         this.offlinePartitionCountGauge = registry.newGauge(OFFLINE_PARTITION_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return offlinePartitionCount;
+                return active ? offlinePartitionCount : 0;
             }
         });
         this.preferredReplicaImbalanceCountGauge = registry.newGauge(PREFERRED_REPLICA_IMBALANCE_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return preferredReplicaImbalanceCount;
+                return active ? preferredReplicaImbalanceCount : 0;
             }
         });
     }
