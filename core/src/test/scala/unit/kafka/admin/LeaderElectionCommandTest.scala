@@ -29,13 +29,11 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{TimeoutException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{BeforeEach, Tag, Test}
-
-import scala.concurrent.duration._
+import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
@@ -247,79 +245,6 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val secondLine = electionResultOutputIter.next()
     assertTrue(secondLine.contains(s"Valid replica already elected for partitions $topicPartition1"),
     s"Unexpected output: $secondLine")
-  }
-}
-
-/**
- * For some error cases, we can save a little build time by avoiding the overhead
- * for cluster creation and cleanup.
- */
-class LeaderElectionCommandErrorTest {
-
-  @Test
-  def testTopicWithoutPartition(): Unit = {
-    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
-      Array(
-        "--bootstrap-server", "nohost:9092",
-        "--election-type", "unclean",
-        "--topic", "some-topic"
-      )
-    ))
-    assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-    assertTrue(e.getMessage.contains(" partition"))
-  }
-
-  @Test
-  def testPartitionWithoutTopic(): Unit = {
-    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
-      Array(
-        "--bootstrap-server", "nohost:9092",
-        "--election-type", "unclean",
-        "--all-topic-partitions",
-        "--partition", "0"
-      )
-    ))
-    assertEquals("Option partition is only allowed if topic is used", e.getMessage)
-  }
-
-  @Test
-  def testMissingElectionType(): Unit = {
-    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
-      Array(
-        "--bootstrap-server", "nohost:9092",
-        "--topic", "some-topic",
-        "--partition", "0"
-      )
-    ))
-    assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-    assertTrue(e.getMessage.contains(" election-type"))
-  }
-
-  @Test
-  def testMissingTopicPartitionSelection(): Unit = {
-    val e = assertThrows(classOf[Throwable], () => LeaderElectionCommand.main(
-      Array(
-        "--bootstrap-server", "nohost:9092",
-        "--election-type", "preferred"
-      )
-    ))
-    assertTrue(e.getMessage.startsWith("One and only one of the following options is required: "))
-    assertTrue(e.getMessage.contains(" all-topic-partitions"))
-    assertTrue(e.getMessage.contains(" topic"))
-    assertTrue(e.getMessage.contains(" path-to-json-file"))
-  }
-
-  @Test
-  def testInvalidBroker(): Unit = {
-    val e = assertThrows(classOf[AdminCommandFailedException], () => LeaderElectionCommand.run(
-      Array(
-        "--bootstrap-server", "example.com:1234",
-        "--election-type", "unclean",
-        "--all-topic-partitions"
-      ),
-      1.seconds
-    ))
-    assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
 }
 

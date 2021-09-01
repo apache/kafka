@@ -818,10 +818,15 @@ public class ReplicationControlManager {
                 if (topic != null) {
                     for (int partitionId : topic.parts.keySet()) {
                         ApiError error = electLeader(topicName, partitionId, electionType, records);
-                        topicResults.partitionResult().add(new PartitionResult().
-                            setPartitionId(partitionId).
-                            setErrorCode(error.error().code()).
-                            setErrorMessage(error.message()));
+
+                        // When electing leaders for all partitions, we do not return
+                        // partitions which already have the desired leader.
+                        if (error.error() != Errors.ELECTION_NOT_NEEDED) {
+                            topicResults.partitionResult().add(new PartitionResult().
+                                setPartitionId(partitionId).
+                                setErrorCode(error.error().code()).
+                                setErrorMessage(error.message()));
+                        }
                     }
                 }
             }
