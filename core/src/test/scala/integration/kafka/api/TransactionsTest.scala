@@ -94,15 +94,18 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.initTransactions()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = false))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = false))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 0, "2", "2", willBeCommitted = false))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = false))
     producer.flush()
     producer.abortTransaction()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = true))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "1", "1", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 0, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
+
+    maybeWaitForSegmentUpload(new TopicPartition(topic2, 0), 3)
+    maybeWaitForSegmentUpload(new TopicPartition(topic1, 0), 3)
 
     consumer.subscribe(List(topic1, topic2).asJava)
     unCommittedConsumer.subscribe(List(topic1, topic2).asJava)
@@ -747,6 +750,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps
+  }
+
+  def maybeWaitForSegmentUpload(topicPartition: TopicPartition, earliestLocalOffset: Long): Unit = {
   }
 
   private def createReadCommittedConsumer(group: String = "group",

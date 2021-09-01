@@ -153,7 +153,7 @@ public final class RemoteLogManagerConfig {
                                   REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC)
                   .defineInternal(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING,
                                   null,
-                                  new ConfigDef.NonEmptyString(),
+                                  null,
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
                   .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,

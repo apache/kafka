@@ -151,6 +151,7 @@ if (file('.git').exists()) {
     excludes.addAll([
         '**/.git/**',
         '**/build/**',
+        '**/docs/**',
         'CONTRIBUTING.md',
         'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
@@ -783,6 +784,7 @@ project(':core') {
     compileOnly libs.log4j
 
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':storage:api').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.mockitoCore
     testCompile libs.easymock
@@ -957,6 +959,9 @@ project(':core') {
     from "$rootDir/NOTICE"
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+    // To test the local tiered storage implementation, copying the clients-test and storage-test jars to the distribution.
+    from(project(':clients').configurations.archives.artifacts.files) { into("libs/") }
+    from(project(':storage').configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtime) { into("libs/") }

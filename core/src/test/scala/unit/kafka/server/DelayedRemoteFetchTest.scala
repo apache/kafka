@@ -19,17 +19,18 @@ package kafka.server
 
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
-
 import kafka.cluster.Partition
 import kafka.log.remote.{MockRemoteLogManager, RemoteLogManager, RemoteLogReadResult}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.utils.Utils
 import org.easymock.{EasyMock, EasyMockSupport}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.nio.file.{Files, Path}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -37,6 +38,13 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
   val tp = new TopicPartition("test", 0)
   val tp1 = new TopicPartition("t1", 0)
   var isRemoteFetchExecuted = false
+  val logDir: Path = Files.createTempDirectory("kafka-test-")
+  val rlm = new MockRemoteLogManager(5, 20, logDir.toString)
+
+  @AfterEach
+  def afterEach(): Unit = {
+    Utils.delete(logDir.toFile)
+  }
 
   @Test
   def testRemoteFetch(): Unit = {
@@ -44,7 +52,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
 
     def responseCallback(r: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       replied = true
-      assert(r(0)._1.equals(tp1))
+      assert(r.head._1.equals(tp1))
 
       assert(r(1)._1.equals(tp))
       assertEquals(None, r(1)._2.error)
@@ -53,7 +61,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
       assertEquals(2000, r(1)._2.highWatermark)
     }
 
-    RemoteFetch(false, responseCallback)
+    RemoteFetch(timeout = false, responseCallback)
     assert(replied)
     assert(isRemoteFetchExecuted)
   }
@@ -64,7 +72,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
 
     def responseCallback(r: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       replied = true
-      assert(r(0)._1.equals(tp1))
+      assert(r.head._1.equals(tp1))
 
       assert(r(1)._1.equals(tp))
       assertEquals(None, r(1)._2.error)
@@ -72,15 +80,14 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
       assertEquals(2000, r(1)._2.highWatermark)
     }
 
-    RemoteFetch(true, responseCallback)
+    RemoteFetch(timeout = true, responseCallback)
     assert(replied)
     assert(!isRemoteFetchExecuted)
   }
 
-  def RemoteFetch(timeout: Boolean, responseCallback: (Seq[(TopicPartition, FetchPartitionData)]) => Unit): Unit = {
-    val rlm = new MockRemoteLogManager(5, 20)
+  private def RemoteFetch(timeout: Boolean, responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit): Unit = {
     val fetchInfo = new PartitionData(100, 0, 1000, Optional.of(1))
-    val remoteFetchInfo = RemoteStorageFetchInfo(1000, true, tp, fetchInfo, FetchTxnCommitted)
+    val remoteFetchInfo = RemoteStorageFetchInfo(1000, minOneMessage = true, tp, fetchInfo, FetchTxnCommitted)
 
     val fetchPartitionStatus = FetchPartitionStatus(new LogOffsetMetadata(fetchInfo.fetchOffset), fetchInfo)
 
@@ -97,7 +104,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
       fetchPartitionStatus = List((tp1, fetchPartitionStatus1), (tp, fetchPartitionStatus)))
 
     val localReadResults: Seq[(TopicPartition, LogReadResult)] = List(
-      (tp1, new LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      (tp1, LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
         divergingEpoch = None,
         highWatermark = -1L,
         leaderLogStartOffset = -1L,
@@ -106,7 +113,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
         fetchTimeMs = -1L,
         lastStableOffset = None,
         exception = Some(new Exception()))),
-      (tp, new LogReadResult(
+      (tp, LogReadResult(
         FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, delayedRemoteStorageFetch = Some(remoteFetchInfo)),
         divergingEpoch = None,
         highWatermark = 2000,
