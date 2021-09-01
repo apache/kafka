@@ -96,6 +96,7 @@ class KafkaServer(
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
 
+  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
   private var shutdownLatch = new CountDownLatch(1)
   private var logContext: LogContext = null
 
@@ -161,6 +162,8 @@ class KafkaServer(
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
+  override def brokerState: BrokerState = _brokerState
+
   def clusterId: String = _clusterId
 
   // Visible for testing
@@ -188,7 +191,7 @@ class KafkaServer(
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState = BrokerState.STARTING
+        _brokerState = BrokerState.STARTING
 
         /* setup zookeeper */
         initZkClient(time)
@@ -250,7 +253,7 @@ class KafkaServer(
         logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
-        brokerState = BrokerState.RECOVERY
+        _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId)
@@ -418,7 +421,7 @@ class KafkaServer(
 
         socketServer.startProcessingRequests(authorizerFutures)
 
-        brokerState = BrokerState.RUNNING
+        _brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -596,13 +599,21 @@ class KafkaServer(
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
               val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
-              if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
+              if (shutdownResponse.error != Errors.NONE) {
+                info(s"Controlled shutdown request returned after ${clientResponse.requestLatencyMs}ms " +
+                  s"with error ${shutdownResponse.error}")
+              } else if (shutdownResponse.data.remainingPartitions.isEmpty) {
                 shutdownSucceeded = true
-                info("Controlled shutdown succeeded")
-              }
-              else {
-                info(s"Remaining partitions to move: ${shutdownResponse.data.remainingPartitions}")
-                info(s"Error from controller: ${shutdownResponse.error}")
+                info("Controlled shutdown request returned successfully " +
+                  s"after ${clientResponse.requestLatencyMs}ms")
+              } else {
+                info(s"Controlled shutdown request returned after ${clientResponse.requestLatencyMs}ms " +
+                  s"with ${shutdownResponse.data.remainingPartitions.size} partitions remaining to move")
+
+                if (isDebugEnabled) {
+                  debug("Remaining partitions to move during controlled shutdown: " +
+                    s"${shutdownResponse.data.remainingPartitions}")
+                }
               }
             }
             catch {
@@ -613,9 +624,9 @@ class KafkaServer(
                 // ignore and try again
             }
           }
-          if (!shutdownSucceeded) {
+          if (!shutdownSucceeded && remainingRetries > 0) {
             Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            warn("Retrying controlled shutdown after the previous attempt failed...")
+            info(s"Retrying controlled shutdown ($remainingRetries retries remaining)")
           }
         }
       }
@@ -631,7 +642,7 @@ class KafkaServer(
       // the shutdown.
       info("Starting controlled shutdown")
 
-      brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
+      _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
@@ -656,7 +667,7 @@ class KafkaServer(
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
-        brokerState = BrokerState.SHUTTING_DOWN
+        _brokerState = BrokerState.SHUTTING_DOWN
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
@@ -726,7 +737,7 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
-        brokerState = BrokerState.NOT_RUNNING
+        _brokerState = BrokerState.NOT_RUNNING
 
         startupComplete.set(false)
         isShuttingDown.set(false)
