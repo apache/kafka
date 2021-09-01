@@ -88,7 +88,7 @@ public class HttpClient {
         }
 
         int responseCode = con.getResponseCode();
-        log.warn("post - responseCode: {}", responseCode);
+        log.debug("post - responseCode: {}", responseCode);
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
             String responseBody;

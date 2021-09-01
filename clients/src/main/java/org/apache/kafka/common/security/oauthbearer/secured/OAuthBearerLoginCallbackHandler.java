@@ -25,6 +25,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -54,6 +56,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private LoginCallbackHandlerConfiguration conf;
 
+    private SSLSocketFactory sslSocketFactory;
+
     private HttpURLConnectionSupplier connectionSupplier;
 
     private boolean isConfigured = false;
@@ -73,7 +77,16 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         conf = new LoginCallbackHandlerConfiguration(moduleOptions);
         accessTokenValidator = new LoginAccessTokenValidator(conf.getScopeClaimName(),
             conf.getSubClaimName());
-        connectionSupplier = () -> (HttpURLConnection) new URL(conf.getTokenEndpointUri()).openConnection();
+        sslSocketFactory = ConfigurationUtils.createSSLSocketFactory(moduleOptions,
+            LoginCallbackHandlerConfiguration.TOKEN_ENDPOINT_URI_CONFIG);
+        connectionSupplier = () -> {
+            HttpURLConnection con = (HttpURLConnection) new URL(conf.getTokenEndpointUri()).openConnection();
+
+            if (sslSocketFactory != null && con instanceof HttpsURLConnection)
+                ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+
+            return con;
+        };
 
         isConfigured = true;
     }

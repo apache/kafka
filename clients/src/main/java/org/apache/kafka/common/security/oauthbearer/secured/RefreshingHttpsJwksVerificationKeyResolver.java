@@ -35,8 +35,8 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private VerificationKeyResolver delegate;
 
-    public RefreshingHttpsJwksVerificationKeyResolver(String location, long refreshIntervalMs) {
-        this.httpsJkws = new RefreshingHttpsJwks(location, refreshIntervalMs);
+    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks httpsJkws) {
+        this.httpsJkws = httpsJkws;
         this.delegate = new HttpsJwksVerificationKeyResolver(httpsJkws);
     }
 

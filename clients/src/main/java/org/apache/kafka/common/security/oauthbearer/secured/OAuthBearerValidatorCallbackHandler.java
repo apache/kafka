@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidat
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.jose4j.http.Get;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +76,16 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             verificationKeyResolver = new PemVerificationKeyResolver(Paths.get(jwksFile));
         } else {
             long refreshIntervalMs = conf.getJwksEndpointRefreshIntervalMs();
-            verificationKeyResolver = new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUri, refreshIntervalMs);
+            RefreshingHttpsJwks httpsJkws = new RefreshingHttpsJwks(jwksEndpointUri, refreshIntervalMs);
+            SSLSocketFactory sslSocketFactory = ConfigurationUtils.createSSLSocketFactory(moduleOptions, JWKS_ENDPOINT_URI_CONFIG);
+
+            if (sslSocketFactory != null) {
+                Get get = new Get();
+                get.setSslSocketFactory(sslSocketFactory);
+                httpsJkws.setSimpleHttpGet(get);
+            }
+
+            verificationKeyResolver = new RefreshingHttpsJwksVerificationKeyResolver(httpsJkws);
         }
 
         configure(saslMechanism, conf, conf.getExpectedAudiences(), verificationKeyResolver);
