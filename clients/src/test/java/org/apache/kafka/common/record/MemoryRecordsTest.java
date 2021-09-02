@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
@@ -525,7 +524,7 @@ public class MemoryRecordsTest {
 
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
-                return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, true);
+                return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
             }
         };
         builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);

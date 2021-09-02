@@ -342,14 +342,15 @@ class LogCleaner(initialConfig: CleanerConfig,
     @throws(classOf[LogCleaningException])
     private def cleanFilthiestLog(): Boolean = {
       val preCleanStats = new PreCleanStats()
-      val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
+      val (ltc, reason) = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
+      val cleaned = ltc match {
         case None =>
           false
         case Some(cleanable) =>
           // there's a log, clean it
           this.lastPreCleanStats = preCleanStats
           try {
-            cleanLog(cleanable)
+            cleanLog(cleanable, reason)
             true
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
@@ -373,11 +374,11 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaned
     }
 
-    private def cleanLog(cleanable: LogToClean): Unit = {
+    private def cleanLog(cleanable: LogToClean, reason: LogCleaningReason): Unit = {
       val startOffset = cleanable.firstDirtyOffset
       var endOffset = startOffset
       try {
-        val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
+        val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable, reason)
         endOffset = nextDirtyOffset
         recordStats(cleaner.id, cleanable.log.name, startOffset, endOffset, cleanerStats)
       } catch {
@@ -489,10 +490,11 @@ private[log] class Cleaner(val id: Int,
    * Clean the given log
    *
    * @param cleanable The log to be cleaned
+   * @param reason The reason the log is being cleaned, for logging purposes
    *
    * @return The first offset not cleaned and the statistics for this round of cleaning
    */
-  private[log] def clean(cleanable: LogToClean): (Long, CleanerStats) = {
+  private[log] def clean(cleanable: LogToClean, reason: LogCleaningReason = DirtyRatio): (Long, CleanerStats) = {
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
     val deleteHorizonMs =
@@ -500,11 +502,11 @@ private[log] class Cleaner(val id: Int,
         case None => 0L
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
     }
-    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs)
+    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs, logCleaningReason = reason)
   }
 
-  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L): (Long, CleanerStats) = {
-    info("Beginning cleaning of log %s.".format(cleanable.log.name))
+  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L, logCleaningReason: LogCleaningReason = DirtyRatio): (Long, CleanerStats) = {
+    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, logCleaningReason.getClass.getName))
 
     val log = cleanable.log
     log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
@@ -585,9 +587,8 @@ private[log] class Cleaner(val id: Int,
         try {
           val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
             log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
-          if (log.latestDeleteHorizon < latestDeleteHorizon) {
+          if (log.latestDeleteHorizon < latestDeleteHorizon)
             log.latestDeleteHorizon = latestDeleteHorizon
-          }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -801,9 +802,9 @@ private[log] class Cleaner(val id: Int,
        *   2) The message doesn't has value but it can't be deleted now.
        */
       val latestOffsetForKey = record.offset() >= foundOffset
-      val supportDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2
+      val legacyRecord = batch.magic() < RecordBatch.MAGIC_VALUE_V2
       val shouldRetainDeletes =
-        if (supportDeleteHorizon)
+        if (!legacyRecord)
           !batch.deleteHorizonMs().isPresent || currentTime < batch.deleteHorizonMs().getAsLong
         else
           retainDeletesForLegacyRecords

@@ -199,17 +199,14 @@ public class MemoryRecords extends AbstractRecords {
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
                     final MemoryRecordsBuilder builder;
-                    if (needToSetDeleteHorizon) {
-                        long deleteHorizonMs = filter.currentTime + filter.deleteRetentionMs;
-                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
-                        if (deleteHorizonMs > filterResult.latestDeleteHorizon()) {
-                            filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
-                        }
-                    } else {
-                        builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP));
-                        if (batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP) > filterResult.latestDeleteHorizon())
-                            filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs().getAsLong());
-                    }
+                    long deleteHorizonMs;
+                    if (needToSetDeleteHorizon)
+                        deleteHorizonMs = filter.currentTime + filter.deleteRetentionMs;
+                    else
+                        deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
+                    builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
+                    if (deleteHorizonMs > filterResult.latestDeleteHorizon())
+                        filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
 
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();

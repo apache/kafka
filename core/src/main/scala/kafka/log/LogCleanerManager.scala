@@ -39,6 +39,10 @@ private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
 private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
 
+private[log] sealed trait LogCleaningReason
+private[log] case object DirtyRatio extends LogCleaningReason
+private[log] case object DeleteHorizon extends LogCleaningReason
+
 private[log] class LogCleaningException(val log: UnifiedLog,
                                         private val message: String,
                                         private val cause: Throwable) extends KafkaException(message, cause)
@@ -164,8 +168,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     * Choose the log to clean next and add it to the in-progress set. We recompute this
     * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
+    * Returns a tuple of an Option of the log selected to be cleaned and the reason it was selected.
     */
-  def grabFilthiestCompactedLog(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {
+  def grabFilthiestCompactedLog(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): (Option[LogToClean], LogCleaningReason) = {
     inLock(lock) {
       val now = time.milliseconds
       this.timeOfLastRun = now
@@ -212,15 +217,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         if (!logsWithTombstonesExpired.isEmpty) {
           val filthiest = logsWithTombstonesExpired.max
           inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
-          Some(filthiest)
+          (Some(filthiest), DeleteHorizon)
         } else {
-          None
+          (None, DirtyRatio)
         }
       } else {
         preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
-        Some(filthiest)
+        (Some(filthiest), DirtyRatio)
       }
     }
   }

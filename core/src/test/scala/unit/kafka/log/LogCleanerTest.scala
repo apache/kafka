@@ -380,12 +380,12 @@ class LogCleanerTest {
     assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
-    // delete horizon forced to 0 to verify marker is not removed early
+    // clean again with same timestamp to verify marker is not removed early
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = largeTimestamp)._1
     assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
-    // clean again with large delete horizon and verify the marker is removed
+    // clean again with max timestamp to verify the marker is removed
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), currentTime = Long.MaxValue)._1
     assertEquals(List(2, 1, 3), LogTestUtils.keysInLog(log))
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
@@ -574,7 +574,7 @@ class LogCleanerTest {
     assertEquals(List(0, 1), lastOffsetsPerBatchInLog(log))
 
     // The empty batch and the marker is still retained after a second cleaning.
-    cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = Long.MaxValue - 1)
+    cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), currentTime = Long.MaxValue)
     assertEquals(List(1), offsetsInLog(log))
     assertEquals(List(0, 1), lastOffsetsPerBatchInLog(log))
   }
@@ -1869,6 +1869,7 @@ class LogCleanerTest {
    *  1. On the first run, set the delete horizon in the batches with tombstone or markers with empty txn records.
    *  2. For the second pass, we will advance the current time by tombstoneRetentionMs, which will cause the
    *     tombstones to expire, leading to their prompt removal from the log.
+   * Returns the first dirty offset in the log as a result of the second cleaning.
    */
   private def runTwoPassClean(cleaner: Cleaner, logToClean: LogToClean, currentTime: Long,
                               legacyDeleteHorizonMs: Long = -1L, tombstoneRetentionMs: Long = 86400000) : Long = {

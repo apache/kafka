@@ -213,7 +213,7 @@ public interface RecordBatch extends Iterable<Record> {
     boolean isTransactional();
 
     /**
-     * Get the delete horizon, returns None if the first timestamp is not the delete horizon
+     * Get the delete horizon, returns OptionalLong.EMPTY if the first timestamp is not the delete horizon
      * @return timestamp of the delete horizon
      */
     OptionalLong deleteHorizonMs();

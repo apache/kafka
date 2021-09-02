@@ -257,8 +257,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                  @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
                  val producerStateManager: ProducerStateManager,
                  @volatile private var _topicId: Option[Uuid],
-                 val keepPartitionMetadataFile: Boolean,
-                 @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP) extends Logging with KafkaMetricsGroup {
+                 val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.UnifiedLog._
 
@@ -288,6 +287,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
   @volatile var partitionMetadataFile : PartitionMetadataFile = null
+
+  /* Keep track of the largest deleteHorizonMs that is present from records in the log. This value helps streamline the
+   * deletion of tombstones in compacted logs. The LogCleanerManager can use this value to determine if the log can
+   * be cleaned to remove eligible tombstones without waiting for the log's dirty section to grow large enough.
+   */
+  @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
 
   locally {
     initializePartitionMetadata()
