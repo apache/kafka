@@ -631,7 +631,6 @@ class KafkaController(val config: KafkaConfig,
     // If no partition has changed leader or ISR, no UpdateMetadataRequest is sent through PartitionStateMachine
     // and ReplicaStateMachine. In that case, we want to send an UpdateMetadataRequest explicitly to
     // propagate the information about the new offline brokers.
-    // Note that during leader re-election, brokers update their metadata
     if (newOfflineReplicasNotForDeletion.isEmpty && onlineStateChangeResults.values.forall(_.isLeft)) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
