@@ -517,14 +517,21 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> currentSegment = segmentIterator.next();
             currentTime = currentSegment.getKey();
 
+            ConcurrentNavigableMap<Bytes, byte[]> subMap;
             if (allKeys) { // keyFrom == null && keyTo == null
-                return currentSegment.getValue().entrySet().iterator();
+                subMap = currentSegment.getValue();
             } else if (keyFrom == null) {
-                return currentSegment.getValue().headMap(keyTo, true).entrySet().iterator();
+                subMap = currentSegment.getValue().headMap(keyTo, true);
             } else if (keyTo == null) {
-                return currentSegment.getValue().tailMap(keyFrom, true).entrySet().iterator();
+                subMap = currentSegment.getValue().tailMap(keyFrom, true);
             } else {
-                return currentSegment.getValue().subMap(keyFrom, true, keyTo, true).entrySet().iterator();
+                subMap = currentSegment.getValue().subMap(keyFrom, true, keyTo, true);
+            }
+
+            if (forward) {
+                return subMap.entrySet().iterator();
+            } else {
+                return subMap.descendingMap().entrySet().iterator();
             }
         }
 
