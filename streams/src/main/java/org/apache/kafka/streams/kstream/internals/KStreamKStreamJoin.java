@@ -26,7 +26,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
@@ -37,7 +37,7 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+@SuppressWarnings({"deprecation", "unchecked"}) // Old PAPI. Needs to be migrated.
 class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
@@ -47,10 +47,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
 
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
     private final boolean outer;
-    private final Optional<String> outerJoinWindowName;
     private final boolean isLeftSide;
+    private final Optional<String> outerJoinWindowName;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends R> joiner;
 
     private final TimeTracker sharedTimeTracker;
 
@@ -86,7 +86,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
     private class KStreamKStreamJoinProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V1> {
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
-        private Optional<KeyValueStore<KeyAndJoinSide<K>, LeftOrRightValue>> outerJoinWindowStore = Optional.empty();
+        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinStore = Optional.empty();
 
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
@@ -96,7 +96,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             otherWindowStore = context.getStateStore(otherWindowName);
 
             if (enableSpuriousResultFix) {
-                outerJoinWindowStore = outerJoinWindowName.map(context::getStateStore);
+                outerJoinStore = outerJoinWindowName.map(context::getStateStore);
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
@@ -135,7 +135,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                outerJoinWindowStore.ifPresent(this::emitNonJoinedOuterRecords);
+                outerJoinStore.ifPresent(this::emitNonJoinedOuterRecords);
             }
 
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(key, timeFrom, timeTo)) {
@@ -144,9 +144,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
 
-                    outerJoinWindowStore.ifPresent(store -> {
-                        // Delete the joined record from the non-joined outer window store
-                        store.put(KeyAndJoinSide.make(!isLeftSide, key, otherRecordTimestamp), null);
+                    outerJoinStore.ifPresent(store -> {
+                        // blind-delete the joined record from the non-joined outer window store;
+                        // we do not use the delete() call since that would incur an extra get
+                        store.put(TimestampedKeyAndJoinSide.make(!isLeftSide, key, otherRecordTimestamp), null);
                     });
 
                     context().forward(
@@ -173,20 +174,19 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!outerJoinWindowStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
+                    if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(key, joiner.apply(key, value, null));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        outerJoinWindowStore.ifPresent(store -> store.put(
-                            KeyAndJoinSide.make(isLeftSide, key, inputRecordTimestamp),
+                        outerJoinStore.ifPresent(store -> store.put(
+                            TimestampedKeyAndJoinSide.make(isLeftSide, key, inputRecordTimestamp),
                             LeftOrRightValue.make(isLeftSide, value)));
                     }
                 }
             }
         }
 
-        @SuppressWarnings("unchecked")
-        private void emitNonJoinedOuterRecords(final KeyValueStore<KeyAndJoinSide<K>, LeftOrRightValue> store) {
+        private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store) {
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
 
@@ -208,14 +208,14 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
-            try (final KeyValueIterator<KeyAndJoinSide<K>, LeftOrRightValue> it = store.all()) {
+            try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
                 while (it.hasNext()) {
-                    final KeyValue<KeyAndJoinSide<K>, LeftOrRightValue> record = it.next();
+                    final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> record = it.next();
 
-                    final KeyAndJoinSide<K> keyAndJoinSide = record.key;
+                    final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = record.key;
                     final LeftOrRightValue<V1, V2> value = record.value;
-                    final K key = keyAndJoinSide.getKey();
-                    final long timestamp = keyAndJoinSide.getTimestamp();
+                    final K key = timestampedKeyAndJoinSide.getKey();
+                    final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
                     sharedTimeTracker.minTime = timestamp;
 
                     // Skip next records if window has not closed
@@ -236,8 +236,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     context().forward(key, nullJoinedValue, To.all().withTimestamp(timestamp));
 
-                    // Delete the key from the outer window store now it is emitted
-                    store.put(keyAndJoinSide, null);
+                    // blind-delete the key from the outer window store now it is emitted;
+                    // we do not use the delete() call since that would incur an extra get
+                    store.put(timestampedKeyAndJoinSide, null);
                 }
             }
         }

@@ -30,23 +30,20 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serde;
 
 /**
- * A persistent (time-key)-value store based on RocksDB.
+ * A wrapper key-value store that serializes the record values bytes as a list.
+ * As a result put calls would be interpreted as a get-append-put to the underlying RocksDB store.
+ * Range iterators would also flatten the value lists and return the values one-by-one.
  *
- * The store uses the {@link TimeOrderedKeySchema} to serialize the record key bytes to generate the
- * combined (time-key) store key. This key schema is efficient when doing time range queries in
- * the store (i.e. fetchAll(from, to) ).
- *
- * For key range queries, like fetch(key, fromTime, toTime), use the {@link RocksDBWindowStore}
- * which uses the {@link WindowKeySchema} to serialize the record bytes for efficient key queries.
+ * This store is used for cases where we do not want to de-duplicate values of the same keys but want to retain all such values.
  */
 @SuppressWarnings("unchecked")
-public class RocksDBTimeOrderedWindowStore
+public class ListValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
     implements KeyValueStore<Bytes, byte[]> {
 
     static private final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
-    RocksDBTimeOrderedWindowStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
+    ListValueStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
     }
 
@@ -81,9 +78,9 @@ public class RocksDBTimeOrderedWindowStore
 
     @Override
     public byte[] delete(final Bytes key) {
-        final byte[] oldValue = wrapped().get(key);
-        put(key, null);
-        return oldValue;
+        // we intentionally disable delete calls since the returned bytes would
+        // represent a list, not a single value; we need to have a new API for delete if we do need it
+        throw new UnsupportedOperationException("delete not supported");
     }
 
     @Override

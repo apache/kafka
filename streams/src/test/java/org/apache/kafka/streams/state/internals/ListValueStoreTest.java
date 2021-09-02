@@ -39,18 +39,18 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 
-public class RocksDBTimeOrderedWindowStoreTest {
-    private static final String STORE_NAME = "rocksDB time-ordered window store";
+public class ListValueStoreTest {
+    private static final String STORE_NAME = "rocksDB list value store";
 
-    KeyValueStore<Integer, String> windowStore;
-    InternalMockProcessorContext<Integer, String> context;
     MockRecordCollector recordCollector;
+    KeyValueStore<Integer, String> listStore;
+    InternalMockProcessorContext<Integer, String> context;
 
     final File baseDir = TestUtils.tempDirectory("test");
 
     @Before
     public void setup() {
-        windowStore = buildStore(Serdes.Integer(), Serdes.String());
+        listStore = buildStore(Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext<>(
@@ -64,17 +64,17 @@ public class RocksDBTimeOrderedWindowStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        windowStore.init((StateStoreContext) context, windowStore);
+        listStore.init((StateStoreContext) context, listStore);
     }
 
     @After
     public void after() {
-        windowStore.close();
+        listStore.close();
     }
 
     <K, V> KeyValueStore<K, V> buildStore(final Serde<K> keySerde,
                                           final Serde<V> valueSerde) {
-        return new TimeOrderedWindowStoreBuilder<>(
+        return new ListValueStoreBuilder<>(
             new RocksDbKeyValueBytesStoreSupplier(STORE_NAME, false),
             keySerde,
             valueSerde,
@@ -84,94 +84,91 @@ public class RocksDBTimeOrderedWindowStoreTest {
 
     @Test
     public void shouldGetAll() {
-        windowStore.put(0, "zero");
+        listStore.put(0, "zero");
         // should retain duplicates
-        windowStore.put(0, "zero again");
-        windowStore.put(1, "one");
-        windowStore.put(2, "two");
+        listStore.put(0, "zero again");
+        listStore.put(1, "one");
+        listStore.put(2, "two");
 
-        final KeyValue<Integer, String> zero = windowedPair(0, "zero");
-        final KeyValue<Integer, String> zeroAgain = windowedPair(0, "zero again");
-        final KeyValue<Integer, String> one = windowedPair(1, "one");
-        final KeyValue<Integer, String> two = windowedPair(2, "two");
+        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> zeroAgain = KeyValue.pair(0, "zero again");
+        final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
+        final KeyValue<Integer, String> two = KeyValue.pair(2, "two");
 
         assertEquals(
             asList(zero, zeroAgain, one, two),
-            toList(windowStore.all())
+            toList(listStore.all())
         );
     }
 
     @Test
     public void shouldGetAllNonDeletedRecords() {
         // Add some records
-        windowStore.put(0, "zero");
-        windowStore.put(1, "one");
-        windowStore.put(1, "one again");
-        windowStore.put(2, "two");
-        windowStore.put(3, "three");
-        windowStore.put(4, "four");
+        listStore.put(0, "zero");
+        listStore.put(1, "one");
+        listStore.put(1, "one again");
+        listStore.put(2, "two");
+        listStore.put(3, "three");
+        listStore.put(4, "four");
 
         // Delete some records
-        windowStore.delete(1);
-        windowStore.delete(3);
+        listStore.put(1, null);
+        listStore.put(3, null);
 
         // Only non-deleted records should appear in the all() iterator
-        final KeyValue<Integer, String> zero = windowedPair(0, "zero");
-        final KeyValue<Integer, String> two = windowedPair(2, "two");
-        final KeyValue<Integer, String> four = windowedPair(4, "four");
+        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> two = KeyValue.pair(2, "two");
+        final KeyValue<Integer, String> four = KeyValue.pair(4, "four");
 
         assertEquals(
             asList(zero, two, four),
-            toList(windowStore.all())
+            toList(listStore.all())
         );
     }
 
     @Test
     public void shouldGetAllReturnTimestampOrderedRecords() {
         // Add some records in different order
-        windowStore.put(4, "four");
-        windowStore.put(0, "zero");
-        windowStore.put(2, "two1");
-        windowStore.put(3, "three");
-        windowStore.put(1, "one");
+        listStore.put(4, "four");
+        listStore.put(0, "zero");
+        listStore.put(2, "two1");
+        listStore.put(3, "three");
+        listStore.put(1, "one");
 
         // Add duplicates
-        windowStore.put(2, "two2");
+        listStore.put(2, "two2");
 
         // Only non-deleted records should appear in the all() iterator
-        final KeyValue<Integer, String> zero = windowedPair(0, "zero");
-        final KeyValue<Integer, String> one = windowedPair(1, "one");
-        final KeyValue<Integer, String> two1 = windowedPair(2, "two1");
-        final KeyValue<Integer, String> two2 = windowedPair(2, "two2");
-        final KeyValue<Integer, String> three = windowedPair(3, "three");
-        final KeyValue<Integer, String> four = windowedPair(4, "four");
+        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
+        final KeyValue<Integer, String> two1 = KeyValue.pair(2, "two1");
+        final KeyValue<Integer, String> two2 = KeyValue.pair(2, "two2");
+        final KeyValue<Integer, String> three = KeyValue.pair(3, "three");
+        final KeyValue<Integer, String> four = KeyValue.pair(4, "four");
 
         assertEquals(
             asList(zero, one, two1, two2, three, four),
-            toList(windowStore.all())
+            toList(listStore.all())
         );
     }
 
     @Test
     public void shouldEarlyClosedIteratorStillGetAllRecords() {
-        windowStore.put(0, "zero");
-        windowStore.put(1, "one");
+        listStore.put(0, "zero");
+        listStore.put(1, "one");
 
-        final KeyValue<Integer, String> zero = windowedPair(0, "zero");
-        final KeyValue<Integer, String> one = windowedPair(1, "one");
+        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
 
-        final KeyValueIterator<Integer, String> it = windowStore.all();
+        final KeyValueIterator<Integer, String> it = listStore.all();
         assertEquals(zero, it.next());
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should return all elements.
         assertEquals(
             asList(zero, one),
-            toList(windowStore.all())
+            toList(listStore.all())
         );
     }
 
-    private static <K, V> KeyValue<K, V> windowedPair(final K key, final V value) {
-        return KeyValue.pair(key, value);
-    }
 }

@@ -29,7 +29,12 @@ public class ChangeLoggingTimeOrderedKeyValueBytesStore extends ChangeLoggingKey
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        // we need to log the new value, which is different from the put value
-        log(key, wrapped().get(key));
+        // we need to log the new value, which is different from the put value;
+        // if the value is a tombstone we can save on the get call
+        if (value == null) {
+            log(key, null);
+        } else {
+            log(key, wrapped().get(key));
+        }
     }
 }

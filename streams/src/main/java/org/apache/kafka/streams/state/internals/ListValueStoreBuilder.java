@@ -24,13 +24,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 
-public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
+public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
     private final KeyValueBytesStoreSupplier storeSupplier;
 
-    public TimeOrderedWindowStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                         final Serde<K> keySerde,
-                                         final Serde<V> valueSerde,
-                                         final Time time) {
+    public ListValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
+                                 final Serde<K> keySerde,
+                                 final Serde<V> valueSerde,
+                                 final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
@@ -40,7 +40,7 @@ public class TimeOrderedWindowStoreBuilder<K, V> extends AbstractStoreBuilder<K,
     @Override
     public KeyValueStore<K, V> build() {
         return new MeteredKeyValueStore<>(
-                maybeWrapCaching(maybeWrapLogging(new RocksDBTimeOrderedWindowStore(storeSupplier.get()))),
+                maybeWrapCaching(maybeWrapLogging(new ListValueStore(storeSupplier.get()))),
                 storeSupplier.metricsScope(),
                 time,
                 keySerde,

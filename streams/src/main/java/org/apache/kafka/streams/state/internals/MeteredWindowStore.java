@@ -63,10 +63,6 @@ public class MeteredWindowStore<K, V>
     private InternalProcessorContext context;
     private TaskId taskId;
 
-    interface WindowedKeySerde {
-        Bytes serialize(final Bytes key, final long timestamp, final int seqnum);
-    }
-
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
                        final String metricsScope,
