@@ -628,7 +628,7 @@ class KafkaController(val config: KafkaConfig,
       topicDeletionManager.failReplicaDeletion(newOfflineReplicasForDeletion)
     }
 
-    // If no partitions are affected, inform brokers of the offline brokers
+    // If no partitions have ISR change, inform brokers of the offline brokers
     // Note that during leader re-election, brokers update their metadata
     if (newOfflineReplicasNotForDeletion.isEmpty && onlineStateChangeResults.values.forall(_.isLeft)) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
