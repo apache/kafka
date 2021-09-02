@@ -455,13 +455,6 @@ public class RestServer {
 
     }
 
-    public static String urlJoin(String base, String path) {
-        if (base.endsWith("/") && path.startsWith("/"))
-            return base + path.substring(1);
-        else
-            return base + path;
-    }
-
     /**
      * Register header filter to ServletContextHandler.
      * @param context The serverlet context handler
