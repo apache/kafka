@@ -2626,14 +2626,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDynamicConfigs(request: RequestChannel.Request, persist: RequestChannel.Request => Unit, 
     validate: RequestChannel.Request => Boolean): Unit = {
-    val isZkController = if (config.requiresZookeeper) {
-      val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
-      zkSupport.controller.isActive
+    val shouldPersist = if (config.requiresZookeeper) {
+      metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request)).controller.isActive
     } else {
       false
     }
     if (request.isForwarded) {
-      if (isZkController)
+      if (shouldPersist)
         // Only persist the configs here if the request ended up at the active zookeeper controller after validation and 
         // being forwarded. In KRaft, the configs are persisted in ControllerApis.
         persist(request)
@@ -2642,7 +2641,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (validate(request))
         // It is possible that a zookeeper broker is also the active controller. If that is the case persist the configs. 
         // Otherwise, forward the request.
-        if (isZkController) persist(request) else forwardToControllerOrFail(request)
+        if (shouldPersist) persist(request) else forwardToControllerOrFail(request)
     }
   }
 
