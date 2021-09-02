@@ -599,13 +599,21 @@ class KafkaServer(
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
               val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
-              if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
+              if (shutdownResponse.error != Errors.NONE) {
+                info(s"Controlled shutdown request returned after ${clientResponse.requestLatencyMs}ms " +
+                  s"with error ${shutdownResponse.error}")
+              } else if (shutdownResponse.data.remainingPartitions.isEmpty) {
                 shutdownSucceeded = true
-                info("Controlled shutdown succeeded")
-              }
-              else {
-                info(s"Remaining partitions to move: ${shutdownResponse.data.remainingPartitions}")
-                info(s"Error from controller: ${shutdownResponse.error}")
+                info("Controlled shutdown request returned successfully " +
+                  s"after ${clientResponse.requestLatencyMs}ms")
+              } else {
+                info(s"Controlled shutdown request returned after ${clientResponse.requestLatencyMs}ms " +
+                  s"with ${shutdownResponse.data.remainingPartitions.size} partitions remaining to move")
+
+                if (isDebugEnabled) {
+                  debug("Remaining partitions to move during controlled shutdown: " +
+                    s"${shutdownResponse.data.remainingPartitions}")
+                }
               }
             }
             catch {
@@ -616,9 +624,9 @@ class KafkaServer(
                 // ignore and try again
             }
           }
-          if (!shutdownSucceeded) {
+          if (!shutdownSucceeded && remainingRetries > 0) {
             Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            warn("Retrying controlled shutdown after the previous attempt failed...")
+            info(s"Retrying controlled shutdown ($remainingRetries retries remaining)")
           }
         }
       }

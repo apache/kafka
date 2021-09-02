@@ -51,13 +51,16 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
-import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage }
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentMatchers, Mockito}
+
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -2692,6 +2695,36 @@ class ReplicaManagerTest {
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionMarkedOfflineIfLogCantBeCreated(becomeLeader: Boolean): Unit = {
+    val dataDir = TestUtils.tempDir()
+    val topicPartition = new TopicPartition(topic, 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+    )
+
+    try {
+      // Delete the data directory to trigger a storage exception
+      Utils.delete(dataDir)
+
+      val request = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = topicPartition,
+        replicas = Seq(0, 1),
+        leaderAndIsr = LeaderAndIsr(if (becomeLeader) 0 else 1, List(0, 1)),
+        isNew = true
+      )
+
+      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
+
+      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def leaderAndIsrRequest(
     topicId: Uuid,
     topicPartition: TopicPartition,
@@ -3182,6 +3215,32 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaToLeaderOrFollowerMarksPartitionOfflineIfLogCantBeCreated(isStartIdLeader: Boolean): Unit = {
+    val localId = 1
+    val topicPartition = new TopicPartition("foo", 0)
+    val dataDir = TestUtils.tempDir()
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+    )
+
+    try {
+      // Delete the data directory to trigger a storage exception
+      Utils.delete(dataDir)
+
+      // Make the local replica the leader
+      val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
+      val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta)
+
+      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
 
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1

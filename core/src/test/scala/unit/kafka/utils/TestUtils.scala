@@ -1631,7 +1631,7 @@ object TestUtils extends Logging {
 
     waitUntilTrue(() => {
       try {
-        val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
+        val topicResult = client.describeTopics(Arrays.asList(topic)).allTopicNames.get.get(topic)
         val partitionResult = topicResult.partitions.get(partition)
         Option(partitionResult.leader).map(_.id) == leader
       } catch {
@@ -1643,7 +1643,7 @@ object TestUtils extends Logging {
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(partition.map(_.topic).asJava).all.get.asScala
+        val description = client.describeTopics(partition.map(_.topic).asJava).allTopicNames.get.asScala
         val isr = description
           .values
           .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
@@ -1659,7 +1659,7 @@ object TestUtils extends Logging {
   def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
+        val description = client.describeTopics(Set(partition.topic).asJava).allTopicNames.get.asScala
         val isr = description
           .values
           .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
@@ -1675,7 +1675,7 @@ object TestUtils extends Logging {
   def waitForReplicasAssigned(client: Admin, partition: TopicPartition, brokerIds: Seq[Int]): Unit = {
     waitUntilTrue(
       () => {
-        val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
+        val description = client.describeTopics(Set(partition.topic).asJava).allTopicNames.get.asScala
         val replicas = description
           .values
           .flatMap(_.partitions.asScala.flatMap(_.replicas.asScala))
