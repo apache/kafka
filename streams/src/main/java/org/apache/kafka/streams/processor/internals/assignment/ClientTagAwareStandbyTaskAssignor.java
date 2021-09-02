@@ -65,16 +65,25 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         fillClientsTagStatistics(clients, tagValueToClients, tagKeyToTagValues);
 
-        statefulTasksWithClients.forEach((taskId, clientId) -> assignStandbyTasksForActiveTask(
-            numStandbyReplicas,
-            taskId,
-            clientId,
-            rackAwareAssignmentTags,
-            clients,
-            tasksToRemainingStandbys,
-            tagKeyToTagValues,
-            tagValueToClients
-        ));
+        for (final TaskId statefulTaskId : statefulTaskIds) {
+            for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
+                final UUID clientId = entry.getKey();
+                final ClientState clientState = entry.getValue();
+
+                if (clientState.activeTasks().contains(statefulTaskId)) {
+                    assignStandbyTasksForActiveTask(
+                        numStandbyReplicas,
+                        statefulTaskId,
+                        clientId,
+                        rackAwareAssignmentTags,
+                        clients,
+                        tasksToRemainingStandbys,
+                        tagKeyToTagValues,
+                        tagValueToClients
+                    );
+                }
+            }
+        }
 
         return true;
     }
