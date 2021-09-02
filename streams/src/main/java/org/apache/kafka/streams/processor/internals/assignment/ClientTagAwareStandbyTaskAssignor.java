@@ -47,13 +47,6 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                           final AssignorConfiguration.AssignmentConfigs configs) {
         final int numStandbyReplicas = configs.numStandbyReplicas;
         final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
-        final Map<TaskId, UUID> statefulTasksWithClients = new HashMap<>();
-
-        statefulTaskIds.forEach(statefulTaskId -> clients.forEach((uuid, clientState) -> {
-            if (clientState.activeTasks().contains(statefulTaskId)) {
-                statefulTasksWithClients.put(statefulTaskId, uuid);
-            }
-        }));
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(
             numStandbyReplicas,
@@ -85,7 +78,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
         }
 
-        return true;
+        // returning false, because standby task assignment will never require a follow-up probing rebalance.
+        return false;
     }
 
     @Override
@@ -160,7 +154,6 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
             usedClients.add(polledClient);
 
-            standbyTaskClientsByTaskLoad.offerAll(clientsOnAlreadyUsedTagDimensions);
             numRemainingStandbys--;
         }
 

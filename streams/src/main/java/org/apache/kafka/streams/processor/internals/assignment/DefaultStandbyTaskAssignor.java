@@ -66,6 +66,7 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
             }
         }
 
-        return true;
+        // returning false, because standby task assignment will never require a follow-up probing rebalance.
+        return false;
     }
 }
