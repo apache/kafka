@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
-
 import kafka.Kafka
 import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
@@ -43,6 +42,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -86,7 +86,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+      Time.SYSTEM, "kafka.test", "AclAuthorizerTest", new ZKClientConfig, "AclAuthorizerTest")
   }
 
   @AfterEach
@@ -803,16 +803,15 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
       case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslProtocolProp =>
-        assertEquals("TLSv1.2", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-      case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("TLSv1.2", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+      case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
   }
 
@@ -839,14 +838,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
         case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-          assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+          assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
         case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-          assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-        case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+          assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       })
   }
 
@@ -889,14 +887,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
       case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-      case _ => assertEquals(prefixedValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+      case _ => assertEquals(prefixedValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
   }
 

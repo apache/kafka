@@ -1940,18 +1940,18 @@ object KafkaZkClient {
             connectionTimeoutMs: Int,
             maxInFlightRequests: Int,
             time: Time,
+            name: String,
+            zkClientConfig: ZKClientConfig,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            name: Option[String] = None,
-            zkClientConfig: Option[ZKClientConfig] = None,
             createChrootIfNecessary: Boolean = false
   ): KafkaZkClient = {
     if (createChrootIfNecessary) {
       val chrootIndex = connectString.indexOf("/")
       if (chrootIndex > 0) {
         val zkConnWithoutChrootForChrootCreation = connectString.substring(0, chrootIndex)
-        val zkClientForChrootCreation = KafkaZkClient(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
-          connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, name, zkClientConfig)
+        val zkClientForChrootCreation = apply(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
+          connectionTimeoutMs, maxInFlightRequests, time, name, zkClientConfig, metricGroup, metricType)
         try {
           val chroot = connectString.substring(chrootIndex)
           if (!zkClientForChrootCreation.pathExists(chroot)) {
@@ -1963,7 +1963,7 @@ object KafkaZkClient {
       }
     }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType, name, zkClientConfig)
+      time, metricGroup, metricType, zkClientConfig, name)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

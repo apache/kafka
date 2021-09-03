@@ -76,7 +76,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     super.setUp()
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+      zkClientConfig = new ZKClientConfig)
     expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
@@ -103,7 +104,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig))
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient", zkClientConfig = clientConfig)
     try {
       assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
@@ -111,7 +112,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
       assertThrows(classOf[Exception],
         () => KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig)))
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest", zkClientConfig = badClientConfig))
     } finally {
       client.close()
     }
@@ -121,9 +122,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @ValueSource(booleans = Array(true, false))
   def testChroot(createChrootIfNecessary: Boolean): Unit = {
     val chroot = "/chroot"
-    val clientConfig = new ZKClientConfig()
     val client = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig), createChrootIfNecessary = createChrootIfNecessary)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest",
+      zkClientConfig = new ZKClientConfig, createChrootIfNecessary = createChrootIfNecessary)
     try {
       client.createTopLevelPaths()
       if (!createChrootIfNecessary) {
@@ -158,7 +159,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // this client doesn't have create permission to the root and chroot, but the chroot already exists
     // Expect that no exception thrown
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest",
+      zkClientConfig = new ZKClientConfig, createChrootIfNecessary = true)
     chrootClient.close()
   }
 
@@ -1365,7 +1367,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
               metricGroup: String = "kafka.server",
               metricType: String = "SessionExpireListener") = {
       val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-        time, metricGroup, metricType)
+        time, metricGroup, metricType, new ZKClientConfig, "ExpiredKafkaZkClient")
       new ExpiredKafkaZkClient(zooKeeperClient, isSecure, time)
     }
   }

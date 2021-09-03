@@ -345,7 +345,7 @@ object KafkaConfig {
       kafkaPropName match {
         case ZkSslEndpointIdentificationAlgorithmProp => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
         case ZkSslEnabledProtocolsProp | ZkSslCipherSuitesProp => kafkaPropValue match {
-          case list: java.util.List[_] => list.asInstanceOf[java.util.List[_]].asScala.mkString(",")
+          case list: java.util.List[_] => list.asScala.mkString(",")
           case _ => kafkaPropValue.toString
         }
         case _ => kafkaPropValue.toString
