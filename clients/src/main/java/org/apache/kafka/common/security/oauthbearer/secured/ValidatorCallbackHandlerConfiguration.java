@@ -17,20 +17,13 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
-import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwt.ReservedClaimNames;
-import org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver;
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
 
 /**
  * Configuration for the validator portion of the login/validation authentication process for
@@ -165,61 +158,35 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             Importance.LOW,
             SUB_CLAIM_NAME_DOC);
 
-    private final Set<String> expectedAudiences;
-
-    private final VerificationKeyResolver verificationKeyResolver;
-
     public ValidatorCallbackHandlerConfiguration(Map<String, ?> options) {
         super(CONFIG, options);
-
-        if (options.containsKey(EXPECTED_AUDIENCE_CONFIG)) {
-            List<String> tmp = getList(EXPECTED_AUDIENCE_CONFIG);
-
-            if (tmp != null)
-                expectedAudiences = Collections.unmodifiableSet(new HashSet<>(tmp));
-            else
-                expectedAudiences = null;
-        } else {
-            expectedAudiences = null;
-        }
-
-        String jwksFile = getString(JWKS_FILE_CONFIG);
-        String jwksEndpointUri = getString(JWKS_ENDPOINT_URI_CONFIG);
-
-        if (jwksFile != null && jwksEndpointUri != null) {
-            throw new ConfigException(String.format("The OAuth validator configuration options %s and %s cannot both be specified", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));
-        } else if (jwksFile == null && jwksEndpointUri == null) {
-            throw new ConfigException(String.format("The OAuth validator configuration must include either %s or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));
-        } else if (jwksFile != null) {
-            // TODO
-            verificationKeyResolver = null;
-            throw new UnsupportedOperationException("Not yet implemented");
-        } else {
-            long refreshIntervalMs = getLong(JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG);
-            HttpsJwks httpsJkws = new RefreshingHttpsJwks(jwksEndpointUri, refreshIntervalMs);
-            verificationKeyResolver = new HttpsJwksVerificationKeyResolver(httpsJkws);
-        }
-    }
-
-    public ValidatorCallbackHandlerConfiguration(Map<String, ?> options,
-        Set<String> expectedAudiences,
-        VerificationKeyResolver verificationKeyResolver) {
-        super(CONFIG, options);
-
-        this.expectedAudiences = expectedAudiences;
-        this.verificationKeyResolver = verificationKeyResolver;
     }
 
     public Integer getClockSkew() {
         return getInt(CLOCK_SKEW_CONFIG);
     }
 
-    public Set<String> getExpectedAudiences() {
-        return expectedAudiences;
+    public List<String> getExpectedAudiences() {
+        if (values().containsKey(EXPECTED_AUDIENCE_CONFIG))
+            return getList(EXPECTED_AUDIENCE_CONFIG);
+        else
+            return null;
     }
 
     public String getExpectedIssuer() {
         return getString(EXPECTED_ISSUER_CONFIG);
+    }
+
+    public long getJwksEndpointRefreshIntervalMs() {
+        return getLong(JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG);
+    }
+
+    public String getJwksEndpointUri() {
+        return getString(JWKS_ENDPOINT_URI_CONFIG);
+    }
+
+    public String getJwksFile() {
+        return getString(JWKS_FILE_CONFIG);
     }
 
     public String getScopeClaimName() {
@@ -228,10 +195,6 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     public String getSubClaimName() {
         return getString(SUB_CLAIM_NAME_CONFIG);
-    }
-
-    public VerificationKeyResolver getVerificationKeyResolver() {
-        return verificationKeyResolver;
     }
 
 }

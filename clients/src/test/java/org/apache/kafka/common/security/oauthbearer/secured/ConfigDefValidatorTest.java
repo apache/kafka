@@ -18,7 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer.secured;
 
 import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
@@ -28,8 +28,9 @@ public abstract class ConfigDefValidatorTest extends OAuthBearerTest {
 
     protected Validator validator;
 
-    @BeforeAll
+    @BeforeEach
     public void setup() {
+        super.setup();
         validator = createValidator();
     }
 

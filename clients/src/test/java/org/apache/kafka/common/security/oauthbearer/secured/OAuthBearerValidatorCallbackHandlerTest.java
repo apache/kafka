@@ -22,15 +22,19 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.security.Key;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.security.auth.callback.Callback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
 import org.apache.kafka.common.utils.Utils;
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwx.JsonWebStructure;
 import org.junit.jupiter.api.Test;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
@@ -82,10 +86,31 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     private OAuthBearerValidatorCallbackHandler createHandler(Map<String, Object> options,
         AccessTokenBuilder builder) {
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(options,
+        ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(options);
+
+        CloseableVerificationKeyResolver verificationKeyResolver = new CloseableVerificationKeyResolver() {
+
+            @Override
+            public void init() {
+                // Do nothing...
+            }
+
+            @Override
+            public void close() {
+                // Do nothing...
+            }
+
+            @Override
+            public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) {
+                return builder.jwk().getRsaPublicKey();
+            }
+
+        };
+
+        handler.configure(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            conf,
             Collections.emptySet(),
-            (jws, nestingContext) -> builder.jwk().getRsaPublicKey());
-        handler.configure(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, conf);
+            verificationKeyResolver);
         return handler;
     }
 

@@ -51,7 +51,13 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
-    private final ScheduledExecutorService scheduler;
+    private static final int SHUTDOWN_TIMEOUT = 10;
+
+    private static final TimeUnit SHUTDOWN_TIME_UNIT = TimeUnit.SECONDS;
+
+    private final ScheduledExecutorService executorService;
+
+    private final long refreshIntervalMs;
 
     /**
      *
@@ -69,24 +75,42 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
 
         setDefaultCacheDuration(refreshIntervalMs);
 
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(this::refreshInternal,
-            0,
-            refreshIntervalMs,
-            TimeUnit.MILLISECONDS);
-        log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshIntervalMs);
+        this.refreshIntervalMs = refreshIntervalMs;
+        this.executorService = Executors.newSingleThreadScheduledExecutor();
+    }
+
+    public void init() {
+        try {
+            log.debug("initialization started");
+            executorService.scheduleAtFixedRate(this::refreshInternal,
+                0,
+                refreshIntervalMs,
+                TimeUnit.MILLISECONDS);
+            log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshIntervalMs);
+        } finally {
+            log.debug("initialization completed");
+        }
     }
 
     @Override
     public void close() {
-        if (isRunning()) {
-            log.info("JWKS validation key refresh thread shutting down");
-            scheduler.shutdownNow();
-        }
-    }
+        try {
+            log.debug("close started");
 
-    public boolean isRunning() {
-        return scheduler != null && !scheduler.isShutdown();
+            try {
+                log.debug("JWKS validation key refresh thread shutting down");
+                executorService.shutdown();
+
+                if (!executorService.awaitTermination(SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT)) {
+                    log.warn("JWKS validation key refresh thread termination did not end after {} {}",
+                        SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
+                }
+            } catch (InterruptedException e) {
+                log.warn("JWKS validation key refresh thread error during close", e);
+            }
+        } finally {
+            log.debug("close completed");
+        }
     }
 
     /**
@@ -98,8 +122,8 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
         try {
             log.info("JWKS validation key refresh processing");
 
-            // Call the *actual* refresh() implementation.
-            super.refresh();
+            // Call the *actual* refresh implementation.
+            refresh();
         } catch (JoseException | IOException e) {
             // Let's wait a random, but short amount of time before trying again.
             long waitMs = ThreadLocalRandom.current().nextLong(1000, 10000);
@@ -109,7 +133,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
                 waitMs);
             log.warn(message, e);
 
-            scheduler.schedule(this::refreshInternal, waitMs, TimeUnit.MILLISECONDS);
+            executorService.schedule(this::refreshInternal, waitMs, TimeUnit.MILLISECONDS);
         }
     }
 

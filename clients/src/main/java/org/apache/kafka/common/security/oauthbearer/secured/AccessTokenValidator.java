@@ -53,7 +53,9 @@ public interface AccessTokenValidator {
      * OAuthBearerToken.
      *
      * @param accessToken Non-<code>null</code> JWT access token
+     *
      * @return {@link OAuthBearerToken}
+     *
      * @throws ValidateException Thrown on errors performing validation of given token
      */
 

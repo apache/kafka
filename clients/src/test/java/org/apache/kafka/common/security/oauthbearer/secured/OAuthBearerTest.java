@@ -27,34 +27,45 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Base64;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.function.Executable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class OAuthBearerTest {
 
-    protected ObjectMapper mapper;
+    protected final Logger log = LoggerFactory.getLogger(getClass());
 
-    @BeforeAll
+    protected ObjectMapper mapper = new ObjectMapper();
+
+    @BeforeEach
     public void setup() {
-        mapper = new ObjectMapper();
+        FileWatchService.useHighSensitivity();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        FileWatchService.resetSensitivity();
     }
 
     protected void assertThrowsWithMessage(Class<? extends Exception> clazz,
-        Executable validatorExecutable,
+        Executable executable,
         String substring) {
-        assertThrows(clazz, validatorExecutable);
-
         try {
-            validatorExecutable.execute();
+            assertThrows(clazz, executable);
         } catch (Throwable e) {
             assertTrue(e.getMessage().contains(substring),
                 String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
@@ -117,6 +128,42 @@ public abstract class OAuthBearerTest {
         when(mockedCon.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         when(mockedCon.getInputStream()).thenReturn(new ByteArrayInputStream(Utils.utf8(response)));
         return mockedCon;
+    }
+
+    protected File createTempPemDir() throws IOException {
+        return createTempDir(String.format("my-pem-dir-%d", Math.abs(new Random().nextInt())));
+    }
+
+    protected File createTempDir(String directory) throws IOException {
+        File tmpDir = new File(System.getProperty("java.io.tmpdir"));
+
+        if (directory != null)
+            tmpDir = new File(tmpDir, directory);
+
+        if (!tmpDir.exists() && !tmpDir.mkdirs())
+            throw new IOException("Could not create " + tmpDir);
+
+        tmpDir.deleteOnExit();
+        log.debug("Created temp directory {}", tmpDir);
+        return tmpDir;
+    }
+
+    protected File createTempFile(File tmpDir,
+        String prefix,
+        String suffix,
+        String contents)
+        throws IOException {
+        File file = File.createTempFile(prefix, suffix, tmpDir);
+        log.debug("Created new temp file {}", file);
+        file.deleteOnExit();
+
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write(contents);
+        }
+
+        Utils.sleep(FileWatchService.MIN_WATCH_INTERVAL.toMillis());
+
+        return file;
     }
 
 }

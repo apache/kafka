@@ -17,27 +17,34 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
+import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_ENDPOINT_URI_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_FILE_CONFIG;
+
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallbackHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
+
+    private CloseableVerificationKeyResolver verificationKeyResolver;
 
     private AccessTokenValidator accessTokenValidator;
 
@@ -54,22 +61,47 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
         Map<String, Object> moduleOptions = Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
         ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(moduleOptions);
-        configure(saslMechanism, conf);
+        CloseableVerificationKeyResolver verificationKeyResolver;
+
+        String jwksFile = conf.getJwksFile();
+        String jwksEndpointUri = conf.getJwksEndpointUri();
+
+        if (jwksFile != null && jwksEndpointUri != null) {
+            throw new ConfigException(String.format("The OAuth validator configuration options %s and %s cannot both be specified", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));
+        } else if (jwksFile == null && jwksEndpointUri == null) {
+            throw new ConfigException(String.format("The OAuth validator configuration must include either %s or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));
+        } else if (jwksFile != null) {
+            verificationKeyResolver = new PemVerificationKeyResolver(Paths.get(jwksFile));
+        } else {
+            long refreshIntervalMs = conf.getJwksEndpointRefreshIntervalMs();
+            verificationKeyResolver = new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUri, refreshIntervalMs);
+        }
+
+        configure(saslMechanism, conf, conf.getExpectedAudiences(), verificationKeyResolver);
     }
 
-    public void configure(String saslMechanism, ValidatorCallbackHandlerConfiguration conf) {
+    public void configure(String saslMechanism,
+        ValidatorCallbackHandlerConfiguration conf,
+        Collection<String> expectedAudiences,
+        CloseableVerificationKeyResolver verificationKeyResolver) {
         if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
-            throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
+            throw new IllegalArgumentException(
+                String.format("Unexpected SASL mechanism: %s", saslMechanism));
 
         Integer clockSkew = conf.getClockSkew();
-        Set<String> expectedAudiences = conf.getExpectedAudiences();
         String expectedIssuer = conf.getExpectedIssuer();
-        VerificationKeyResolver verificationKeyResolver = conf.getVerificationKeyResolver();
         String scopeClaimName = conf.getScopeClaimName();
         String subClaimName = conf.getSubClaimName();
 
+        try {
+            verificationKeyResolver.init();
+        } catch (Exception e) {
+            throw new ConfigException("The OAuth validator configuration encountered an error when initializing the VerificationKeyResolver", e);
+        }
+
+        this.verificationKeyResolver = verificationKeyResolver;
         this.accessTokenValidator = new ValidatorAccessTokenValidator(clockSkew,
-            expectedAudiences,
+            expectedAudiences != null ? Collections.unmodifiableSet(new HashSet<>(expectedAudiences)) : null,
             expectedIssuer,
             verificationKeyResolver,
             scopeClaimName,
@@ -80,7 +112,13 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void close() {
-
+        if (verificationKeyResolver != null) {
+            try {
+                verificationKeyResolver.close();
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+        }
     }
 
     @Override
