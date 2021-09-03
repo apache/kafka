@@ -3277,7 +3277,7 @@ class ReplicaManagerTest {
       // The first call to removeFetcherForPartitions should be ignored.
       Mockito.when(mockReplicaFetcherManager.removeFetcherForPartitions(
         Set(topicPartition))
-      ).thenReturn(Map.empty)
+      ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
 
       // Make the local replica the follower
       var followerTopicsDelta = topicsCreateDelta(localId, false)
@@ -3317,7 +3317,7 @@ class ReplicaManagerTest {
           case _ =>
         }
 
-        Map.empty
+        Map.empty[TopicPartition, PartitionFetchState]
       }
 
       // Apply changes that bumps the leader epoch.
