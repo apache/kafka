@@ -26,8 +26,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 public class DescribeProducersRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeProducersRequest> {
@@ -71,7 +69,7 @@ public class DescribeProducersRequest extends AbstractRequest {
     @Override
     public DescribeProducersResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        List<TopicResponse> topics = new ArrayList<>();
+        DescribeProducersResponseData response = new DescribeProducersResponseData();
         for (TopicRequest topicRequest : data.topics()) {
             TopicResponse topicResponse = new TopicResponse()
                 .setName(topicRequest.name());
@@ -82,10 +80,8 @@ public class DescribeProducersRequest extends AbstractRequest {
                         .setErrorCode(error.code())
                 );
             }
-            topics.add(topicResponse);
+            response.topics().add(topicResponse);
         }
-        DescribeProducersResponseData response = new DescribeProducersResponseData()
-                .setTopics(topics);
         return new DescribeProducersResponse(response);
     }
 

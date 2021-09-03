@@ -128,9 +128,9 @@ public class AlterClientQuotasRequest extends AbstractRequest {
                     .setEntityName(entityData.entityName()));
             }
             responseEntries.add(new AlterClientQuotasResponseData.EntryData()
-                    .setEntity(responseEntities)
-                    .setErrorCode(error.code())
-                    .setErrorMessage(error.message()));
+                .setEntity(responseEntities)
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message()));
         }
         AlterClientQuotasResponseData responseData = new AlterClientQuotasResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
