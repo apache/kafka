@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -28,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This class is responsible for publishing messages into the remote log metadata topic partitions.
@@ -50,11 +51,12 @@ public class ProducerManager implements Closeable {
         topicPartitioner = rlmmTopicPartitioner;
     }
 
-    public Future<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
+    public void publishMessage(RemoteLogMetadata remoteLogMetadata,
+                               CompletableFuture<RecordMetadata> produceFuture) {
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
-                topicIdPartition, metadataPartitionNum, remoteLogMetadata);
+                  topicIdPartition, metadataPartitionNum, remoteLogMetadata);
         if (metadataPartitionNum >= rlmmConfig.metadataTopicPartitionsCount()) {
             // This should never occur as long as metadata partitions always remain the same.
             throw new KafkaException("Chosen partition no " + metadataPartitionNum +
@@ -62,12 +64,21 @@ public class ProducerManager implements Closeable {
         }
 
         try {
-            return producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
-                    serde.serialize(remoteLogMetadata)));
-        } catch (KafkaException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new KafkaException("Exception occurred while publishing message for topicIdPartition: " + topicIdPartition, e);
+            Callback callback = new Callback() {
+                @Override
+                public void onCompletion(RecordMetadata metadata,
+                                         Exception exception) {
+                    if (exception != null) {
+                        produceFuture.completeExceptionally(exception);
+                    } else {
+                        produceFuture.complete(metadata);
+                    }
+                }
+            };
+            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
+                                               serde.serialize(remoteLogMetadata)), callback);
+        } catch (Exception ex) {
+            produceFuture.completeExceptionally(ex);
         }
     }
 

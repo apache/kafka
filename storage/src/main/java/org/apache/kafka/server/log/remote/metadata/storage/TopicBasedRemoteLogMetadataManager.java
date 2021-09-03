@@ -49,10 +49,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.Future;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
 
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
@@ -87,7 +89,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
 
     @Override
-    public Future<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
+    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -114,7 +116,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
-    public Future<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
+    public CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
             throws RemoteStorageException {
         Objects.requireNonNull(segmentMetadataUpdate, "segmentMetadataUpdate can not be null");
 
@@ -137,7 +139,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     @Override
-    public Future<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
+    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
@@ -151,14 +153,23 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    private FuturePublishRecordMetadata doPublishMetadata(TopicIdPartition topicIdPartition, RemoteLogMetadata remoteLogMetadata)
+    private CompletableFuture<Void> doPublishMetadata(TopicIdPartition topicIdPartition,
+                                                      RemoteLogMetadata remoteLogMetadata)
             throws RemoteStorageException {
         log.debug("Publishing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
 
         try {
             // Publish the message to the topic.
-            Future<RecordMetadata> recordMetadata = producerManager.publishMessage(remoteLogMetadata);
-            return new FuturePublishRecordMetadata(recordMetadata, consumerManager, time);
+            CompletableFuture<RecordMetadata> produceFuture = new CompletableFuture<>();
+            producerManager.publishMessage(remoteLogMetadata, produceFuture);
+            return produceFuture.thenApplyAsync((Function<RecordMetadata, Void>) recordMetadata -> {
+                try {
+                    consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
+                } catch (TimeoutException e) {
+                    throw new KafkaException(e);
+                }
+                return null;
+            }).toCompletableFuture();
         } catch (KafkaException e) {
             if (e instanceof RetriableException) {
                 throw e;

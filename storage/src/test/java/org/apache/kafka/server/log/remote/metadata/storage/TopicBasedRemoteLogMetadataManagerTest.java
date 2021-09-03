@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -79,12 +78,12 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newLeaderTopicIdPartition, Uuid.randomUuid()),
                                                                                 0, 100, -1L, 0,
                                                                                 time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(KafkaException.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
+        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newFollowerTopicIdPartition, Uuid.randomUuid()),
                                                                                 0, 100, -1L, 0,
                                                                                 time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-        Assertions.assertThrows(KafkaException.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
+        Assertions.assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
         Assertions.assertThrows(RemoteStorageException.class, () -> topicBasedRlmm().listRemoteLogSegments(newLeaderTopicIdPartition));

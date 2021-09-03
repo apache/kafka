@@ -25,7 +25,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
@@ -63,9 +63,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @throws RemoteStorageException   if there are any storage related errors occurred.
      * @throws IllegalArgumentException if the given metadata instance does not have the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
-     * @return a Future which will complete once this operation is finished.
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    Future<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
+    CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
      * This method is used to update the {@link RemoteLogSegmentMetadata} asynchronously. Currently, it allows to update with the new
@@ -106,9 +106,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @throws RemoteStorageException          if there are any storage related errors occurred.
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadataUpdate.
      * @throws IllegalArgumentException        if the given metadata instance has the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
-     * @return a Future which will complete once this operation is finished.
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    Future<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
+    CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
             throws RemoteStorageException;
 
     /**
@@ -156,9 +156,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param remotePartitionDeleteMetadata update on delete state of a partition.
      * @throws RemoteStorageException          if there are any storage related errors occurred.
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remotePartitionDeleteMetadata.
-     * @return a Future which will complete once this operation is finished.
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    Future<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
+    CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException;
 
     /**
