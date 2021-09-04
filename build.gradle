@@ -37,7 +37,7 @@ plugins {
   id 'org.owasp.dependencycheck' version '6.1.6'
   id 'org.nosphere.apache.rat' version "0.7.0"
 
-  id "com.github.spotbugs" version '4.7.1' apply false
+  id "com.github.spotbugs" version '4.7.3' apply false
   id 'org.gradle.test-retry' version '1.3.1' apply false
   id 'org.scoverage' version '5.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
@@ -103,7 +103,12 @@ ext {
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
-    defaultJvmArgs.add("--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED")
+    defaultJvmArgs.addAll(
+      "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
+      "--add-opens=java.base/jdk.internal.util.random=ALL-UNNAMED",
+      "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
+    )
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
