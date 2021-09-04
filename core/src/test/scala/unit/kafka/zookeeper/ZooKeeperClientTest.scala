@@ -105,9 +105,9 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     val propKey = KafkaConfig.ZkClientCnxnSocketProp
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
-    val client = newZooKeeperClient()
+    val client = newZooKeeperClient(clientConfig = clientConfig)
     try {
-      assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.clientConfig, propKey))
+      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.clientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")

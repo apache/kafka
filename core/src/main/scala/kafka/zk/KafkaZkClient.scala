@@ -1954,7 +1954,7 @@ object KafkaZkClient {
      *
      * We restore the 3.4.x/3.5.x behavior unless the caller has set the property (note that ZKConfig
      * auto configures itself if certain system properties have been set).
-     * 
+     *
      * See https://github.com/apache/zookeeper/pull/1129 for the details on why the behavior
      * changed in 3.6.0.
      */

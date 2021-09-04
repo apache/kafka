@@ -20,7 +20,7 @@ package kafka.server
 import kafka.api.ApiVersion
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
@@ -46,7 +46,10 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val props = new Properties
     props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
     props.put(KafkaConfig.ZkSslClientEnableProp, "false")
-    assertEquals(None, KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
+    val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach { propName =>
+      assertNull(zkClientConfig.getProperty(propName))
+    }
   }
 
   @Test

@@ -106,13 +106,13 @@ object AclAuthorizer {
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
       KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) => {
-        val prefixedValue = configMap.get(AclAuthorizer.configPrefix + kafkaProp)
-        if (prefixedValue.isDefined)
+        configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
             if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
-              (prefixedValue.get.toString.toUpperCase == "HTTPS").toString
+              (prefixedValue.toString.toUpperCase == "HTTPS").toString
             else
-              prefixedValue.get.toString)
+              prefixedValue.toString)
+        }
       }}
       zkClientConfig
     }
