@@ -32,7 +32,7 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.{RequestChannel, SocketServer}
 import kafka.security.CredentialProvider
-import kafka.server.metadata.ZkConfigRepository
+import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}

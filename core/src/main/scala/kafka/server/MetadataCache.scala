@@ -18,11 +18,10 @@
 package kafka.server
 
 import kafka.admin.BrokerMetadata
-
-import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 
 import java.util
 
