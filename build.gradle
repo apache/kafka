@@ -104,6 +104,7 @@ ext {
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
     defaultJvmArgs.addAll(
+      "--add-opens=java.base/java.nio=ALL-UNNAMED",
       "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
       "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
       "--add-opens=java.base/jdk.internal.util.random=ALL-UNNAMED",
