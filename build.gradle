@@ -112,7 +112,6 @@ ext {
       "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
       "--add-opens=java.base/java.text=ALL-UNNAMED",
       "--add-opens=java.base/java.time=ALL-UNNAMED",
-      "--add-opens=java.base/jdk.internal.util.random=ALL-UNNAMED",
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 

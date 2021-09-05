@@ -101,9 +101,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -126,9 +124,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
             .withVotedCandidate(epoch, localId)
             .build();
 
@@ -151,9 +147,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
+                .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
                 .withElectedLeader(epoch, localId)
                 .build();
 
@@ -181,9 +175,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
+                .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
                 .withVotedCandidate(epoch, localId)
                 .build();
 
@@ -235,9 +227,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
+                .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
                 .withElectedLeader(epoch, localId)
                 .build();
 
@@ -262,9 +252,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -728,9 +716,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
-            })
+            .mockRandomNextInt(__ -> Optional.of(jitterMs))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -1238,9 +1224,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
-            })
+            .mockRandomNextInt(__ -> Optional.of(exponentialFactor))
             .build();
 
         context.assertUnknownLeader(0);
@@ -2184,9 +2168,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2395,9 +2377,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .mockRandomNextInt(KafkaRaftClientTest::return0IfBoundEqualsElectionTimeout)
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2798,5 +2778,12 @@ public class KafkaRaftClientTest {
 
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
+    }
+
+    private static Optional<Integer> return0IfBoundEqualsElectionTimeout(int bound) {
+        if (bound == DEFAULT_ELECTION_TIMEOUT_MS)
+            return Optional.of(0);
+        else
+            return Optional.empty();
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.function.IntFunction;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -60,7 +61,6 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -77,7 +77,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -128,7 +127,7 @@ public final class RaftClientTestContext {
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
-        private final Random random = Mockito.spy(new Random(1));
+        private final MockableRandom random = new MockableRandom(1);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
@@ -164,8 +163,12 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder updateRandom(Consumer<Random> consumer) {
-            consumer.accept(random);
+        /**
+         * If the function returns an empty option, `random.nextInt` behaves as usual. Otherwise, the
+         * integer returned from `function` is returned by `random.nextInt`.
+         */
+        Builder mockRandomNextInt(IntFunction<Optional<Integer>> function) {
+            random.mockNextInt(function);
             return this;
         }
 
@@ -270,6 +273,28 @@ public final class RaftClientTestContext {
             context.appendLingerMs = appendLingerMs;
 
             return context;
+        }
+    }
+
+    private static class MockableRandom extends Random {
+
+        private IntFunction<Optional<Integer>> nextIntFunction = __ -> Optional.empty();
+
+        public MockableRandom(long seed) {
+            super(seed);
+        }
+
+        /**
+         * If the function returns an empty option, `nextInt` behaves as usual. Otherwise, the
+         * integer returned from `function` is returned by `nextInt`.
+         */
+        public void mockNextInt(IntFunction<Optional<Integer>> function) {
+            this.nextIntFunction = function;
+        }
+
+        @Override
+        public int nextInt(int bound) {
+            return nextIntFunction.apply(bound).orElse(super.nextInt(bound));
         }
     }
 
