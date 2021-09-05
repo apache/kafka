@@ -1,0 +1,161 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package kafka.server
+
+import kafka.test.ClusterInstance
+import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.junit.ClusterTestExtensions
+import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import kafka.utils.TestUtils
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
+import org.apache.kafka.common.metadata.MetadataRecordType.{FEATURE_LEVEL_RECORD, REGISTER_BROKER_RECORD}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterBrokerRecord}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.metadata.{FeatureMapAndEpoch, VersionRange}
+import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.extension.ExtendWith
+
+import scala.jdk.CollectionConverters._
+
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 3, controllers = 3)
+@Tag("integration")
+class KRaftMetadataTest(cluster: ClusterInstance) {
+
+  var brokerServers: Seq[BrokerServer] = _
+  var controllerServers: Seq[ControllerServer] = _
+  var activeController: ControllerServer = _
+  var epoch: Int = _
+
+  def updateFinalizedVersion(apiVersionAndMessages: List[ApiMessageAndVersion]): Unit = {
+    val offset = updateMetadata(apiVersionAndMessages)
+    brokerServers.foreach(s => {
+      s.featureCache.waitUntilEpochOrThrow(offset, s.config.zkConnectionTimeoutMs)
+    })
+    TestUtils.waitUntilTrue(
+      () => try {
+        activeController.controller.finalizedFeatures().get() // .map().features()
+        true
+      } catch {
+        case _: Throwable => false
+      },
+      "Controller did not get broker updates"
+    )
+  }
+
+  def updateSupportedVersion(features: Features[SupportedVersionRange],
+                             targetServers: Seq[BrokerServer]): Unit = {
+    targetServers.foreach(brokerServer => {
+      TestUtils.waitUntilTrue(() => brokerServer.lifecycleManager.brokerEpoch != -1, "broker registration failed")
+      brokerServer.brokerFeatures.setSupportedFeatures(features)
+      updateMetadata(List(toApiMessageAndVersion(features, brokerServer)))
+    })
+
+    val brokerRegistrations = activeController.controller.asInstanceOf[QuorumController].brokerRegistrations()
+    brokerRegistrations.asScala.foreach { case (_, value) =>
+      TestUtils.waitUntilTrue(
+        () => value.supportedFeatures().asScala == toVersionRanges(features),
+        "Controller did not get broker updates"
+      )
+    }
+  }
+
+  def toVersionRanges(features: Features[SupportedVersionRange]): Map[String, VersionRange] = {
+    features.features().asScala.map { case (key, value) =>
+      (key, new VersionRange(value.min(), value.max()))
+    }.toMap
+  }
+
+  def toApiMessageAndVersion(features: Features[SupportedVersionRange],
+                             brokerServer: BrokerServer): ApiMessageAndVersion = {
+    val networkListeners = new ListenerCollection()
+    brokerServer.config.advertisedListeners.foreach { ep =>
+      networkListeners.add(new Listener().
+        setHost(ep.host).
+        setName(ep.listenerName.value()).
+        setPort(ep.port).
+        setSecurityProtocol(ep.securityProtocol.id))
+    }
+
+    val featureCollection = new RegisterBrokerRecord.BrokerFeatureCollection()
+    features.features().asScala.foreach{ feature =>
+      featureCollection.add(new RegisterBrokerRecord.BrokerFeature()
+        .setName(feature._1)
+        .setMinSupportedVersion(feature._2.min())
+        .setMaxSupportedVersion(feature._2.max()))
+    }
+    new ApiMessageAndVersion(
+      new RegisterBrokerRecord()
+        .setBrokerId(brokerServer.config.nodeId)
+        .setEndPoints(new RegisterBrokerRecord.BrokerEndpointCollection())
+        .setBrokerEpoch(brokerServer.lifecycleManager.brokerEpoch)
+        .setFeatures(featureCollection),
+      REGISTER_BROKER_RECORD.highestSupportedVersion()
+    )
+  }
+
+  def updateMetadata(apiVersionAndMessages: List[ApiMessageAndVersion]): Long = {
+    // Append to controller
+    val offset = activeController.controller.asInstanceOf[QuorumController].updateMetadata(apiVersionAndMessages.asJava)
+    // Wait raft response
+    offset.get()
+  }
+
+  def getFeatureMetadataData(): FeatureMapAndEpoch =
+    activeController.controller.finalizedFeatures().get()
+
+  @ClusterTest
+  def testUpdateFinalizedVersion(): Unit = {
+    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
+    activeController = raftCluster.activeController()
+    brokerServers = raftCluster.brokerServers().asScala.toSeq
+    controllerServers = raftCluster.controllerServers().asScala.toSeq
+    epoch = activeController.controller.curClaimEpoch()
+
+    updateFinalizedVersion(
+      List(
+        new ApiMessageAndVersion(
+          new FeatureLevelRecord()
+            .setName("feature")
+            .setMinFeatureLevel(1)
+            .setMaxFeatureLevel(2),
+          FEATURE_LEVEL_RECORD.highestSupportedVersion()
+        )
+      )
+    )
+
+    println(getFeatureMetadataData())
+  }
+
+  @ClusterTest
+  def testUpdateSupportedVersion(): Unit = {
+    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
+    activeController = raftCluster.activeController()
+    brokerServers = raftCluster.brokerServers().asScala.toSeq
+    controllerServers = raftCluster.controllerServers().asScala.toSeq
+    epoch = activeController.controller.curClaimEpoch()
+
+    updateSupportedVersion(
+      Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)))),
+      brokerServers
+    )
+  }
+
+}
