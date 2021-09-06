@@ -31,14 +31,6 @@ class MockableRandom extends Random {
         super(seed);
     }
 
-    /**
-     * If the function returns an empty option, `nextInt` behaves as usual. Otherwise, the integer
-     * returned from `function` is returned by `nextInt`.
-     */
-    private void mockNextInt(IntFunction<OptionalInt> function) {
-        this.nextIntFunction = function;
-    }
-
     public void mockNextInt(int expectedBound, int returnValue) {
         this.nextIntFunction = b -> {
             if (b == expectedBound)
