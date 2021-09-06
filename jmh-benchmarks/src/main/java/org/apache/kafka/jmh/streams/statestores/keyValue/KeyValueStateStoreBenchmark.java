@@ -92,7 +92,7 @@ public class KeyValueStateStoreBenchmark {
                 Task.TaskType.ACTIVE,
                 false,
                 new LogContext("jmh"),
-                new StateDirectory(config, Time.SYSTEM, true),
+                new StateDirectory(config, Time.SYSTEM, true, false),
                 null,
                 Collections.emptyMap(),
                 Collections.emptySet()

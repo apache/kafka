@@ -8,68 +8,65 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.*;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.openjdk.jmh.annotations.Benchmark;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
+import java.time.Instant;
+import java.util.*;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class WindowedStoreBenchmark {
 
-    /*
-
-    Things to test ->
-
-    1) Serdes(serialisation/deserialisation)
-    2) State stores- find all stores and add relevant benchmarks.
-    3) various operators tests.
-    4) e2e tests.
-    5) DSL v/s PAPI.
-    6) testing for joins.
-    7) eos
-
-    5 types of stores => kv, timestamped, windowed, timestampedWindowed, session
-
-     */
-
     protected final int DISTINCT_KEYS = 1_000_000;
 
-    protected final String[] keys = new String[DISTINCT_KEYS];
+    protected final int WINDOW_SIZE = 1;
 
-    protected final ValueAndTimestamp<String>[] values = new ValueAndTimestamp[DISTINCT_KEYS];
+    private final int NUM_WINDOWS = 100;
+
+    private final Map<String, List<ValueAndTimestamp<String>>> windowedValues = new HashMap<>();
+
+    protected final String[] keys = new String[DISTINCT_KEYS];
 
     protected final String KEY = "some_key";
 
     protected final String VALUE = "some_value";
 
-    private final String SCAN_KEY = "scan_key";
-
-    protected TimestampedKeyValueStore<String, String> timestampedKeyValueStore;
+    protected WindowStore<String, String> windowStore;
 
     private final long timestamp = new Date().getTime();
 
-    protected void storeKeys() {
+    protected void generateWindowedKeys() {
         for (int i = 0; i < DISTINCT_KEYS; ++i) {
             keys[i] = KEY + i;
-            values[i] = ValueAndTimestamp.make(VALUE + i, timestamp);
+            List<ValueAndTimestamp<String>> valueAndTimestamps = new ArrayList<>();
+            for (int w = 0; w < NUM_WINDOWS; w++) {
+                valueAndTimestamps.add(ValueAndTimestamp.make(
+                    VALUE + i,
+                    Instant.ofEpochMilli(timestamp).
+                        plusSeconds(60 * (w + WINDOW_SIZE)).
+                        toEpochMilli())
+                );
+            }
+            windowedValues.put(keys[i], valueAndTimestamps);
         }
     }
 
-    protected void storeScanKeys() {
-        for (int i = 0; i < DISTINCT_KEYS; ++i) {
-            timestampedKeyValueStore.put(SCAN_KEY + i, ValueAndTimestamp.make(VALUE + i, timestamp));
+    protected void putWindowedKeys() {
+        for (String windowedKey: windowedValues.keySet()) {
+            List<ValueAndTimestamp<String>> valueAndTimestamps = windowedValues.get(windowedKey);
+            for (ValueAndTimestamp<String> valueAndTimestamp: valueAndTimestamps)
+            windowStore.put(windowedKey, valueAndTimestamp.value(), valueAndTimestamp.timestamp());
         }
     }
 
@@ -92,7 +89,7 @@ public class WindowedStoreBenchmark {
                 Task.TaskType.ACTIVE,
                 false,
                 new LogContext("jmh"),
-                new StateDirectory(config, Time.SYSTEM, true),
+                new StateDirectory(config, Time.SYSTEM, true, false),
                 null,
                 Collections.emptyMap(),
                 Collections.emptySet()
@@ -114,68 +111,142 @@ public class WindowedStoreBenchmark {
     }
 
     @Benchmark
-    protected ValueAndTimestamp<String> testPersistentPutGetPerformance() {
-        int counter = 0;
-        counter++;
-        final int index = counter % DISTINCT_KEYS;
-        final String key = keys[index];
-        timestampedKeyValueStore.put(key, values[index]);
-        return timestampedKeyValueStore.get(key);
+    protected int testFetchKeyAtTimePerformance() {
+        List<String> records = new ArrayList<>();
+        for (String key: keys) {
+            for (int w = 0; w < NUM_WINDOWS; w++) {
+                final String fetch = windowStore.fetch(key,
+                    Instant.ofEpochMilli(timestamp).
+                        plusSeconds(60 * (w + WINDOW_SIZE))
+                    .toEpochMilli()
+                );
+                records.add(fetch);
+            }
+        }
+        return records.size();
     }
 
     @Benchmark
-    protected int testPersistentPrefixScanPerformance() {
-        int numKeys = 0;
-        final KeyValueIterator<String, ValueAndTimestamp<String>> prefixScan = timestampedKeyValueStore.prefixScan(SCAN_KEY, new StringSerializer());
-        while (prefixScan.hasNext()) {
-            prefixScan.next();
-            numKeys++;
+    protected int testFetchKeyInTimeRangePerformance() {
+        int records = 0;
+        for (String key: keys) {
+            for (int w = 0; w < NUM_WINDOWS; w++) {
+                final WindowStoreIterator<String> fetch = windowStore.fetch(key,
+                    Instant.ofEpochMilli(timestamp),
+                    Instant.ofEpochMilli(timestamp).
+                        plusSeconds(60 * (w + WINDOW_SIZE))
+                );
+                while (fetch.hasNext()) {
+                    fetch.next();
+                    records++;
+                }
+            }
         }
-        return numKeys;
+        return records;
     }
 
     @Benchmark
-    protected int testPersistentRangeQueryPerformance() {
-        int numKeys = 0;
-        final KeyValueIterator<String, ValueAndTimestamp<String>> rangeScan = timestampedKeyValueStore.range(SCAN_KEY + 0, SCAN_KEY + (DISTINCT_KEYS - 1));
-        while (rangeScan.hasNext()) {
-            rangeScan.next();
-            numKeys++;
+    protected int testFetchForKeyRangeInTimeRangePerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.fetch(
+            keys[0],
+            keys[keys.length - 1],
+            Instant.ofEpochMilli(timestamp),
+            Instant.ofEpochMilli(timestamp).
+                plusSeconds(60 * (NUM_WINDOWS + WINDOW_SIZE))
+        );
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
         }
-        return numKeys;
+        return records;
     }
 
     @Benchmark
-    protected int testPersistentReverseRangeQueryPerformance() {
-        int numKeys = 0;
-        final KeyValueIterator<String, ValueAndTimestamp<String>> reverseRangeScan = timestampedKeyValueStore.reverseRange(SCAN_KEY + (DISTINCT_KEYS - 1), SCAN_KEY + 0);
-        while (reverseRangeScan.hasNext()) {
-            reverseRangeScan.next();
-            numKeys++;
+    protected int testFetchAllPerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.fetchAll(
+            Instant.ofEpochMilli(timestamp),
+            Instant.ofEpochMilli(timestamp).
+                plusSeconds(60 * (NUM_WINDOWS + WINDOW_SIZE))
+        );
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
         }
-        return numKeys;
+        return records;
     }
 
     @Benchmark
-    protected int testPersistentAllPerformance() {
-        int numKeys = 0;
-        final KeyValueIterator<String, ValueAndTimestamp<String>> allScan = timestampedKeyValueStore.all();
-        while (allScan.hasNext()) {
-            allScan.next();
-            numKeys++;
+    protected int testAllPerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.all();
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
         }
-        return numKeys;
+        return records;
     }
 
     @Benchmark
-    protected List<KeyValue<String, ValueAndTimestamp<String>>> testPersistentPutAllPerformance() {
-        List<KeyValue<String, ValueAndTimestamp<String>>> entries = new ArrayList<>();
-        for (int count = 0; count < DISTINCT_KEYS; count++) {
-            final int index = count % DISTINCT_KEYS;
-            entries.add(KeyValue.pair(keys[index], values[index]));
+    protected int testFetchKeyInBackwardTimeRangePerformance() {
+        int records = 0;
+        for (String key: keys) {
+            for (int w = 0; w < NUM_WINDOWS; w++) {
+                final WindowStoreIterator<String> fetch = windowStore.backwardFetch(key,
+                    Instant.ofEpochMilli(timestamp),
+                    Instant.ofEpochMilli(timestamp).
+                        plusSeconds(60 * (w + WINDOW_SIZE))
+                );
+                while (fetch.hasNext()) {
+                    fetch.next();
+                    records++;
+                }
+            }
         }
-        timestampedKeyValueStore.putAll(entries);
-        return entries;
+        return records;
     }
 
+    @Benchmark
+    protected int testFetchForKeyRangeInBackwardTimeRangePerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.backwardFetch(
+            keys[0],
+            keys[keys.length - 1],
+            Instant.ofEpochMilli(timestamp),
+            Instant.ofEpochMilli(timestamp).
+                plusSeconds(60 * (NUM_WINDOWS + WINDOW_SIZE))
+        );
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
+        }
+        return records;
+    }
+
+    @Benchmark
+    protected int testBackwardFetchAllPerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.backwardFetchAll(
+            Instant.ofEpochMilli(timestamp),
+            Instant.ofEpochMilli(timestamp).
+                plusSeconds(60 * (NUM_WINDOWS + WINDOW_SIZE))
+        );
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
+        }
+        return records;
+    }
+
+    @Benchmark
+    protected int testBackwardAllPerformance() {
+        int records = 0;
+        final KeyValueIterator<Windowed<String>, String> fetch = windowStore.backwardAll();
+        while (fetch.hasNext()) {
+            fetch.next();
+            records++;
+        }
+        return records;
+    }
 }

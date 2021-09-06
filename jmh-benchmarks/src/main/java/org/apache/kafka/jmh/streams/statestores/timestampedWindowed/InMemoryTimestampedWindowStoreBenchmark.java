@@ -15,9 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.jmh.streams.statestores.windowed;
+package org.apache.kafka.jmh.streams.statestores.timestampedWindowed;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.jmh.streams.statestores.windowed.WindowedStoreBenchmark;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.Stores;
@@ -29,19 +30,19 @@ import java.time.Duration;
 @Fork(value = 1)
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.Throughput)
-public class InMemoryTimestampedKVStoreBenchmarkTimestamped extends WindowedStoreBenchmark {
+public class InMemoryTimestampedWindowStoreBenchmark extends WindowedStoreBenchmark {
 
     @Setup(Level.Trial)
     public void setUp() {
-        storeKeys();
-        Stores.windowStoreBuilder(Stores.inMemoryWindowStore("in-memory", Duration.ofMinutes(30), Duration.ofMinutes(30), true),
+        generateWindowedKeys();
+        Stores.timestampedWindowStoreBuilder(Stores.inMemoryWindowStore("in-memory", Duration.ofDays(1), Duration.ofMinutes(WINDOW_SIZE), false),
             Serdes.String(),
             Serdes.String())
             .withCachingDisabled()
             .withLoggingDisabled()
             .build();
         ProcessorContextImpl context = (ProcessorContextImpl) setupProcessorContext();
-        this.timestampedKeyValueStore.init((StateStoreContext) context, this.timestampedKeyValueStore);
-        storeScanKeys();
+        this.windowStore.init((StateStoreContext) context, this.windowStore);
+        putWindowedKeys();
     }
 }
