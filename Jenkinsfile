@@ -142,10 +142,10 @@ pipeline {
           }
         }
 
-        stage('JDK 16 and Scala 2.13') {
+        stage('JDK 17 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_16_latest'
+            jdk 'jdk_17_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -157,7 +157,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 16'
+            echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
 
@@ -231,14 +231,14 @@ pipeline {
           }
         }
 
-        stage('JDK 16 and Scala 2.12') {
+        stage('JDK 17 and Scala 2.12') {
           when {
             not { changeRequest() }
             beforeAgent true
           }
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_16_latest'
+            jdk 'jdk_17_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -250,7 +250,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 16'
+            echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
       }
