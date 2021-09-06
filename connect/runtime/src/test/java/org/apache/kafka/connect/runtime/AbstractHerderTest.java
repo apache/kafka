@@ -139,12 +139,12 @@ public class AbstractHerderTest {
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
     private Connector insConnector;
 
-    final private Worker worker = mock(Worker.class);
-    final private WorkerConfigTransformer transformer = mock(WorkerConfigTransformer.class);
-    final private Plugins plugins = mock(Plugins.class);
-    final private ClassLoader classLoader = mock(ClassLoader.class);
-    final private ConfigBackingStore configStore = mock(ConfigBackingStore.class);
-    final private StatusBackingStore statusStore = mock(StatusBackingStore.class);
+    private final Worker worker = mock(Worker.class);
+    private final WorkerConfigTransformer transformer = mock(WorkerConfigTransformer.class);
+    private final Plugins plugins = mock(Plugins.class);
+    private final ClassLoader classLoader = mock(ClassLoader.class);
+    private final ConfigBackingStore configStore = mock(ConfigBackingStore.class);
+    private final StatusBackingStore statusStore = mock(StatusBackingStore.class);
     private ClassLoader loader;
 
     @Before
