@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -498,7 +499,7 @@ class AdminApiDriverTest {
     ) {
         OptionalInt brokerIdOpt = context.driver.keyToBrokerId(key);
         assertEquals(OptionalInt.empty(), brokerIdOpt);
-        KafkaFutureImpl<Long> future = context.future.all().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertFalse(future.isDone());
     }
 
@@ -507,7 +508,7 @@ class AdminApiDriverTest {
         String key,
         Throwable expectedException
     ) {
-        KafkaFutureImpl<Long> future = context.future.all().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertTrue(future.isCompletedExceptionally());
         Throwable exception = assertThrows(ExecutionException.class, future::get);
         assertEquals(expectedException, exception.getCause());
@@ -518,7 +519,7 @@ class AdminApiDriverTest {
         String key,
         Long expected
     ) {
-        KafkaFutureImpl<Long> future = context.future.all().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertTrue(future.isDone());
         try {
             assertEquals(expected, future.get());

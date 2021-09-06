@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,9 +34,9 @@ import java.util.concurrent.ExecutionException;
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
-    private final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures;
+    private final Map<CoordinatorKey, KafkaFuture<ConsumerGroupDescription>> futures;
 
-    public DescribeConsumerGroupsResult(final Map<CoordinatorKey, KafkaFutureImpl<ConsumerGroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(final Map<CoordinatorKey, KafkaFuture<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 
