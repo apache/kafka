@@ -189,7 +189,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         );
 
         assertEquals(
-            new HashSet<>(Collections.singletonList("zero")),
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 0,
                 ofEpochMilli(startTime - WINDOW_SIZE),
@@ -465,7 +465,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             iter.next();
             fetchedCount++;
         }
-        assertEquals(2, fetchedCount);
+        assertEquals(1, fetchedCount);
 
         assertEquals(
             Utils.mkSet(segments.segmentName(1L), segments.segmentName(3L)),
@@ -651,7 +651,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
-            new HashSet<>(Collections.singletonList("four")),
+            new HashSet<>(Collections.emptyList()),
             valuesToSet(windowStore.fetch(
                 4,
                 ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
