@@ -68,7 +68,7 @@ public class RestServerTest {
     protected static final String KAFKA_CLUSTER_ID = "Xbafgnagvar";
 
     @Before
-    public void tearUp() {
+    public void setUp() {
         herder = mock(Herder.class);
         plugins = mock(Plugins.class);
     }
