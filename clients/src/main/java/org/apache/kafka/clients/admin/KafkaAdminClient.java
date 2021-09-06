@@ -3178,7 +3178,8 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeConsumerGroupsHandler.newFuture(groupIds);
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(options.includeAuthorizedOperations(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new DescribeConsumerGroupsResult(future.all());
+        return new DescribeConsumerGroupsResult(future.all().entrySet().stream()
+                .collect(Collectors.toMap(x -> x.getKey().idValue, Map.Entry::getValue)));
     }
 
     /**

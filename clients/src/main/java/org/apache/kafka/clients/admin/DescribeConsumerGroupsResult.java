@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -34,9 +33,9 @@ import java.util.concurrent.ExecutionException;
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
-    private final Map<CoordinatorKey, KafkaFuture<ConsumerGroupDescription>> futures;
+    private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
 
-    public DescribeConsumerGroupsResult(final Map<CoordinatorKey, KafkaFuture<ConsumerGroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(final Map<String, KafkaFuture<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 
@@ -45,7 +44,7 @@ public class DescribeConsumerGroupsResult {
      */
     public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
         Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups = new HashMap<>();
-        futures.forEach((key, future) -> describedGroups.put(key.idValue, future));
+        futures.forEach((key, future) -> describedGroups.put(key, future));
         return describedGroups;
     }
 
@@ -58,7 +57,7 @@ public class DescribeConsumerGroupsResult {
                 Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {
                     try {
-                        descriptions.put(key.idValue, future.get());
+                        descriptions.put(key, future.get());
                     } catch (InterruptedException | ExecutionException e) {
                         // This should be unreachable, since the KafkaFuture#allOf already ensured
                         // that all of the futures completed successfully.
