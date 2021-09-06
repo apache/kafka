@@ -1345,6 +1345,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testJuteMaxBufffer(): Unit = {
+
+    def assertJuteMaxBufferConfig(clientConfig: ZKClientConfig, expectedValue: String): Unit = {
+      val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+        zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+        zkClientConfig = clientConfig)
+      try assertEquals(expectedValue, client.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
+      finally client.close()
+    }
+
     // default case
     assertEquals("4194304", zkClient.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
 
@@ -1353,18 +1362,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     try {
       val clientConfig1 = new ZKClientConfig
       clientConfig1.setProperty(ZKConfig.JUTE_MAXBUFFER, (2000 * 1024).toString)
-      val client1 = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-        zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
-        zkClientConfig = clientConfig1)
-      try assertEquals("2048000", client1.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
-      finally client1.close()
+      assertJuteMaxBufferConfig(clientConfig1, expectedValue = "2048000")
 
       // System property value is used if value is not set in ZKClientConfig
-      val client2 = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-        zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
-        zkClientConfig = new ZKClientConfig)
-      try assertEquals("3072000", client2.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
-      finally client2.close()
+      assertJuteMaxBufferConfig(new ZKClientConfig, expectedValue = "3072000")
 
     } finally System.clearProperty(ZKConfig.JUTE_MAXBUFFER)
   }
