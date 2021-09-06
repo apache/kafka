@@ -51,6 +51,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.client.ZKClientConfig
+import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -76,7 +77,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     super.setUp()
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+      zkClientConfig = new ZKClientConfig)
     expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
@@ -103,15 +105,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig))
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient", zkClientConfig = clientConfig)
     try {
-      assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
+      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
       assertThrows(classOf[Exception],
         () => KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig)))
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest", zkClientConfig = badClientConfig))
     } finally {
       client.close()
     }
@@ -121,9 +123,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @ValueSource(booleans = Array(true, false))
   def testChroot(createChrootIfNecessary: Boolean): Unit = {
     val chroot = "/chroot"
-    val clientConfig = new ZKClientConfig()
     val client = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig), createChrootIfNecessary = createChrootIfNecessary)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest",
+      zkClientConfig = new ZKClientConfig, createChrootIfNecessary = createChrootIfNecessary)
     try {
       client.createTopLevelPaths()
       if (!createChrootIfNecessary) {
@@ -158,7 +160,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // this client doesn't have create permission to the root and chroot, but the chroot already exists
     // Expect that no exception thrown
     val chrootClient = KafkaZkClient(zkConnect + chroot, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, createChrootIfNecessary = true)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest",
+      zkClientConfig = new ZKClientConfig, createChrootIfNecessary = true)
     chrootClient.close()
   }
 
@@ -1340,6 +1343,33 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getAcl(mockPath))
   }
 
+  @Test
+  def testJuteMaxBufffer(): Unit = {
+
+    def assertJuteMaxBufferConfig(clientConfig: ZKClientConfig, expectedValue: String): Unit = {
+      val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+        zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+        zkClientConfig = clientConfig)
+      try assertEquals(expectedValue, client.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
+      finally client.close()
+    }
+
+    // default case
+    assertEquals("4194304", zkClient.currentZooKeeper.getClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER))
+
+    // Value set directly on ZKClientConfig takes precedence over system property
+    System.setProperty(ZKConfig.JUTE_MAXBUFFER, (3000 * 1024).toString)
+    try {
+      val clientConfig1 = new ZKClientConfig
+      clientConfig1.setProperty(ZKConfig.JUTE_MAXBUFFER, (2000 * 1024).toString)
+      assertJuteMaxBufferConfig(clientConfig1, expectedValue = "2048000")
+
+      // System property value is used if value is not set in ZKClientConfig
+      assertJuteMaxBufferConfig(new ZKClientConfig, expectedValue = "3072000")
+
+    } finally System.clearProperty(ZKConfig.JUTE_MAXBUFFER)
+  }
+
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
     extends KafkaZkClient(zooKeeperClient, isSecure, time) {
     // Overwriting this method from the parent class to force the client to re-register the Broker.
@@ -1365,7 +1395,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
               metricGroup: String = "kafka.server",
               metricType: String = "SessionExpireListener") = {
       val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-        time, metricGroup, metricType)
+        time, metricGroup, metricType, new ZKClientConfig, "ExpiredKafkaZkClient")
       new ExpiredKafkaZkClient(zooKeeperClient, isSecure, time)
     }
   }

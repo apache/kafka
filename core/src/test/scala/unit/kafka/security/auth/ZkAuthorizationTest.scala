@@ -18,7 +18,6 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
-
 import kafka.admin.ZkSecurityMigrator
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk._
@@ -36,6 +35,7 @@ import kafka.controller.ReplicaAssignment
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -137,13 +137,17 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
     (securityProtocol), securityProtocol)), rack = rack), ApiVersion.latestVersion, jmxPort = port + 10)
 
+  private def newKafkaZkClient(connectionString: String, isSecure: Boolean) =
+    KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, Time.SYSTEM, "ZkAuthorizationTest",
+      new ZKClientConfig)
+
   /**
    * Tests the migration tool when making an unsecure
    * cluster secure.
    */
   @Test
   def testZkMigration(): Unit = {
-    val unsecureZkClient = KafkaZkClient(zkConnect, false, 6000, 6000, Int.MaxValue, Time.SYSTEM)
+    val unsecureZkClient = newKafkaZkClient(zkConnect, isSecure = false)
     try {
       testMigration(zkConnect, unsecureZkClient, zkClient)
     } finally {
@@ -157,7 +161,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   @Test
   def testZkAntiMigration(): Unit = {
-    val unsecureZkClient = KafkaZkClient(zkConnect, false, 6000, 6000, Int.MaxValue, Time.SYSTEM)
+    val unsecureZkClient = newKafkaZkClient(zkConnect, isSecure = false)
     try {
       testMigration(zkConnect, zkClient, unsecureZkClient)
     } finally {
@@ -198,8 +202,8 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   def testChroot(): Unit = {
     val zkUrl = zkConnect + "/kafka"
     zkClient.createRecursive("/kafka")
-    val unsecureZkClient = KafkaZkClient(zkUrl, false, 6000, 6000, Int.MaxValue, Time.SYSTEM)
-    val secureZkClient = KafkaZkClient(zkUrl, true, 6000, 6000, Int.MaxValue, Time.SYSTEM)
+    val unsecureZkClient = newKafkaZkClient(zkUrl, isSecure = false)
+    val secureZkClient = newKafkaZkClient(zkUrl, isSecure = true)
     try {
       testMigration(zkUrl, unsecureZkClient, secureZkClient)
     } finally {
@@ -284,7 +288,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   private def deleteAllUnsecure(): Unit = {
     System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
-    val unsecureZkClient = KafkaZkClient(zkConnect, false, 6000, 6000, Int.MaxValue, Time.SYSTEM)
+    val unsecureZkClient = newKafkaZkClient(zkConnect, isSecure = false)
     val result: Try[Boolean] = {
       deleteRecursive(unsecureZkClient, "/")
     }
