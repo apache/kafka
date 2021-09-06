@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -26,11 +25,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.KeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 
-import java.util.HashMap;
 import java.util.Optional;
-import java.util.Properties;
-
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 
 /**
  * Too much information to generalize, so Stream-Stream joins are represented by a specific node.
@@ -89,7 +84,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     @SuppressWarnings("unchecked")
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
         final String thisProcessorName = thisProcessorParameters().processorName();
         final String otherProcessorName = otherProcessorParameters().processorName();
@@ -102,14 +97,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
         topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
 
-        if (enableSpuriousResultFix &&
-            (props == null ||
-                StreamsConfig.InternalConfig.getBoolean(
-                    new HashMap(props),
-                    ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                    true
-                )
-            )) {
+        if (enableSpuriousResultFix) {
             outerJoinWindowStoreBuilder.ifPresent(builder -> topologyBuilder.addStateStore(builder, thisProcessorName, otherProcessorName));
         }
     }

@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -1926,6 +1927,96 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testMeasureCommitSyncDurationOnFailure() {
+        final KafkaConsumer<String, String> consumer
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+
+        try {
+            consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommitSyncDuration() {
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(
+            offsetCommitResponse(Collections.singletonMap(tp0, Errors.NONE)),
+            coordinator
+        );
+
+        consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDurationOnFailure() {
+        final KafkaConsumer<String, String> consumer
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+
+        try {
+            consumer.committed(Collections.singleton(tp0));
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDuration() {
+        long offset1 = 10000;
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        // lookup coordinator
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // fetch offset for one topic
+        client.prepareResponseFrom(
+            offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE), coordinator);
+
+        consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
     public void testRebalanceException() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
@@ -2178,16 +2269,35 @@ public class KafkaConsumerTest {
 
         consumer.assign(singleton(tp0));
 
+        // poll once to update with the current metadata
+        consumer.poll(Duration.ofMillis(0));
+        client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
+
         // no error for no current position
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertEquals(0, client.inFlightRequestCount());
 
+        // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
+        consumer.poll(Duration.ofMillis(0));
+        // requests: list-offset, fetch
+        assertEquals(2, client.inFlightRequestCount());
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
 
+        // poll once again, which should return the list-offset response
+        // and hence next call would return correct lag result
+        client.respond(listOffsetsResponse(singletonMap(tp0, 90L)));
+        consumer.poll(Duration.ofMillis(0));
+
+        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+        // requests: fetch
+        assertEquals(1, client.inFlightRequestCount());
+
+        // one successful fetch should update the log end offset and the position
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
-        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
+        client.respond(fetchResponse(singletonMap(tp0, fetchInfo)));
 
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
@@ -2199,8 +2309,36 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
-        Time time = new MockTime();
+    @Test
+    public void testListOffsetShouldUpateSubscriptions() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer =
+                newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        consumer.assign(singleton(tp0));
+
+        // poll once to update with the current metadata
+        consumer.poll(Duration.ofMillis(0));
+        client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
+
+        consumer.seek(tp0, 50L);
+        client.prepareResponse(listOffsetsResponse(singletonMap(tp0, 90L)));
+
+        assertEquals(singletonMap(tp0, 90L), consumer.endOffsets(Collections.singleton(tp0)));
+        // correct lag result should be returned as well
+        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+
+        consumer.close(Duration.ZERO);
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(final Time time) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2212,6 +2350,14 @@ public class KafkaConsumerTest {
 
         client.createPendingAuthenticationError(node, 0);
         return newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
+        return consumerWithPendingAuthenticationError(new MockTime());
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingError(final Time time) {
+        return consumerWithPendingAuthenticationError(time);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
@@ -2787,6 +2933,17 @@ public class KafkaConsumerTest {
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
+    }
+
+    @Test
+    public void testAssignorNameConflict() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            Arrays.asList(RangeAssignor.class.getName(), ConsumerPartitionAssignorTest.TestConsumerPartitionAssignor.class.getName()));
+
+        assertThrows(KafkaException.class,
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

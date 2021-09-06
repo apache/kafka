@@ -311,13 +311,30 @@ public class StructTest {
 
         Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
             fakeSchema, new Object()));
-        assertEquals("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"",
+        assertEquals("Invalid Java object for schema \"fake\" with type null: class java.lang.Object for field: \"field\"",
             e.getMessage());
 
         e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
             Schema.INT8_SCHEMA, new Object()));
-        assertEquals("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"",
+        assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object for field: \"field\"",
             e.getMessage());
+
+        e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(Schema.INT8_SCHEMA, new Object()));
+        assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object", e.getMessage());
+    }
+
+    @Test
+    public void testValidateFieldWithInvalidValueMismatchTimestamp() {
+        String fieldName = "field";
+        long longValue = 1000L;
+
+        // Does not throw
+        ConnectSchema.validateValue(fieldName, Schema.INT64_SCHEMA, longValue);
+
+        Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
+            Timestamp.SCHEMA, longValue));
+        assertEquals("Invalid Java object for schema \"org.apache.kafka.connect.data.Timestamp\" " +
+                "with type INT64: class java.lang.Long for field: \"field\"", e.getMessage());
     }
 
     @Test

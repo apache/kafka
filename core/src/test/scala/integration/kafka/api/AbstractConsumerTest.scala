@@ -163,6 +163,25 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     records
   }
 
+
+  /**
+   * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
+   * records to each partition
+   */
+  protected def createTopicAndSendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                                          topicName: String,
+                                          numPartitions: Int,
+                                          recordsPerPartition: Int): Set[TopicPartition] = {
+    createTopic(topicName, numPartitions, brokerCount)
+    var parts = Set[TopicPartition]()
+    for (partition <- 0 until numPartitions) {
+      val tp = new TopicPartition(topicName, partition)
+      sendRecords(producer, recordsPerPartition, tp)
+      parts = parts + tp
+    }
+    parts
+  }
+
   protected def sendAndAwaitAsyncCommit[K, V](consumer: Consumer[K, V],
                                               offsetsOpt: Option[Map[TopicPartition, OffsetAndMetadata]] = None): Unit = {
 

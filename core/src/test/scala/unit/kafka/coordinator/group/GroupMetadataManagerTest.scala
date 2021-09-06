@@ -27,7 +27,7 @@ import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
-import kafka.log.{AppendOrigin, Log, LogAppendInfo}
+import kafka.log.{AppendOrigin, UnifiedLog, LogAppendInfo}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
@@ -823,7 +823,7 @@ class GroupMetadataManagerTest {
     val endOffset = 10L
     val groupEpoch = 2
 
-    val logMock: Log = EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
     expectGroupMetadataLoad(logMock, startOffset, MemoryRecords.EMPTY)
     EasyMock.expect(replicaManager.getLogEndOffset(groupTopicPartition)).andStubReturn(Some(endOffset))
@@ -891,7 +891,7 @@ class GroupMetadataManagerTest {
     val tp2 = new TopicPartition("bar", 0)
     val tp3 = new TopicPartition("xxx", 0)
 
-    val logMock: Log = EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
 
     val segment1MemberId = "a"
@@ -2366,7 +2366,7 @@ class GroupMetadataManagerTest {
     EasyMock.expect(mockRecords.sizeInBytes()).andReturn(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + records.sizeInBytes()).anyTimes()
     EasyMock.replay(mockRecords)
 
-    val logMock: Log = EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(logMock.logStartOffset).andReturn(startOffset).anyTimes()
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
@@ -2512,7 +2512,7 @@ class GroupMetadataManagerTest {
   private def expectGroupMetadataLoad(groupMetadataTopicPartition: TopicPartition,
                                       startOffset: Long,
                                       records: MemoryRecords): Unit = {
-    val logMock: Log =  EasyMock.mock(classOf[Log])
+    val logMock: UnifiedLog =  EasyMock.mock(classOf[UnifiedLog])
     EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
     val endOffset = expectGroupMetadataLoad(logMock, startOffset, records)
     EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(endOffset))
@@ -2524,7 +2524,7 @@ class GroupMetadataManagerTest {
    *
    * @return the calculated end offset to be mocked into [[ReplicaManager.getLogEndOffset]]
    */
-  private def expectGroupMetadataLoad(logMock: Log,
+  private def expectGroupMetadataLoad(logMock: UnifiedLog,
                                       startOffset: Long,
                                       records: MemoryRecords): Long = {
     val endOffset = startOffset + records.records.asScala.size

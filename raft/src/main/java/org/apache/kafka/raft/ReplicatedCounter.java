@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
@@ -61,10 +62,13 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
         int epoch = claimedEpoch.getAsInt();
         uncommitted += 1;
-        Long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
-        if (offset != null) {
+        try {
+            long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
                 uncommitted, epoch, offset);
+        } catch (NotLeaderException e) {
+            log.info("Appending failed, transition to resigned", e);
+            client.resign(epoch);
         }
     }
 
@@ -103,7 +107,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             }
             log.debug("Counter incremented from {} to {}", initialCommitted, committed);
 
-            if (lastOffsetSnapshotted + snapshotDelayInRecords  < lastCommittedOffset) {
+            if (lastOffsetSnapshotted + snapshotDelayInRecords < lastCommittedOffset) {
                 log.debug(
                     "Generating new snapshot with committed offset {} and epoch {} since the previoud snapshot includes {}",
                     lastCommittedOffset,

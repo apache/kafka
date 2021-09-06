@@ -45,10 +45,10 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -236,7 +236,7 @@ public class KafkaStreamsTest {
         // setup stream threads
         streamThreadMockedStatic = mockStatic(StreamThread.class);
         streamThreadMockedStatic.when(() -> StreamThread.create(
-                any(InternalTopologyBuilder.class),
+                any(TopologyMetadata.class),
                 any(StreamsConfig.class),
                 any(KafkaClientSupplier.class),
                 any(Admin.class),

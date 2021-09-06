@@ -308,6 +308,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
         validateStoreOpen();
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
 
         final KeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);
@@ -366,10 +368,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                           final Bytes to,
                                           final boolean forward) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
-
-        if (from.compareTo(to) > 0) {
+        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +

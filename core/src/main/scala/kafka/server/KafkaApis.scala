@@ -212,7 +212,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForwardToController(request, handleIncrementalAlterConfigsRequest)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
-        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request, requestLocal)
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForwardToController(request, handleAlterClientQuotasRequest)
@@ -223,10 +223,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelope(request, requestLocal)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
-        case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
-        case ApiKeys.ALLOCATE_PRODUCER_IDS => maybeForwardToController(request, handleAllocateProducerIdsRequest)
+        case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
@@ -766,19 +765,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
         FetchResponse.partitionResponse(tp.partition, Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
-        // Down-conversion of the fetched records is needed when the stored magic version is
-        // greater than that supported by the client (as indicated by the fetch request version). If the
-        // configured magic version for the topic is less than or equal to that supported by the version of the
-        // fetch request, we skip the iteration through the records in order to check the magic version since we
-        // know it must be supported. However, if the magic version is changed from a higher version back to a
-        // lower version, this check will no longer be valid and we will fail to down-convert the messages
-        // which were written in the new format prior to the version downgrade.
+        // Down-conversion of fetched records is needed when the on-disk magic value is greater than what is
+        // supported by the fetch request version.
+        // If the inter-broker protocol version is `3.0` or higher, the log config message format version is
+        // always `3.0` (i.e. magic value is `v2`). As a result, we always go through the down-conversion
+        // path if the fetch version is 3 or lower (in rare cases the down-conversion may not be needed, but
+        // it's not worth optimizing for them).
+        // If the inter-broker protocol version is lower than `3.0`, we rely on the log config message format
+        // version as a proxy for the on-disk magic value to maintain the long-standing behavior originally
+        // introduced in Kafka 0.10.0. An important implication is that it's unsafe to downgrade the message
+        // format version after a single message has been produced (the broker would return the message(s)
+        // without down-conversion irrespective of the fetch version).
         val unconvertedRecords = FetchResponse.recordsOrFail(partitionData)
         val downConvertMagic =
-          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+          logConfig.map(_.recordVersion.value).flatMap { magic =>
+            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1)
               Some(RecordBatch.MAGIC_VALUE_V0)
-            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3)
               Some(RecordBatch.MAGIC_VALUE_V1)
             else
               None
@@ -1130,11 +1133,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def metadataResponseTopic(error: Errors,
                                     topic: String,
+                                    topicId: Uuid,
                                     isInternal: Boolean,
                                     partitionData: util.List[MetadataResponsePartition]): MetadataResponseTopic = {
     new MetadataResponseTopic()
       .setErrorCode(error.code)
       .setName(topic)
+      .setTopicId(topicId)
       .setIsInternal(isInternal)
       .setPartitions(partitionData)
   }
@@ -1171,6 +1176,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           metadataResponseTopic(
             error,
             topic,
+            metadataCache.getTopicId(topic),
             Topic.isInternal(topic),
             util.Collections.emptyList()
           )
@@ -1188,16 +1194,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Topic IDs are not supported for versions 10 and 11. Topic names can not be null in these versions.
     if (!metadataRequest.isAllTopics) {
       metadataRequest.data.topics.forEach{ topic =>
-        if (topic.name == null) {
+        if (topic.name == null && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic name can not be null for version ${metadataRequest.version}")
-        } else if (topic.topicId != Uuid.ZERO_UUID) {
+        } else if (topic.topicId != Uuid.ZERO_UUID && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic IDs are not supported in requests for version ${metadataRequest.version}")
         }
       }
     }
 
+    // Check if topicId is presented firstly.
+    val topicIds = metadataRequest.topicIds.asScala.toSet.filterNot(_ == Uuid.ZERO_UUID)
+    val useTopicId = topicIds.nonEmpty
+
+    // Only get topicIds and topicNames when supporting topicId
+    val unknownTopicIds = topicIds.filter(metadataCache.getTopicName(_).isEmpty)
+    val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
+
+    val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
+
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
+    else if (useTopicId)
+      knownTopicNames
     else
       metadataRequest.topics.asScala.toSet
 
@@ -1219,16 +1238,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
-      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, isInternal(topic), util.Collections.emptyList()))
+      // Set topicId to zero since we will never create topic which topicId
+      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal(topic), util.Collections.emptyList()))
 
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include topics unauthorized for Describe
       if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
         Set.empty[MetadataResponseTopic]
-      else
+      else if (useTopicId) {
+        // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
+      } else {
+        // We should not return topicId when on unauthorized error, so we return zero uuid.
+        unauthorizedForDescribeTopics.map(topic =>
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+      }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
     // while in higher versions we simply don't include the broker in the returned broker list
@@ -1264,7 +1290,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
+    val completeTopicMetadata =  unknownTopicIdsTopicMetadata ++
+      topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
@@ -2671,7 +2698,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
@@ -3367,14 +3394,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     } catch {
       case e: Throwable => Some(ApiError.fromThrowable(e))
     }
-  }
-
-  def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
-    // This function will not be called when in KRaft mode, since the
-    // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
-    // manager.
-    throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
-      "Apache ZooKeeper mode.")
   }
 
   def handleDescribeTransactionsRequest(request: RequestChannel.Request): Unit = {

@@ -148,6 +148,8 @@ abstract class WorkerTask implements Runnable {
         taskMetricsGroup.close();
     }
 
+    protected abstract void initializeAndStart();
+
     protected abstract void execute();
 
     protected abstract void close();
@@ -179,10 +181,10 @@ abstract class WorkerTask implements Runnable {
                     onPause();
                     if (!awaitUnpause()) return;
                 }
-
-                statusListener.onStartup(id);
             }
 
+            initializeAndStart();
+            statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
             if (cancelled) {

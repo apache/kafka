@@ -229,7 +229,8 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  protected def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
+  // Visibility for unit tests
+  protected[server] def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
     inLock(partitionMapLock) {
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(partitionsWithError, "truncateOnFetchResponse")
@@ -247,7 +248,7 @@ abstract class AbstractFetcherThread(name: String,
         val highWatermark = partitionState.fetchOffset
         val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-        info(s"Truncating partition $tp to local high watermark $highWatermark")
+        info(s"Truncating partition $tp with $truncationState due to local high watermark $highWatermark")
         if (doTruncate(tp, truncationState))
           fetchOffsets.put(tp, truncationState)
       }
@@ -262,21 +263,29 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     fetchedEpochs.forKeyValue { (tp, leaderEpochOffset) =>
-      Errors.forCode(leaderEpochOffset.errorCode) match {
-        case Errors.NONE =>
-          val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
-          if (doTruncate(tp, offsetTruncationState))
-            fetchOffsets.put(tp, offsetTruncationState)
+      if (partitionStates.contains(tp)) {
+        Errors.forCode(leaderEpochOffset.errorCode) match {
+          case Errors.NONE =>
+            val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+            info(s"Truncating partition $tp with $offsetTruncationState due to leader epoch and offset $leaderEpochOffset")
+            if (doTruncate(tp, offsetTruncationState))
+              fetchOffsets.put(tp, offsetTruncationState)
 
-        case Errors.FENCED_LEADER_EPOCH =>
-          val currentLeaderEpoch = latestEpochsForPartitions.get(tp)
-            .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).asJava
-          if (onPartitionFenced(tp, currentLeaderEpoch))
+          case Errors.FENCED_LEADER_EPOCH =>
+            val currentLeaderEpoch = latestEpochsForPartitions.get(tp)
+              .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).asJava
+            if (onPartitionFenced(tp, currentLeaderEpoch))
+              partitionsWithError += tp
+
+          case error =>
+            info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
             partitionsWithError += tp
-
-        case error =>
-          info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
-          partitionsWithError += tp
+        }
+      } else {
+        // Partitions may have been removed from the fetcher while the thread was waiting for fetch
+        // response. Removed partitions are filtered out while holding `partitionMapLock` to ensure that we
+        // don't update state for any partition that may have already been migrated to another thread.
+        trace(s"Ignoring epoch offsets for partition $tp since it has been removed from this fetcher thread.")
       }
     }
 
@@ -317,10 +326,6 @@ abstract class AbstractFetcherThread(name: String,
           warn(s"Error in response for fetch request $fetchRequest", t)
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
-            // there is an error occurred while fetching partitions, sleep a while
-            // note that `AbstractFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
-            // partition with error effectively doubling the delay. It would be good to improve this.
-            partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
         }
     }
@@ -863,7 +868,7 @@ case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
 
   def this(offset: Long) = this(offset, true)
 
-  override def toString: String = "offset:%d-truncationCompleted:%b".format(offset, truncationCompleted)
+  override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
 }
 
 case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {

@@ -105,4 +105,24 @@ public class PartitionRegistrationTest {
                 setIsNew(false).toString(),
             b.toLeaderAndIsrPartitionState(new TopicPartition("bar", 0), false).toString());
     }
+
+    @Test
+    public void testMergePartitionChangeRecordWithReassignmentData() {
+        PartitionRegistration partition0 = new PartitionRegistration(new int[] {1, 2, 3},
+            new int[] {1, 2, 3}, Replicas.NONE, Replicas.NONE, 1, 100, 200);
+        PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
+            setRemovingReplicas(Collections.singletonList(3)).
+            setAddingReplicas(Collections.singletonList(4)).
+            setReplicas(Arrays.asList(1, 2, 3, 4)));
+        assertEquals(new PartitionRegistration(new int[] {1, 2, 3, 4},
+            new int[] {1, 2, 3}, new int[] {3}, new int[] {4}, 1, 100, 201), partition1);
+        PartitionRegistration partition2 = partition1.merge(new PartitionChangeRecord().
+            setIsr(Arrays.asList(1, 2, 4)).
+            setRemovingReplicas(Collections.emptyList()).
+            setAddingReplicas(Collections.emptyList()).
+            setReplicas(Arrays.asList(1, 2, 4)));
+        assertEquals(new PartitionRegistration(new int[] {1, 2, 4},
+            new int[] {1, 2, 4}, Replicas.NONE, Replicas.NONE, 1, 100, 202), partition2);
+        assertFalse(partition2.isReassigning());
+    }
 }
