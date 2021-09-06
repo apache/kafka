@@ -511,12 +511,13 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20);
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20)) {
 
-        assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertFalse(iterator.hasNext());
+            assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -526,12 +527,13 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.backwardFindSessions("a", 0L, 20);
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.backwardFindSessions("a", 0L, 20)) {
 
-        assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(10L, 20L)));
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertEquals(iterator.peekNextKey(), iterator.next().key);
-        assertFalse(iterator.hasNext());
+            assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(10L, 20L)));
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertEquals(iterator.peekNextKey(), iterator.next().key);
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -576,11 +578,12 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("b", new SessionWindow(10, 50)), 2L);
         sessionStore.put(new Windowed<>("c", new SessionWindow(100, 500)), 3L);
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.fetch("a");
-        assertTrue(iterator.hasNext());
-        sessionStore.close();
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.fetch("a")) {
+            assertTrue(iterator.hasNext());
+            sessionStore.close();
 
-        assertFalse(iterator.hasNext());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -590,13 +593,14 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(4, 5)), 2L);
         sessionStore.put(new Windowed<>("aaa", new SessionWindow(6, 7)), 3L);
 
-        final KeyValueIterator<Windowed<String>, Long> singleKeyIterator = sessionStore.findSessions("aa", 0L, 10L);
-        final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("aa", "aa", 0L, 10L);
+        try (final KeyValueIterator<Windowed<String>, Long> singleKeyIterator = sessionStore.findSessions("aa", 0L, 10L);
+             final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("aa", "aa", 0L, 10L)) {
 
-        assertEquals(singleKeyIterator.next(), rangeIterator.next());
-        assertEquals(singleKeyIterator.next(), rangeIterator.next());
-        assertFalse(singleKeyIterator.hasNext());
-        assertFalse(rangeIterator.hasNext());
+            assertEquals(singleKeyIterator.next(), rangeIterator.next());
+            assertEquals(singleKeyIterator.next(), rangeIterator.next());
+            assertFalse(singleKeyIterator.hasNext());
+            assertFalse(rangeIterator.hasNext());
+        }
     }
 
     @Test
@@ -707,8 +711,8 @@ public abstract class AbstractSessionBytesStoreTest {
         final String keyTo = Serdes.String().deserializer()
             .deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+             final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L)) {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();

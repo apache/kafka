@@ -815,9 +815,9 @@ class GroupCoordinator(val brokerId: Int,
       return
     }
 
-    groupManager.getGroup(groupId) match {
+    val err = groupManager.getGroup(groupId) match {
       case None =>
-        responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        Errors.UNKNOWN_MEMBER_ID
 
       case Some(group) => group.inLock {
         val validationErrorOpt = validateHeartbeat(
@@ -828,28 +828,28 @@ class GroupCoordinator(val brokerId: Int,
         )
 
         if (validationErrorOpt.isDefined) {
-          responseCallback(validationErrorOpt.get)
+          validationErrorOpt.get
         } else {
           group.currentState match {
             case Empty =>
-              responseCallback(Errors.UNKNOWN_MEMBER_ID)
+              Errors.UNKNOWN_MEMBER_ID
 
             case CompletingRebalance =>
               // consumers may start sending heartbeat after join-group response, in which case
               // we should treat them as normal hb request and reset the timer
               val member = group.get(memberId)
               completeAndScheduleNextHeartbeatExpiration(group, member)
-              responseCallback(Errors.NONE)
+              Errors.NONE
 
             case PreparingRebalance =>
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
-                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+                Errors.REBALANCE_IN_PROGRESS
 
             case Stable =>
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
-                responseCallback(Errors.NONE)
+                Errors.NONE
 
             case Dead =>
               throw new IllegalStateException(s"Reached unexpected condition for Dead group $groupId")
@@ -857,6 +857,7 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
     }
+    responseCallback(err)
   }
 
   def handleTxnCommitOffsets(groupId: String,

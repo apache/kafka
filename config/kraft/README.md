@@ -1,10 +1,10 @@
-KRaft (aka KIP-500) mode Early Access Release
+KRaft (aka KIP-500) mode Preview Release
 =========================================================
 
 # Introduction
 It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `KRaft mode`.
-`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
-is available for testing in the Kafka 2.8 release.
+`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *PREVIEW AND SHOULD NOT BE USED IN PRODUCTION*, but it
+is available for testing in the Kafka 3.0 release.
 
 When the Kafka cluster is in KRaft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a KRaft quorum of controller nodes.
 
@@ -14,8 +14,8 @@ Most important of all, KRaft mode is more scalable.  We expect to be able to [su
 # Quickstart
 
 ## Warning
-KRaft mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released,
-it will not be possible to upgrade your KRaft clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of KRaft mode.
+KRaft mode in Kafka 3.0 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.1 is released,
+it may not be possible to upgrade your KRaft clusters from 3.0 to 3.1.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the preview release of KRaft mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -107,22 +107,17 @@ This is particularly important for the metadata log maintained by the controller
 nothing in the log, which would cause all metadata to be lost.
 
 # Missing Features
-We do not yet support generating or loading KIP-630 metadata snapshots.  This means that after a while, the time required to restart a broker will become very large.  This is a known issue and we are working on
-completing snapshots for the next release.
-
-We also don't support any kind of upgrade right now, either to or from KRaft mode.  This is another important gap that we are working on.
+We don't support any kind of upgrade right now, either to or from KRaft mode.  This is an important gap that we are working on.
 
 Finally, the following Kafka features have not yet been fully implemented:
 
-* Support for certain security features: configuring an Authorizer, setting up SCRAM, delegation tokens, and so forth
-* Support for transactions and exactly-once semantics
-* Support for adding partitions to existing topics
-* Support for partition reassignment
+* Support for certain security features: configuring a KRaft-based Authorizer, setting up SCRAM, delegation tokens, and so forth
+  (although note that you can use authorizers such as `kafka.security.authorizer.AclAuthorizer` with KRaft clusters, even
+  if they are ZooKeeper-based: simply define `authorizer.class.name` and configure the authorizer as you normally would).
 * Support for some configurations, like enabling unclean leader election by default or dynamically changing broker endpoints
 * Support for KIP-112 "JBOD" modes
-* Support for KIP-631 controller metrics
 
-We've tried to make it clear when a feature is not supported in the early access release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
+We've tried to make it clear when a feature is not supported in the preview release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
 
 # Debugging
 If you encounter an issue, you might want to take a look at the metadata log.

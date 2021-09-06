@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.common.{InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
@@ -155,7 +155,7 @@ object KafkaRaftServer {
         s"loaded from ${config.metadataLogDir}")
     }
 
-    val metadataPartitionDirName = Log.logDirName(MetadataPartition)
+    val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)
     val onlineNonMetadataDirs = logDirs.diff(offlineDirs :+ config.metadataLogDir)
     onlineNonMetadataDirs.foreach { logDir =>
       val metadataDir = new File(logDir, metadataPartitionDirName)
