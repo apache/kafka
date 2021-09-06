@@ -708,8 +708,8 @@ public class RequestResponseTest {
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         Errors error = Errors.forException(e);
         Map<Errors, Integer> errorCounts = response.errorCounts();
-        assertEquals(1, errorCounts.size());
-        assertTrue(errorCounts.containsKey(error), "API Key " + req.apiKey().name + " v" + req.version() + " failed errorCounts test");
+        assertEquals(Collections.singleton(error), errorCounts.keySet(),
+            "API Key " + req.apiKey().name + " v" + req.version() + " failed errorCounts test");
         assertTrue(errorCounts.get(error) > 0);
         if (e instanceof UnknownServerException) {
             String responseStr = response.toString();
