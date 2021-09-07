@@ -114,7 +114,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         for (final Method method : Options.class.getMethods()) {
             if (!ignoreMethods.contains(method.getName())) {
                 RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class
-                        .getDeclaredMethod(method.getName(), method.getParameterTypes());
+                    .getDeclaredMethod(method.getName(), method.getParameterTypes());
             }
         }
     }
@@ -134,7 +134,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     private void verifyDBOptionsMethodCall(final Method method) throws Exception {
         final DBOptions mockedDbOptions = mock(DBOptions.class);
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeDbOptions
-                = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
+            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(mockedDbOptions, new ColumnFamilyOptions());
 
         final Object[] parameters = getDBOptionsParameters(method.getParameterTypes());
 
@@ -147,7 +147,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                    matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
+                matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
         }
     }
 
@@ -239,7 +239,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
     private void verifyColumnFamilyOptionsMethodCall(final Method method) throws Exception {
         final ColumnFamilyOptions mockedColumnFamilyOptions = mock(ColumnFamilyOptions.class);
         final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter optionsFacadeColumnFamilyOptions
-                = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), mockedColumnFamilyOptions);
+            = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), mockedColumnFamilyOptions);
 
         final Object[] parameters = getColumnFamilyOptionsParameters(method.getParameterTypes());
 
@@ -252,7 +252,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                    matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
+                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
         }
     }
 
