@@ -37,7 +37,6 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.DbPath;
 import org.rocksdb.Env;
 import org.rocksdb.InfoLogLevel;
-
 import org.rocksdb.MemTableConfig;
 import org.rocksdb.MergeOperator;
 import org.rocksdb.Options;
