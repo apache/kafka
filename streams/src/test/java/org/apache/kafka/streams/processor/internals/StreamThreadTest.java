@@ -2503,6 +2503,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             eosEnabledConfig,
@@ -2513,7 +2515,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
@@ -2568,6 +2570,8 @@ public class StreamThreadTest {
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = new StreamThread(
             mockTime,
             eosEnabledConfig,
@@ -2578,7 +2582,7 @@ public class StreamThreadTest {
             null,
             taskManager,
             streamsMetrics,
-            internalTopologyBuilder,
+            topologyMetadata,
             CLIENT_ID,
             new LogContext(""),
             new AtomicInteger(),
