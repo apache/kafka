@@ -110,6 +110,7 @@ public interface AdminApiFuture<K, V> {
         }
 
         private KafkaFutureImpl<V> futureOrThrow(K key) {
+            // The below typecast is safe because we initialise futures using only KafkaFutureImpl.
             KafkaFutureImpl<V> future = (KafkaFutureImpl<V>) futures.get(key);
             if (future == null) {
                 throw new IllegalArgumentException("Attempt to complete future for " + key +
