@@ -139,6 +139,18 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
+  def testMarkedDeletionTopicCreation(): Unit = {
+    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val topicPartition = new TopicPartition("test", 0)
+    val topic = topicPartition.topic
+    EasyMock.expect(zkMock.isTopicMarkedForDeletion(topic)).andReturn(true);
+    EasyMock.replay(zkMock)
+    val adminZkClient = new AdminZkClient(zkMock)
+
+    assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
+  }
+
+  @Test
   def testMockedConcurrentTopicCreation(): Unit = {
     val topic = "test.topic"
 
