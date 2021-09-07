@@ -193,6 +193,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  override def getTopicId(topicName: String): Uuid = _currentImage.topics().topicsByName().asScala.get(topicName).map(_.id()).getOrElse(Uuid.ZERO_UUID)
+
+  override def getTopicName(topicId: Uuid): Option[String] = _currentImage.topics().topicsById.asScala.get(topicId).map(_.name())
+
   override def hasAliveBroker(brokerId: Int): Boolean = {
     Option(_currentImage.cluster().broker(brokerId)).count(!_.fenced()) == 1
   }

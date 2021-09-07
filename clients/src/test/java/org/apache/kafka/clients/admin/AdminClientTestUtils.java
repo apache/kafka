@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 public class AdminClientTestUtils {
@@ -70,7 +71,7 @@ public class AdminClientTestUtils {
      */
     public static ListTopicsResult listTopicsResult(String topic) {
         KafkaFutureImpl<Map<String, TopicListing>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(topic, new TopicListing(topic, false)));
+        future.complete(Collections.singletonMap(topic, new TopicListing(topic, Uuid.ZERO_UUID, false)));
         return new ListTopicsResult(future);
     }
 
@@ -93,11 +94,11 @@ public class AdminClientTestUtils {
     public static DescribeTopicsResult describeTopicsResult(String topic, TopicDescription description) {
         KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
-        return new DescribeTopicsResult(Collections.singletonMap(topic, future));
+        return DescribeTopicsResult.ofTopicNames(Collections.singletonMap(topic, future));
     }
 
     public static DescribeTopicsResult describeTopicsResult(Map<String, TopicDescription> topicDescriptions) {
-        return new DescribeTopicsResult(topicDescriptions.entrySet().stream()
+        return DescribeTopicsResult.ofTopicNames(topicDescriptions.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 

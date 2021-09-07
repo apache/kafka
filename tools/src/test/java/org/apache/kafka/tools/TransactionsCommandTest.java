@@ -540,7 +540,7 @@ public class TransactionsCommandTest {
         Map<String, TopicDescription> descriptions
     ) {
         DescribeTopicsResult result = Mockito.mock(DescribeTopicsResult.class);
-        Mockito.when(result.all()).thenReturn(completedFuture(descriptions));
+        Mockito.when(result.allTopicNames()).thenReturn(completedFuture(descriptions));
         Mockito.when(admin.describeTopics(new ArrayList<>(descriptions.keySet()))).thenReturn(result);
     }
 
