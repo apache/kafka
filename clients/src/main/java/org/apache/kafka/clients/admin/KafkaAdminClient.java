@@ -3179,7 +3179,7 @@ public class KafkaAdminClient extends AdminClient {
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(options.includeAuthorizedOperations(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeConsumerGroupsResult(future.all().entrySet().stream()
-                .collect(Collectors.toMap(x -> x.getKey().idValue, Map.Entry::getValue)));
+                .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
     /**
@@ -3379,7 +3379,8 @@ public class KafkaAdminClient extends AdminClient {
                 DeleteConsumerGroupsHandler.newFuture(groupIds);
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new DeleteConsumerGroupsResult(future.all());
+        return new DeleteConsumerGroupsResult(future.all().entrySet().stream()
+                .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
     @Override
