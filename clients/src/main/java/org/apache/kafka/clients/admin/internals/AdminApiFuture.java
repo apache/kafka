@@ -77,7 +77,7 @@ public interface AdminApiFuture<K, V> {
      * This class can be used when the set of keys is known ahead of time.
      */
     class SimpleAdminApiFuture<K, V> implements AdminApiFuture<K, V> {
-        private final Map<K, KafkaFuture<V>> futures;
+        private final Map<K, KafkaFutureImpl<V>> futures;
 
         public SimpleAdminApiFuture(Set<K> keys) {
             this.futures = keys.stream().collect(Collectors.toMap(
@@ -110,7 +110,7 @@ public interface AdminApiFuture<K, V> {
         }
 
         private KafkaFutureImpl<V> futureOrThrow(K key) {
-            KafkaFutureImpl<V> future = (KafkaFutureImpl<V>) futures.get(key);
+            KafkaFutureImpl<V> future = futures.get(key);
             if (future == null) {
                 throw new IllegalArgumentException("Attempt to complete future for " + key +
                     ", which was not requested");
@@ -119,7 +119,7 @@ public interface AdminApiFuture<K, V> {
             }
         }
 
-        public Map<K, KafkaFuture<V>> all() {
+        public Map<K, ? extends KafkaFuture<V>> all() {
             return futures;
         }
 
