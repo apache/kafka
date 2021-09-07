@@ -1275,7 +1275,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         /**
-         * This method generates `time-total` metrics with a couple of errors, no `-ns` suffix and no dash between basename
+         * This method generates `time-total` metrics but has a couple of deficiencies: no `-ns` suffix and no dash between basename
          * and `time-toal` suffix.
          * @deprecated use {{@link #createIOThreadRatioMeter(Metrics, String, Map, String, String)}} for new metrics instead
          */
