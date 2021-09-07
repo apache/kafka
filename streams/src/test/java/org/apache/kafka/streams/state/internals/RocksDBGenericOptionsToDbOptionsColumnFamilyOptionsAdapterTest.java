@@ -349,11 +349,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 .map(LogCaptureAppender.Event::getMessage)
                 .collect(Collectors.toSet());
 
-            walOptions.forEach(option -> {
-                assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option)));
-            });
+            walOptions.forEach(option -> assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option))));
 
         }
     }
 }
-
