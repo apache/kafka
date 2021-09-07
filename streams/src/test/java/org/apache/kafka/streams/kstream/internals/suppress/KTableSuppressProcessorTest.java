@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -41,6 +43,7 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
 
@@ -293,15 +296,17 @@ public class KTableSuppressProcessorTest {
         final MockInternalNewProcessorContext<Windowed<String>, Change<Long>> context = harness.context;
 
         final long timestamp = 100L;
+        final Headers headers = new RecordHeaders().add("k", "v".getBytes(StandardCharsets.UTF_8));
         context.setRecordMetadata("", 0, 0L);
         context.setTimestamp(timestamp);
+        context.setHeaders(headers);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(new Record<>(key, value, timestamp));
 
         assertThat(context.forwarded(), hasSize(1));
         final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
-        assertThat(capturedForward.record(), is(new Record<>(key, value, timestamp)));
+        assertThat(capturedForward.record(), is(new Record<>(key, value, timestamp, headers)));
     }
 
 
