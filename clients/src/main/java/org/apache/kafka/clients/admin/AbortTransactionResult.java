@@ -29,9 +29,9 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class AbortTransactionResult {
-    private final Map<TopicPartition, ? extends KafkaFuture<Void>> futures;
+    private final Map<TopicPartition, KafkaFuture<Void>> futures;
 
-    AbortTransactionResult(Map<TopicPartition, ? extends KafkaFuture<Void>> futures) {
+    AbortTransactionResult(Map<TopicPartition, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
