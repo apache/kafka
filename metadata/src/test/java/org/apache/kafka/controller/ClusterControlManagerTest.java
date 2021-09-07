@@ -42,15 +42,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 
 
 @Timeout(value = 40)
 public class ClusterControlManagerTest {
+
     @Test
     public void testReplay() {
         MockTime time = new MockTime(0, 0, 0);
@@ -85,7 +89,37 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testUnregister() throws Exception {
+    public void testReregister() {
+        Logger logger = Mockito.mock(Logger.class);
+        LogContext logContext = Mockito.mock(LogContext.class);
+        Mockito.when(logContext.logger(any())).thenReturn(logger);
+
+        MockTime time = new MockTime(0, 0, 0);
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClusterControlManager clusterControl = new ClusterControlManager(
+            logContext, time, snapshotRegistry, 1000,
+            new StripedReplicaPlacer(new Random()));
+
+        RegisterBrokerRecord record = new RegisterBrokerRecord()
+            .setBrokerId(1)
+            .setIncarnationId(Uuid.randomUuid())
+            .setBrokerEpoch(1);
+
+        clusterControl.replay(record);
+        Mockito.verify(logger)
+            .info("Registered new broker: {}", record);
+
+        clusterControl.replay(record);
+        Mockito.verify(logger)
+            .info("Re-registered broker incarnation: {}", record);
+
+        clusterControl.replay(record.setIncarnationId(Uuid.randomUuid()));
+        Mockito.verify(logger)
+            .info("Re-registered broker id {}: {}", 1, record);
+    }
+
+    @Test
+    public void testUnregister() {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100).
@@ -116,7 +150,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(ints = {3, 10})
-    public void testPlaceReplicas(int numUsableBrokers) throws Exception {
+    public void testPlaceReplicas(int numUsableBrokers) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         MockRandom random = new MockRandom();
