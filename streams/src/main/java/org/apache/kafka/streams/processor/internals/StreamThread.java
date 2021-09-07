@@ -613,7 +613,7 @@ public class StreamThread extends Thread {
                 try {
                     // check if any active task got corrupted. We will trigger a rebalance in that case.
                     // once the task corruptions have been handled
-                    boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
+                    final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
                     if (enforceRebalance && eosEnabled) {
                         log.info("Active task(s) got corrupted. Triggering a rebalance.");
                         mainConsumer.enforceRebalance();
