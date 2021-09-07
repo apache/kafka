@@ -345,9 +345,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             final List<String> walOptions = Arrays.asList("walDir", "walFilter", "walRecoveryMode", "walBytesPerSync", "walSizeLimitMB", "manualWalFlush", "maxTotalWalSize", "walTtlSeconds");
 
             final Set<String> logMessages = appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals("WARN"))
-                    .map(LogCaptureAppender.Event::getMessage)
-                    .collect(Collectors.toSet());
+                .filter(e -> e.getLevel().equals("WARN"))
+                .map(LogCaptureAppender.Event::getMessage)
+                .collect(Collectors.toSet());
 
             walOptions.forEach(option -> {
                 assertThat(logMessages, hasItem(String.format("WAL is explicitly disabled by Streams in RocksDB. Setting option '%s' will be ignored", option)));
