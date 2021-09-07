@@ -1156,7 +1156,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 buffer.printf("int _stringPrefixSize = " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
                                 buffer.printf("_size.addBytes(_stringBytes.length + _stringPrefixSize + " +
-                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize));%n");
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize + _stringBytes.length));%n");
+
                             } else {
                                 buffer.printf("_size.addBytes(_stringBytes.length + " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
