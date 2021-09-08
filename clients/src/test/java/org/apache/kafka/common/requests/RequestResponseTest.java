@@ -706,6 +706,11 @@ public class RequestResponseTest {
     private void checkErrorResponse(AbstractRequest req, Throwable e, boolean checkEqualityAndHashCode) {
         AbstractResponse response = req.getErrorResponse(e);
         checkResponse(response, req.version(), checkEqualityAndHashCode);
+        Errors error = Errors.forException(e);
+        Map<Errors, Integer> errorCounts = response.errorCounts();
+        assertEquals(Collections.singleton(error), errorCounts.keySet(),
+            "API Key " + req.apiKey().name + " v" + req.version() + " failed errorCounts test");
+        assertTrue(errorCounts.get(error) > 0);
         if (e instanceof UnknownServerException) {
             String responseStr = response.toString();
             assertFalse(responseStr.contains(e.getMessage()),
@@ -803,7 +808,6 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
@@ -1758,7 +1762,6 @@ public class RequestResponseTest {
             Collections.singletonMap("group1", responseData));
     }
 
-    @SuppressWarnings("deprecation")
     private ProduceRequest createProduceRequest(int version) {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
@@ -2881,6 +2884,7 @@ public class RequestResponseTest {
     private DescribeProducersRequest createDescribeProducersRequest(short version) {
         DescribeProducersRequestData data = new DescribeProducersRequestData();
         DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
+        topicRequest.setName("test");
         topicRequest.partitionIndexes().add(0);
         topicRequest.partitionIndexes().add(1);
         data.topics().add(topicRequest);
