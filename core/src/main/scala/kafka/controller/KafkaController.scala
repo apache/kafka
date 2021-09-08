@@ -128,6 +128,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var replicasToDeleteCount = 0
   @volatile private var ineligibleTopicsToDeleteCount = 0
   @volatile private var ineligibleReplicasToDeleteCount = 0
+  @volatile private var activeBrokerCount = 0
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -142,6 +143,9 @@ class KafkaController(val config: KafkaConfig,
   newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
   newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
   newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
+  newGauge("ActiveBrokerCount", () => activeBrokerCount)
+  // FencedBrokerCount metric is always 0 in the ZK controller.
+  newGauge("FencedBrokerCount", () => 0)
 
   /**
    * Returns true if this broker is the current controller.
@@ -1460,6 +1464,8 @@ class KafkaController(val config: KafkaConfig,
         controllerContext.replicaState(replica) == ReplicaDeletionIneligible
       }
     }.sum
+
+    activeBrokerCount = if (isActive) controllerContext.liveOrShuttingDownBrokerIds.size else 0
   }
 
   // visible for testing
