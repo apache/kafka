@@ -34,6 +34,7 @@ class RocksDBRangeIterator extends RocksDbIterator {
     private final byte[] rawLastKey;
     private final boolean forward;
     private final boolean toInclusive;
+    private final ByteBuffer directByteBuffer;
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
@@ -41,10 +42,12 @@ class RocksDBRangeIterator extends RocksDbIterator {
                          final Bytes from,
                          final Bytes to,
                          final boolean forward,
-                         final boolean toInclusive) {
+                         final boolean toInclusive,
+                         final ByteBuffer directByteBuffer) {
         super(storeName, iter, openIterators, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;
+        this.directByteBuffer = directByteBuffer;
         if (forward) {
             if (from == null) {
                 iter.seekToFirst();
@@ -63,8 +66,8 @@ class RocksDBRangeIterator extends RocksDbIterator {
     }
 
     private void allocateDirectByteBufferAndSeek(final RocksIterator iter, final Bytes bytes, final boolean forward) {
-        final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(bytes.get().length);
-        directByteBuffer.order(ByteOrder.nativeOrder());
+        /*final ByteBuffer directByteBuffer = ByteBuffer.allocateDirect(bytes.get().length);
+        directByteBuffer.order(ByteOrder.nativeOrder());*/
         directByteBuffer.clear();
         directByteBuffer.put(bytes.get());
         directByteBuffer.flip();

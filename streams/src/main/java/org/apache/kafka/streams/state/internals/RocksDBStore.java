@@ -108,6 +108,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected volatile boolean open = false;
 
+    private final ByteBuffer putAllKeyDirectBuffer = ByteBuffer.allocateDirect(128);
+    private final ByteBuffer putAllValueDirectBuffer = ByteBuffer.allocateDirect(128);
+
+    private final ByteBuffer rangeDirectBuffer = ByteBuffer.allocateDirect(128);
+
     RocksDBStore(final String name,
                  final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
@@ -119,6 +124,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.name = name;
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
+        this.putAllKeyDirectBuffer.order(ByteOrder.nativeOrder());
+        this.putAllValueDirectBuffer.order(ByteOrder.nativeOrder());
+        this.rangeDirectBuffer.order(ByteOrder.nativeOrder());
     }
 
     @SuppressWarnings("unchecked")
@@ -584,7 +592,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
                                  final WriteBatch batch) throws RocksDBException {
-            int keyCapacity = 0, valueCapacity = 0;
+            /*int keyCapacity = 0, valueCapacity = 0;
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 keyCapacity = Math.max(keyCapacity, entry.key.get().length);
                 if (entry.value != null) valueCapacity = Math.max(valueCapacity, entry.value.length);
@@ -605,6 +613,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 keyDirectBuffer.flip();
                 valueDirectBuffer.flip();
                 addToBatch(keyDirectBuffer, valueDirectBuffer, batch);
+            }*/
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                Objects.requireNonNull(entry.key, "key cannot be null");
+                putAllKeyDirectBuffer.clear();
+                putAllValueDirectBuffer.clear();
+                putAllKeyDirectBuffer.put(entry.key.get());
+                if (entry.value != null)
+                    putAllValueDirectBuffer.put(entry.value);
+                putAllKeyDirectBuffer.flip();
+                putAllValueDirectBuffer.flip();
+                addToBatch(putAllKeyDirectBuffer, putAllValueDirectBuffer, batch);
             }
         }
 
@@ -629,7 +648,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 from,
                 to,
                 forward,
-                true
+                true,
+                rangeDirectBuffer
             );
         }
 
@@ -664,7 +684,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 prefix,
                 to,
                 true,
-                false
+                false,
+                rangeDirectBuffer
             );
         }
 

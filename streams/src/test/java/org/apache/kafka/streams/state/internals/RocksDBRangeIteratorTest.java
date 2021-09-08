@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.junit.Test;
 import org.rocksdb.RocksIterator;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.NoSuchElementException;
 
@@ -46,6 +47,7 @@ public class RocksDBRangeIteratorTest {
     private final  Bytes key3Bytes = Bytes.wrap(key3.getBytes());
     private final  Bytes key4Bytes = Bytes.wrap(key4.getBytes());
     private final byte[] valueBytes = value.getBytes();
+    private final ByteBuffer rangeDirectBuffer = ByteBuffer.allocateDirect(128);
 
     @Test
     public void shouldReturnAllKeysInTheRangeInForwardDirection() {
@@ -71,7 +73,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key3Bytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
@@ -107,7 +110,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key3Bytes,
             false,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
@@ -146,7 +150,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             toBytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
@@ -187,7 +192,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key4Bytes,
             false,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
@@ -216,7 +222,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key2Bytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         verify(rocksIterator);
@@ -241,7 +248,8 @@ public class RocksDBRangeIteratorTest {
             fromBytes,
             toBytes,
             false,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         verify(rocksIterator);
@@ -269,7 +277,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key3Bytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key2Bytes));
@@ -303,7 +312,8 @@ public class RocksDBRangeIteratorTest {
             key3Bytes,
             toBytes,
             false,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
@@ -335,7 +345,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key3Bytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.peekNextKey(), is(key2Bytes));
@@ -373,7 +384,8 @@ public class RocksDBRangeIteratorTest {
             key3Bytes,
             toBytes,
             false,
-            true
+            true,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.peekNextKey(), is(key4Bytes));
@@ -402,7 +414,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key2Bytes,
             true,
-            true
+            true,
+            rangeDirectBuffer
         );
         rocksDBRangeIterator.close();
         verify(rocksIterator);
@@ -429,7 +442,8 @@ public class RocksDBRangeIteratorTest {
             key1Bytes,
             key2Bytes,
             true,
-            false
+            false,
+            rangeDirectBuffer
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
