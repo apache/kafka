@@ -215,7 +215,7 @@ public class StreamsProducer {
     }
 
     private double totalBlockedTime(final Producer<?, ?> producer) {
-        return getMetricValue(producer.metrics(), "bufferpool-wait-time-total")
+        return getMetricValue(producer.metrics(), "bufferpool-wait-time-ns-total")
             + getMetricValue(producer.metrics(), "flush-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-init-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-begin-time-ns-total")
