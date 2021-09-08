@@ -977,6 +977,9 @@ class GroupMetadataManager(brokerId: Int,
     shuttingDown.set(true)
     if (scheduler.isStarted)
       scheduler.shutdown()
+    metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
+    metrics.removeSensor("OffsetCommits")
+    metrics.removeSensor("OffsetExpired")
 
     // TODO: clear the caches
   }
