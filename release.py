@@ -619,16 +619,10 @@ for filename in os.listdir(artifacts_dir):
     cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
-if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
-    fail("Quitting")
 
 cmd("Zipping artifacts", "tar -czf %s.tar.gz %s" % (artifact_name, artifact_name), cwd=work_dir)
-cmd("Uploading artifacts in %s to your Apache home directory" % artifacts_dir, "rsync %s.tar.gz %s@home.apache.org:%s.tar.gz" % (artifact_name, apache_id, artifact_name), cwd=work_dir)
-cmd("Extracting artifacts in Apache public_html directory",
-    ["ssh",
-     "%s@home.apache.org" % (apache_id),
-     "mkdir -p public_html && rm -rf public_html/%s && mv %s.tar.gz public_html/ && cd public_html/ && tar -xf %s.tar.gz && rm %s.tar.gz" % (artifact_name, artifact_name, artifact_name, artifact_name)
-     ])
+if not user_ok("Have you uploaded artifacts in %s, listed above, to public_html in your Apache home directory (y/n)?: " % artifacts_dir):
+    fail("Ok, giving up")
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
