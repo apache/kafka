@@ -35,7 +35,7 @@ public class ListConsumerGroupsResult {
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> valid;
     private final KafkaFutureImpl<Collection<Throwable>> errors;
 
-    ListConsumerGroupsResult(KafkaFutureImpl<Collection<Object>> future) {
+    ListConsumerGroupsResult(KafkaFuture<Collection<Object>> future) {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();
