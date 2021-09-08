@@ -26,8 +26,6 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
-import java.util.Properties;
-
 public class StreamSinkNode<K, V> extends GraphNode {
 
     private final TopicNameExtractor<K, V> topicNameExtractor;
@@ -54,7 +52,7 @@ public class StreamSinkNode<K, V> extends GraphNode {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final Serializer<K> keySerializer = producedInternal.keySerde() == null ? null : producedInternal.keySerde().serializer();
         final Serializer<V> valSerializer = producedInternal.valueSerde() == null ? null : producedInternal.valueSerde().serializer();
         final String[] parentNames = parentNodeNames();

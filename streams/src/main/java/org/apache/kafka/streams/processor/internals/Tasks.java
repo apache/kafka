@@ -84,6 +84,27 @@ class Tasks {
         this.mainConsumer = mainConsumer;
     }
 
+    void handleNewAssignmentAndCreateTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                           final Set<TaskId> assignedActiveTasks,
+                                           final Set<TaskId> assignedStandbyTasks) {
+        activeTaskCreator.removeRevokedUnknownTasks(assignedActiveTasks);
+        standbyTaskCreator.removeRevokedUnknownTasks(assignedStandbyTasks);
+        createTasks(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    void maybeCreateTasksFromNewTopologies() {
+        final Set<String> currentNamedTopologies = topologyMetadata.namedTopologiesView();
+        createTasks(
+            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
+            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+        );
+    }
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
+    }
+
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                      final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {

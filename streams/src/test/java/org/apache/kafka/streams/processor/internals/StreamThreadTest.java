@@ -814,7 +814,14 @@ public class StreamThreadTest {
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
-        EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator);
+        expect(activeTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
+        activeTaskCreator.removeRevokedUnknownTasks(singleton(task1));
+
+        final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
+        expect(standbyTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
+        standbyTaskCreator.removeRevokedUnknownTasks(emptySet());
+
+        EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator, standbyTaskCreator);
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
@@ -826,7 +833,7 @@ public class StreamThreadTest {
             null,
             null,
             activeTaskCreator,
-            null,
+            standbyTaskCreator,
             new TopologyMetadata(internalTopologyBuilder, config),
             null,
             null,
@@ -2329,9 +2336,9 @@ public class StreamThreadTest {
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
         consumer.subscribe((Collection<String>) anyObject(), anyObject());
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expectLastCall().atLeastOnce();
         consumer.unsubscribe();
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expectLastCall().atLeastOnce();
         EasyMock.replay(consumerGroupMetadata);
         final Task task1 = mock(Task.class);
         final Task task2 = mock(Task.class);

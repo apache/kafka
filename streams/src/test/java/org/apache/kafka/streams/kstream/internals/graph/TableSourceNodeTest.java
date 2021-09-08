@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode.TableSou
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.junit.Test;
 
-import java.util.Properties;
 
 import static org.mockito.Mockito.mock;
 
@@ -62,6 +61,6 @@ public class TableSourceNodeTest {
             .build();
         tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
 
-        tableSourceNode.writeToTopology(topologyBuilder, new Properties());
+        tableSourceNode.writeToTopology(topologyBuilder);
     }
 }

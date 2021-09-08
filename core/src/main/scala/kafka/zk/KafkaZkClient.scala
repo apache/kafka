@@ -17,7 +17,6 @@
 package kafka.zk
 
 import java.util.Properties
-
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
@@ -38,6 +37,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
+import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
@@ -1940,18 +1940,33 @@ object KafkaZkClient {
             connectionTimeoutMs: Int,
             maxInFlightRequests: Int,
             time: Time,
+            name: String,
+            zkClientConfig: ZKClientConfig,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            name: Option[String] = None,
-            zkClientConfig: Option[ZKClientConfig] = None,
             createChrootIfNecessary: Boolean = false
   ): KafkaZkClient = {
+
+    /* ZooKeeper 3.6.0 changed the default configuration for JUTE_MAXBUFFER from 4 MB to 1 MB.
+     * This causes a regression if Kafka tries to retrieve a large amount of data across many
+     * znodes – in such a case the ZooKeeper client will repeatedly emit a message of the form
+     * "java.io.IOException: Packet len <####> is out of range".
+     *
+     * We restore the 3.4.x/3.5.x behavior unless the caller has set the property (note that ZKConfig
+     * auto configures itself if certain system properties have been set).
+     *
+     * See https://github.com/apache/zookeeper/pull/1129 for the details on why the behavior
+     * changed in 3.6.0.
+     */
+    if (zkClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER) == null)
+      zkClientConfig.setProperty(ZKConfig.JUTE_MAXBUFFER, ((4096 * 1024).toString))
+
     if (createChrootIfNecessary) {
       val chrootIndex = connectString.indexOf("/")
       if (chrootIndex > 0) {
         val zkConnWithoutChrootForChrootCreation = connectString.substring(0, chrootIndex)
-        val zkClientForChrootCreation = KafkaZkClient(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
-          connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, name, zkClientConfig)
+        val zkClientForChrootCreation = apply(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
+          connectionTimeoutMs, maxInFlightRequests, time, name, zkClientConfig, metricGroup, metricType)
         try {
           val chroot = connectString.substring(chrootIndex)
           if (!zkClientForChrootCreation.pathExists(chroot)) {
@@ -1963,7 +1978,7 @@ object KafkaZkClient {
       }
     }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType, name, zkClientConfig)
+      time, metricGroup, metricType, zkClientConfig, name)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

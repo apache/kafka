@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.errors.BufferAllocationException;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -136,19 +138,20 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
-     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
-     * not possible to become committed. The state machine is expected to discard all
+     * this method will throw an {@link NotLeaderException} to indicate the leader
+     * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
+     * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException if we failed to allocate memory for the records
      */
-    Long scheduleAppend(int epoch, List<T> records);
+    long scheduleAppend(int epoch, List<T> records);
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -158,19 +161,20 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
-     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
-     * not possible to become committed. The state machine is expected to discard all
+     * this method will throw an {@link NotLeaderException} to indicate the leader
+     * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
+     * @return the expected offset of the last record if append succeed
      * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
+     * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException we failed to allocate memory for the records
      */
-    Long scheduleAtomicAppend(int epoch, List<T> records);
+    long scheduleAtomicAppend(int epoch, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

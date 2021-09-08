@@ -24,6 +24,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -57,6 +60,8 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.junit.Assert.assertSame;
@@ -64,6 +69,13 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class StreamsProducerTest {
+    private static final double BUFFER_POOL_WAIT_TIME = 1;
+    private static final double FLUSH_TME = 2;
+    private static final double TXN_INIT_TIME = 3;
+    private static final double TXN_BEGIN_TIME = 4;
+    private static final double TXN_SEND_OFFSETS_TIME = 5;
+    private static final double TXN_COMMIT_TIME = 6;
+    private static final double TXN_ABORT_TIME = 7;
 
     private final LogContext logContext = new LogContext("test ");
     private final String topic = "topic";
@@ -93,6 +105,8 @@ public class StreamsProducerTest {
         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
     );
 
+    private final Time mockTime = mock(Time.class);
+
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
     final KafkaClientSupplier clientSupplier = new MockClientSupplier() {
         @Override
@@ -106,7 +120,8 @@ public class StreamsProducerTest {
         clientSupplier,
         null,
         null,
-        logContext
+        logContext,
+        mockTime
     );
     final StreamsProducer eosAlphaStreamsProducerWithMock = new StreamsProducer(
         eosAlphaConfig,
@@ -114,7 +129,8 @@ public class StreamsProducerTest {
         clientSupplier,
         new TaskId(0, 0),
         null,
-        logContext
+        logContext,
+        mockTime
     );
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
@@ -136,8 +152,6 @@ public class StreamsProducerTest {
         mkEntry(new TopicPartition(topic, 0), new OffsetAndMetadata(0L, null))
     );
 
-
-
     @Before
     public void before() {
         mockClientSupplier.setCluster(cluster);
@@ -148,7 +162,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 null,
                 null,
-                logContext
+                logContext,
+                mockTime
             );
         nonEosMockProducer = mockClientSupplier.producers.get(0);
 
@@ -161,7 +176,8 @@ public class StreamsProducerTest {
                 eosAlphaMockClientSupplier,
                 new TaskId(0, 0),
                 null,
-                logContext
+                logContext,
+                mockTime
             );
         eosAlphaStreamsProducer.initTransaction();
         eosAlphaMockProducer = eosAlphaMockClientSupplier.producers.get(0);
@@ -175,10 +191,13 @@ public class StreamsProducerTest {
                 eosBetaMockClientSupplier,
                 null,
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                mockTime
             );
         eosBetaStreamsProducer.initTransaction();
         eosBetaMockProducer = eosBetaMockClientSupplier.producers.get(0);
+        expect(mockTime.nanoseconds()).andAnswer(Time.SYSTEM::nanoseconds).anyTimes();
+        replay(mockTime);
     }
 
 
@@ -251,7 +270,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext)
+                logContext,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("config cannot be null"));
@@ -267,7 +287,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext)
+                logContext,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("threadId cannot be null"));
@@ -283,7 +304,8 @@ public class StreamsProducerTest {
                 null,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext)
+                logContext,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("clientSupplier cannot be null"));
@@ -299,7 +321,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                null)
+                null,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("logContext cannot be null"));
@@ -343,7 +366,8 @@ public class StreamsProducerTest {
             mockClientSupplier,
             null,
             null,
-            logContext
+            logContext,
+            mockTime
         );
     }
 
@@ -462,7 +486,8 @@ public class StreamsProducerTest {
             eosAlphaMockClientSupplier,
             new TaskId(0, 0),
             null,
-            logContext
+            logContext,
+            mockTime
         );
 
         verify(mockMap);
@@ -489,7 +514,8 @@ public class StreamsProducerTest {
             eosAlphaMockClientSupplier,
             null,
             processId,
-            logContext
+            logContext,
+            mockTime
         );
 
         verify(mockMap);
@@ -612,7 +638,8 @@ public class StreamsProducerTest {
             clientSupplier,
             null,
             UUID.randomUUID(),
-            logContext
+            logContext,
+            mockTime
         );
         streamsProducer.initTransaction();
         // call `send()` to start a transaction
@@ -665,7 +692,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 null,
                 UUID.randomUUID(),
-                logContext)
+                logContext,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("taskId cannot be null for exactly-once alpha"));
@@ -681,7 +709,8 @@ public class StreamsProducerTest {
                 mockClientSupplier,
                 new TaskId(0, 0),
                 null,
-                logContext)
+                logContext,
+                mockTime)
         );
 
         assertThat(thrown.getMessage(), is("processId cannot be null for exactly-once v2"));
@@ -704,7 +733,8 @@ public class StreamsProducerTest {
             clientSupplier,
             new TaskId(0, 0),
             null,
-            logContext
+            logContext,
+            mockTime
         );
 
         final TimeoutException thrown = assertThrows(
@@ -724,7 +754,8 @@ public class StreamsProducerTest {
                 eosAlphaMockClientSupplier,
                 new TaskId(0, 0),
                 null,
-                logContext
+                logContext,
+                mockTime
             );
 
         final IllegalStateException thrown = assertThrows(
@@ -744,7 +775,8 @@ public class StreamsProducerTest {
                 eosBetaMockClientSupplier,
                 null,
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                mockTime
             );
 
         final IllegalStateException thrown = assertThrows(
@@ -772,7 +804,8 @@ public class StreamsProducerTest {
             clientSupplier,
             new TaskId(0, 0),
             null,
-            logContext
+            logContext,
+            mockTime
         );
 
         final StreamsException thrown = assertThrows(
@@ -801,7 +834,8 @@ public class StreamsProducerTest {
             clientSupplier,
             new TaskId(0, 0),
             null,
-            logContext
+            logContext,
+            mockTime
         );
 
         final RuntimeException thrown = assertThrows(
@@ -1105,7 +1139,8 @@ public class StreamsProducerTest {
             clientSupplier,
             null,
             UUID.randomUUID(),
-            logContext
+            logContext,
+            mockTime
         );
         streamsProducer.initTransaction();
 
@@ -1113,6 +1148,7 @@ public class StreamsProducerTest {
         mockedProducer.close();
         mockedProducer.initTransactions();
         expectLastCall();
+        expect(mockedProducer.metrics()).andReturn(Collections.emptyMap()).anyTimes();
         replay(mockedProducer);
 
         streamsProducer.resetProducer();
@@ -1121,4 +1157,99 @@ public class StreamsProducerTest {
         verify(mockedProducer);
     }
 
+    @Test
+    public void shouldComputeTotalBlockedTime() {
+        setProducerMetrics(
+            nonEosMockProducer,
+            BUFFER_POOL_WAIT_TIME,
+            FLUSH_TME,
+            TXN_INIT_TIME,
+            TXN_BEGIN_TIME,
+            TXN_SEND_OFFSETS_TIME,
+            TXN_COMMIT_TIME,
+            TXN_ABORT_TIME
+        );
+
+        final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
+            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME;
+        assertThat(nonEosStreamsProducer.totalBlockedTime(), closeTo(expectedTotalBlocked, 0.01));
+    }
+
+    @Test
+    public void shouldComputeTotalBlockedTimeAfterReset() {
+        setProducerMetrics(
+            eosBetaMockProducer,
+            BUFFER_POOL_WAIT_TIME,
+            FLUSH_TME,
+            TXN_INIT_TIME,
+            TXN_BEGIN_TIME,
+            TXN_SEND_OFFSETS_TIME,
+            TXN_COMMIT_TIME,
+            TXN_ABORT_TIME
+        );
+        final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
+            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME;
+        assertThat(eosBetaStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
+        reset(mockTime);
+        final long closeStart = 1L;
+        final long clodeDelay = 1L;
+        expect(mockTime.nanoseconds()).andReturn(closeStart).andReturn(closeStart + clodeDelay);
+        replay(mockTime);
+        eosBetaStreamsProducer.resetProducer();
+        setProducerMetrics(
+            eosBetaMockClientSupplier.producers.get(1),
+            BUFFER_POOL_WAIT_TIME,
+            FLUSH_TME,
+            TXN_INIT_TIME,
+            TXN_BEGIN_TIME,
+            TXN_SEND_OFFSETS_TIME,
+            TXN_COMMIT_TIME,
+            TXN_ABORT_TIME
+        );
+
+        assertThat(
+            eosBetaStreamsProducer.totalBlockedTime(),
+            closeTo(2 * expectedTotalBlocked + clodeDelay, 0.01)
+        );
+    }
+
+    private MetricName metricName(final String name) {
+        return new MetricName(name, "", "", Collections.emptyMap());
+    }
+
+    private void addMetric(
+        final MockProducer<?, ?> producer,
+        final String name,
+        final double value) {
+        final MetricName metricName = metricName(name);
+        producer.setMockMetrics(metricName, new Metric() {
+            @Override
+            public MetricName metricName() {
+                return metricName;
+            }
+
+            @Override
+            public Object metricValue() {
+                return value;
+            }
+        });
+    }
+
+    private void setProducerMetrics(
+        final MockProducer<?, ?> producer,
+        final double bufferPoolWaitTime,
+        final double flushTime,
+        final double txnInitTime,
+        final double txnBeginTime,
+        final double txnSendOffsetsTime,
+        final double txnCommitTime,
+        final double txnAbortTime) {
+        addMetric(producer, "bufferpool-wait-time-total", bufferPoolWaitTime);
+        addMetric(producer, "flush-time-ns-total", flushTime);
+        addMetric(producer, "txn-init-time-ns-total", txnInitTime);
+        addMetric(producer, "txn-begin-time-ns-total", txnBeginTime);
+        addMetric(producer, "txn-send-offsets-time-ns-total", txnSendOffsetsTime);
+        addMetric(producer, "txn-commit-time-ns-total", txnCommitTime);
+        addMetric(producer, "txn-abort-time-ns-total", txnAbortTime);
+    }
 }

@@ -616,7 +616,7 @@ class KafkaController(val config: KafkaConfig,
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the newOfflineReplicas
     partitionStateMachine.handleStateChanges(partitionsWithOfflineLeader.toSeq, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
-    partitionStateMachine.triggerOnlinePartitionStateChange()
+    val onlineStateChangeResults = partitionStateMachine.triggerOnlinePartitionStateChange()
     // trigger OfflineReplica state change for those newly offline replicas
     replicaStateMachine.handleStateChanges(newOfflineReplicasNotForDeletion.toSeq, OfflineReplica)
 
@@ -628,9 +628,10 @@ class KafkaController(val config: KafkaConfig,
       topicDeletionManager.failReplicaDeletion(newOfflineReplicasForDeletion)
     }
 
-    // If replica failure did not require leader re-election, inform brokers of the offline brokers
-    // Note that during leader re-election, brokers update their metadata
-    if (partitionsWithOfflineLeader.isEmpty) {
+    // If no partition has changed leader or ISR, no UpdateMetadataRequest is sent through PartitionStateMachine
+    // and ReplicaStateMachine. In that case, we want to send an UpdateMetadataRequest explicitly to
+    // propagate the information about the new offline brokers.
+    if (newOfflineReplicasNotForDeletion.isEmpty && onlineStateChangeResults.values.forall(_.isLeft)) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
   }
@@ -1220,7 +1221,7 @@ class KafkaController(val config: KafkaConfig,
               val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
               controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
               finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
-              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
+              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}, zkVersion=${leaderAndIsr.zkVersion}")
               true
             case Some(Left(e)) => throw e
             case None => false
@@ -2344,17 +2345,17 @@ class KafkaController(val config: KafkaConfig,
               debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.zkVersion}]")
               partitionResponses(partition) = Right(updatedIsr)
               Some(partition -> updatedIsr)
-            case Left(error) =>
-              warn(s"Failed to update ISR for partition $partition", error)
-              partitionResponses(partition) = Left(Errors.forException(error))
+            case Left(e) =>
+              error(s"Failed to update ISR for partition $partition", e)
+              partitionResponses(partition) = Left(Errors.forException(e))
               None
           }
       }
 
-      badVersionUpdates.foreach(partition => {
-        debug(s"Failed to update ISR for partition $partition, bad ZK version")
+      badVersionUpdates.foreach { partition =>
+        info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
         partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
-      })
+      }
 
       def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
         val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
@@ -2633,6 +2634,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
     leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)
     leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
+    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.zkVersion)
     leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
     leaderAndIsrInfo.toString()
   }

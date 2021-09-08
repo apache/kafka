@@ -77,8 +77,6 @@ public class StateManagerUtilTest {
     @Test
     public void testRegisterStateStoreWhenTopologyEmpty() {
         when(topology.stateStores()).thenReturn(emptyList());
-        inOrder(topology);
-
         StateManagerUtil.registerStateStores(logger,
             "logPrefix:", topology, stateManager, stateDirectory, processorContext);
     }
@@ -91,12 +89,14 @@ public class StateManagerUtilTest {
 
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
-        inOrder(topology, stateManager, stateDirectory);
 
         final LockException thrown = assertThrows(LockException.class,
             () -> StateManagerUtil.registerStateStores(logger, "logPrefix:",
                 topology, stateManager, stateDirectory, processorContext));
 
+        inOrder(topology).verify(topology).stateStores();
+        inOrder(stateManager).verify(stateManager).taskId();
+        inOrder(stateDirectory).verify(stateDirectory).lock(taskId);
         assertEquals("logPrefix:Failed to lock the state directory for task 0_0", thrown.getMessage());
     }
 

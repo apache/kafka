@@ -139,7 +139,6 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
-
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`OffsetFetch` request for group id {} failed because the coordinator " +
