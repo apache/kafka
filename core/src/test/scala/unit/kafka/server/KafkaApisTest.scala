@@ -290,6 +290,7 @@ class KafkaApisTest {
 
     authorizeResource(authorizer, operation, ResourceType.TOPIC, resourceName, AuthorizationResult.ALLOWED)
 
+    EasyMock.expect(controller.isActive).andReturn(true)
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
     EasyMock.expect(adminManager.alterConfigs(anyObject(), EasyMock.eq(false)))
       .andAnswer(() => {
@@ -444,7 +445,7 @@ class KafkaApisTest {
       .build(topicHeader.apiVersion)
     val request = buildRequest(alterConfigsRequest)
 
-    EasyMock.expect(controller.isActive).andReturn(false)
+    EasyMock.expect(controller.isActive).andReturn(true)
 
     val capturedResponse = expectNoThrottling(request)
 

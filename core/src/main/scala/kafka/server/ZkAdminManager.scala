@@ -495,10 +495,54 @@ class ZkAdminManager(val config: KafkaConfig,
     if (resource.name == null || resource.name.isEmpty)
       None
     else {
-      val id = resourceNameToBrokerId(resource.name)
-      if (id != this.config.brokerId)
-        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
-      Some(id)
+      Some(resourceNameToBrokerId(resource.name))
+    }
+  }
+
+  def validateIncrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]]): Unit = {
+    configs.foreach { case (resource, alterConfigOps) =>
+      resource.`type` match {
+        case ConfigResource.Type.BROKER =>
+          val brokerId = getBrokerId(resource)
+          val perBrokerConfig = brokerId.nonEmpty
+          validateBrokerId(brokerId)
+          if (perBrokerConfig) {
+            val persistentProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
+            val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+          } 
+        case ConfigResource.Type.BROKER_LOGGER =>
+          val brokerId = getBrokerId(resource)
+          validateBrokerId(brokerId)
+          validateLogLevelConfigs(alterConfigOps)
+        case _ =>
+      }
+    }
+  }
+
+  def validateAlterConfigs(configs: Seq[ConfigResource]): Unit = {
+    configs.foreach { resource =>
+      resource.`type` match {
+        case ConfigResource.Type.BROKER =>
+          val brokerId = getBrokerId(resource)
+          val perBrokerConfig = brokerId.nonEmpty
+          validateBrokerId(brokerId)
+          if (perBrokerConfig) {
+            val persistentProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
+            val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+          } 
+        case _ =>
+      }
+    }
+  }
+
+  private def validateBrokerId(brokerId: Option[Int]): Unit = {
+    brokerId match {
+      case Some(id) =>
+        if (id != this.config.brokerId)
+          throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${id}")
+      case None =>
     }
   }
 

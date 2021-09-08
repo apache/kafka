@@ -20,7 +20,6 @@ import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.message.ApiVersionsResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 
@@ -98,17 +97,6 @@ class DefaultApiVersionManager(
         listenerType)
     }
 
-    // This is a temporary workaround in order to allow testing of forwarding
-    // in integration tests. We can remove this after the KRaft controller
-    // is available for integration testing.
-    if (forwardingManager.isDefined) {
-      response.data.apiKeys.add(
-        new ApiVersionsResponseData.ApiVersion()
-          .setApiKey(ApiKeys.ENVELOPE.id)
-          .setMinVersion(ApiKeys.ENVELOPE.oldestVersion)
-          .setMaxVersion(ApiKeys.ENVELOPE.latestVersion)
-      )
-    }
 
     response
   }
@@ -121,6 +109,6 @@ class DefaultApiVersionManager(
   }
 
   override def isApiEnabled(apiKey: ApiKeys): Boolean = {
-    apiKey.inScope(listenerType) || (apiKey == ApiKeys.ENVELOPE && forwardingManager.isDefined)
+    apiKey.inScope(listenerType)
   }
 }

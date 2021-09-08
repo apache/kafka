@@ -193,16 +193,16 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testAlterNotController(): Unit = {
+  def testAlterNotControllerGetsForwarded(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)))).build()
+        .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build()
     val response = sendAlterUserScramCredentialsRequest(request, notControllerSocketServer)
 
     val results = response.data.results
-    assertEquals(2, results.size)
-    checkAllErrorsAlteringCredentials(results, Errors.NOT_CONTROLLER, "when routed incorrectly to a non-Controller broker")
+    assertEquals(1, results.size)
+    checkAllErrorsAlteringCredentials(results, Errors.RESOURCE_NOT_FOUND, "when routed incorrectly to a non-Controller broker")
   }
 
   @Test
@@ -321,6 +321,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String) = {
+    println(s"results ${resultsToCheck}")
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
       s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
   }

@@ -135,10 +135,10 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testNotController(): Unit = {
+  def testForwardedToController(): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
+    assertEquals(null, response.errorCounts().get(Errors.NOT_CONTROLLER))
   }
 
   @Test
