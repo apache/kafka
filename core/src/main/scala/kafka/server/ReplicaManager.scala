@@ -1701,6 +1701,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
 
+      // Stopping the fetchers must be done first in order to initialize the fetch
+      // position correctly.
       replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.map(_.topicPartition))
       stateChangeLogger.info(s"Stopped fetchers as part of become-follower request from controller $controllerId " +
         s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
@@ -2207,6 +2209,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
+    // Stopping the fetchers must be done first in order to initialize the fetch
+    // position correctly.
     replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.keySet)
     stateChangeLogger.info(s"Stopped fetchers as part of become-follower for ${partitionsToMakeFollower.size} partitions")
 
@@ -2234,13 +2238,14 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
-    stopPartitions(topicPartitions.map(tp => tp -> true).toMap).forKeyValue { (topicPartition, e) =>
-      if (e.isInstanceOf[KafkaStorageException]) {
-        stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-          "the local replica for the partition is in an offline log directory")
-      } else {
-        stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-          s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
+    stopPartitions(topicPartitions.map(tp => tp -> true).toMap).forKeyValue { (topicPartition, exception) =>
+      exception match {
+        case e: KafkaStorageException =>
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
+            s"the local replica for the partition is in an offline log directory: ${e.getMessage}.")
+        case e: Throwable =>
+          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
+            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
       }
     }
   }
