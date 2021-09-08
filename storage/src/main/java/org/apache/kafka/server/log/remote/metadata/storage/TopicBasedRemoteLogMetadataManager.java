@@ -54,7 +54,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Function;
 
 /**
  * This is the {@link RemoteLogMetadataManager} implementation with storage as an internal topic with name {@link TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_TOPIC_NAME}.
@@ -160,16 +159,15 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
         try {
             // Publish the message to the topic.
-            CompletableFuture<RecordMetadata> produceFuture = new CompletableFuture<>();
-            producerManager.publishMessage(remoteLogMetadata, produceFuture);
-            return produceFuture.thenApplyAsync((Function<RecordMetadata, Void>) recordMetadata -> {
+            CompletableFuture<RecordMetadata> produceFuture =  producerManager.publishMessage(remoteLogMetadata);
+            return produceFuture.thenApplyAsync(recordMetadata -> {
                 try {
                     consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
                 } catch (TimeoutException e) {
                     throw new KafkaException(e);
                 }
                 return null;
-            }).toCompletableFuture();
+            });
         } catch (KafkaException e) {
             if (e instanceof RetriableException) {
                 throw e;

@@ -51,8 +51,9 @@ public class ProducerManager implements Closeable {
         topicPartitioner = rlmmTopicPartitioner;
     }
 
-    public void publishMessage(RemoteLogMetadata remoteLogMetadata,
-                               CompletableFuture<RecordMetadata> produceFuture) {
+    public CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
@@ -69,17 +70,19 @@ public class ProducerManager implements Closeable {
                 public void onCompletion(RecordMetadata metadata,
                                          Exception exception) {
                     if (exception != null) {
-                        produceFuture.completeExceptionally(exception);
+                        future.completeExceptionally(exception);
                     } else {
-                        produceFuture.complete(metadata);
+                        future.complete(metadata);
                     }
                 }
             };
             producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
                                                serde.serialize(remoteLogMetadata)), callback);
         } catch (Exception ex) {
-            produceFuture.completeExceptionally(ex);
+            future.completeExceptionally(ex);
         }
+
+        return future;
     }
 
     public void close() {
