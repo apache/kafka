@@ -62,7 +62,7 @@ versions += [
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "7.1.1",
+  gradle: "7.2",
   grgit: "4.1.0",
   httpclient: "4.5.13",
   easymock: "4.3",
@@ -97,10 +97,10 @@ versions += [
   kafka_26: "2.6.2",
   kafka_27: "2.7.1",
   kafka_28: "2.8.0",
-  lz4: "1.7.1",
+  lz4: "1.8.0",
   mavenArtifact: "3.8.1",
   metrics: "2.2.0",
-  mockito: "3.9.0",
+  mockito: "3.12.4",
   netty: "4.1.62.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
@@ -110,11 +110,11 @@ versions += [
   scalaJava8Compat : "1.0.0",
   scoverage: "1.4.1",
   slf4j: "1.7.30",
-  snappy: "1.1.8.1",
+  snappy: "1.1.8.4",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
   zookeeper: "3.6.3",
-  zstd: "1.5.0-2"
+  zstd: "1.5.0-4"
 ]
 libs += [
   activation: "javax.activation:activation:$versions.activation",
