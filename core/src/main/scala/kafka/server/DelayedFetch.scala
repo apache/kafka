@@ -21,7 +21,7 @@ import java.util
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
@@ -50,7 +50,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          isFromFollower: Boolean,
                          replicaId: Int,
                          topicIds: util.Map[String, Uuid],
-                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
+                         fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +
@@ -68,7 +68,7 @@ class DelayedFetch(delayMs: Long,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
                    clientMetadata: Option[ClientMetadata],
-                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
+                   responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -92,7 +92,7 @@ class DelayedFetch(delayMs: Long,
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            val partition = replicaManager.getPartitionOrException(topicPartition)
+            val partition = replicaManager.getPartitionOrException(topicPartition.topicPartition)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
             val endOffset = fetchMetadata.fetchIsolation match {
@@ -187,7 +187,7 @@ class DelayedFetch(delayMs: Long,
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       val isReassignmentFetch = fetchMetadata.isFromFollower &&
-        replicaManager.isAddingReplica(tp, fetchMetadata.replicaId)
+        replicaManager.isAddingReplica(tp.topicPartition, fetchMetadata.replicaId)
 
       tp -> result.toFetchPartitionData(isReassignmentFetch)
     }

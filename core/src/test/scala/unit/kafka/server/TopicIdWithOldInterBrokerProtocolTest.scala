@@ -22,7 +22,7 @@ import java.util.{Arrays, LinkedHashMap, Optional, Properties}
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -86,6 +86,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
     val tp0 = new TopicPartition("topic1", 0)
+    val tidp0 = new TopicIdPartition(Uuid.ZERO_UUID, tp0)
     val maxResponseBytes = 800
     val maxPartitionBytes = 190
     val topicIds = Map("topic1" -> Uuid.randomUuid())
@@ -98,7 +99,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     assertEquals(Errors.NONE, resp.error())
 
     val responseData = resp.responseData(topicNames.asJava, 12)
-    assertEquals(Errors.NONE.code, responseData.get(tp0).errorCode);
+    assertEquals(Errors.NONE.code, responseData.get(tidp0).errorCode);
   }
 
   @Test

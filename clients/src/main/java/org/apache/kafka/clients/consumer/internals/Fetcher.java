@@ -38,6 +38,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -299,12 +300,12 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
-                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
+                            Map<TopicIdPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
-                                TopicPartition partition = entry.getKey();
+                            for (Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
+                                TopicPartition partition = entry.getKey().topicPartition();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                 if (requestData == null) {
                                     String message;

@@ -18,6 +18,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchMetadata;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -536,7 +538,8 @@ public class FetchSessionHandler {
             }
             return false;
         }
-        Set<TopicPartition> topicPartitions = response.responseData(sessionTopicNames, version).keySet();
+        Set<TopicPartition> topicPartitions = response.responseData(sessionTopicNames, version).keySet().stream().map(
+                TopicIdPartition::topicPartition).collect(Collectors.toSet());
         if (nextMetadata.isFull()) {
             if (topicPartitions.isEmpty() && response.throttleTimeMs() > 0) {
                 // Normally, an empty full fetch response would be invalid.  However, KIP-219

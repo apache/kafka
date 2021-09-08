@@ -233,7 +233,8 @@ class ReplicaFetcherThread(name: String,
         Map.empty
       }
     } else {
-      fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
+      fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala.map {
+        case (tidp, data) => (tidp.topicPartition, data) }
     }
   }
 

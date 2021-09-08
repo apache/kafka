@@ -17,20 +17,20 @@
 
 package kafka.server
 
-import kafka.log.{ClientRecordDeletion, UnifiedLog, LogSegment}
+import kafka.log.{ClientRecordDeletion, LogSegment, UnifiedLog}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
+
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
@@ -135,6 +135,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     val topicIds = getTopicIds().asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
+    val topicIdPartition = new TopicIdPartition(topicIds.get(topic), topicPartition)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -155,7 +156,7 @@ class LogOffsetTest extends BaseRequestTest {
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
         300 * 1024, Optional.empty())).asJava, topicIds).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
-    assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition)).batches.iterator.hasNext)
+    assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicIdPartition)).batches.iterator.hasNext)
   }
 
   @Test

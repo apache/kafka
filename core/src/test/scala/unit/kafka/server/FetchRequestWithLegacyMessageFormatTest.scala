@@ -23,8 +23,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
-
 import java.util.Properties
+
+import org.apache.kafka.common.{TopicIdPartition, Uuid}
+
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -58,7 +60,7 @@ class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(fetchVersion, Int.MaxValue, 0,
       createPartitionMap(maxPartitionBytes, Seq(topicPartition)), topicIds).build(fetchVersion)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-    val partitionData = fetchResponse.responseData(topicNames, fetchVersion).get(topicPartition)
+    val partitionData = fetchResponse.responseData(topicNames, fetchVersion).get(new TopicIdPartition(Uuid.ZERO_UUID, topicPartition))
     assertEquals(Errors.NONE.code, partitionData.errorCode)
 
     assertTrue(partitionData.highWatermark > 0)

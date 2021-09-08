@@ -18,6 +18,7 @@ package kafka.server.epoch.util
 
 import java.net.SocketTimeoutException
 import java.util
+
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
@@ -27,7 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
-import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 
 import scala.collection.Map
 
@@ -100,9 +101,9 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+        val partitionData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
         val topicIdsForRequest = new util.HashMap[String, Uuid]()
-        fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
+        fetchPartitionData.foreach { case (tp, data) => partitionData.put(new TopicIdPartition(topicIds.getOrElse(tp.topic(), Uuid.ZERO_UUID), tp), data) }
         topicIds.foreach { case (name, id) => topicIdsForRequest.put(name, id)}
         fetchPartitionData = Map.empty
         topicIds = Map.empty

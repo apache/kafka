@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -47,8 +48,8 @@ public class FetchRequest extends AbstractRequest {
     public static final long INVALID_LOG_START_OFFSET = -1L;
 
     private final FetchRequestData data;
-    private volatile LinkedHashMap<TopicPartition, PartitionData> fetchData = null;
-    private volatile List<TopicPartition> toForget = null;
+    private volatile LinkedHashMap<TopicIdPartition, PartitionData> fetchData = null;
+    private volatile List<TopicIdPartition> toForget = null;
 
     // This is an immutable read-only structures derived from FetchRequestData
     private final FetchMetadata metadata;
@@ -315,7 +316,7 @@ public class FetchRequest extends AbstractRequest {
     // For versions < 13, builds the partitionData map using only the FetchRequestData.
     // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
     // Throws UnknownTopicIdException for versions 13+ if the topic ID was unknown to the server.
-    public Map<TopicPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+    public Map<TopicIdPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         if (fetchData == null) {
             synchronized (this) {
                 if (fetchData == null) {
@@ -331,7 +332,7 @@ public class FetchRequest extends AbstractRequest {
                         if (name != null) {
                             // If topic name is resolved, simply add to fetchData map
                             fetchTopic.partitions().forEach(fetchPartition ->
-                                    fetchData.put(new TopicPartition(name, fetchPartition.partition()),
+                                    fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
                                             new PartitionData(
                                                     fetchPartition.fetchOffset(),
                                                     fetchPartition.logStartOffset(),
@@ -352,7 +353,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
-    public List<TopicPartition> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+    public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         if (toForget == null) {
             synchronized (this) {
                 if (toForget == null) {
@@ -367,7 +368,7 @@ public class FetchRequest extends AbstractRequest {
                         if (name == null) {
                             throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", forgottenTopic.topicId()));
                         }
-                        forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicPartition(name, partitionId)));
+                        forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
                     });
                 }
             }

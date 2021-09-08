@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -72,7 +73,7 @@ public class FetchResponse extends AbstractResponse {
 
     private final FetchResponseData data;
     // we build responseData when needed.
-    private volatile LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = null;
+    private volatile LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = null;
 
     @Override
     public FetchResponseData data() {
@@ -96,7 +97,7 @@ public class FetchResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
+    public LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
@@ -110,7 +111,7 @@ public class FetchResponse extends AbstractResponse {
                         }
                         if (name != null) {
                             topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                                    responseData.put(new TopicIdPartition(topicResponse.topicId(), new TopicPartition(name, partition.partitionIndex())), partition));
                         }
                     });
                 }
@@ -158,7 +159,7 @@ public class FetchResponse extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicPartition,
+                             Iterator<Map.Entry<TopicIdPartition,
                              FetchResponseData.PartitionData>> partIterator,
                              Map<String, Uuid> topicIds) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
@@ -226,7 +227,7 @@ public class FetchResponse extends AbstractResponse {
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
                                    int sessionId,
-                                   LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData,
+                                   LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData,
                                    Map<String, Uuid> topicIds) {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), topicIds));
     }
@@ -234,25 +235,25 @@ public class FetchResponse extends AbstractResponse {
     private static FetchResponseData toMessage(Errors error,
                                                int throttleTimeMs,
                                                int sessionId,
-                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator,
+                                               Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator,
                                                Map<String, Uuid> topicIds) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         partIterator.forEachRemaining(entry -> {
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
-            partitionData.setPartitionIndex(entry.getKey().partition());
+            partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
                 : topicResponseList.get(topicResponseList.size() - 1);
-            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
+            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topicPartition().topic()))
                 previousTopic.partitions().add(partitionData);
             else {
                 List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopic(entry.getKey().topic())
-                    .setTopicId(topicIds.getOrDefault(entry.getKey().topic(), Uuid.ZERO_UUID))
+                    .setTopic(entry.getKey().topicPartition().topic())
+                    .setTopicId(topicIds.getOrDefault(entry.getKey().topicPartition().topic(), Uuid.ZERO_UUID))
                     .setPartitions(partitionResponses));
             }
         });

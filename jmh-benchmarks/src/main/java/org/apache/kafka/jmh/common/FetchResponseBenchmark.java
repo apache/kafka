@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
@@ -63,7 +64,7 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
+    LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData;
 
     Map<String, Uuid> topicIds;
 
@@ -96,7 +97,7 @@ public class FetchResponseBenchmark {
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setRecords(records);
-                responseData.put(new TopicPartition(topic, partitionId), partitionData);
+                responseData.put(new TopicIdPartition(id, new TopicPartition(topic, partitionId)), partitionData);
             }
         }
 

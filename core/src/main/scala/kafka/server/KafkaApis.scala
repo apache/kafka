@@ -70,7 +70,7 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -679,8 +679,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         (Collections.emptyMap[String, Uuid](), Collections.emptyMap[Uuid, String]())
 
     // If fetchData or forgottenTopics contain an unknown topic ID, return a top level error.
-    var fetchData: util.Map[TopicPartition, FetchRequest.PartitionData] = null
-    var forgottenTopics: util.List[TopicPartition] = null
+    var fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData] = null
+    var forgottenTopics: util.List[TopicIdPartition] = null
     try {
       fetchData = fetchRequest.fetchData(topicNames)
       forgottenTopics = fetchRequest.forgottenTopics(topicNames)
@@ -708,40 +708,40 @@ class KafkaApis(val requestChannel: RequestChannel,
       None
     }
 
-    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponseData.PartitionData)]()
-    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+    val erroneous = mutable.ArrayBuffer[(TopicIdPartition, FetchResponseData.PartitionData)]()
+    val interesting = mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]()
     val sessionTopicIds = mutable.Map[String, Uuid]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-        fetchContext.foreachPartition { (topicPartition, topicId, data) =>
-          sessionTopicIds.put(topicPartition.topic(), topicId)
-          if (!metadataCache.contains(topicPartition))
-            erroneous += topicPartition -> FetchResponse.partitionResponse(topicPartition.partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        fetchContext.foreachPartition { (topicIdPartition, data) =>
+          sessionTopicIds.put(topicIdPartition.topicPartition.topic, topicIdPartition.topicId)
+          if (!metadataCache.contains(topicIdPartition.topicPartition))
+            erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
           else
-            interesting += (topicPartition -> data)
+            interesting += (topicIdPartition -> data)
         }
       } else {
-        fetchContext.foreachPartition { (part, topicId, _) =>
-          sessionTopicIds.put(part.topic(), topicId)
-          erroneous += part -> FetchResponse.partitionResponse(part.partition, Errors.TOPIC_AUTHORIZATION_FAILED)
+        fetchContext.foreachPartition { (topicIdPartition, _) =>
+          sessionTopicIds.put(topicIdPartition.topicPartition.topic, topicIdPartition.topicId)
+          erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.TOPIC_AUTHORIZATION_FAILED)
         }
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
-      val partitionDatas = new mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]
-      fetchContext.foreachPartition { (topicPartition, topicId, partitionData) =>
-        partitionDatas += topicPartition -> partitionData
-        sessionTopicIds.put(topicPartition.topic(), topicId)
+      val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]
+      fetchContext.foreachPartition { (topicIdPartition, partitionData) =>
+        partitionDatas += topicIdPartition -> partitionData
+        sessionTopicIds.put(topicIdPartition.topicPartition.topic(), topicIdPartition.topicId)
       }
-      val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topic)
-      partitionDatas.foreach { case (topicPartition, data) =>
-        if (!authorizedTopics.contains(topicPartition.topic))
-          erroneous += topicPartition -> FetchResponse.partitionResponse(topicPartition.partition, Errors.TOPIC_AUTHORIZATION_FAILED)
-        else if (!metadataCache.contains(topicPartition))
-          erroneous += topicPartition -> FetchResponse.partitionResponse(topicPartition.partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topicPartition.topic)
+      partitionDatas.foreach { case (topicIdPartition, data) =>
+        if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
+          erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.TOPIC_AUTHORIZATION_FAILED)
+        else if (!metadataCache.contains(topicIdPartition.topicPartition))
+          erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else
-          interesting += (topicPartition -> data)
+          interesting += (topicIdPartition -> data)
       }
     }
 
@@ -757,13 +757,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def maybeConvertFetchedData(tp: TopicPartition,
+    def maybeConvertFetchedData(tp: TopicIdPartition,
                                 partitionData: FetchResponseData.PartitionData): FetchResponseData.PartitionData = {
-      val logConfig = replicaManager.getLogConfig(tp)
+      val logConfig = replicaManager.getLogConfig(tp.topicPartition)
 
       if (logConfig.exists(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
-        FetchResponse.partitionResponse(tp.partition, Errors.UNSUPPORTED_COMPRESSION_TYPE)
+        FetchResponse.partitionResponse(tp.topicPartition.partition, Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
         // Down-conversion of fetched records is needed when the on-disk magic value is greater than what is
         // supported by the fetch request version.
@@ -792,7 +792,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // For fetch requests from clients, check if down-conversion is disabled for the particular partition
             if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
               trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-              FetchResponse.partitionResponse(tp.partition, Errors.UNSUPPORTED_VERSION)
+              FetchResponse.partitionResponse(tp.topicPartition.partition, Errors.UNSUPPORTED_VERSION)
             } else {
               try {
                 trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
@@ -801,23 +801,23 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 new FetchResponseData.PartitionData()
-                  .setPartitionIndex(tp.partition)
+                  .setPartitionIndex(tp.topicPartition.partition)
                   .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
                   .setHighWatermark(partitionData.highWatermark)
                   .setLastStableOffset(partitionData.lastStableOffset)
                   .setLogStartOffset(partitionData.logStartOffset)
                   .setAbortedTransactions(partitionData.abortedTransactions)
-                  .setRecords(new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+                  .setRecords(new LazyDownConversionRecords(tp.topicPartition, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
                   .setPreferredReadReplica(partitionData.preferredReadReplica())
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
-                  FetchResponse.partitionResponse(tp.partition, Errors.UNSUPPORTED_COMPRESSION_TYPE)
+                  FetchResponse.partitionResponse(tp.topicPartition.partition, Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
           case None =>
             new FetchResponseData.PartitionData()
-              .setPartitionIndex(tp.partition)
+              .setPartitionIndex(tp.topicPartition.partition)
               .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
               .setHighWatermark(partitionData.highWatermark)
               .setLastStableOffset(partitionData.lastStableOffset)
@@ -831,15 +831,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for process a fetch response, invoked before throttling
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      val partitions = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-      val reassigningPartitions = mutable.Set[TopicPartition]()
+    def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+      val partitions = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
+      val reassigningPartitions = mutable.Set[TopicIdPartition]()
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         val partitionData = new FetchResponseData.PartitionData()
-          .setPartitionIndex(tp.partition)
+          .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(maybeDownConvertStorageError(data.error).code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
@@ -856,10 +856,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       def createResponse(throttleTimeMs: Int): FetchResponse = {
         // Down-convert messages for each partition if required
-        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+        val convertedData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
         unconvertedFetchResponse.data().responses().forEach { topicResponse =>
           topicResponse.partitions().forEach { unconvertedPartitionData =>
-            val tp = new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex())
+            val tp = new TopicIdPartition(topicResponse.topicId(), new TopicPartition(topicResponse.topic(), unconvertedPartitionData.partitionIndex()))
             val error = Errors.forCode(unconvertedPartitionData.errorCode)
             if (error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
@@ -874,8 +874,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         // record the bytes out metrics only when the response is being sent
         response.data().responses().forEach { topicResponse =>
           topicResponse.partitions().forEach { data =>
-            val tp = new TopicPartition(topicResponse.topic(), data.partitionIndex())
-            brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
+            val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), data.partitionIndex()))
+            brokerTopicStats.updateBytesOut(tp.topicPartition.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
           }
         }
         response
@@ -3500,12 +3500,12 @@ object KafkaApis {
                                                 unconvertedResponse: FetchResponse,
                                                 quota: ReplicationQuotaManager,
                                                 topicIds: util.Map[String, Uuid]): Int = {
-    val responseData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+    val responseData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     unconvertedResponse.data.responses().forEach(topicResponse =>
       topicResponse.partitions().forEach(partition =>
-        responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition)))
+        responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex())), partition)))
     FetchResponse.sizeOf(versionId, responseData.entrySet
-      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, topicIds)
+      .iterator.asScala.filter(element => quota.isThrottled(element.getKey.topicPartition)).asJava, topicIds)
   }
 
   // visible for testing

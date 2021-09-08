@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.fetchsession;
 
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -78,14 +79,14 @@ public class FetchSessionBenchmark {
         Uuid id = Uuid.randomUuid();
         topicIds.put("foo", id);
 
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("foo", i);
             FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
                     Optional.empty());
             fetches.put(tp, partitionData);
             builder.add(tp, topicIds.get(tp.topic()), partitionData);
-            respMap.put(tp, new FetchResponseData.PartitionData()
+            respMap.put(new TopicIdPartition(topicIds.get(tp.topic()), tp), new FetchResponseData.PartitionData()
                             .setPartitionIndex(tp.partition())
                             .setLastStableOffset(0)
                             .setLogStartOffset(0));

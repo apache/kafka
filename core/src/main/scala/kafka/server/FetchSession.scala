@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
@@ -33,10 +33,10 @@ import scala.collection.{mutable, _}
 import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
-  type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
-  type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
+  type REQ_MAP = util.Map[TopicIdPartition, FetchRequest.PartitionData]
+  type RESP_MAP = util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashCollection[CachedPartition]
-  type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponseData.PartitionData]]
+  type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData]]
   type TOPIC_ID_MAP = util.Map[String, Uuid]
 
   val NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions"
@@ -44,7 +44,7 @@ object FetchSession {
   val INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec"
   val EVICTIONS = "evictions"
 
-  def partitionsToLogString(partitions: util.Collection[TopicPartition], traceEnabled: Boolean): String = {
+  def partitionsToLogString(partitions: util.Collection[TopicIdPartition], traceEnabled: Boolean): String = {
     if (traceEnabled) {
       "(" + Utils.join(partitions, ", ") + ")"
     } else {
@@ -243,11 +243,11 @@ class FetchSession(val id: Int,
       sessionTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID)))).map(_.fetchOffset)
   }
 
-  type TL = util.ArrayList[TopicPartition]
+  type TL = util.ArrayList[TopicIdPartition]
 
   // Update the cached partition data based on the request.
   def update(fetchData: FetchSession.REQ_MAP,
-             toForget: util.List[TopicPartition],
+             toForget: util.List[TopicIdPartition],
              reqMetadata: JFetchMetadata,
              topicIds: util.Map[String, Uuid]): (TL, TL, TL, TL) = synchronized {
     val added = new TL
@@ -257,10 +257,10 @@ class FetchSession(val id: Int,
     fetchData.forEach { (topicPart, reqData) =>
       // Get the topic ID on the broker, if it is valid and the topic is new to the session, add its ID.
       // If the topic already existed, check that its ID is consistent.
-      val id = topicIds.getOrDefault(topicPart.topic, Uuid.ZERO_UUID)
-      val newCachedPart = new CachedPartition(topicPart, id, reqData)
+      val id = topicIds.getOrDefault(topicPart.topicPartition.topic, Uuid.ZERO_UUID)
+      val newCachedPart = new CachedPartition(topicPart.topicPartition, id, reqData)
       if (id != Uuid.ZERO_UUID) {
-        val prevSessionTopicId = sessionTopicIds.putIfAbsent(topicPart.topic, id)
+        val prevSessionTopicId = sessionTopicIds.putIfAbsent(topicPart.topicPartition.topic, id)
         if (prevSessionTopicId != null && prevSessionTopicId != id)
           inconsistentTopicIds.add(topicPart)
       }
@@ -274,7 +274,7 @@ class FetchSession(val id: Int,
       }
     }
     toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topic, p.partition, topicIds.getOrDefault(p.topic, Uuid.ZERO_UUID)))) {
+      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, topicIds.getOrDefault(p.topicPartition.topic, Uuid.ZERO_UUID)))) {
         removed.add(p)
       }
     }
@@ -296,12 +296,12 @@ trait FetchContext extends Logging {
   /**
     * Get the fetch offset for a given partition.
     */
-  def getFetchOffset(part: TopicPartition): Option[Long]
+  def getFetchOffset(part: TopicIdPartition): Option[Long]
 
   /**
     * Apply a function to each partition in the fetch request.
     */
-  def foreachPartition(fun: (TopicPartition, Uuid, FetchRequest.PartitionData) => Unit): Unit
+  def foreachPartition(fun: (TopicIdPartition, FetchRequest.PartitionData) => Unit): Unit
 
   /**
     * Get the response size to be used for quota computation. Since we are returning an empty response in case of
@@ -315,7 +315,7 @@ trait FetchContext extends Logging {
     */
   def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse
 
-  def partitionsToLogString(partitions: util.Collection[TopicPartition]): String =
+  def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
 
   /**
@@ -330,9 +330,9 @@ trait FetchContext extends Logging {
   */
 class SessionErrorContext(val error: Errors,
                           val reqMetadata: JFetchMetadata) extends FetchContext {
-  override def getFetchOffset(part: TopicPartition): Option[Long] = None
+  override def getFetchOffset(part: TopicIdPartition): Option[Long] = None
 
-  override def foreachPartition(fun: (TopicPartition, Uuid, FetchRequest.PartitionData) => Unit): Unit = {}
+  override def foreachPartition(fun: (TopicIdPartition, FetchRequest.PartitionData) => Unit): Unit = {}
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
     FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet.iterator, Collections.emptyMap())
@@ -351,13 +351,13 @@ class SessionErrorContext(val error: Errors,
   * @param fetchData          The partition data from the fetch request.
   * @param topicIds           The map from topic names to topic IDs.
   */
-class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
+class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData],
                               val topicIds: util.Map[String, Uuid]) extends FetchContext {
-  override def getFetchOffset(part: TopicPartition): Option[Long] =
+  override def getFetchOffset(part: TopicIdPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, Uuid, FetchRequest.PartitionData) => Unit): Unit = {
-    fetchData.forEach((tp, data) => fun(tp, topicIds.get(tp.topic), data))
+  override def foreachPartition(fun: (TopicIdPartition, FetchRequest.PartitionData) => Unit): Unit = {
+    fetchData.forEach((tp, data) => fun(tp, data))
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -384,15 +384,15 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchReque
 class FullFetchContext(private val time: Time,
                        private val cache: FetchSessionCache,
                        private val reqMetadata: JFetchMetadata,
-                       private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
+                       private val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData],
                        private val usesTopicIds: Boolean,
                        private val topicIds: util.Map[String, Uuid],
                        private val isFromFollower: Boolean) extends FetchContext {
-  override def getFetchOffset(part: TopicPartition): Option[Long] =
+  override def getFetchOffset(part: TopicIdPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, Uuid, FetchRequest.PartitionData) => Unit): Unit = {
-    fetchData.forEach((tp, data) => fun(tp, topicIds.get(tp.topic), data))
+  override def foreachPartition(fun: (TopicIdPartition, FetchRequest.PartitionData) => Unit): Unit = {
+    fetchData.forEach((tp, data) => fun(tp, data))
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -410,10 +410,10 @@ class FullFetchContext(private val time: Time,
           hasInconsistentTopicIds = true
         }
         val reqData = fetchData.get(part)
-        val id = topicIds.getOrDefault(part.topic(), Uuid.ZERO_UUID)
-        cachedPartitions.mustAdd(new CachedPartition(part, id, reqData, respData))
+        val id = topicIds.getOrDefault(part.topicPartition.topic, Uuid.ZERO_UUID)
+        cachedPartitions.mustAdd(new CachedPartition(part.topicPartition, id, reqData, respData))
         if (id != Uuid.ZERO_UUID)
-          sessionTopicIds.put(part.topic, id)
+          sessionTopicIds.put(part.topicPartition.topic, id)
       }
       (cachedPartitions, sessionTopicIds)
     }
@@ -440,13 +440,13 @@ class IncrementalFetchContext(private val time: Time,
                               private val reqMetadata: JFetchMetadata,
                               private val session: FetchSession) extends FetchContext {
 
-  override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
+  override def getFetchOffset(tp: TopicIdPartition): Option[Long] = session.getFetchOffset(tp.topicPartition)
 
-  override def foreachPartition(fun: (TopicPartition, Uuid, FetchRequest.PartitionData) => Unit): Unit = {
+  override def foreachPartition(fun: (TopicIdPartition, FetchRequest.PartitionData) => Unit): Unit = {
     // Take the session lock and iterate over all the cached partitions.
     session.synchronized {
       session.partitionMap.forEach { part =>
-        fun(new TopicPartition(part.topic, part.partition), part.topicId, part.reqData)
+        fun(new TopicIdPartition(part.topicId, new TopicPartition(part.topic, part.partition)), part.reqData)
       }
     }
   }
@@ -457,15 +457,15 @@ class IncrementalFetchContext(private val time: Time,
   private class PartitionIterator(val iter: FetchSession.RESP_MAP_ITER,
                                   val updateFetchContextAndRemoveUnselected: Boolean)
     extends FetchSession.RESP_MAP_ITER {
-    var nextElement: util.Map.Entry[TopicPartition, FetchResponseData.PartitionData] = null
+    var nextElement: util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = null
 
     override def hasNext: Boolean = {
       while ((nextElement == null) && iter.hasNext) {
         val element = iter.next()
         val topicPart = element.getKey
         val respData = element.getValue
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart,
-          session.sessionTopicIds.getOrDefault(topicPart.topic(), Uuid.ZERO_UUID)))
+        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart.topicPartition,
+          session.sessionTopicIds.getOrDefault(topicPart.topicPartition.topic, Uuid.ZERO_UUID)))
         val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
           nextElement = element
@@ -482,7 +482,7 @@ class IncrementalFetchContext(private val time: Time,
       nextElement != null
     }
 
-    override def next(): util.Map.Entry[TopicPartition, FetchResponseData.PartitionData] = {
+    override def next(): util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = {
       if (!hasNext) throw new NoSuchElementException
       val element = nextElement
       nextElement = null
@@ -783,7 +783,7 @@ class FetchManager(private val time: Time,
                  reqMetadata: JFetchMetadata,
                  isFollower: Boolean,
                  fetchData: FetchSession.REQ_MAP,
-                 toForget: util.List[TopicPartition],
+                 toForget: util.List[TopicIdPartition],
                  topicIds: util.Map[String, Uuid]): FetchContext = {
     val context = if (reqMetadata.isFull) {
       var removedFetchSessionStr = ""
@@ -850,6 +850,6 @@ class FetchManager(private val time: Time,
     context
   }
 
-  def partitionsToLogString(partitions: util.Collection[TopicPartition]): String =
+  def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
 }
