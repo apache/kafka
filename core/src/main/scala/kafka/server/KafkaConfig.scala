@@ -1901,6 +1901,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
+    val nodeIdValue = getInt(KafkaConfig.NodeIdProp)
+    if (nodeIdValue >= 0) {
+      val brokerIdValue = getInt(KafkaConfig.BrokerIdProp)
+      if (brokerIdValue != Defaults.BrokerId && brokerIdValue != nodeIdValue) {
+        throw new ConfigException(s"The values for broker.id ($brokerIdValue) and node.id ($nodeIdValue) must be the same if both are specified")
+      }
+    }
     if (requiresZookeeper) {
       if (zkConnect == null) {
         throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
