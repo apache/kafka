@@ -385,8 +385,6 @@ subprojects {
       "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*", "**/WorkerTest.*", "**/RestServerTest.*",
-      // streams tests
-      "**/KafkaStreamsTest.*"
     ])
   }
 
@@ -1751,8 +1749,6 @@ project(':streams') {
     testImplementation libs.junitJupiterApi
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
-    testImplementation libs.powermockJunit4
-    testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
