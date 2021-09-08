@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -62,7 +62,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 @RunWith(Parameterized.class)
-public class WindowStoreFetchIntegrationTest {
+public class WindowStoreFetchTest {
     private enum StoreType { InMemory, RocksDB, Timed };
     private static final String STORE_NAME = "store";
     private static final int DATA_SIZE = 5;
@@ -80,7 +80,7 @@ public class WindowStoreFetchIntegrationTest {
 
     private TimeWindowedKStream<String, String> windowedStream;
 
-    public WindowStoreFetchIntegrationTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
+    public WindowStoreFetchTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
         this.storeType = storeType;
         this.enableLogging = enableLogging;
         this.enableCaching = enableCaching;
