@@ -81,7 +81,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.IN_PRODUCT_ASSIGNOR_NAMES;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -558,8 +558,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateSubscriptionMetadata();
     }
 
-    private boolean isInProductAssignor(String name) {
-        return IN_PRODUCT_ASSIGNOR_NAMES.contains(name);
+    private boolean isAssignFromSubscribedTopicsAssignor(String name) {
+        return ASSIGN_FROM_SUBSCRIBED_ASSIGNORS.contains(name);
     }
 
     /**
@@ -580,7 +580,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void maybeUpdateGroupSubscription(String assignorName,
                                               Map<String, Assignment> assignments,
                                               Set<String> allSubscribedTopics) {
-        if (!isInProductAssignor(assignorName)) {
+        if (!isAssignFromSubscribedTopicsAssignor(assignorName)) {
             Set<String> assignedTopics = new HashSet<>();
             for (Assignment assigned : assignments.values()) {
                 for (TopicPartition tp : assigned.partitions())
