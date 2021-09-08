@@ -353,13 +353,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def logDirFailureChannel: LogDirFailureChannel = localLog.logDirFailureChannel
 
-  def updateConfig(newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
     val oldRecordVersion = oldConfig.recordVersion
     val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
+    oldConfig
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -958,16 +959,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
       case other => other
     }
 
-    if (updatedFirstStableOffset != this.firstUnstableOffsetMetadata) {
-      debug(s"First unstable offset updated to $updatedFirstStableOffset")
-      this.firstUnstableOffsetMetadata = updatedFirstStableOffset
+    if (updatedFirstUnstableOffset != this.firstUnstableOffsetMetadata) {
+      debug(s"First unstable offset updated to $updatedFirstUnstableOffset")
+      this.firstUnstableOffsetMetadata = updatedFirstUnstableOffset
     }
   }
 

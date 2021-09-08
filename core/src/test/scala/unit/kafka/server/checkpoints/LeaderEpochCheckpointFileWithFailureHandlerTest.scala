@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
-class LeaderEpochCheckpointFileTest extends Logging {
+class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit ={

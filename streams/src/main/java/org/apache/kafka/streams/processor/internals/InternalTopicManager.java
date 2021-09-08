@@ -157,7 +157,7 @@ public class InternalTopicManager {
             Map<String, KafkaFuture<TopicDescription>> descriptionsForTopic = Collections.emptyMap();
             if (!topicDescriptionsStillToValidate.isEmpty()) {
                 final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicDescriptionsStillToValidate);
-                descriptionsForTopic = describeTopicsResult.values();
+                descriptionsForTopic = describeTopicsResult.topicNameValues();
             }
             Map<String, KafkaFuture<Config>> configsForTopic = Collections.emptyMap();
             if (!topicConfigsStillToValidate.isEmpty()) {
@@ -515,7 +515,7 @@ public class InternalTopicManager {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
-        final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
+        final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.topicNameValues();
 
         final Map<String, Integer> existedTopicPartition = new HashMap<>();
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {

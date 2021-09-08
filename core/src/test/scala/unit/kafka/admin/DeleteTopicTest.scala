@@ -147,7 +147,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def waitUntilTopicGone(adminClient: Admin, topicName: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       try {
-        adminClient.describeTopics(util.Collections.singletonList(topicName)).all().get()
+        adminClient.describeTopics(util.Collections.singletonList(topicName)).allTopicNames().get()
         false
       } catch {
         case e: ExecutionException =>

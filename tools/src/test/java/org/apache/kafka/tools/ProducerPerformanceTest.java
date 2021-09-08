@@ -84,7 +84,7 @@ public class ProducerPerformanceTest {
         Properties prop = ProducerPerformance.readProps(producerProps, producerConfig, transactionalId, transactionsEnabled);
 
         assertNotNull(prop);
-        assertEquals(5, prop.size());
+        assertEquals(6, prop.size());
     }
 
     @Test
@@ -153,5 +153,25 @@ public class ProducerPerformanceTest {
 
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> ProducerPerformance.generateRandomPayload(recordSize, payloadByteList, payload, random));
         assertEquals("no payload File Path or record Size provided", thrown.getMessage());
+    }
+
+    @Test
+    public void testClientIdOverride()  throws Exception {
+        List<String> producerProps = Collections.singletonList("client.id=producer-1");
+
+        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+
+        assertNotNull(prop);
+        assertEquals("producer-1", prop.getProperty("client.id"));
+    }
+
+    @Test
+    public void testDefaultClientId() throws Exception {
+        List<String> producerProps = Collections.singletonList("acks=1");
+
+        Properties prop = ProducerPerformance.readProps(producerProps, null, "1234", true);
+
+        assertNotNull(prop);
+        assertEquals("perf-producer-client", prop.getProperty("client.id"));
     }
 }
