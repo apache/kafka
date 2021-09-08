@@ -1930,7 +1930,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       }
 
       require(getClass(KafkaConfig.AlterConfigPolicyClassNameProp) == null, s"${KafkaConfig.AlterConfigPolicyClassNameProp} is not supported in KRaft.")
-      require(getClass(KafkaConfig.CreateTopicPolicyClassNameProp) == null, s"${KafkaConfig.CreateTopicPolicyClassNameProp} is not supported in KRaft.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
