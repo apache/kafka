@@ -21,10 +21,16 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.AbstractSet;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -90,6 +96,148 @@ public final class TopicsImage {
     @Override
     public int hashCode() {
         return Objects.hash(topicsById, topicsByName);
+    }
+
+    /**
+     * Expose a view of this TopicsImage as a map from topic names to IDs.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<String, Uuid> topicNameToIdView() {
+        return new TopicNameToIdMap();
+    }
+
+    class TopicNameToIdMap extends AbstractMap<String, Uuid> {
+        private final TopicNameToIdMapEntrySet set = new TopicNameToIdMapEntrySet();
+
+        @Override
+        public boolean containsKey(Object key) {
+            return topicsByName.containsKey(key);
+        }
+
+        @Override
+        public Uuid get(Object key) {
+            TopicImage image = topicsByName.get(key);
+            if (image == null) return null;
+            return image.id();
+        }
+
+        @Override
+        public Set<Entry<String, Uuid>> entrySet() {
+            return set;
+        }
+    }
+
+    class TopicNameToIdMapEntrySet extends AbstractSet<Entry<String, Uuid>> {
+        @Override
+        public Iterator<Entry<String, Uuid>> iterator() {
+            return new TopicNameToIdMapEntrySetIterator(topicsByName.entrySet().iterator());
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        public boolean contains(Object o) {
+            if (!(o instanceof Entry)) return false;
+            Entry other = (Entry) o;
+            TopicImage image = topicsByName.get(other.getKey());
+            if (image == null) return false;
+            return image.id().equals(other.getValue());
+        }
+
+        @Override
+        public int size() {
+            return topicsByName.size();
+        }
+    }
+
+    static class TopicNameToIdMapEntrySetIterator implements Iterator<Entry<String, Uuid>> {
+        private final Iterator<Entry<String, TopicImage>> iterator;
+
+        TopicNameToIdMapEntrySetIterator(Iterator<Entry<String, TopicImage>> iterator) {
+            this.iterator = iterator;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.iterator.hasNext();
+        }
+
+        @Override
+        public Entry<String, Uuid> next() {
+            Entry<String, TopicImage> entry = iterator.next();
+            return new SimpleImmutableEntry<>(entry.getKey(), entry.getValue().id());
+        }
+    }
+
+    /**
+     * Expose a view of this TopicsImage as a map from IDs to names.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<Uuid, String> topicIdToNameView() {
+        return new TopicIdToNameMap();
+    }
+
+    class TopicIdToNameMap extends AbstractMap<Uuid, String> {
+        private final TopicIdToNameMapEntrySet set = new TopicIdToNameMapEntrySet();
+
+        @Override
+        public boolean containsKey(Object key) {
+            return topicsById.containsKey(key);
+        }
+
+        @Override
+        public String get(Object key) {
+            TopicImage image = topicsById.get(key);
+            if (image == null) return null;
+            return image.name();
+        }
+
+        @Override
+        public Set<Entry<Uuid, String>> entrySet() {
+            return set;
+        }
+    }
+
+    class TopicIdToNameMapEntrySet extends AbstractSet<Entry<Uuid, String>> {
+        @Override
+        public Iterator<Entry<Uuid, String>> iterator() {
+            return new TopicIdToNameEntrySetIterator(topicsById.entrySet().iterator());
+        }
+
+        @SuppressWarnings("rawtypes")
+        @Override
+        public boolean contains(Object o) {
+            if (!(o instanceof Entry)) return false;
+            Entry other = (Entry) o;
+            TopicImage image = topicsById.get(other.getKey());
+            if (image == null) return false;
+            return image.name().equals(other.getValue());
+        }
+
+        @Override
+        public int size() {
+            return topicsById.size();
+        }
+    }
+
+    static class TopicIdToNameEntrySetIterator implements Iterator<Entry<Uuid, String>> {
+        private final Iterator<Entry<Uuid, TopicImage>> iterator;
+
+        TopicIdToNameEntrySetIterator(Iterator<Entry<Uuid, TopicImage>> iterator) {
+            this.iterator = iterator;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.iterator.hasNext();
+        }
+
+        @Override
+        public Entry<Uuid, String> next() {
+            Entry<Uuid, TopicImage> entry = iterator.next();
+            return new SimpleImmutableEntry<>(entry.getKey(), entry.getValue().name());
+        }
     }
 
     @Override
