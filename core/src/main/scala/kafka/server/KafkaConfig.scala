@@ -79,6 +79,7 @@ object Defaults {
     "RawKafkaConsumerFactory", "RawKafkaConsumerFactoryFactory", "RawKafkaProducerFactory", "RawKafkaProducerFactoryFactory",
     "AvroKafkaProducerBuilder", "AvroKafkaConsumerBuilder", "RawKafkaProducerBuilder", "RawKafkaConsumerBuilder",
     "TrackerProcessorFactory", "TrackingConsumerFactory", "TrackingProducerFactory")
+  val MissingPerTopicConfig = "-1"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""

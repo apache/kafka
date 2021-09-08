@@ -1282,7 +1282,15 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processTopicMinInSyncReplicasConfigChange(topic: String, minInSyncReplicas: Int): Unit = {
-    controllerContext.topicMinIsrConfig += topic -> minInSyncReplicas
+    if (minInSyncReplicas != Defaults.MissingPerTopicConfig.toInt) {
+      // Add the explicitly configured value of min.insync.replicas config for the corresponding topic.
+      controllerContext.topicMinIsrConfig += topic -> minInSyncReplicas
+    } else {
+      // Remove the topic-level config value of min.insync.replicas to ensure that the topic config uses the default value.
+      // Note that we remove the topic from the map rather than setting its config value to the default value. This
+      // keeps the map no larger than the number of topics with explicitly configured values of min.insync.replicas.
+      controllerContext.topicMinIsrConfig -= topic
+    }
   }
 
   private def preemptControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {

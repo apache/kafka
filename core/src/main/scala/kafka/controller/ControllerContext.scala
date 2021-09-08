@@ -76,6 +76,7 @@ class ControllerContext {
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
+  // A map to indicate the explicitly configured value of min.insync.replicas config per corresponding topic.
   val topicMinIsrConfig = mutable.Map.empty[String, Int]
 
   val topicsToBeDeleted = mutable.Set.empty[String]
