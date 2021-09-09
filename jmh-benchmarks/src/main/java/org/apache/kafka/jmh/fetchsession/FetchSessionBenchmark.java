@@ -93,7 +93,7 @@ public class FetchSessionBenchmark {
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap, topicIds), ApiKeys.FETCH.latestVersion());
+        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {

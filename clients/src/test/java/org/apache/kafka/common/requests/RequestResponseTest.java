@@ -848,8 +848,8 @@ public class RequestResponseTest {
                         .setLogStartOffset(-1)
                         .setRecords(records));
 
-        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData, topicIds);
-        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData, topicIds);
+        FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData);
+        FetchResponse v1Response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
         FetchResponse v0Deserialized = FetchResponse.parse(v0Response.serialize((short) 0), (short) 0);
         FetchResponse v1Deserialized = FetchResponse.parse(v1Response.serialize((short) 1), (short) 1);
         assertEquals(0, v0Deserialized.throttleTimeMs(), "Throttle time must be zero");
@@ -857,7 +857,14 @@ public class RequestResponseTest {
         assertEquals(responseData, v0Deserialized.responseData(topicNames, (short) 0), "Response data does not match");
         assertEquals(responseData, v1Deserialized.responseData(topicNames, (short) 1), "Response data does not match");
 
-        FetchResponse idTestResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData, topicIds);
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> idResponseData = new LinkedHashMap<>();
+        idResponseData.put(new TopicIdPartition(id, new TopicPartition("test", 0)),
+                new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
+                        .setHighWatermark(1000000)
+                        .setLogStartOffset(-1)
+                        .setRecords(records));
+        FetchResponse idTestResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, idResponseData);
         FetchResponse v12Deserialized = FetchResponse.parse(idTestResponse.serialize((short) 12), (short) 12);
         FetchResponse newestDeserialized = FetchResponse.parse(idTestResponse.serialize(FETCH.latestVersion()), FETCH.latestVersion());
         assertTrue(v12Deserialized.topicIds().isEmpty());
@@ -900,7 +907,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(6)
                         .setRecords(records));
 
-        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData, topicIds);
+        FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData, deserialized.responseData(topicNames, (short) 4));
     }
@@ -1326,8 +1333,7 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
         return FetchResponse.parse(
-            FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>(),
-                             new HashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            FetchResponse.of(error, 25, sessionId, new LinkedHashMap<>()).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
@@ -1348,7 +1354,7 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
-            responseData, topicIds).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse createFetchResponse(boolean includeAborted) {
@@ -1372,7 +1378,7 @@ public class RequestResponseTest {
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
-            responseData, Collections.singletonMap("test", topicId)).serialize(FETCH.latestVersion()), FETCH.latestVersion());
+            responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

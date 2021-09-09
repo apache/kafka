@@ -102,13 +102,13 @@ public class FetchResponseBenchmark {
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         return fetchResponse.data().responses().size();
     }
 

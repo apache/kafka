@@ -222,7 +222,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched, topicIds), ApiKeys.FETCH.latestVersion());
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)

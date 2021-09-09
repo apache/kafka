@@ -598,14 +598,22 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val foo1 = new TopicPartition("foo", 1)
     createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val topicIds = getTopicIds()
+    val fooId0 = new TopicIdPartition(topicIds("foo"), foo0)
+    val fooId1 = new TopicIdPartition(topicIds("foo"), foo1)
     val topicIDsWithUnknown = topicIds ++ Map("bar" -> Uuid.randomUuid())
     val bar0 = new TopicPartition("bar", 0)
+    val barId0 = new TopicIdPartition(topicIDsWithUnknown("bar"), bar0)
     val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil, topicIDsWithUnknown)
     val resp1 = sendFetchRequest(0, req1)
-    assertEquals(Errors.UNKNOWN_TOPIC_ID, resp1.error())
+    assertEquals(Errors.NONE, resp1.error())
     val topicNames1 = topicIDsWithUnknown.map(_.swap).asJava
     val responseData1 = resp1.responseData(topicNames1, ApiKeys.FETCH.latestVersion())
-    assertEquals(0, responseData1.size())
+    assertTrue(responseData1.containsKey(fooId0))
+    assertTrue(responseData1.containsKey(fooId1))
+    assertTrue(responseData1.containsKey(barId0))
+    assertEquals(Errors.NONE.code, responseData1.get(fooId0).errorCode)
+    assertEquals(Errors.NONE.code, responseData1.get(fooId1).errorCode)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(barId0).errorCode)
   }
 
   @Test

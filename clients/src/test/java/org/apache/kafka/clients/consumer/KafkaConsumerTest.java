@@ -2567,7 +2567,7 @@ public class KafkaConsumerTest {
                     .setLogStartOffset(logStartOffset)
                     .setRecords(records));
         }
-        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses, topicIds);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

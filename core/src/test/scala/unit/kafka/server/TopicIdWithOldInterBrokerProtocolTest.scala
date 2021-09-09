@@ -71,14 +71,16 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val maxPartitionBytes = 190
     val topicIds = Map("topic1" -> Uuid.randomUuid())
     val topicNames = topicIds.map(_.swap)
+    val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
     val leadersMap = createTopic(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
     val responseData = resp.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion())
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp.error().code())
-    assertEquals(0, responseData.size());
+    assertEquals(Errors.NONE.code, resp.error().code())
+    assertEquals(1, responseData.size())
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData.get(tidp0).errorCode)
   }
 
   @Test

@@ -102,14 +102,12 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.FETCH =>
         fetchCount += 1
         val partitionData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-        val topicIdsForRequest = new util.HashMap[String, Uuid]()
         fetchPartitionData.foreach { case (tp, data) => partitionData.put(new TopicIdPartition(topicIds.getOrElse(tp.topic(), Uuid.ZERO_UUID), tp), data) }
-        topicIds.foreach { case (name, id) => topicIdsForRequest.put(name, id)}
         fetchPartitionData = Map.empty
         topicIds = Map.empty
         FetchResponse.of(Errors.NONE, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1,
-          partitionData, topicIdsForRequest)
+          partitionData)
 
       case _ =>
         throw new UnsupportedOperationException

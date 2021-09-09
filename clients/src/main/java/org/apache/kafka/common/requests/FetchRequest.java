@@ -329,22 +329,18 @@ public class FetchRequest extends AbstractRequest {
                         } else {
                             name = topicNames.get(fetchTopic.topicId());
                         }
-                        if (name != null) {
-                            // If topic name is resolved, simply add to fetchData map
-                            fetchTopic.partitions().forEach(fetchPartition ->
-                                    fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
-                                            new PartitionData(
-                                                    fetchPartition.fetchOffset(),
-                                                    fetchPartition.logStartOffset(),
-                                                    fetchPartition.partitionMaxBytes(),
-                                                    optionalEpoch(fetchPartition.currentLeaderEpoch()),
-                                                    optionalEpoch(fetchPartition.lastFetchedEpoch())
-                                            )
-                                    )
-                            );
-                        } else {
-                            throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", fetchTopic.topicId()));
-                        }
+                        // If topic name is resolved, simply add to fetchData map
+                        fetchTopic.partitions().forEach(fetchPartition ->
+                                fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
+                                        new PartitionData(
+                                                fetchPartition.fetchOffset(),
+                                                fetchPartition.logStartOffset(),
+                                                fetchPartition.partitionMaxBytes(),
+                                                optionalEpoch(fetchPartition.currentLeaderEpoch()),
+                                                optionalEpoch(fetchPartition.lastFetchedEpoch())
+                                        )
+                                )
+                        );
                     });
                 }
             }
