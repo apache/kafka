@@ -19,9 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -31,25 +33,26 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, V, K, T> {
+public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, KIn, VAgg> {
+
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
 
     private final String storeName;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final Initializer<VAgg> initializer;
+    private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
 
     private boolean sendOldValues = false;
 
     KStreamAggregate(final String storeName,
-                     final Initializer<T> initializer,
-                     final Aggregator<? super K, ? super V, T> aggregator) {
+                     final Initializer<VAgg> initializer,
+                     final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
     }
 
     @Override
-    public Processor<K, V, K, Change<T>> get() {
+    public Processor<KIn, VIn, KIn, Change<VAgg>> get() {
         return new KStreamAggregateProcessor();
     }
 
@@ -59,13 +62,14 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     }
 
 
-    private class KStreamAggregateProcessor implements Processor<K, V, K, Change<T>> {
-        private TimestampedKeyValueStore<K, T> store;
+    private class KStreamAggregateProcessor extends ContextualProcessor<KIn, VIn, KIn, Change<VAgg>> {
+        private TimestampedKeyValueStore<KIn, VAgg> store;
         private Sensor droppedRecordsSensor;
-        private TimestampedTupleForwarder<K, T> tupleForwarder;
+        private TimestampedTupleForwarder<KIn, VAgg> tupleForwarder;
 
         @Override
-        public void init(final ProcessorContext<K, Change<T>> context) {
+        public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
+            super.init(context);
             droppedRecordsSensor = droppedRecordsSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -79,21 +83,29 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         }
 
         @Override
-        public void process(final Record<K, V> record) {
+        public void process(final Record<KIn, VIn> record) {
             // If the key or value is null we don't need to proceed
             if (record.key() == null || record.value() == null) {
-//                LOG.warn(
-//                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    key, value, context().topic(), context().partition(), context().offset()
-//                );
+                if (context.recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                    LOG.warn(
+                        "Skipping record due to null key or value. "
+                            + "topic=[{}] partition=[{}] offset=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    );
+                } else {
+                    LOG.warn(
+                        "Skipping record due to null key. Topic, partition, and offset not known."
+                    );
+                }
                 droppedRecordsSensor.record();
                 return;
             }
 
-            final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(record.key());
-            T oldAgg = getValueOrNull(oldAggAndTimestamp);
+            final ValueAndTimestamp<VAgg> oldAggAndTimestamp = store.get(record.key());
+            VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
 
-            final T newAgg;
+            final VAgg newAgg;
             final long newTimestamp;
 
             if (oldAgg == null) {
@@ -112,10 +124,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     }
 
     @Override
-    public KTableValueGetterSupplier<K, T> view() {
-        return new KTableValueGetterSupplier<K, T>() {
+    public KTableValueGetterSupplier<KIn, VAgg> view() {
+        return new KTableValueGetterSupplier<KIn, VAgg>() {
 
-            public KTableValueGetter<K, T> get() {
+            public KTableValueGetter<KIn, VAgg> get() {
                 return new KStreamAggregateValueGetter();
             }
 
@@ -126,8 +138,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
-        private TimestampedKeyValueStore<K, T> store;
+    private class KStreamAggregateValueGetter implements KTableValueGetter<KIn, VAgg> {
+        private TimestampedKeyValueStore<KIn, VAgg> store;
 
         @Override
         public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
@@ -135,7 +147,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         }
 
         @Override
-        public ValueAndTimestamp<T> get(final K key) {
+        public ValueAndTimestamp<VAgg> get(final KIn key) {
             return store.get(key);
         }
     }
