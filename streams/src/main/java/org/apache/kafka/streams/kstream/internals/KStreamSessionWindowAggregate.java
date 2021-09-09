@@ -107,7 +107,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         public void process(final Record<KIn, VIn> record) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
-            if (record.value() == null) {
+            if (record.key() == null) {
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
                     LOG.warn(
