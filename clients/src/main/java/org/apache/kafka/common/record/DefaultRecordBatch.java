@@ -162,10 +162,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Gets the base timestamp of the batch which is used to calculate the timestamp deltas.
+     * Gets the base timestamp of the batch which is used to calculate the record timestamps from the deltas.
      * 
-     * @return The base timestamp or
-     *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
+     * @return The base timestamp
      */
     public long baseTimestamp() {
         return buffer.getLong(BASE_TIMESTAMP_OFFSET);

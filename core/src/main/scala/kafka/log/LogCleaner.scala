@@ -342,7 +342,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     @throws(classOf[LogCleaningException])
     private def cleanFilthiestLog(): Boolean = {
       val preCleanStats = new PreCleanStats()
-      val (ltc, reason) = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
+      val ltc = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
       val cleaned = ltc match {
         case None =>
           false
@@ -350,7 +350,7 @@ class LogCleaner(initialConfig: CleanerConfig,
           // there's a log, clean it
           this.lastPreCleanStats = preCleanStats
           try {
-            cleanLog(cleanable, reason)
+            cleanLog(cleanable)
             true
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
@@ -374,11 +374,11 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaned
     }
 
-    private def cleanLog(cleanable: LogToClean, reason: LogCleaningReason): Unit = {
+    private def cleanLog(cleanable: LogToClean): Unit = {
       val startOffset = cleanable.firstDirtyOffset
       var endOffset = startOffset
       try {
-        val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable, reason)
+        val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
         endOffset = nextDirtyOffset
         recordStats(cleaner.id, cleanable.log.name, startOffset, endOffset, cleanerStats)
       } catch {
@@ -490,11 +490,10 @@ private[log] class Cleaner(val id: Int,
    * Clean the given log
    *
    * @param cleanable The log to be cleaned
-   * @param reason The reason the log is being cleaned, for logging purposes
    *
    * @return The first offset not cleaned and the statistics for this round of cleaning
    */
-  private[log] def clean(cleanable: LogToClean, reason: LogCleaningReason = DirtyRatio): (Long, CleanerStats) = {
+  private[log] def clean(cleanable: LogToClean): (Long, CleanerStats) = {
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
     val deleteHorizonMs =
@@ -502,11 +501,11 @@ private[log] class Cleaner(val id: Int,
         case None => 0L
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
     }
-    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs, logCleaningReason = reason)
+    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs)
   }
 
-  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L, logCleaningReason: LogCleaningReason = DirtyRatio): (Long, CleanerStats) = {
-    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, logCleaningReason.getClass.getName))
+  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L): (Long, CleanerStats) = {
+    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, cleanable.logCleaningReason.getClass.getName))
 
     val log = cleanable.log
     log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
@@ -581,7 +580,8 @@ private[log] class Cleaner(val id: Int,
 
         val retainLegacyDeletesAndTxnMarkers = currentSegment.lastModified > legacyDeleteHorizonMs
         info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
-          s"with legacy deletion horizon $legacyDeleteHorizonMs, " +
+          s"with an upper bound deletion horizon $legacyDeleteHorizonMs computed from " +
+          s"the segment last modified time of ${currentSegment.lastModified}," +
           s"${if(retainLegacyDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
@@ -656,11 +656,10 @@ private[log] class Cleaner(val id: Int,
         // note that we will never delete a marker until all the records from that transaction are removed.
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
-        if (batch.isControlBatch) {
-            discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
-        } else {
+        if (batch.isControlBatch)
+          discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
+        else
           discardBatchRecords = canDiscardBatch
-        }
 
         def isBatchLastRecordOfProducer: Boolean = {
           // We retain the batch in order to preserve the state of active producers. There are three cases:
@@ -803,11 +802,12 @@ private[log] class Cleaner(val id: Int,
        */
       val latestOffsetForKey = record.offset() >= foundOffset
       val legacyRecord = batch.magic() < RecordBatch.MAGIC_VALUE_V2
-      val shouldRetainDeletes =
+      def shouldRetainDeletes = {
         if (!legacyRecord)
           !batch.deleteHorizonMs().isPresent || currentTime < batch.deleteHorizonMs().getAsLong
         else
           retainDeletesForLegacyRecords
+      }
       val isRetainedValue = record.hasValue || shouldRetainDeletes
       latestOffsetForKey && isRetainedValue
     } else {
@@ -1092,13 +1092,14 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
 
 /**
   * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
-  * and whether it needs compaction immediately.
+  * the reason why it is being cleaned, and whether it needs compaction immediately.
   */
 private case class LogToClean(topicPartition: TopicPartition,
                               log: UnifiedLog,
                               firstDirtyOffset: Long,
                               uncleanableOffset: Long,
-                              needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
+                              needCompactionNow: Boolean = false,
+                              var logCleaningReason: LogCleaningReason = DirtyRatio) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes
