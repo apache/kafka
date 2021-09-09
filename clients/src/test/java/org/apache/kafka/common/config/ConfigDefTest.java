@@ -368,12 +368,16 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testInternalConfigDoesntShowUpInDocs() throws Exception {
+    public void testInternalConfigDoesntShowUpInDocs() {
         final String name = "my.config";
         final ConfigDef configDef = new ConfigDef().defineInternal(name, Type.STRING, "", Importance.LOW);
+        configDef.defineInternal("my.other.config", Type.STRING, "", null, Importance.LOW, null);
         assertFalse(configDef.toHtmlTable().contains("my.config"));
         assertFalse(configDef.toEnrichedRst().contains("my.config"));
         assertFalse(configDef.toRst().contains("my.config"));
+        assertFalse(configDef.toHtmlTable().contains("my.other.config"));
+        assertFalse(configDef.toEnrichedRst().contains("my.other.config"));
+        assertFalse(configDef.toRst().contains("my.other.config"));
     }
 
     @Test
@@ -492,7 +496,8 @@ public class ConfigDefTest {
         final ConfigDef def = new ConfigDef()
                 .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
                 .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
-                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3");
+                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
+                .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
 
         final String expectedRst = "" +
                 "``opt2``\n" +
@@ -514,6 +519,12 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: list\n" +
                 "  * Default: a,b\n" +
+                "  * Importance: low\n" +
+                "\n" +
+                "``opt4``\n" +
+                "\n" +
+                "  * Type: boolean\n" +
+                "  * Default: false\n" +
                 "  * Importance: low\n" +
                 "\n";
 
