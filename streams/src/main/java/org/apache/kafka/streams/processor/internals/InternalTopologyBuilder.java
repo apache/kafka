@@ -136,8 +136,8 @@ public class InternalTopologyBuilder {
     private Map<Integer, Set<String>> nodeGroups = null;
 
     private StreamsConfig applicationConfig = null;  // the global streams configs and default topology props
-    private Properties topologyProperties = null;    // this topology's config overrides
-    private TopologyConfig topologyConfigs = null;           // the configs for tasks in this topology
+    private Properties topologyOverrides = null;     // this topology's config overrides
+    private TopologyConfig topologyConfigs = null;
 
     // The name of the topology this builder belongs to, or null if none
     private String topologyName;
@@ -362,8 +362,8 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final void setTopologyProperties(final Properties props) {
-        this.topologyProperties = props;
+    public synchronized final void setTopologyOverrides(final Properties props) {
+        this.topologyOverrides = props;
     }
 
     public synchronized final void setStreamsConfig(final StreamsConfig config) {
@@ -372,9 +372,9 @@ public class InternalTopologyBuilder {
         topologyConfigs = new TopologyConfig(
             topologyName,
             applicationConfig,
-            topologyProperties == null ?
+            topologyOverrides == null ?
                 new Properties() :
-                topologyProperties
+                topologyOverrides
         );
     }
 

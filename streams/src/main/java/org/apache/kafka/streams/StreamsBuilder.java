@@ -611,7 +611,7 @@ public class StreamsBuilder {
      */
     public synchronized Topology build(final Properties props) {
         internalStreamsBuilder.buildAndOptimizeTopology(props);
-        internalTopologyBuilder.setTopologyProperties(props);
+        internalTopologyBuilder.setTopologyOverrides(props);
         return topology;
     }
 }

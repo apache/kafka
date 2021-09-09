@@ -57,7 +57,7 @@ public class TopologyConfig extends AbstractConfig {
                      null,
                      Importance.LOW,
                      BUFFERED_RECORDS_PER_PARTITION_DOC)
-            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
@@ -128,7 +128,6 @@ public class TopologyConfig extends AbstractConfig {
             log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, getClass(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG));
         } else {
             deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
-
         }
     }
 
@@ -137,6 +136,8 @@ public class TopologyConfig extends AbstractConfig {
      *         don't use named topologies will just refer to the global defaults regardless of the topology properties
      */
     private boolean isTopologyOverride(final String config, final Properties topologyOverrides) {
+        // TODO KAFKA-13283: eventually we should always have the topology props override the global ones regardless
+        // of whether it's a named topology or not
         return topologyName != null && topologyOverrides.containsKey(config);
     }
 

@@ -949,7 +949,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         builder.setNamedTopology(new NamedTopology("test-topology"));
-        builder.setTopologyProperties(topologyOverrides);
+        builder.setTopologyOverrides(topologyOverrides);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
@@ -969,7 +969,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-        builder.setTopologyProperties(topologyOverrides);
+        builder.setTopologyOverrides(topologyOverrides);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
         final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
