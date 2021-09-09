@@ -24,6 +24,9 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,8 +40,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, V, Windowed<K>, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
@@ -59,7 +61,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, V> get() {
+    public Processor<K, V, Windowed<K>, Change<Agg>> get() {
         return new KStreamSlidingWindowAggregateProcessor();
     }
 
@@ -72,7 +74,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         sendOldValues = true;
     }
 
-    private class KStreamSlidingWindowAggregateProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
+    private class KStreamSlidingWindowAggregateProcessor implements Processor<K, V, Windowed<K>, Change<Agg>> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private Sensor droppedRecordsSensor;
@@ -80,8 +82,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         private Boolean reverseIteratorPossible = null;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
@@ -95,52 +96,52 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         @Override
-        public void process(final K key, final V value) {
-            if (key == null || value == null) {
-                log.warn(
-                    "Skipping record due to null key or value. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
-                );
+        public void process(final Record<K, V> record) {
+            if (record.key() == null || record.value() == null) {
+//                log.warn(
+//                    "Skipping record due to null key or value. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+//                    value, context().topic(), context().partition(), context().offset()
+//                );
                 droppedRecordsSensor.record();
                 return;
             }
 
-            final long inputRecordTimestamp = context().timestamp();
+            final long inputRecordTimestamp = record.timestamp();
             observedStreamTime = Math.max(observedStreamTime, inputRecordTimestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
-                log.warn(
-                    "Skipping record for expired window. " +
-                        "key=[{}] " +
-                        "topic=[{}] " +
-                        "partition=[{}] " +
-                        "offset=[{}] " +
-                        "timestamp=[{}] " +
-                        "window=[{},{}] " +
-                        "expiration=[{}] " +
-                        "streamTime=[{}]",
-                    key,
-                    context().topic(),
-                    context().partition(),
-                    context().offset(),
-                    context().timestamp(),
-                    inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp,
-                    closeTime,
-                    observedStreamTime
-                );
+//                log.warn(
+//                    "Skipping record for expired window. " +
+//                        "key=[{}] " +
+//                        "topic=[{}] " +
+//                        "partition=[{}] " +
+//                        "offset=[{}] " +
+//                        "timestamp=[{}] " +
+//                        "window=[{},{}] " +
+//                        "expiration=[{}] " +
+//                        "streamTime=[{}]",
+//                    key,
+//                    context().topic(),
+//                    context().partition(),
+//                    context().offset(),
+//                    context().timestamp(),
+//                    inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp,
+//                    closeTime,
+//                    observedStreamTime
+//                );
                 droppedRecordsSensor.record();
                 return;
             }
 
             if (inputRecordTimestamp < windows.timeDifferenceMs()) {
-                processEarly(key, value, inputRecordTimestamp, closeTime);
+                processEarly(record.key(), record.value(), inputRecordTimestamp, closeTime);
                 return;
             }
 
             if (reverseIteratorPossible == null) {
                 try {
-                    windowStore.backwardFetch(key, 0L, 0L);
+                    windowStore.backwardFetch(record.key(), 0L, 0L);
                     reverseIteratorPossible = true;
                     log.debug("Sliding Windows aggregate using a reverse iterator");
                 } catch (final UnsupportedOperationException e)  {
@@ -150,9 +151,9 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             if (reverseIteratorPossible) {
-                processReverse(key, value, inputRecordTimestamp, closeTime);
+                processReverse(record.key(), record.value(), inputRecordTimestamp, closeTime);
             } else {
-                processInOrder(key, value, inputRecordTimestamp, closeTime);
+                processInOrder(record.key(), record.value(), inputRecordTimestamp, closeTime);
             }
         }
 
@@ -464,25 +465,25 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     sendOldValues ? oldAgg : null,
                     newTimestamp);
             } else {
-                log.warn(
-                    "Skipping record for expired window. " +
-                        "key=[{}] " +
-                        "topic=[{}] " +
-                        "partition=[{}] " +
-                        "offset=[{}] " +
-                        "timestamp=[{}] " +
-                        "window=[{},{}] " +
-                        "expiration=[{}] " +
-                        "streamTime=[{}]",
-                    key,
-                    context().topic(),
-                    context().partition(),
-                    context().offset(),
-                    context().timestamp(),
-                    windowStart, windowEnd,
-                    closeTime,
-                    observedStreamTime
-                );
+//                log.warn(
+//                    "Skipping record for expired window. " +
+//                        "key=[{}] " +
+//                        "topic=[{}] " +
+//                        "partition=[{}] " +
+//                        "offset=[{}] " +
+//                        "timestamp=[{}] " +
+//                        "window=[{},{}] " +
+//                        "expiration=[{}] " +
+//                        "streamTime=[{}]",
+//                    key,
+//                    context().topic(),
+//                    context().partition(),
+//                    context().offset(),
+//                    context().timestamp(),
+//                    windowStart, windowEnd,
+//                    closeTime,
+//                    observedStreamTime
+//                );
                 droppedRecordsSensor.record();
             }
         }

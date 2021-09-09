@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public interface KStreamAggProcessorSupplier<K, RK, V, T> extends org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+
+public interface KStreamAggProcessorSupplier<K, V, RK, T> extends ProcessorSupplier<K, V, RK, Change<T>> {
 
     KTableValueGetterSupplier<RK, T> view();
 
