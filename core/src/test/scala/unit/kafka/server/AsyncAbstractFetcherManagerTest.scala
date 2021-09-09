@@ -18,12 +18,8 @@ package kafka.server
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
-import kafka.cluster.BrokerEndPoint
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
-import org.easymock.EasyMock
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.junit.Before
 
 import scala.collection.JavaConverters._
 

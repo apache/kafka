@@ -58,6 +58,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
+    private final ChannelMetadataRegistry metadataRegistry;
     private final Logger log;
 
     private HandshakeStatus handshakeStatus;
@@ -70,17 +71,20 @@ public class SslTransportLayer implements TransportLayer {
     private boolean hasBytesBuffered;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
-    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-        return new SslTransportLayer(channelId, key, sslEngine);
+    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine,
+        ChannelMetadataRegistry metadataRegistry) throws IOException {
+        return new SslTransportLayer(channelId, key, sslEngine, metadataRegistry);
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+        ChannelMetadataRegistry metadataRegistry) {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
         this.state = State.NOT_INITALIZED;
+        this.metadataRegistry = metadataRegistry;
 
         final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
         this.log = logContext.logger(getClass());
@@ -423,6 +427,8 @@ public class SslTransportLayer implements TransportLayer {
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
                             session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                metadataRegistry.registerCipherInformation(
+                    new CipherInformation(session.getCipherSuite(),  session.getProtocol()));
             }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",

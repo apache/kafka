@@ -51,7 +51,6 @@ abstract class DelayedOperation(override val delayMs: Long,
                                 lockOpt: Option[Lock] = None)
   extends TimerTask {
 
-  import DelayedOperation._
   private val completed = new AtomicBoolean(false)
   private val tryCompletePending = new AtomicBoolean(false)
   // Visible for testing

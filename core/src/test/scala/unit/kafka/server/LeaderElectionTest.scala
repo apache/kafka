@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.TopicPartition
 
@@ -30,7 +29,6 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -157,7 +155,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           .setIsNew(false)
       )
       val requestBuilder = new LeaderAndIsrRequest.Builder(
-        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, servers(brokerId2).kafkaController.brokerEpoch, 
+        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, servers(brokerId2).kafkaController.brokerEpoch,
         servers(brokerId2).kafkaController.brokerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
       controllerChannelManager.sendRequest(brokerId2, requestBuilder, staleControllerEpochCallback)

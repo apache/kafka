@@ -18,7 +18,7 @@ package kafka.controller
 
 import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
-import kafka.admin.{AdminOperationException, AdminUtils}
+import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}

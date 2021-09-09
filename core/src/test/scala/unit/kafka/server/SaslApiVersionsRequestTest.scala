@@ -69,6 +69,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
       val response = sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
       assertEquals(Errors.ILLEGAL_SASL_STATE.code(), response.data.errorCode())
+
     } finally {
       socket.close()
     }

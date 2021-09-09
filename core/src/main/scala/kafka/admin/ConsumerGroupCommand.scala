@@ -20,7 +20,6 @@ package kafka.admin
 import java.text.{ParseException, SimpleDateFormat}
 import java.time.{Duration, Instant}
 import java.util.Properties
-import java.util.concurrent.ExecutionException
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule

@@ -69,6 +69,7 @@ import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Mode;
@@ -1567,7 +1568,7 @@ public class SaslAuthenticatorTest {
         final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
         Assert.assertThrows(IllegalStateException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header1));
     }
-    
+
     /**
      * Re-authentication must fail if mechanism changes
      */
@@ -1808,8 +1809,10 @@ public class SaslAuthenticatorTest {
                                                                        String id,
                                                                        TransportLayer transportLayer,
                                                                        Map<String, Subject> subjects,
-                                                                       Map<String, Long> connectionsMaxReauthMsByMechanism) {
-                return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName, securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, time) {
+                                                                       Map<String, Long> connectionsMaxReauthMsByMechanism,
+                                                                       ChannelMetadataRegistry metadataRegistry) {
+                return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName, securityProtocol, transportLayer,
+                    connectionsMaxReauthMsByMechanism, metadataRegistry, time) {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {

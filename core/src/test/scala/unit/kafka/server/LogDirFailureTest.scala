@@ -29,7 +29,7 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Ignore, Test}
 import org.scalatest.Assertions.fail
 

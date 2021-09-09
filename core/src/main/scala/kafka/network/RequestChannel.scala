@@ -197,6 +197,7 @@ object RequestChannel extends Logging {
           .append(",securityProtocol:").append(context.securityProtocol)
           .append(",principal:").append(session.principal)
           .append(",listener:").append(context.listenerName.value)
+          .append(",clientInformation:").append(context.clientInformation)
         if (temporaryMemoryBytes > 0)
           builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
         if (messageConversionsTimeMs > 0)
