@@ -494,18 +494,19 @@ private[log] class Cleaner(val id: Int,
    * @return The first offset not cleaned and the statistics for this round of cleaning
    */
   private[log] def clean(cleanable: LogToClean): (Long, CleanerStats) = {
+    doClean(cleanable, time.milliseconds())
+  }
+
+  private[log] def doClean(cleanable: LogToClean, currentTime: Long): (Long, CleanerStats) = {
+    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, cleanable.logCleaningReason.getClass.getName))
+
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
-    val deleteHorizonMs =
+    val legacyDeleteHorizonMs =
       cleanable.log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
         case None => 0L
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
-    }
-    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs)
-  }
-
-  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L): (Long, CleanerStats) = {
-    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, cleanable.logCleaningReason.getClass.getName))
+      }
 
     val log = cleanable.log
     log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
