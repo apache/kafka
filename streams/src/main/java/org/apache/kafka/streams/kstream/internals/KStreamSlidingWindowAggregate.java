@@ -44,7 +44,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
 
-    private final Logger LOG = LoggerFactory.getLogger(getClass());
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final SlidingWindows windows;
@@ -105,13 +105,13 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             if (record.key() == null || record.value() == null) {
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
-                    LOG.warn(
+                    log.warn(
                         "Skipping record due to null key or value. "
                             + "topic=[{}] partition=[{}] offset=[{}]",
                         recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                     );
                 } else {
-                    LOG.warn(
+                    log.warn(
                         "Skipping record due to null key. Topic, partition, and offset not known."
                     );
                 }
@@ -126,7 +126,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
-                    LOG.warn(
+                    log.warn(
                         "Skipping record for expired window. " +
                             "topic=[{}] " +
                             "partition=[{}] " +
@@ -142,7 +142,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         observedStreamTime
                     );
                 } else {
-                    LOG.warn(
+                    log.warn(
                         "Skipping record for expired window. Topic, partition, and offset not known. " +
                             "timestamp=[{}] " +
                             "window=[{},{}] " +
@@ -167,10 +167,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 try {
                     windowStore.backwardFetch(record.key(), 0L, 0L);
                     reverseIteratorPossible = true;
-                    LOG.debug("Sliding Windows aggregate using a reverse iterator");
+                    log.debug("Sliding Windows aggregate using a reverse iterator");
                 } catch (final UnsupportedOperationException e)  {
                     reverseIteratorPossible = false;
-                    LOG.debug("Sliding Windows aggregate using a forward iterator");
+                    log.debug("Sliding Windows aggregate using a forward iterator");
                 }
             }
 
@@ -225,7 +225,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     } else if (startTime == inputRecordTimestamp + 1) {
                         rightWinAlreadyCreated = true;
                     } else {
-                        LOG.error(
+                        log.error(
                             "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
                             startTime, inputRecordTimestamp
                         );
@@ -284,7 +284,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         previousRecordTimestamp = windowMaxRecordTimestamp;
                         break;
                     } else {
-                        LOG.error(
+                        log.error(
                             "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
                             startTime, inputRecordTimestamp
                         );
@@ -302,7 +302,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
          */
         private void processEarly(final KIn key, final VIn value, final long inputRecordTimestamp, final long closeTime) {
             if (inputRecordTimestamp < 0 || inputRecordTimestamp >= windows.timeDifferenceMs()) {
-                LOG.error(
+                log.error(
                     "Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp. Timestamp {} does not fall between 0 <= {}",
                     inputRecordTimestamp, windows.timeDifferenceMs()
                 );
@@ -346,7 +346,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     } else if (startTime == inputRecordTimestamp + 1) {
                         rightWinAlreadyCreated = true;
                     } else {
-                        LOG.error(
+                        log.error(
                             "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
                             startTime, inputRecordTimestamp
                         );
@@ -491,7 +491,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             } else {
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
-                    LOG.warn(
+                    log.warn(
                         "Skipping record for expired window. " +
                             "topic=[{}] " +
                             "partition=[{}] " +
@@ -507,7 +507,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         observedStreamTime
                     );
                 } else {
-                    LOG.warn(
+                    log.warn(
                         "Skipping record for expired window. Topic, partition, and offset not known. " +
                             "timestamp=[{}] " +
                             "window=[{},{}] " +

@@ -148,9 +148,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldCreateSingleSessionWhenWithinGap() {
-//        context.setTime(0);
         processor.process(new Record<>("john", "first", 0L));
-//        context.setTime(500);
         processor.process(new Record<>("john", "second", 500L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values =
@@ -162,19 +160,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldMergeSessions() {
-//        context.setTime(0);
         final String sessionId = "mel";
         processor.process(new Record<>(sessionId, "first", 0L));
         assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
 
         // move time beyond gap
-//        context.setTime(GAP_MS + 1);
         processor.process(new Record<>(sessionId, "second", GAP_MS + 1));
         assertTrue(sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1).hasNext());
         // should still exist as not within gap
         assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
         // move time back
-//        context.setTime(GAP_MS / 2);
         processor.process(new Record<>(sessionId, "third", GAP_MS / 2));
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -188,7 +183,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldUpdateSessionIfTheSameTime() {
-//        context.setTime(0);
         processor.process(new Record<>("mel", "first", 0L));
         processor.process(new Record<>("mel", "second", 0L));
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -202,13 +196,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() {
         final String sessionId = "mel";
         long time = 0;
-//        context.setTime(time);
         processor.process(new Record<>(sessionId, "first", time));
-//        context.setTime(time += GAP_MS + 1);
         final long time1 = time += GAP_MS + 1;
         processor.process(new Record<>(sessionId, "second", time1));
         processor.process(new Record<>(sessionId, "second", time1));
-//        context.setTime(time += GAP_MS + 1);
         final long time2 = time += GAP_MS + 1;
         processor.process(new Record<>(sessionId, "third", time2));
         processor.process(new Record<>(sessionId, "third", time2));
@@ -237,7 +228,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldRemoveMergedSessionsFromStateStore() {
-//        context.setTime(0);
         processor.process(new Record<>("a", "1", 0L));
 
         // first ensure it is in the store
@@ -247,7 +237,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
 
 
-//        context.setTime(100);
         processor.process(new Record<>("a", "2", 100L));
         // a1 from above should have been removed
         // should have merged session in store
@@ -260,17 +249,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldHandleMultipleSessionsAndMerging() {
-//        context.setTime(0);
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
         processor.process(new Record<>("c", "1", 0L));
         processor.process(new Record<>("d", "1", 0L));
-//        context.setTime(GAP_MS / 2);
         processor.process(new Record<>("d", "2", GAP_MS / 2));
-//        context.setTime(GAP_MS + 1);
         processor.process(new Record<>("a", "2", GAP_MS + 1));
         processor.process(new Record<>("b", "2", GAP_MS + 1));
-//        context.setTime(GAP_MS + 1 + GAP_MS / 2);
         processor.process(new Record<>("a", "3", GAP_MS + 1 + GAP_MS / 2));
         processor.process(new Record<>("c", "3", GAP_MS + 1 + GAP_MS / 2));
 
@@ -315,9 +300,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldGetAggregatedValuesFromValueGetter() {
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
         getter.init(context);
-//        context.setTime(0);
         processor.process(new Record<>("a", "1", 0L));
-//        context.setTime(GAP_MS + 1);
         processor.process(new Record<>("a", "1", GAP_MS + 1));
         processor.process(new Record<>("a", "2", GAP_MS + 1));
         final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0))).value();
@@ -331,7 +314,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         initStore(false);
         processor.init(context);
 
-//        context.setTime(0);
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
         processor.process(new Record<>("c", "1", 0L));
@@ -360,9 +342,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         initStore(false);
         processor.init(context);
 
-//        context.setTime(0);
         processor.process(new Record<>("a", "1", 0L));
-//        context.setTime(5);
         processor.process(new Record<>("a", "1", 5L));
         assertEquals(
             Arrays.asList(
@@ -401,7 +381,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
                     .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
+                hasItem("Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]")
             );
         }
 
@@ -424,28 +404,28 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.init(context);
 
         // dummy record to establish stream time = 0
-//        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 0L));
 
         // record arrives on time, should not be skipped
-//        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("OnTime1", "1", 0L));
 
         // dummy record to advance stream time = 11, 10 for gap time plus 1 to place outside window
-//        context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
+        context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 11L));
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // record is late
-//            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record for expired window." +
-                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]")
+                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[11]")
             );
         }
 
@@ -518,7 +498,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Skipping record for expired window." +
-                    " key=[Late1] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]")
+                    " topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0] expiration=[1] streamTime=[12]")
             );
         }
 

@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
 
-    private final Logger LOG = LoggerFactory.getLogger(getClass());
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final Windows<W> windows;
@@ -103,13 +103,13 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
             if (record.key() == null) {
                 if (context.recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
-                    LOG.warn(
+                    log.warn(
                         "Skipping record due to null key. "
                             + "topic=[{}] partition=[{}] offset=[{}]",
                         recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                     );
                 } else {
-                    LOG.warn(
+                    log.warn(
                         "Skipping record due to null key. Topic, partition, and offset not known."
                     );
                 }
@@ -154,7 +154,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 } else {
                     if (context.recordMetadata().isPresent()) {
                         final RecordMetadata recordMetadata = context.recordMetadata().get();
-                        LOG.warn(
+                        log.warn(
                             "Skipping record for expired window. " +
                                 "topic=[{}] " +
                                 "partition=[{}] " +
@@ -170,7 +170,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                             observedStreamTime
                         );
                     } else {
-                        LOG.warn(
+                        log.warn(
                             "Skipping record for expired window. Topic, partition, and offset not known. " +
                                 "timestamp=[{}] " +
                                 "window=[{},{}] " +
