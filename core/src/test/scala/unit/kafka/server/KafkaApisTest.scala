@@ -2385,8 +2385,7 @@ class KafkaApisTest {
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicIdPartition]],
-      anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
+      anyObject[util.List[TopicIdPartition]])).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
@@ -2955,8 +2954,7 @@ class KafkaApisTest {
       anyObject[JFetchMetadata],
       anyObject[Boolean],
       anyObject[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicIdPartition]],
-      anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
+      anyObject[util.List[TopicIdPartition]])).andReturn(fetchContext)
 
     expect(replicaQuotaManager.record(anyLong()))
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)
