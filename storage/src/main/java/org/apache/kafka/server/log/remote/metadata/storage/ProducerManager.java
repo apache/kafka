@@ -51,6 +51,13 @@ public class ProducerManager implements Closeable {
         topicPartitioner = rlmmTopicPartitioner;
     }
 
+    /**
+     * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata}
+     * is considered complete.
+     *
+     * @param remoteLogMetadata RemoteLogMetadata to be published
+     * @return
+     */
     public CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
         CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
 

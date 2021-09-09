@@ -107,8 +107,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            return doPublishMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
-                              remoteLogSegmentMetadata);
+            return storeRemoteLogMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
+                                          remoteLogSegmentMetadata);
         } finally {
             lock.readLock().unlock();
         }
@@ -131,7 +131,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            return doPublishMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+            return storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
         } finally {
             lock.readLock().unlock();
         }
@@ -146,20 +146,31 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         try {
             ensureInitializedAndNotClosed();
 
-            return doPublishMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
+            return storeRemoteLogMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    private CompletableFuture<Void> doPublishMetadata(TopicIdPartition topicIdPartition,
-                                                      RemoteLogMetadata remoteLogMetadata)
+    /**
+     * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata} into
+     * the remote log metadata topic and the internal consumer is caught up until the produced record's offset.
+     *
+     * @param topicIdPartition partition of the given remoteLogMetadata.
+     * @param remoteLogMetadata RemoteLogMetadata to be stored.
+     * @return
+     * @throws RemoteStorageException if there are any storage errors occur.
+     */
+    private CompletableFuture<Void> storeRemoteLogMetadata(TopicIdPartition topicIdPartition,
+                                                           RemoteLogMetadata remoteLogMetadata)
             throws RemoteStorageException {
-        log.debug("Publishing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
+        log.debug("Storing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
 
         try {
-            // Publish the message to the topic.
-            CompletableFuture<RecordMetadata> produceFuture =  producerManager.publishMessage(remoteLogMetadata);
+            // Publish the message to the metadata topic.
+            CompletableFuture<RecordMetadata> produceFuture = producerManager.publishMessage(remoteLogMetadata);
+
+            // Create and return a `CompletableFuture` instance which completes when the consumer is caught up with the produced record's offset.
             return produceFuture.thenApplyAsync(recordMetadata -> {
                 try {
                     consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
