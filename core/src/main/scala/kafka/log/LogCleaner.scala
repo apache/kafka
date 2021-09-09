@@ -687,13 +687,11 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
-        var isRecordRetained: Boolean = true
         if (discardBatchRecords)
           // The batch is only retained to preserve producer sequence information; the records can be removed
-          isRecordRetained = false
+          false
         else
-          isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
-        isRecordRetained
+          Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
       }
     }
 
