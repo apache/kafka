@@ -22,41 +22,43 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.Key;
+import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.security.auth.callback.Callback;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
 import org.apache.kafka.common.utils.Utils;
-import org.jose4j.jws.JsonWebSignature;
-import org.jose4j.jwx.JsonWebStructure;
 import org.junit.jupiter.api.Test;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testBasic() throws Exception {
-        AccessTokenBuilder builder = new AccessTokenBuilder();
+        String expectedAudience = "a";
+        List<String> allAudiences = Arrays.asList(expectedAudience, "b", "c");
+        AccessTokenBuilder builder = new AccessTokenBuilder().audience(expectedAudience);
         String accessToken = builder.build();
 
         Map<String, Object> options = new HashMap<>();
-        options.put(ValidatorCallbackHandlerConfiguration.EXPECTED_AUDIENCE_CONFIG, "test");
+        options.put(ValidatorCallbackHandlerConfiguration.EXPECTED_AUDIENCE_CONFIG, allAudiences);
         OAuthBearerValidatorCallbackHandler handler = createHandler(options, builder);
 
-        OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
-        handler.handle(new Callback[] {callback});
+        try {
+            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
+            handler.handle(new Callback[]{callback});
 
-        assertNotNull(callback.token());
-        OAuthBearerToken token = callback.token();
-        assertEquals(accessToken, token.value());
-        assertEquals(builder.subject(), token.principalName());
-        assertEquals(builder.expirationSeconds() * 1000, token.lifetimeMs());
-        assertEquals(builder.issuedAtSeconds() * 1000, token.startTimeMs());
+            assertNotNull(callback.token());
+            OAuthBearerToken token = callback.token();
+            assertEquals(accessToken, token.value());
+            assertEquals(builder.subject(), token.principalName());
+            assertEquals(builder.expirationSeconds() * 1000, token.lifetimeMs());
+            assertEquals(builder.issuedAtSeconds() * 1000, token.startTimeMs());
+        } finally {
+            handler.close();
+        }
     }
 
     @Test
@@ -74,43 +76,27 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         Map<String, Object> options = new HashMap<>();
         OAuthBearerValidatorCallbackHandler handler = createHandler(options, new AccessTokenBuilder());
 
-        OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
-        handler.handle(new Callback[] {callback});
+        try {
+            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
+            handler.handle(new Callback[] {callback});
 
-        assertNull(callback.token());
-        String actualMessage = callback.errorStatus();
-        assertNotNull(actualMessage);
-        assertTrue(actualMessage.contains(expectedMessageSubstring), String.format("The error message \"%s\" didn't contain the expected substring \"%s\"", actualMessage, expectedMessageSubstring));
+            assertNull(callback.token());
+            String actualMessage = callback.errorStatus();
+            assertNotNull(actualMessage);
+            assertTrue(actualMessage.contains(expectedMessageSubstring), String.format("The error message \"%s\" didn't contain the expected substring \"%s\"", actualMessage, expectedMessageSubstring));
+        } finally {
+            handler.close();
+        }
     }
 
     private OAuthBearerValidatorCallbackHandler createHandler(Map<String, Object> options,
         AccessTokenBuilder builder) {
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
         ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(options);
-
-        CloseableVerificationKeyResolver verificationKeyResolver = new CloseableVerificationKeyResolver() {
-
-            @Override
-            public void init() {
-                // Do nothing...
-            }
-
-            @Override
-            public void close() {
-                // Do nothing...
-            }
-
-            @Override
-            public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) {
-                return builder.jwk().getRsaPublicKey();
-            }
-
-        };
-
-        handler.configure(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            conf,
-            Collections.emptySet(),
-            verificationKeyResolver);
+        CloseableVerificationKeyResolver verificationKeyResolver = (jws, nestingContext) ->
+                builder.jwk().getRsaPublicKey();
+        AccessTokenValidator accessTokenValidator = OAuthBearerValidatorCallbackHandler.configureAccessTokenValidator(conf, verificationKeyResolver);
+        handler.configure(verificationKeyResolver, accessTokenValidator);
         return handler;
     }
 

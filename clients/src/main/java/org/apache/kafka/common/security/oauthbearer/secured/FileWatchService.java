@@ -52,7 +52,7 @@ import org.slf4j.LoggerFactory;
  * @see WatchService
  */
 
-public class FileWatchService implements Closeable {
+public class FileWatchService implements Initable, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(FileWatchService.class);
 
@@ -96,11 +96,11 @@ public class FileWatchService implements Closeable {
         MIN_WATCH_INTERVAL = usesPollingService ? Duration.ofSeconds(3) : Duration.ZERO;
     }
 
-    public FileWatchService(Path directory, FileWatchCallback callback) throws IOException {
+    public FileWatchService(Path directory, FileWatchCallback callback) {
         directory = directory.toAbsolutePath();
 
         if (!directory.toFile().isDirectory())
-            throw new IOException(String.format("Path %s must be a directory", directory));
+            throw new IllegalArgumentException(String.format("Path %s must be a directory", directory));
 
         this.directory = directory;
         this.callback = callback;
@@ -108,9 +108,10 @@ public class FileWatchService implements Closeable {
         this.lock = new ReentrantReadWriteLock();
     }
 
+    @Override
     public void init() throws IOException {
         try {
-            log.debug("{} initialization started", logPrefix);
+            log.debug("{} init started", logPrefix);
 
             lock.writeLock().lock();
 
@@ -132,7 +133,7 @@ public class FileWatchService implements Closeable {
         } finally {
             lock.writeLock().unlock();
 
-            log.debug("{} initialization completed", logPrefix);
+            log.debug("{} init completed", logPrefix);
         }
     }
 

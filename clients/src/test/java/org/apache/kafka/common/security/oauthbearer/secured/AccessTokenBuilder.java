@@ -35,6 +35,8 @@ public class AccessTokenBuilder {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private String audience;
+
     private String subject = "jdoe";
 
     private String subjectClaimName = ReservedClaimNames.SUBJECT;
@@ -63,6 +65,15 @@ public class AccessTokenBuilder {
         RsaJsonWebKey jwk = RsaJwkGenerator.generateJwk(2048);
         jwk.setKeyId("key-1");
         return jwk;
+    }
+
+    public String audience() {
+        return audience;
+    }
+
+    public AccessTokenBuilder audience(String audience) {
+        this.audience = audience;
+        return this;
     }
 
     public String subject() {
@@ -142,6 +153,9 @@ public class AccessTokenBuilder {
     @SuppressWarnings("unchecked")
     public String build() throws JoseException, IOException {
         ObjectNode node = objectMapper.createObjectNode();
+
+        if (audience != null)
+            node.put(ReservedClaimNames.AUDIENCE, audience);
 
         if (subject != null)
             node.put(subjectClaimName, subject);

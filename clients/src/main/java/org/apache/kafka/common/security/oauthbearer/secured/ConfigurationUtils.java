@@ -19,20 +19,40 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.net.ssl.SSLSocketFactory;
+import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
+ * logic and is separated out here for easier, more direct testing.
+ */
+
 public class ConfigurationUtils {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigurationUtils.class);
+
+    public static Map<String, Object> getModuleOptions(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
+            throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
+
+        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
+            throw new IllegalArgumentException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
+
+        return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
+    }
 
     public static Map<String, ?> getSslClientConfig(Map<String, ?> config, String uriConfigName) {
         String urlConfigValue = (String) config.get(uriConfigName);
@@ -72,6 +92,21 @@ public class ConfigurationUtils {
         SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
         log.warn("socketFactory: {}", socketFactory);
         return socketFactory;
+    }
+
+    public static String validateString(String name, String value) throws ValidateException {
+        if (value == null)
+            throw new ValidateException(String.format("The OAuth configuration option %s value must be non-null", name));
+
+        if (value.isEmpty())
+            throw new ValidateException(String.format("The OAuth configuration option%s value must be non-empty", name));
+
+        value = value.trim();
+
+        if (value.isEmpty())
+            throw new ValidateException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
+
+        return value;
     }
 
 }

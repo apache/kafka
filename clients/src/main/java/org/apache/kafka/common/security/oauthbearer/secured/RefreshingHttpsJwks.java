@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
  * @see ValidatorAccessTokenValidator
  */
 
-public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
+public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -79,16 +79,18 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Closeable {
         this.executorService = Executors.newSingleThreadScheduledExecutor();
     }
 
+    @Override
     public void init() {
         try {
-            log.debug("initialization started");
+            log.debug("init started");
+
             executorService.scheduleAtFixedRate(this::refreshInternal,
                 0,
                 refreshIntervalMs,
                 TimeUnit.MILLISECONDS);
             log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshIntervalMs);
         } finally {
-            log.debug("initialization completed");
+            log.debug("init completed");
         }
     }
 

@@ -43,6 +43,11 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
     public static final String SCOPE_CLAIM_NAME_CONFIG = "scopeClaimName";
     public static final String SUB_CLAIM_NAME_CONFIG = "subClaimName";
 
+    private static final String JWKS_NOTE =
+        "Note: only one of " + JWKS_ENDPOINT_URI_CONFIG + " or " + JWKS_FILE_CONFIG + " should " +
+        "be configured as they are mutually exclusive. An error will be generated at broker " +
+        "start if both are provided.";
+
     private static final int CLOCK_SKEW_DEFAULT = 30;
     private static final String CLOCK_SKEW_DOC = "The (optional) value in " +
         "seconds to allow for differences between the time of the OAuth/OIDC identity " +
@@ -70,11 +75,7 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     private static final String JWKS_ENDPOINT_URI_DOC = "The OAuth/OIDC provider URI from " +
         "which the provider's JWKS (JSON Web Key Set) can be retrieved." +
-        ""  +
-        "Note: only one of " + JWKS_ENDPOINT_URI_CONFIG + " or " + JWKS_FILE_CONFIG + " should " +
-        "be configured as they are mutually exclusive. An error will be generated at broker " +
-        "start if both are provided. " +
-        ""  +
+        " "  + JWKS_NOTE + " " +
         "In this mode, the JWKS data will be retrieved from the " +
         "OAuth/OIDC provider via the configured URI on broker startup. All then-current " +
         "keys will be cached on the broker for incoming requests. If an authentication " +
@@ -85,13 +86,18 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
         "JWT requests that include them are received.";
     private static final ConfigDef.Validator JWKS_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator();
 
-    private static final String JWKS_FILE_DOC = "The file name of the file that contains a " +
-        "copy of the OAuth/OIDC provider's JWKS (JSON Web Key Set)." +
-        ""  +
-        "Note: only one of " + JWKS_ENDPOINT_URI_CONFIG + " or " + JWKS_FILE_CONFIG + " should " +
-        "be configured as they are mutually exclusive. An error will be generated at broker " +
-        "start if both are provided. " +
-        ""  +
+    private static final String JWKS_FILE_DOC = "The directory name that contains one or more " +
+        "<a href=\"https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail\">public key files</a> " +
+        "which are copies of the OAuth/OIDC provider's JWKS (JSON Web Key Set). " +
+        "The directory is watched for file system events for the creation, deletion, and " +
+        "modification of files. When this occurs, the JWKS is rebuilt. " +
+        "" +
+        "Note: the file names in the directory must end in the .pem suffix and the non-suffix " +
+        "portion of the file name is used as the OAuth/OIDC key ID (\"kid\") to distinguish " +
+        "between multiple key files in the directory. For example, a file named " +
+        "\"cafe0123.pem\" in the directory will be interpreted as holding the key " +
+        "for the key ID \"cafe0123\"." +
+        " "  + JWKS_NOTE + " " +
         "In this mode, the broker will load the JWKS file from a configured location " +
         "on startup and will watch the file for updates which allows for dynamic " +
         "configuration updates. The means by which the JWKS file is updated is left to the " +

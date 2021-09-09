@@ -33,14 +33,18 @@ import org.jose4j.keys.resolvers.VerificationKeyResolver;
  * @see Closeable
  */
 
-public interface CloseableVerificationKeyResolver extends Closeable, VerificationKeyResolver {
+public interface CloseableVerificationKeyResolver extends Initable, Closeable, VerificationKeyResolver {
 
     /**
-     * Provide a means for the <code>VerificationKeyResolver</code> to initialize connections,
-     * threads, etc. that it may need.
+     * Lifecycle method to perform a clean shutdown of the {@link VerificationKeyResolver}.
+     * This must be performed by the caller to ensure the correct state, freeing up
+     * and releasing any resources performed in {@link #init()}.
      *
-     * @throws IOException Thrown on errors related to IO
+     * @throws IOException Thrown on errors related to IO during closure
      */
-    void init() throws IOException;
+
+    default void close() throws IOException {
+        // This method left intentionally blank.
+    }
 
 }

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
-
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -36,6 +34,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 
 public class LoginCallbackHandlerConfiguration extends AbstractConfig {
 
+    public static final String ACCESS_TOKEN_CONFIG = "accessToken";
+    public static final String ACCESS_TOKEN_FILE_CONFIG = "accessTokenFile";
     public static final String CLIENT_ID_CONFIG = "clientId";
     public static final String CLIENT_SECRET_CONFIG = "clientSecret";
     public static final String LOGIN_ATTEMPTS_CONFIG = "loginAttempts";
@@ -48,12 +48,27 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
     public static final String SUB_CLAIM_NAME_CONFIG = "subClaimName";
     public static final String TOKEN_ENDPOINT_URI_CONFIG = "tokenEndpointUri";
 
+    private static final String ACCESS_TOKEN_RETRIEVER_NOTE =
+        "Note: only one of " + ACCESS_TOKEN_CONFIG + ", " + ACCESS_TOKEN_FILE_CONFIG + ", or " +
+            CLIENT_ID_CONFIG + " should be configured as they are mutually exclusive. " +
+            "An error will be generated at client start if more than one is provided.";
+
+    private static final String ACCESS_TOKEN_DOC = "An access token " +
+        "(in JWT serialized form) issued by the OAuth/OIDC identity provider to use for " +
+        "authorization for this client." +
+        " "  + ACCESS_TOKEN_RETRIEVER_NOTE;
+
+    private static final String ACCESS_TOKEN_FILE_DOC = "A file containing an access token " +
+        "(in JWT serialized form) issued by the OAuth/OIDC identity provider to use for " +
+        "authorization for this client." +
+        " "  + ACCESS_TOKEN_RETRIEVER_NOTE;
+
     private static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
         "client ID to uniquely identify the service account to use for authentication for " +
         "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
         "value and is provided to the OAuth provider using the OAuth " +
-        "clientcredentials grant type.";
-    private static final ConfigDef.Validator CLIENT_ID_VALIDATOR = new NonEmptyString();
+        "clientcredentials grant type." +
+        " "  + ACCESS_TOKEN_RETRIEVER_NOTE;
 
     private static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
         "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
@@ -61,7 +76,6 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
         "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
         "value and is provided to the OAuth provider using the OAuth " +
         "clientcredentials grant type.";
-    private static final ConfigDef.Validator CLIENT_SECRET_VALIDATOR = new NonEmptyString();
 
     private static final int LOGIN_ATTEMPTS_DEFAULT = 3;
     private static final String LOGIN_ATTEMPTS_DOC = "The (optional) number of attempts to " +
@@ -125,16 +139,24 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
     private static final ConfigDef.Validator TOKEN_ENDPOINT_URI_VALIDATOR = CompositeValidator.of(new NonEmptyString(), new UriConfigDefValidator());
 
     private static final ConfigDef CONFIG = new ConfigDef()
+        .define(ACCESS_TOKEN_CONFIG,
+            Type.STRING,
+            null,
+            Importance.HIGH,
+            ACCESS_TOKEN_DOC)
+        .define(ACCESS_TOKEN_FILE_CONFIG,
+            Type.STRING,
+            null,
+            Importance.HIGH,
+            ACCESS_TOKEN_FILE_DOC)
         .define(CLIENT_ID_CONFIG,
             Type.STRING,
-            NO_DEFAULT_VALUE,
-            CLIENT_ID_VALIDATOR,
+            null,
             Importance.HIGH,
             CLIENT_ID_DOC)
         .define(CLIENT_SECRET_CONFIG,
             Type.STRING,
-            NO_DEFAULT_VALUE,
-            CLIENT_SECRET_VALIDATOR,
+            null,
             Importance.HIGH,
             CLIENT_SECRET_DOC)
         .define(LOGIN_ATTEMPTS_CONFIG,
@@ -184,13 +206,21 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
             SUB_CLAIM_NAME_DOC)
         .define(TOKEN_ENDPOINT_URI_CONFIG,
             Type.STRING,
-            NO_DEFAULT_VALUE,
+            null,
             TOKEN_ENDPOINT_URI_VALIDATOR,
             Importance.MEDIUM,
             TOKEN_ENDPOINT_URI_DOC);
 
     public LoginCallbackHandlerConfiguration(Map<String, ?> options) {
         super(CONFIG, options);
+    }
+
+    public String getAccessToken() {
+        return getString(ACCESS_TOKEN_CONFIG);
+    }
+
+    public String getAccessTokenFile() {
+        return getString(ACCESS_TOKEN_FILE_CONFIG);
     }
 
     public String getClientId() {

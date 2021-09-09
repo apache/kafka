@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
@@ -31,10 +30,17 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import javax.security.auth.login.AppConfigurationEntry;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.authenticator.TestJaasConfig;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,13 +70,36 @@ public abstract class OAuthBearerTest {
     protected void assertThrowsWithMessage(Class<? extends Exception> clazz,
         Executable executable,
         String substring) {
+        boolean failed = false;
+
         try {
-            assertThrows(clazz, executable);
-        } catch (Throwable e) {
-            assertTrue(e.getMessage().contains(substring),
-                String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
-                    e.getMessage(), substring));
+            executable.execute();
+        } catch (Throwable t) {
+            failed = true;
+            assertTrue(clazz.isInstance(t), String.format("Test failed by exception %s, but expected %s", t.getClass(), clazz));
+
+            assertErrorMessageContains(t.getMessage(), substring);
         }
+
+        if (!failed)
+            fail("Expected test to fail with " + clazz + " that contains the string " + substring);
+    }
+
+    protected void assertErrorMessageContains(String actual, String expectedSubstring) {
+        assertTrue(actual.contains(expectedSubstring),
+            String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
+                actual,
+                expectedSubstring));
+    }
+
+    protected void configureHandler(AuthenticateCallbackHandler handler, Map<String, Object> options) {
+        TestJaasConfig config = new TestJaasConfig();
+        config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), options);
+        AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];
+
+        handler.configure(Collections.emptyMap(),
+            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            Collections.singletonList(kafkaClient));
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {
@@ -120,11 +149,10 @@ public abstract class OAuthBearerTest {
         };
     }
 
-    protected HttpURLConnection createHttpURLConnection(String response,
-        int statusCode)
-        throws IOException {
+    protected HttpURLConnection createHttpURLConnection(String response) throws IOException {
         HttpURLConnection mockedCon = mock(HttpURLConnection.class);
-        when(mockedCon.getResponseCode()).thenReturn(statusCode);
+        when(mockedCon.getURL()).thenReturn(new URL("https://www.example.com"));
+        when(mockedCon.getResponseCode()).thenReturn(200);
         when(mockedCon.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         when(mockedCon.getInputStream()).thenReturn(new ByteArrayInputStream(Utils.utf8(response)));
         return mockedCon;

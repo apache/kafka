@@ -31,12 +31,35 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.util.Base64;
 import java.util.Random;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
-public class HttpClientUtilsTest {
+public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
+
+    @Test
+    public void test() throws IOException {
+        String expectedResponse = "Hiya, buddy";
+        HttpURLConnection mockedCon = createHttpURLConnection(expectedResponse);
+        String response = HttpAccessTokenRetriever.post(mockedCon, null, null, null, null);
+        assertEquals(expectedResponse, response);
+    }
+
+    @Test
+    public void testEmptyResponse() throws IOException {
+        HttpURLConnection mockedCon = createHttpURLConnection("");
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+    }
+
+    @Test
+    public void testErrorReadingResponse() throws IOException {
+        HttpURLConnection mockedCon = createHttpURLConnection("dummy");
+        when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
+
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+    }
 
     @Test
     public void testCopy() throws IOException {
@@ -45,7 +68,7 @@ public class HttpClientUtilsTest {
         r.nextBytes(expected);
         InputStream in = new ByteArrayInputStream(expected);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        HttpClientUtils.copy(in, out);
+        HttpAccessTokenRetriever.copy(in, out);
         assertArrayEquals(expected, out.toByteArray());
     }
 
@@ -54,7 +77,7 @@ public class HttpClientUtilsTest {
         InputStream mockedIn = mock(InputStream.class);
         OutputStream out = new ByteArrayOutputStream();
         when(mockedIn.read(any(byte[].class))).thenThrow(new IOException());
-        assertThrows(IOException.class, () -> HttpClientUtils.copy(mockedIn, out));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.copy(mockedIn, out));
     }
 
     @Test
@@ -64,7 +87,7 @@ public class HttpClientUtilsTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", expected);
 
-        String actual = HttpClientUtils.parseAccessToken(mapper.writeValueAsString(node));
+        String actual = HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node));
         assertEquals(expected, actual);
     }
 
@@ -74,7 +97,7 @@ public class HttpClientUtilsTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", "");
 
-        assertThrows(IOException.class, () -> HttpClientUtils.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
@@ -83,39 +106,39 @@ public class HttpClientUtilsTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("sub", "jdoe");
 
-        assertThrows(IOException.class, () -> HttpClientUtils.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
     public void testParseAccessTokenInvalidJson() {
-        assertThrows(IOException.class, () -> HttpClientUtils.parseAccessToken("not valid JSON"));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken("not valid JSON"));
     }
 
     @Test
     public void testFormatAuthorizationHeader() throws IOException {
         String expected = "Basic " + Base64.getUrlEncoder().encodeToString(Utils.utf8("id:secret"));
 
-        String actual = HttpClientUtils.formatAuthorizationHeader("id", "secret");
+        String actual = HttpAccessTokenRetriever.formatAuthorizationHeader("id", "secret");
         assertEquals(expected, actual);
     }
 
     @Test
     public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader(null, "secret"));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("id", null));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader(null, null));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("", "secret"));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("id", ""));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("", ""));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("  ", "secret"));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("id", "  "));
-        assertThrows(IOException.class, () -> HttpClientUtils.formatAuthorizationHeader("  ", "  "));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret"));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret"));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", ""));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", ""));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret"));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  "));
+        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  "));
     }
 
     @Test
     public void testFormatRequestBody() throws IOException {
         String expected = "grant_type=client_credentials&scope=scope";
-        String actual = HttpClientUtils.formatRequestBody("scope");
+        String actual = HttpAccessTokenRetriever.formatRequestBody("scope");
         assertEquals(expected, actual);
     }
 
@@ -125,24 +148,24 @@ public class HttpClientUtilsTest {
         String exclamationMark = "%21";
 
         String expected = String.format("grant_type=client_credentials&scope=earth+is+great%s", exclamationMark);
-        String actual = HttpClientUtils.formatRequestBody("earth is great!");
+        String actual = HttpAccessTokenRetriever.formatRequestBody("earth is great!");
         assertEquals(expected, actual);
 
         expected = String.format("grant_type=client_credentials&scope=what+on+earth%s%s%s%s%s", questionMark, exclamationMark, questionMark, exclamationMark, questionMark);
-        actual = HttpClientUtils.formatRequestBody("what on earth?!?!?");
+        actual = HttpAccessTokenRetriever.formatRequestBody("what on earth?!?!?");
         assertEquals(expected, actual);
     }
 
     @Test
     public void testFormatRequestBodyMissingValues() throws IOException {
         String expected = "grant_type=client_credentials";
-        String actual = HttpClientUtils.formatRequestBody(null);
+        String actual = HttpAccessTokenRetriever.formatRequestBody(null);
         assertEquals(expected, actual);
 
-        actual = HttpClientUtils.formatRequestBody("");
+        actual = HttpAccessTokenRetriever.formatRequestBody("");
         assertEquals(expected, actual);
 
-        actual = HttpClientUtils.formatRequestBody("  ");
+        actual = HttpAccessTokenRetriever.formatRequestBody("  ");
         assertEquals(expected, actual);
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.security.Key;
 import java.util.List;
+import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver;
@@ -27,13 +28,27 @@ import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
+ * {@link VerificationKeyResolver} implementation that will periodically refresh the
+ * JWKS from the given {@link HttpsJwks} instance.
+ *
+ * This class is a wrapper around the <code>RefreshingHttpsJwks</code> to expose the
+ * {@link #init()} and {@link #close()} lifecycle methods.
+ *
+ * @see CloseableVerificationKeyResolver
+ * @see VerificationKeyResolver
+ * @see RefreshingHttpsJwks
+ * @see HttpsJwks
+ */
+
 public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private RefreshingHttpsJwks httpsJkws;
+    private final RefreshingHttpsJwks httpsJkws;
 
-    private VerificationKeyResolver delegate;
+    private final VerificationKeyResolver delegate;
 
     public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks httpsJkws) {
         this.httpsJkws = httpsJkws;
@@ -43,11 +58,11 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
     @Override
     public void init() {
         try {
-            log.debug("initialization started");
+            log.debug("init started");
 
             httpsJkws.init();
         } finally {
-            log.debug("initialization completed");
+            log.debug("init completed");
         }
     }
 

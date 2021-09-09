@@ -44,8 +44,7 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
     private final Long startTimeMs;
 
     /**
-     * Creates a new OAuthBearerToken instance that performs validation of the given values with the
-     * {@link ClaimValidationUtils} class.
+     * Creates a new OAuthBearerToken instance around the given values.
      *
      * @param token         Value containing the compact serialization as a base 64 string that
      *                      can be parsed, decoded, and validated as a well-formed JWS. Must be
@@ -60,11 +59,6 @@ public class BasicOAuthBearerToken implements OAuthBearerToken {
      * @param startTimeMs   The token's start time, expressed as the number of milliseconds since
      *                      the epoch, if available, otherwise <code>null</code>. Must be
      *                      non-negative if a non-<code>null</code> value is provided.
-     *
-     * @see ClaimValidationUtils
-     *
-     * @throws ValidateException If the provided values do not conform to the expected values per
-     *                           the validation logic in {@link ClaimValidationUtils}
      */
 
     public BasicOAuthBearerToken(String token,
