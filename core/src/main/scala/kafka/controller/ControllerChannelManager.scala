@@ -508,12 +508,12 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   /** Send UpdateMetadataRequest to the given brokers for the given partitions and partitions that are being deleted */
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
                                          partitions: collection.Set[TopicPartition]): Unit = {
-
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
       controllerContext.partitionLeadershipInfo.get(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
-          val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))
+          val offlineReplicas = replicas.filter(!controllerContextSnapshot.isReplicaOnline(_, partition))
           val updatedLeaderAndIsr =
             if (beingDeleted) LeaderAndIsr.duringDelete(leaderAndIsr.isr)
             else leaderAndIsr

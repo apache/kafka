@@ -571,11 +571,12 @@ class KafkaController(val config: KafkaConfig,
     * partitions coming online.
     */
   private def onReplicasBecomeOffline(newOfflineReplicas: Set[PartitionAndReplica]): Unit = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val (newOfflineReplicasForDeletion, newOfflineReplicasNotForDeletion) =
       newOfflineReplicas.partition(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
 
     val partitionsWithoutLeader = controllerContext.partitionLeadershipInfo.filter(partitionAndLeader =>
-      !controllerContext.isReplicaOnline(partitionAndLeader._2.leaderAndIsr.leader, partitionAndLeader._1) &&
+      !controllerContextSnapshot.isReplicaOnline(partitionAndLeader._2.leaderAndIsr.leader, partitionAndLeader._1) &&
         !topicDeletionManager.isTopicQueuedUpForDeletion(partitionAndLeader._1.topic)).keySet
 
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the newOfflineReplicas
@@ -935,10 +936,11 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def fetchTopicDeletionsInProgress(): (Set[String], Set[String]) = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val topicsToBeDeleted = zkClient.getTopicDeletions.toSet
     val topicsWithOfflineReplicas = controllerContext.allTopics.filter { topic => {
       val replicasForTopic = controllerContext.replicasForTopic(topic)
-      replicasForTopic.exists(r => !controllerContext.isReplicaOnline(r.replica, r.topicPartition))
+      replicasForTopic.exists(r => !controllerContextSnapshot.isReplicaOnline(r.replica, r.topicPartition))
     }}
     val topicsForWhichPartitionReassignmentIsInProgress = controllerContext.partitionsBeingReassigned.map(_.topic)
     val topicsIneligibleForDeletion = topicsWithOfflineReplicas | topicsForWhichPartitionReassignmentIsInProgress
@@ -1001,13 +1003,13 @@ class KafkaController(val config: KafkaConfig,
                                                       newAssignment: ReplicaAssignment): Unit = {
     val reassignedReplicas = newAssignment.replicas
     val currentLeader = controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader
-
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     if (!reassignedReplicas.contains(currentLeader)) {
       info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
         s"is not in the new list of replicas ${reassignedReplicas.mkString(",")}. Re-electing leader")
       // move the leader to one of the alive and caught up new replicas
       partitionStateMachine.handleStateChanges(Seq(topicPartition), OnlinePartition, Some(ReassignPartitionLeaderElectionStrategy))
-    } else if (controllerContext.isReplicaOnline(currentLeader, topicPartition)) {
+    } else if (controllerContextSnapshot.isReplicaOnline(currentLeader, topicPartition)) {
       info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
         s"is already in the new list of replicas ${reassignedReplicas.mkString(",")} and is alive")
       // shrink replication factor and update the leader epoch in zookeeper to use on the next LeaderAndIsrRequest
@@ -1225,6 +1227,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def checkAndTriggerAutoLeaderRebalance(): Unit = {
     trace("Checking need to trigger auto leader balancing")
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val preferredReplicasForTopicsByBrokers: Map[Int, Map[TopicPartition, Seq[Int]]] =
       controllerContext.allPartitions.filterNot {
         tp => topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)
@@ -1250,7 +1253,7 @@ class KafkaController(val config: KafkaConfig,
       if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
         // do this check only if the broker is live and there are no partitions being reassigned currently
         // and preferred replica election is not in progress
-        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContext.isReplicaOnline(leaderBroker, tp) &&
+        val candidatePartitions = topicsNotInPreferredReplica.keys.filter(tp => controllerContextSnapshot.isReplicaOnline(leaderBroker, tp) &&
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
           controllerContext.allTopics.contains(tp.topic))

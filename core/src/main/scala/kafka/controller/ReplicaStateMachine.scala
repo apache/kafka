@@ -55,11 +55,12 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
    * in zookeeper
    */
   private def initializeReplicaState(): Unit = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     controllerContext.allPartitions.foreach { partition =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(partition, replicaId)
-        if (controllerContext.isReplicaOnline(replicaId, partition)) {
+        if (controllerContextSnapshot.isReplicaOnline(replicaId, partition)) {
           controllerContext.putReplicaState(partitionAndReplica, OnlineReplica)
         } else {
           // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
