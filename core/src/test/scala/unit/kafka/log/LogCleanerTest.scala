@@ -1727,7 +1727,8 @@ class LogCleanerTest {
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      time = time,
+      scheduler = time.scheduler)
 
     def checkGauge(name: String): Unit = {
       val gauge = logCleaner.newGauge(name, () => 999)

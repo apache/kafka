@@ -103,11 +103,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val lastClean = allCleanerCheckpoints
             val now = Time.SYSTEM.milliseconds
             partitions.iterator.map { tp =>
-              val log = logs.get(tp)
-              val lastCleanOffset = lastClean.get(tp)
-              val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
-              val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
-              uncleanableBytes
+              Option(logs.get(tp)).map(
+                log => {
+                  val lastCleanOffset = lastClean.get(tp)
+                  val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
+                  val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
+                  uncleanableBytes
+                }
+              ).getOrElse(0L)
             }.sum
           case None => 0
         }
@@ -512,6 +515,28 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       uncleanablePartitions.get(log.parentDir).exists(partitions => partitions.contains(topicPartition))
     }
   }
+
+  def maintainUncleanablePartitions(): Unit = {
+    // Remove deleted partitions from uncleanablePartitions
+    inLock(lock) {
+      // Remove non-existing logDir
+      // Note: we don't use retain or filterInPlace method in this function because retain in deprecated in
+      // scala 2.13 while filterInPlace is not available in scala 2.12.
+      uncleanablePartitions.filterNot {
+        case (logDir, _) => logDirs.map(_.getAbsolutePath).contains(logDir)
+      }.keys.foreach {
+        uncleanablePartitions.remove(_)
+      }
+
+      uncleanablePartitions.values.foreach {
+        // Remove deleted partitions
+        partitions => partitions.filterNot(logs.contains(_)).foreach {
+          partitions.remove(_)
+        }
+      }
+    }
+  }
+
 }
 
 /**
