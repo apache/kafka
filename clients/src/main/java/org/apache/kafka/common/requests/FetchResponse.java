@@ -234,29 +234,36 @@ public class FetchResponse extends AbstractResponse {
                                                int sessionId,
                                                Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        partIterator.forEachRemaining(entry -> {
+        boolean hasInconsistentTopicId = false;
+        while (partIterator.hasNext()) {
+            Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry = partIterator.next();
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
+            if (partitionData.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
+                hasInconsistentTopicId = true;
+            }
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
-                : topicResponseList.get(topicResponseList.size() - 1);
+                    : topicResponseList.get(topicResponseList.size() - 1);
             if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topicPartition().topic()))
                 previousTopic.partitions().add(partitionData);
             else {
                 List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopic(entry.getKey().topicPartition().topic())
-                    .setTopicId(entry.getKey().topicId())
-                    .setPartitions(partitionResponses));
+                        .setTopic(entry.getKey().topicPartition().topic())
+                        .setTopicId(entry.getKey().topicId())
+                        .setPartitions(partitionResponses));
             }
-        });
+        }
+
+        short errorCode = hasInconsistentTopicId ? Errors.INCONSISTENT_TOPIC_ID.code() : error.code();
 
         return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setErrorCode(error.code())
+            .setErrorCode(errorCode)
             .setSessionId(sessionId)
             .setResponses(topicResponseList);
     }

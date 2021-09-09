@@ -415,10 +415,7 @@ class FullFetchContext(private val time: Time,
           hasInconsistentTopicIds = true
         }
         val reqData = fetchData.get(part)
-        val id = part.topicId
-        cachedPartitions.mustAdd(new CachedPartition(part.topicPartition, id, reqData, respData))
-        //if (id != Uuid.ZERO_UUID)
-          //sessionTopicIds.put(part.topicPartition.topic, id)
+        cachedPartitions.mustAdd(new CachedPartition(part.topicPartition, part.topicId, reqData, respData))
       }
       cachedPartitions
     }
