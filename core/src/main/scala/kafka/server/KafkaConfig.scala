@@ -1386,6 +1386,9 @@ object KafkaConfig {
     if (maybeSensitive) Password.HIDDEN else value
   }
 
+  /**
+   * Copy a configuration map, populating some keys that we want to treat as synonyms.
+   */
   def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
     val output = new util.HashMap[Any, Any](input)
     val brokerId = output.get(KafkaConfig.BrokerIdProp)
@@ -1399,11 +1402,14 @@ object KafkaConfig {
   }
 }
 
-class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
-  extends AbstractConfig(KafkaConfig.configDef, KafkaConfig.populateSynonyms(props), doLog) with Logging {
+class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynamicConfigOverride: Option[DynamicBrokerConfig])
+  extends AbstractConfig(KafkaConfig.configDef, props, doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(props, true, None)
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
+  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props), None)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props), None)
+  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) =
+    this(doLog, KafkaConfig.populateSynonyms(props), dynamicConfigOverride)
+
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
   private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
