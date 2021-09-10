@@ -157,7 +157,6 @@ class LogCleanerManagerTest extends Logging {
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(DirtyRatio, filthiestLog.logCleaningReason)
     assertEquals(tp2, filthiestLog.topicPartition)
     assertEquals(tp2, filthiestLog.log.topicPartition)
   }
@@ -177,7 +176,6 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.markPartitionUncleanable(logs.get(tp2).dir.getParent, tp2)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(DirtyRatio, filthiestLog.logCleaningReason)
     assertEquals(tp1, filthiestLog.topicPartition)
     assertEquals(tp1, filthiestLog.log.topicPartition)
   }
@@ -197,7 +195,6 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(DirtyRatio, filthiestLog.logCleaningReason)
     assertEquals(tp1, filthiestLog.topicPartition)
     assertEquals(tp1, filthiestLog.log.topicPartition)
   }
@@ -219,26 +216,6 @@ class LogCleanerManagerTest extends Logging {
 
     val filthiestLog: Option[LogToClean] = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals(None, filthiestLog)
-  }
-
-  @Test
-  def testGrabFilthiestCompactedLogReturnsLogWithDeleteHorizon(): Unit = {
-    val tp0 = new TopicPartition("wishing-well", 0)
-    val tp1 = new TopicPartition("wishing-well", 1)
-    val tp2 = new TopicPartition("wishing-well", 2)
-    val partitions = Seq(tp0, tp1, tp2)
-
-    // setup logs without any cleanable ranges: [20, 20], [20, 20], [20, 20]
-    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 0)
-    // modify latestDeleteHorizon for tp2 to signal that this log has tombstones ready for deletion
-    logs.get(tp2).latestDeleteHorizon = 0
-    val cleanerManager = createCleanerManagerMock(logs)
-    partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
-
-    val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-    assertEquals(DeleteHorizon, filthiestLog.logCleaningReason)
-    assertEquals(tp2, filthiestLog.topicPartition)
-    assertEquals(tp2, filthiestLog.log.topicPartition)
   }
 
   @Test

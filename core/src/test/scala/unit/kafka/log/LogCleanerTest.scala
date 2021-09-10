@@ -1872,9 +1872,9 @@ class LogCleanerTest {
    * Returns the first dirty offset in the log as a result of the second cleaning.
    */
   private def runTwoPassClean(cleaner: Cleaner, logToClean: LogToClean, currentTime: Long,
-                              legacyDeleteHorizonMs: Long = -1L, tombstoneRetentionMs: Long = 86400000) : Long = {
-    cleaner.doClean(logToClean, currentTime, legacyDeleteHorizonMs)
-    cleaner.doClean(logToClean, currentTime + tombstoneRetentionMs + 1, legacyDeleteHorizonMs)._1
+                              tombstoneRetentionMs: Long = 86400000) : Long = {
+    cleaner.doClean(logToClean, currentTime)
+    cleaner.doClean(logToClean, currentTime + tombstoneRetentionMs + 1)._1
   }
 }
 

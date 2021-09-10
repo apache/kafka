@@ -498,7 +498,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   private[log] def doClean(cleanable: LogToClean, currentTime: Long): (Long, CleanerStats) = {
-    info("Beginning cleaning of log %s due to %s.".format(cleanable.log.name, cleanable.logCleaningReason.getClass.getName))
+    info("Beginning cleaning of log %s".format(cleanable.log.name))
 
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
@@ -1097,8 +1097,7 @@ private case class LogToClean(topicPartition: TopicPartition,
                               log: UnifiedLog,
                               firstDirtyOffset: Long,
                               uncleanableOffset: Long,
-                              needCompactionNow: Boolean = false,
-                              var logCleaningReason: LogCleaningReason = DirtyRatio) extends Ordered[LogToClean] {
+                              needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes

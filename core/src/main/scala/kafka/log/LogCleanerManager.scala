@@ -30,7 +30,6 @@ import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{Iterable, Seq, mutable}
 
@@ -38,10 +37,6 @@ private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
 private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
-
-private[log] sealed trait LogCleaningReason
-private[log] case object DirtyRatio extends LogCleaningReason
-private[log] case object DeleteHorizon extends LogCleaningReason
 
 private[log] class LogCleaningException(val log: UnifiedLog,
                                         private val message: String,
@@ -192,7 +187,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
-            LogToClean(topicPartition, log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset, compactionDelayMs > 0, DirtyRatio)
+            LogToClean(topicPartition, log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset, compactionDelayMs > 0)
           } catch {
             case e: Throwable => throw new LogCleaningException(log,
               s"Failed to calculate log cleaning stats for partition $topicPartition", e)
@@ -205,23 +200,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio
       }
 
-      if (cleanableLogs.isEmpty) {
-        val logsWithTombstonesExpired = dirtyLogs.filter { ltc =>
-            // in this case, we are probably in a low throughput situation
-            // therefore, we should take advantage of this fact and remove tombstones if we can
-            // under the condition that the log's latest delete horizon is less than the current time
-            // tracked
-            ltc.log.latestDeleteHorizon != RecordBatch.NO_TIMESTAMP && ltc.log.latestDeleteHorizon <= time.milliseconds()
-        }
-        if (logsWithTombstonesExpired.nonEmpty) {
-          val filthiest = logsWithTombstonesExpired.max
-          filthiest.logCleaningReason = DeleteHorizon
-          inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
-          Some(filthiest)
-        } else {
-          None
-        }
-      } else {
+      if (cleanableLogs.isEmpty)
+        None
+      else {
         preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
