@@ -38,8 +38,8 @@ import static org.easymock.EasyMock.anyObject;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.reset;
@@ -84,6 +84,7 @@ public class RocksDBMetricsRecorderTest {
 
     @Before
     public void setUp() {
+        rocksDBMetricsMockedStatic = Mockito.mockStatic(RocksDBMetrics.class);
         setUpMetricsStubMock();
         when(streamsMetrics.rocksDBMetricsRecordingTrigger()).thenReturn(recordingTrigger);
         recorder.init(streamsMetrics, TASK_ID1);
@@ -106,20 +107,24 @@ public class RocksDBMetricsRecorderTest {
 
     @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentTask() {
+        setUpMetricsStubMock();
+        recorder.init(streamsMetrics, TASK_ID1);
         assertThrows(
-                IllegalStateException.class,
-                () -> recorder.init(streamsMetrics, TASK_ID2)
+            IllegalStateException.class,
+            () -> recorder.init(streamsMetrics, TASK_ID2)
         );
     }
 
     @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentStreamsMetrics() {
+        setUpMetricsStubMock();
+        recorder.init(streamsMetrics, TASK_ID1);
         assertThrows(
-                IllegalStateException.class,
-                () -> recorder.init(
-                        new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
-                        TASK_ID1
-                )
+            IllegalStateException.class,
+            () -> recorder.init(
+                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
+                TASK_ID1
+            )
         );
     }
 
@@ -140,14 +145,14 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd2)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd2)
         );
         assertThat(
-                exception.getMessage(),
-                is("Value providers for store " + SEGMENT_STORE_NAME_1 + " of task " + TASK_ID1 +
-                        " has been already added. This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Value providers for store " + SEGMENT_STORE_NAME_1 + " of task " + TASK_ID1 +
+                " has been already added. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -156,15 +161,15 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2)
         );
         assertThat(
-                exception.getMessage(),
-                is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
-                        " is not null although the statistics of another segment in this metrics recorder is null. " +
-                        "This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is not null although the statistics of another segment in this metrics recorder is null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -173,15 +178,15 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, null)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, null)
         );
         assertThat(
-                exception.getMessage(),
-                is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
-                        " is null although the statistics of another segment in this metrics recorder is not null. " +
-                        "This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is null although the statistics of another segment in this metrics recorder is not null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -190,15 +195,15 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, null, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd1)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd1)
         );
         assertThat(
-                exception.getMessage(),
-                is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
-                        " is not null although the cache of another segment in this metrics recorder is null. " +
-                        "This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is not null although the cache of another segment in this metrics recorder is null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -207,15 +212,15 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, null, statisticsToAdd2)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, null, statisticsToAdd2)
         );
         assertThat(
-                exception.getMessage(),
-                is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
-                        " is null although the cache of another segment in this metrics recorder is not null. " +
-                        "This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is null although the cache of another segment in this metrics recorder is not null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -225,14 +230,14 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd2);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd2, statisticsToAdd3)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd2, statisticsToAdd3)
         );
         assertThat(
-                exception.getMessage(),
-                is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
-                        " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+                " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -242,14 +247,14 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd1, statisticsToAdd3)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd1, statisticsToAdd3)
         );
         assertThat(
-                exception.getMessage(),
-                is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
-                        " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+                " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -258,14 +263,14 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
-                IllegalStateException.class,
-                () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd2, statisticsToAdd2)
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd2, statisticsToAdd2)
         );
         assertThat(
-                exception.getMessage(),
-                is("DB instance for store " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
-                        " was already added for another segment as a value provider. This is a bug in Kafka Streams. " +
-                        "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            exception.getMessage(),
+            is("DB instance for store " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " was already added for another segment as a value provider. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -330,8 +335,8 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         assertThrows(
-                IllegalStateException.class,
-                () -> recorder.removeValueProviders(SEGMENT_STORE_NAME_2)
+            IllegalStateException.class,
+            () -> recorder.removeValueProviders(SEGMENT_STORE_NAME_2)
         );
     }
 
@@ -427,31 +432,31 @@ public class RocksDBMetricsRecorderTest {
         rocksDBMetricsMockedStatic.close();
         rocksDBMetricsMockedStatic = Mockito.mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-                new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesWrittenToDatabaseSensor);
+            .thenReturn(bytesWrittenToDatabaseSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesReadFromDatabaseSensor);
+            .thenReturn(bytesReadFromDatabaseSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricsContext))
-                .thenReturn(memtableBytesFlushedSensor);
+            .thenReturn(memtableBytesFlushedSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(memtableHitRatioSensor);
+            .thenReturn(memtableHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.writeStallDurationSensor(streamsMetrics, metricsContext))
-                .thenReturn(writeStallDurationSensor);
+            .thenReturn(writeStallDurationSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheDataHitRatioSensor);
+            .thenReturn(blockCacheDataHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheIndexHitRatioSensor);
+            .thenReturn(blockCacheIndexHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheFilterHitRatioSensor);
+            .thenReturn(blockCacheFilterHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesWrittenDuringCompactionSensor);
+            .thenReturn(bytesWrittenDuringCompactionSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesReadDuringCompactionSensor);
+            .thenReturn(bytesReadDuringCompactionSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricsContext))
-                .thenReturn(numberOfOpenFilesSensor);
+            .thenReturn(numberOfOpenFilesSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
-                .thenReturn(numberOfFileErrorsSensor);
+            .thenReturn(numberOfFileErrorsSensor);
         RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
         RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), any());
         RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
@@ -477,34 +482,33 @@ public class RocksDBMetricsRecorderTest {
     }
 
     private void setUpMetricsStubMock() {
-        rocksDBMetricsMockedStatic = Mockito.mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-                new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
 
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesWrittenToDatabaseSensor);
+            .thenReturn(bytesWrittenToDatabaseSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesReadFromDatabaseSensor);
+            .thenReturn(bytesReadFromDatabaseSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricsContext))
-                .thenReturn(memtableBytesFlushedSensor);
+            .thenReturn(memtableBytesFlushedSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(memtableHitRatioSensor);
+            .thenReturn(memtableHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.writeStallDurationSensor(streamsMetrics, metricsContext))
-                .thenReturn(writeStallDurationSensor);
+            .thenReturn(writeStallDurationSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheDataHitRatioSensor);
+            .thenReturn(blockCacheDataHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheIndexHitRatioSensor);
+            .thenReturn(blockCacheIndexHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(streamsMetrics, metricsContext))
-                .thenReturn(blockCacheFilterHitRatioSensor);
+            .thenReturn(blockCacheFilterHitRatioSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesWrittenDuringCompactionSensor);
+            .thenReturn(bytesWrittenDuringCompactionSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricsContext))
-                .thenReturn(bytesReadDuringCompactionSensor);
+            .thenReturn(bytesReadDuringCompactionSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricsContext))
-                .thenReturn(numberOfOpenFilesSensor);
+            .thenReturn(numberOfOpenFilesSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
-                .thenReturn(numberOfFileErrorsSensor);
+            .thenReturn(numberOfFileErrorsSensor);
         RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
         RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), any());
         RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
