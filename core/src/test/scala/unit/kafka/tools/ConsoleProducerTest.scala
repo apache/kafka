@@ -115,4 +115,12 @@ class ConsoleProducerTest {
     assertEquals("producer-1",
       producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
   }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals("console-producer",
+      producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
+  }
 }
