@@ -36,7 +36,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStreamsBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
@@ -142,14 +142,14 @@ public class NamedTopologyIntegrationTest {
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
     // builders for the 1st Streams instance (default)
-    private final NamedTopologyStreamsBuilder topology1Builder = new NamedTopologyStreamsBuilder("topology-1");
-    private final NamedTopologyStreamsBuilder topology2Builder = new NamedTopologyStreamsBuilder("topology-2");
-    private final NamedTopologyStreamsBuilder topology3Builder = new NamedTopologyStreamsBuilder("topology-3");
+    private final NamedTopologyBuilder topology1Builder = new NamedTopologyBuilder("topology-1");
+    private final NamedTopologyBuilder topology2Builder = new NamedTopologyBuilder("topology-2");
+    private final NamedTopologyBuilder topology3Builder = new NamedTopologyBuilder("topology-3");
 
     // builders for the 2nd Streams instance
-    private final NamedTopologyStreamsBuilder topology1Builder2 = new NamedTopologyStreamsBuilder("topology-1");
-    private final NamedTopologyStreamsBuilder topology2Builder2 = new NamedTopologyStreamsBuilder("topology-2");
-    private final NamedTopologyStreamsBuilder topology3Builder2 = new NamedTopologyStreamsBuilder("topology-3");
+    private final NamedTopologyBuilder topology1Builder2 = new NamedTopologyBuilder("topology-1");
+    private final NamedTopologyBuilder topology2Builder2 = new NamedTopologyBuilder("topology-2");
+    private final NamedTopologyBuilder topology3Builder2 = new NamedTopologyBuilder("topology-3");
 
     private Properties props;
     private Properties props2;
@@ -203,10 +203,10 @@ public class NamedTopologyIntegrationTest {
         final String countTopologyName = "count-topology";
         final String fkjTopologyName = "FKJ-topology";
 
-        final NamedTopologyStreamsBuilder countBuilder = new NamedTopologyStreamsBuilder(countTopologyName);
+        final NamedTopologyBuilder countBuilder = new NamedTopologyBuilder(countTopologyName);
         countBuilder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count();
 
-        final NamedTopologyStreamsBuilder fkjBuilder = new NamedTopologyStreamsBuilder(fkjTopologyName);
+        final NamedTopologyBuilder fkjBuilder = new NamedTopologyBuilder(fkjTopologyName);
 
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
         final KTable<String, Long> left = fkjBuilder.table(
@@ -434,9 +434,9 @@ public class NamedTopologyIntegrationTest {
         );
     }
 
-    private List<NamedTopology> buildNamedTopologies(final NamedTopologyStreamsBuilder... builders) {
+    private List<NamedTopology> buildNamedTopologies(final NamedTopologyBuilder... builders) {
         final List<NamedTopology> topologies = new ArrayList<>();
-        for (final NamedTopologyStreamsBuilder builder : builders) {
+        for (final NamedTopologyBuilder builder : builders) {
             topologies.add(builder.buildNamedTopology(props));
         }
         return topologies;

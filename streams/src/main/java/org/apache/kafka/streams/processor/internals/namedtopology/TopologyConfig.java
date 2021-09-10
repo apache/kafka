@@ -46,7 +46,7 @@ import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
  * {@link org.apache.kafka.streams.KafkaStreams} or {@link KafkaStreamsNamedTopologyWrapper} constructors will
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
  * topology via the {@link org.apache.kafka.streams.StreamsBuilder#build(Properties)} or
- * {@link NamedTopologyStreamsBuilder#buildNamedTopology(Properties)} methods.
+ * {@link NamedTopologyBuilder#buildNamedTopology(Properties)} methods.
  */
 public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
@@ -83,6 +83,9 @@ public class TopologyConfig extends AbstractConfig {
     public final String topologyName;
     public final boolean eosEnabled;
 
+    public final StreamsConfig applicationConfigs;
+    public final Properties topologyOverrides;
+
     final long maxTaskIdleMs;
     final long taskTimeoutMs;
     final int maxBufferedSize;
@@ -94,6 +97,9 @@ public class TopologyConfig extends AbstractConfig {
 
         this.topologyName = topologyName;
         this.eosEnabled = StreamThread.eosEnabled(globalAppConfigs);
+
+        this.applicationConfigs = globalAppConfigs;
+        this.topologyOverrides = topologyOverrides;
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
             maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);

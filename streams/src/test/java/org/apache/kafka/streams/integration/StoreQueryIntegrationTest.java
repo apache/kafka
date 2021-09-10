@@ -34,7 +34,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStreamsBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -397,10 +397,10 @@ public class StoreQueryIntegrationTest {
         final Semaphore semaphore = new Semaphore(0);
         final int numStreamThreads = 2;
 
-        final NamedTopologyStreamsBuilder builder1A = new NamedTopologyStreamsBuilder("topology-A");
+        final NamedTopologyBuilder builder1A = new NamedTopologyBuilder("topology-A");
         getStreamsBuilderWithTopology(builder1A, semaphore);
 
-        final NamedTopologyStreamsBuilder builder2A = new NamedTopologyStreamsBuilder("topology-A");
+        final NamedTopologyBuilder builder2A = new NamedTopologyBuilder("topology-A");
         getStreamsBuilderWithTopology(builder2A, semaphore);
 
         final Properties streamsConfiguration1 = streamsConfiguration();
@@ -567,7 +567,7 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
-    private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final NamedTopologyStreamsBuilder builder, final Properties config) {
+    private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final NamedTopologyBuilder builder, final Properties config) {
         final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(builder.buildNamedTopology(config), config);
         streamsToCleanup.add(streams);
         return streams;

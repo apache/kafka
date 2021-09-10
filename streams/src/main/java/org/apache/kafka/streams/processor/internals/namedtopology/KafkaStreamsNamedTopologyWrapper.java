@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
@@ -113,9 +114,41 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
+     * Provides a high-level DSL for specifying the processing logic of your application and building it into an
+     * independent topology that can be executed by this {@link KafkaStreams}.
+     *
+     * @param topologyName              The name for this topology
+     * @param topologyConfigs           The properties and any config overrides for this topology
+     *
+     * @throws IllegalArgumentException if the name contains the character sequence "__"
+     */
+    public NamedTopologyBuilder newNamedTopologyBuilder(final String topologyName, final Properties topologyConfigs) {
+        if (topologyName.contains(TaskId.NAMED_TOPOLOGY_DELIMITER)) {
+            throw new IllegalArgumentException("The character sequence '__' is not allowed in a NamedTopology, please select a new name");
+        }
+        return new NamedTopologyBuilder(topologyName, applicationConfigs, topologyConfigs);
+    }
+
+    /**
+     * Returns an empty topology for full control over the graph of streams and processor nodes that define the processing
+     * logic to be executed by this {@link KafkaStreams}.
+     *
+     * @param topologyName              The name for this topology
+     * @param topologyConfigs           The properties and any config overrides for this topology
+     *
+     * @throws IllegalArgumentException if the name contains the character sequence "__"
+     */
+    public NamedTopology newNamedTopology(final String topologyName, final Properties topologyConfigs) {
+        if (topologyName.contains(TaskId.NAMED_TOPOLOGY_DELIMITER)) {
+            throw new IllegalArgumentException("The character sequence '__' is not allowed in a NamedTopology, please select a new name");
+        }
+        return new NamedTopology(topologyName, applicationConfigs, topologyConfigs);
+    }
+
+    /**
      * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
      */
-    public Optional<NamedTopology> getTopologyByName(final String name) {
+    public Optional<NamedTopology> lookupTopologyByName(final String name) {
         return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
@@ -131,7 +164,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public void addNamedTopology(final NamedTopology newTopology) {
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
-        } else if (getTopologyByName(newTopology.name()).isPresent()) {
+        } else if (lookupTopologyByName(newTopology.name()).isPresent()) {
             throw new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
                                                    " as another of the same name already exists");
         }
@@ -150,7 +183,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public void removeNamedTopology(final String topologyToRemove) {
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
-        } else if (!getTopologyByName(topologyToRemove).isPresent()) {
+        } else if (!lookupTopologyByName(topologyToRemove).isPresent()) {
             throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
 
@@ -171,7 +204,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws StreamsException if cleanup failed
      */
     public void cleanUpNamedTopology(final String name) {
-        if (getTopologyByName(name).isPresent()) {
+        if (lookupTopologyByName(name).isPresent()) {
             throw new IllegalStateException("Can't clean up local state for an active NamedTopology: " + name);
         }
         stateDirectory.clearLocalStateForNamedTopology(name);

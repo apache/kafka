@@ -66,6 +66,17 @@ import static org.apache.kafka.clients.consumer.OffsetResetStrategy.NONE;
 
 public class InternalTopologyBuilder {
 
+    public InternalTopologyBuilder() {
+        this.topologyName = null;
+        this.namedTopology = null;
+    }
+
+    public InternalTopologyBuilder(final NamedTopology namedTopology, final TopologyConfig topologyConfigs) {
+        this.topologyName = namedTopology.name();
+        this.namedTopology = namedTopology;
+        this.topologyConfigs = topologyConfigs;
+    }
+
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
     private static final String[] NO_PREDECESSORS = {};
 
@@ -135,13 +146,15 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private StreamsConfig applicationConfig = null;  // the global streams configs and default topology props
-    private Properties topologyOverrides = null;     // this topology's config overrides
-    private TopologyConfig topologyConfigs = null;
-
     // The name of the topology this builder belongs to, or null if none
-    private String topologyName;
-    private NamedTopology namedTopology;
+    private final String topologyName;
+    private final NamedTopology namedTopology;
+
+    // TODO KAFKA-13283: we still need to save the topology overrides here since we don't get the app configs until we
+    //  get passed in to the KafkaStreams, once we enforce all configs be passed in when constructing the topology then
+    //  we can make topologyConfigs final and drop the other
+    private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
+    private Properties topologyOverrides = null;
 
     private boolean hasPersistentStores = false;
 
@@ -342,18 +355,6 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public void setNamedTopology(final NamedTopology topology) {
-        final String topologyName = topology.name();
-        Objects.requireNonNull(topologyName, "topology name can't be null");
-        Objects.requireNonNull(topology, "named topology can't be null");
-        if (this.topologyName != null) {
-            log.error("Tried to reset the topologyName to {} but it was already set to {}", topologyName, this.topologyName);
-            throw new IllegalStateException("The topologyName has already been set to " + this.topologyName);
-        }
-        this.namedTopology = topology;
-        this.topologyName = topologyName;
-    }
-
     // public for testing only
     public final InternalTopologyBuilder setApplicationId(final String applicationId) {
         Objects.requireNonNull(applicationId, "applicationId can't be null");
@@ -366,9 +367,8 @@ public class InternalTopologyBuilder {
         this.topologyOverrides = props;
     }
 
-    public synchronized final void setStreamsConfig(final StreamsConfig config) {
-        Objects.requireNonNull(config, "config can't be null");
-        this.applicationConfig = config;
+    public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
+        Objects.requireNonNull(applicationConfig, "config can't be null");
         topologyConfigs = new TopologyConfig(
             topologyName,
             applicationConfig,
