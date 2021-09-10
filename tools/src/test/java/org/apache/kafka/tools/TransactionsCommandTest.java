@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
@@ -533,7 +534,8 @@ public class TransactionsCommandTest {
     ) {
         ListTopicsResult result = Mockito.mock(ListTopicsResult.class);
         Mockito.when(result.names()).thenReturn(completedFuture(topics));
-        Mockito.when(admin.listTopics()).thenReturn(result);
+        ListTopicsOptions listOptions = new ListTopicsOptions().listInternal(true);
+        Mockito.when(admin.listTopics(listOptions)).thenReturn(result);
     }
 
     private void expectDescribeTopics(
