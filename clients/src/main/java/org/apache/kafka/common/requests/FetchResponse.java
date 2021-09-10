@@ -229,6 +229,16 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
     }
 
+    private static boolean matchingTopic(FetchResponseData.FetchableTopicResponse previousTopic, TopicIdPartition currentTopic) {
+        if (previousTopic == null)
+            return false;
+        if (!previousTopic.topicId().equals(Uuid.ZERO_UUID))
+            return previousTopic.topicId().equals(currentTopic.topicId());
+        else
+            return previousTopic.topic().equals(currentTopic.topicPartition().topic());
+
+    }
+
     private static FetchResponseData toMessage(Errors error,
                                                int throttleTimeMs,
                                                int sessionId,
@@ -247,7 +257,7 @@ public class FetchResponse extends AbstractResponse {
             }
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
                     : topicResponseList.get(topicResponseList.size() - 1);
-            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topicPartition().topic()))
+            if (matchingTopic(previousTopic, entry.getKey()))
                 previousTopic.partitions().add(partitionData);
             else {
                 List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();

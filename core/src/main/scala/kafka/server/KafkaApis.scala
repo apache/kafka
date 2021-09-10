@@ -672,11 +672,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val (topicIds, topicNames) =
+    val topicNames =
       if (fetchRequest.version() >= 13)
-        metadataCache.topicIdInfo()
+        metadataCache.topicIdsToNames()
       else
-        (Collections.emptyMap[String, Uuid](), Collections.emptyMap[Uuid, String]())
+        Collections.emptyMap[Uuid, String]()
 
     // If fetchData or forgottenTopics contain an unknown topic ID, return a top level error.
     var fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData] = null
@@ -693,7 +693,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.metadata,
       fetchRequest.isFromFollower,
       fetchData,
-      forgottenTopics)
+      forgottenTopics,
+      topicNames)
 
     val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
       // Fetch API version 11 added preferred replica logic

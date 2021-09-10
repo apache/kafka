@@ -37,7 +37,7 @@ object FetchSession {
   type RESP_MAP = util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashCollection[CachedPartition]
   type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData]]
-  type TOPIC_ID_MAP = util.Map[String, Uuid]
+  type TOPIC_NAME_MAP = util.Map[Uuid, String]
 
   val NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions"
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
@@ -120,11 +120,11 @@ class CachedPartition(var topic: String,
     this.topic = name
   }
 
-  //def maybeResolveUnknownName(): Unit = {
-    //if (this.topic == null) {
-      //this.topic = topicNames.getOrDefault()
-    //}
-  //}
+  def maybeResolveUnknownName(topicNames: FetchSession.TOPIC_NAME_MAP): Unit = {
+    if (this.topic == null) {
+      this.topic = topicNames.get(this.topicId)
+    }
+  }
 
   /**
     * Determine whether or not the specified cached partition should be included in the FetchResponse we send back to
@@ -183,7 +183,7 @@ class CachedPartition(var topic: String,
         this.eq(that) ||
           (that.canEqual(this) &&
             this.partition.equals(that.partition) &&
-            this.topic.equals(that.topic) &&
+            (if (this.topic == null) this.topic == null && that.topic == null else this.topic.equals(that.topic)) &&
             this.topicId.equals(that.topicId))
       case _ => false
     }
@@ -437,10 +437,12 @@ class FullFetchContext(private val time: Time,
   * @param time         The clock to use.
   * @param reqMetadata  The request metadata.
   * @param session      The incremental fetch request session.
+  * @param topicNames   A mapping from topic ID to topic name used to resolve partitions already in the session.
   */
 class IncrementalFetchContext(private val time: Time,
                               private val reqMetadata: JFetchMetadata,
-                              private val session: FetchSession) extends FetchContext {
+                              private val session: FetchSession,
+                              private val topicNames: FetchSession.TOPIC_NAME_MAP) extends FetchContext {
 
   override def getFetchOffset(tp: TopicIdPartition): Option[Long] = session.getFetchOffset(tp)
 
@@ -448,6 +450,9 @@ class IncrementalFetchContext(private val time: Time,
     // Take the session lock and iterate over all the cached partitions.
     session.synchronized {
       session.partitionMap.forEach { part =>
+        // Try to resolve an unresolved partition if it does not yet have a name
+        if (session.usesTopicIds)
+          part.maybeResolveUnknownName(topicNames)
         fun(new TopicIdPartition(part.topicId, new TopicPartition(part.topic, part.partition)), part.reqData)
       }
     }
@@ -784,7 +789,8 @@ class FetchManager(private val time: Time,
                  reqMetadata: JFetchMetadata,
                  isFollower: Boolean,
                  fetchData: FetchSession.REQ_MAP,
-                 toForget: util.List[TopicIdPartition]): FetchContext = {
+                 toForget: util.List[TopicIdPartition],
+                 topicNames: FetchSession.TOPIC_NAME_MAP): FetchContext = {
     val context = if (reqMetadata.isFull) {
       var removedFetchSessionStr = ""
       if (reqMetadata.sessionId != INVALID_SESSION_ID) {
@@ -836,7 +842,7 @@ class FetchManager(private val time: Time,
                   s"epoch ${session.epoch}: added ${partitionsToLogString(added)}, " +
                   s"updated ${partitionsToLogString(updated)}, " +
                   s"removed ${partitionsToLogString(removed)}")
-                new IncrementalFetchContext(time, reqMetadata, session)
+                new IncrementalFetchContext(time, reqMetadata, session, topicNames)
               }
             }
           }
