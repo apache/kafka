@@ -115,5 +115,4 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
             .setErrorMessage(null)
             .setEntries(entries));
     }
-
 }

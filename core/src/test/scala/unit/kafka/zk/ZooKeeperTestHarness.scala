@@ -19,7 +19,7 @@ package kafka.zk
 
 import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.junit.jupiter.api.{AfterEach, AfterAll, BeforeEach, BeforeAll, Tag}
+import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.security.JaasUtils
 
@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
 @Tag("integration")
@@ -53,7 +54,7 @@ abstract class ZooKeeperTestHarness extends Logging {
   def setUp(): Unit = {
     zookeeper = new EmbeddedZookeeper()
     zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
-      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "ZooKeeperTestHarness", new ZKClientConfig)
     adminZkClient = new AdminZkClient(zkClient)
   }
 

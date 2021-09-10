@@ -17,6 +17,7 @@
 
 package kafka.log
 
+import kafka.api.KAFKA_3_0_IV1
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
+import scala.annotation.nowarn
 
 class LogConfigTest {
 
@@ -47,6 +49,7 @@ class LogConfigTest {
       })
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
@@ -54,12 +57,15 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+    // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
+    assertEquals(KAFKA_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
   }
 
   @Test
@@ -69,6 +75,7 @@ class LogConfigTest {
     assertEquals(LogConfig(), config)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.foreach(name => name match {
@@ -215,8 +222,8 @@ class LogConfigTest {
     props.put(LogConfig.RetentionMsProp, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(retentionMs, logConfig.localRetentionMs)
-    assertEquals(retentionBytes, logConfig.localRetentionBytes)
+    assertEquals(retentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(retentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
   }
 
   @Test
@@ -224,8 +231,8 @@ class LogConfigTest {
     val logConfig = new LogConfig( new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
-    assertEquals(Defaults.RetentionMs, logConfig.localRetentionMs)
-    assertEquals(Defaults.RetentionSize, logConfig.localRetentionBytes)
+    assertEquals(Defaults.RetentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(Defaults.RetentionSize, logConfig.remoteLogConfig.localRetentionBytes)
   }
 
   @Test
@@ -240,8 +247,8 @@ class LogConfigTest {
     props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(localRetentionMs, logConfig.localRetentionMs)
-    assertEquals(localRetentionBytes, logConfig.localRetentionBytes)
+    assertEquals(localRetentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(localRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
   }
 
   @Test

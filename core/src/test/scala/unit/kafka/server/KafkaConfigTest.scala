@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_0_8_2}
+import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
@@ -39,6 +39,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
@@ -256,6 +257,22 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControllerListenerDefined(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+
+    assertFalse(isValidKafkaConfig(props))
+    val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("controller.listener.names cannot be empty if the server has the controller role"))
+
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -382,6 +399,7 @@ class KafkaConfigTest {
     assertEquals(conf.advertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testVersionConfiguration(): Unit = {
     val props = new Properties()
@@ -530,6 +548,7 @@ class KafkaConfigTest {
     assertTrue(caught.getMessage.contains("advertised.listeners listener names must be equal to or a subset of the ones defined in listeners"))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
     def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
@@ -543,8 +562,11 @@ class KafkaConfigTest {
       ApiVersion.allVersions.foreach { messageFormatVersion =>
         if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
-          assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
+          if (interBrokerVersion >= KAFKA_3_0_IV1)
+            assertEquals(KAFKA_3_0_IV1, config.logMessageFormatVersion)
+          else
+            assertEquals(messageFormatVersion, config.logMessageFormatVersion)
         } else {
           assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
         }
@@ -603,6 +625,10 @@ class KafkaConfigTest {
         case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataLogDirProp => // ignore string
+        case KafkaConfig.MetadataLogSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataLogSegmentMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataMaxRetentionMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControllerListenerNamesProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
@@ -800,6 +826,7 @@ class KafkaConfigTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testDynamicLogConfigs(): Unit = {
     def baseProperties: Properties = {
@@ -1028,7 +1055,7 @@ class KafkaConfigTest {
 
   private def assertInvalidQuorumVoters(value: String): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    props.put(KafkaConfig.QuorumVotersProp, value)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1053,7 +1080,7 @@ class KafkaConfigTest {
 
   private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    props.put(KafkaConfig.QuorumVotersProp, value)
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
@@ -1066,6 +1093,7 @@ class KafkaConfigTest {
     val largeBrokerId = 2000
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
     assertTrue(isValidKafkaConfig(props))
   }
@@ -1092,6 +1120,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertFalse(isValidKafkaConfig(props))
   }
 
@@ -1168,6 +1197,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
     props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
   }
 
@@ -1181,6 +1211,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
     props.put(KafkaConfig.LogDirProp, dataDir)
     props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
 
     val config = KafkaConfig.fromProps(props)
@@ -1197,11 +1228,11 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
     props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
-
 }

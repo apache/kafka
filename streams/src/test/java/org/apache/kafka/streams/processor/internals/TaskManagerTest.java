@@ -47,6 +47,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
@@ -188,12 +189,18 @@ public class TaskManagerTest {
             new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            topologyBuilder,
+            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig()),
             adminClient,
             stateDirectory,
             processingMode
         );
         taskManager.setMainConsumer(consumer);
+        reset(topologyBuilder);
+        expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
+        activeTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
+        standbyTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
     }
 
     @Test
@@ -202,8 +209,10 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(emptyList());
+
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
+
         replay(activeTaskCreator, topologyBuilder);
 
         taskManager.handleAssignment(assignment, emptyMap());
@@ -577,9 +586,10 @@ public class TaskManagerTest {
     public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
-        replay(activeTaskCreator);
 
         setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+
+        replay(activeTaskCreator);
 
         taskManager.handleLostAll();
 
@@ -2761,6 +2771,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2771,8 +2782,8 @@ public class TaskManagerTest {
             final List<String> messages = appender.getMessages();
             assertThat(
                 messages,
-                hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
-                    "from the task partitions. It could potentially due to race " +
+                hasItem("taskManagerTestThe following revoked partitions [unknown-0] are missing " +
+                    "from the current task partitions. It could potentially be due to race " +
                     "condition of consumer detecting the heartbeat failure, or the " +
                     "tasks have been cleaned up by the handleAssignment callback.")
             );

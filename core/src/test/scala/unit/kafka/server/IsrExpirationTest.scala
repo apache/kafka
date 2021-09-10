@@ -21,9 +21,8 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -68,7 +67,7 @@ class IsrExpirationTest {
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, new MockConfigRepository())
+      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
   }
 
   @AfterEach
@@ -215,7 +214,7 @@ class IsrExpirationTest {
   }
 
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
-                                               localLog: Log): Partition = {
+                                               localLog: UnifiedLog): Partition = {
     val leaderId = config.brokerId
     val tp = new TopicPartition(topic, partitionId)
     val partition = replicaManager.createPartition(tp)
@@ -241,8 +240,8 @@ class IsrExpirationTest {
     partition
   }
 
-  private def logMock: Log = {
-    val log: Log = EasyMock.createMock(classOf[Log])
+  private def logMock: UnifiedLog = {
+    val log: UnifiedLog = EasyMock.createMock(classOf[UnifiedLog])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLogEndOffset)).anyTimes()
     EasyMock.expect(log.logEndOffset).andReturn(leaderLogEndOffset).anyTimes()

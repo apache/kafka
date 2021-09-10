@@ -86,12 +86,48 @@
               <code class="docutils literal"><span class="pre">close()</span></code> method. Note that Kafka Streams may re-use a single
               <code class="docutils literal"><span class="pre">Processor</span></code> object by calling
               <code class="docutils literal"><span class="pre">init()</span></code> on it again after <code class="docutils literal"><span class="pre">close()</span></code>.</p>
-            <p>When records are forwarded via downstream processors they also get a timestamp assigned. There are two different default behaviors:
-	       (1) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">#process()</span></code> the output record inherits the input record timestamp.
-	       (2) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">punctuate()</span></code></p> the output record inherits the current punctuation timestamp (either current 'stream time' or system wall-clock time).
-	       Note, that <code class="docutils literal"><span class="pre">#forward()</span></code> also allows to change the default behavior by passing a custom timestamp for the output record.</p>
-            <p>Specifically, <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code> accepts a user <code class="docutils literal"><span class="pre">Punctuator</span></code> callback interface, which triggers its <code class="docutils literal"><span class="pre">punctuate()</span></code>
-                API method periodically based on the <code class="docutils literal"><span class="pre">PunctuationType</span></code>. The <code class="docutils literal"><span class="pre">PunctuationType</span></code> determines what notion of time is used
+          <p>
+            The <code class="docutils literal"><span class="pre">Processor</span></code> interface takes two sets of generic parameters:
+            <code class="docutils literal"><span class="pre">KIn, VIn, KOut, VOut</span></code>. These define the input and output types
+            that the processor implementation can handle. <code class="docutils literal"><span class="pre">KIn</span></code> and
+            <code class="docutils literal"><span class="pre">VIn</span></code> define the key and value types that will be passed
+            to <code class="docutils literal"><span class="pre">process()</span></code>.
+            Likewise, <code class="docutils literal"><span class="pre">KOut</span></code> and <code class="docutils literal"><span class="pre">VOut</span></code>
+            define the forwarded key and value types that <code class="docutils literal"><span class="pre">ProcessorContext#forward()</span></code>
+            will accept. If your processor does not forward any records at all (or if it only forwards
+            <code class="docutils literal"><span class="pre">null</span></code> keys or values),
+            a best practice is to set the output generic type argument to
+            <code class="docutils literal"><span class="pre">Void</span></code>.
+            If it needs to forward multiple types that don't share a common superclass, you will
+            have to set the output generic type argument to <code class="docutils literal"><span class="pre">Object</span></code>.
+          </p>
+          <p>
+            Both the <code class="docutils literal"><span class="pre">Processor#process()</span></code>
+            and the <code class="docutils literal"><span class="pre">ProcessorContext#forward()</span></code>
+            methods handle records in the form of the <code class="docutils literal"><span class="pre">Record&lt;K, V&gt;</span></code>
+            data class. This class gives you access to the main components of a Kafka record:
+            the key, value, timestamp and headers. When forwarding records, you can use the
+            constructor to create a new <code class="docutils literal"><span class="pre">Record</span></code>
+            from scratch, or you can use the convenience builder methods to replace one of the
+            <code class="docutils literal"><span class="pre">Record</span></code>'s properties
+            and copy over the rest. For example,
+            <code class="docutils literal"><span class="pre">inputRecord.withValue(newValue)</span></code>
+            would copy the key, timestamp, and headers from
+            <code class="docutils literal"><span class="pre">inputRecord</span></code> while
+            setting the output record's value to <code class="docutils literal"><span class="pre">newValue</span></code>.
+            Note that this does not mutate <code class="docutils literal"><span class="pre">inputRecord</span></code>,
+            but instead creates a shallow copy. Beware that this is only a shallow copy, so if you
+            plan to mutate the key, value, or headers elsewhere in the program, you will want to
+            create a deep copy of those fields yourself.
+          </p>
+            <p>
+              In addition to handling incoming records via
+              <code class="docutils literal"><span class="pre">Processor#process()</span></code>,
+              you have the option to schedule periodic invocation (called "punctuation")
+              in your processor's <code class="docutils literal"><span class="pre">init()</span></code>
+              method by calling  <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code>
+              and passing it a  <code class="docutils literal"><span class="pre">Punctuator</span></code>.
+                The <code class="docutils literal"><span class="pre">PunctuationType</span></code> determines what notion of time is used
                 for the punctuation scheduling: either <a class="reference internal" href="../core-concepts.html#streams_time"><span class="std std-ref">stream-time</span></a> or wall-clock-time (by default, stream-time
                 is configured to represent event-time via <code class="docutils literal"><span class="pre">TimestampExtractor</span></code>). When stream-time is used, <code class="docutils literal"><span class="pre">punctuate()</span></code> is triggered purely
                 by data because stream-time is determined (and advanced forward) by the timestamps derived from the input data. When there
@@ -108,8 +144,10 @@
                 times inside <code class="docutils literal"><span class="pre">init()</span></code> method.</p>
             <div class="admonition attention">
                 <p class="first admonition-title"><b>Attention</b></p>
-                <p class="last">Stream-time is only advanced if all input partitions over all input topics have new data (with newer timestamps) available.
-                    If at least one partition does not have any new data available, stream-time will not be advanced and thus <code class="docutils literal"><span class="pre">punctuate()</span></code> will not be triggered if <code class="docutils literal"><span class="pre">PunctuationType.STREAM_TIME</span></code> was specified.
+                <p class="last">Stream-time is only advanced when Streams processes records.
+                  If there are no records to process, or if Streams is waiting for new records
+                  due to the <a class="reference internal" href="/documentation/#streamsconfigs_max.task.idle.ms">Task Idling</a>
+                  configuration, then the stream time will not advance and <code class="docutils literal"><span class="pre">punctuate()</span></code> will not be triggered if <code class="docutils literal"><span class="pre">PunctuationType.STREAM_TIME</span></code> was specified.
                     This behavior is independent of the configured timestamp extractor, i.e., using <code class="docutils literal"><span class="pre">WallclockTimestampExtractor</span></code> does not enable wall-clock triggering of <code class="docutils literal"><span class="pre">punctuate()</span></code>.</p>
             </div>
             <p><b>Example</b></p>
@@ -119,45 +157,42 @@
                 <li>In the <code class="docutils literal"><span class="pre">process()</span></code> method, upon each received record, split the value string into words, and update their counts into the state store (we will talk about this later in this section).</li>
                 <li>In the <code class="docutils literal"><span class="pre">punctuate()</span></code> method, iterate the local state store and send the aggregated counts to the downstream processor (we will talk about downstream processors later in this section), and commit the current stream state.</li>
             </ul>
-            <pre class="line-numbers"><code class="language-java">public class WordCountProcessor implements Processor&lt;String, String&gt; {
+            <pre class="line-numbers"><code class="language-java">public class WordCountProcessor implements Processor&lt;String, String, String, String&gt; {
+    private KeyValueStore&lt;String, Integer&gt; kvStore;
 
-  private ProcessorContext context;
-  private KeyValueStore&lt;String, Long&gt; kvStore;
+    @Override
+    public void init(final ProcessorContext&lt;String, String> context) {
+        context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -&gt; {
+            try (final KeyValueIterator&lt;String, Integer&gt; iter = kvStore.all()) {
+                while (iter.hasNext()) {
+                    final KeyValue&lt;String, Integer&gt; entry = iter.next();
+                    context.forward(new Record&lt;&gt;(entry.key, entry.value.toString(), timestamp));
+                }
+            }
+        });
+        kvStore = context.getStateStore("Counts");
+    }
 
-  @Override
-  @SuppressWarnings(&quot;unchecked&quot;)
-  public void init(ProcessorContext context) {
-      // keep the processor context locally because we need it in punctuate() and commit()
-      this.context = context;
+    @Override
+    public void process(final Record&lt;String, String&gt; record) {
+        final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\\W+");
 
-      // retrieve the key-value store named &quot;Counts&quot;
-      kvStore = (KeyValueStore) context.getStateStore(&quot;Counts&quot;);
+        for (final String word : words) {
+            final Integer oldValue = kvStore.get(word);
 
-      // schedule a punctuate() method every second based on stream-time
-      this.context.schedule(Duration.ofSeconds(1000), PunctuationType.STREAM_TIME, (timestamp) -&gt; {
-          KeyValueIterator&lt;String, Long&gt; iter = this.kvStore.all();
-          while (iter.hasNext()) {
-              KeyValue&lt;String, Long&gt; entry = iter.next();
-              context.forward(entry.key, entry.value.toString());
-          }
-          iter.close();
+            if (oldValue == null) {
+                kvStore.put(word, 1);
+            } else {
+                kvStore.put(word, oldValue + 1);
+            }
+        }
+    }
 
-          // commit the current processing progress
-          context.commit();
-      });
-  }
-
-  @Override
-  public void punctuate(long timestamp) {
-      // this method is deprecated and should not be used anymore
-  }
-
-  @Override
-  public void close() {
-      // close any resources managed by this processor
-      // Note: Do not close any StateStores as these are managed by the library
-  }
-
+    @Override
+    public void close() {
+        // close any resources managed by this processor
+        // Note: Do not close any StateStores as these are managed by the library
+    }
 }</code></pre>
             <div class="admonition note">
                 <p><b>Note</b></p>
@@ -428,12 +463,20 @@ builder.addSource("Source", "source-topic")
 builder.addSource("Source", "source-topic")
     // add the WordCountProcessor node which takes the source processor as its upstream processor.
     // the ProcessorSupplier provides the count store associated with the WordCountProcessor
-    .addProcessor("Process", new ProcessorSupplier&ltString, String&gt() {
-        public Processor&ltString, String&gt get() {
+    .addProcessor("Process", new ProcessorSupplier&lt;String, String, String, String&gt;() {
+        public Processor&lt;String, String, String, String&gt; get() {
             return new WordCountProcessor();
         }
-        public Set&ltStoreBuilder&lt?&gt&gt stores() {
-            return countStoreBuilder;
+
+        public Set&lt;StoreBuilder&lt;?&gt;&gt; stores() {
+            final StoreBuilder&lt;KeyValueStore&lt;String, Long&gt;&gt; countsStoreBuilder =
+                Stores
+                    .keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore("Counts"),
+                        Serdes.String(),
+                        Serdes.Long()
+                    );
+            return Collections.singleton(countsStoreBuilder);
         }
     }, "Source")
     // add the sink processor node that takes Kafka topic "sink-topic" as output

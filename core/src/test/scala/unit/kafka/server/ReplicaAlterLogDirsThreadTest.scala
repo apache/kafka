@@ -16,21 +16,22 @@
   */
 package kafka.server
 
-import java.util.Optional
+import java.util.{Collections, Optional}
 
 import kafka.api.Request
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.message.UpdateMetadataRequestData
+import org.apache.kafka.common.protocol.{Errors, ApiKeys}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
 import org.junit.jupiter.api.Assertions._
@@ -45,7 +46,23 @@ class ReplicaAlterLogDirsThreadTest {
 
   private val t1p0 = new TopicPartition("topic1", 0)
   private val t1p1 = new TopicPartition("topic1", 1)
+  private val topicId = Uuid.randomUuid()
+  private val topicIds = collection.immutable.Map("topic1" -> topicId)
+  private val topicNames = collection.immutable.Map(topicId -> "topic1")
   private val failedPartitions = new FailedPartitions
+
+  private val partitionStates = List(new UpdateMetadataRequestData.UpdateMetadataPartitionState()
+    .setTopicName("topic1")
+    .setPartitionIndex(0)
+    .setControllerEpoch(0)
+    .setLeader(0)
+    .setLeaderEpoch(0)).asJava
+
+  private val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
+    0, 0, 0, partitionStates, Collections.emptyList(), topicIds.asJava).build()
+  // TODO: support raft code?
+  private val metadataCache = new ZkMetadataCache(0)
+  metadataCache.updateMetadata(0, updateMetadataRequest)
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
@@ -87,12 +104,13 @@ class ReplicaAlterLogDirsThreadTest {
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
-    val futureLog = Mockito.mock(classOf[Log])
+    val futureLog = Mockito.mock(classOf[UnifiedLog])
 
     val leaderEpoch = 5
     val logEndOffset = 0
 
     when(partition.partitionId).thenReturn(partitionId)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
@@ -184,12 +202,13 @@ class ReplicaAlterLogDirsThreadTest {
     val partition = Mockito.mock(classOf[Partition])
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
-    val futureLog = Mockito.mock(classOf[Log])
+    val futureLog = Mockito.mock(classOf[UnifiedLog])
 
     val leaderEpoch = 5
     val logEndOffset = 0
 
     when(partition.partitionId).thenReturn(partitionId)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
@@ -259,6 +278,7 @@ class ReplicaAlterLogDirsThreadTest {
       fetchMaxBytes = ArgumentMatchers.eq(config.replicaFetchResponseMaxBytes),
       hardMaxBytesLimit = ArgumentMatchers.eq(false),
       fetchInfos = ArgumentMatchers.eq(Seq(topicPartition -> requestData)),
+      topicIds = ArgumentMatchers.eq(topicIds.asJava),
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
       isolationLevel = ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
@@ -418,11 +438,11 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val logT1p0: Log = createNiceMock(classOf[Log])
-    val logT1p1: Log = createNiceMock(classOf[Log])
+    val logT1p0: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val logT1p1: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     // one future replica mock because our mocking methods return same values for both future replicas
-    val futureLogT1p0: Log = createNiceMock(classOf[Log])
-    val futureLogT1p1: Log = createNiceMock(classOf[Log])
+    val futureLogT1p0: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLogT1p1: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partitionT1p0: Partition = createMock(classOf[Partition])
     val partitionT1p1: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
@@ -439,6 +459,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.partitionId).andStubReturn(partitionT1p0Id)
     expect(partitionT1p1.partitionId).andStubReturn(partitionT1p1Id)
 
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partitionT1p0)
     expect(replicaManager.getPartitionOrException(t1p1))
@@ -510,9 +531,9 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     // one future replica mock because our mocking methods return same values for both future replicas
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
@@ -527,6 +548,7 @@ class ReplicaAlterLogDirsThreadTest {
     //Stubs
     expect(partition.partitionId).andStubReturn(partitionId)
 
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(replicaManager.futureLocalLogOrException(t1p0)).andStubReturn(futureLog)
@@ -596,8 +618,8 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
@@ -608,6 +630,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(partition.truncateTo(capture(truncated), isFuture = EasyMock.eq(true))).anyTimes()
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     expect(replicaManager.futureLocalLogOrException(t1p0)).andStubReturn(futureLog)
     expect(replicaManager.futureLogExists(t1p0)).andStubReturn(true)
 
@@ -649,8 +672,8 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
@@ -663,6 +686,7 @@ class ReplicaAlterLogDirsThreadTest {
     //Stubs
     expect(partition.partitionId).andStubReturn(partitionId)
 
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(partition.truncateTo(capture(truncated), isFuture = EasyMock.eq(true))).once()
@@ -693,6 +717,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyInt(),
       EasyMock.anyInt(),
       EasyMock.anyInt(),
+      EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
@@ -737,8 +762,8 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
@@ -750,6 +775,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     expect(partition.partitionId).andStubReturn(partitionId)
 
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     expect(replicaManager.getPartitionOrException(t1p0))
         .andStubReturn(partition)
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
@@ -799,13 +825,14 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     //Stubs
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     stub(log, null, futureLog, partition, replicaManager)
 
     replay(replicaManager, logManager, quotaManager, partition, log)
@@ -835,7 +862,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError.nonEmpty)
     val request = fetchRequest.build()
     assertEquals(0, request.minBytes)
-    val fetchInfos = request.fetchData.asScala.toSeq
+    val fetchInfos = request.fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for first partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
@@ -848,8 +875,8 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
     val logManager: LogManager = createMock(classOf[LogManager])
-    val log: Log = createNiceMock(classOf[Log])
-    val futureLog: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
+    val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
@@ -857,6 +884,7 @@ class ReplicaAlterLogDirsThreadTest {
     val startOffset = 123
     expect(futureLog.logStartOffset).andReturn(startOffset).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.metadataCache).andStubReturn(metadataCache)
     stub(log, null, futureLog, partition, replicaManager)
 
     replay(replicaManager, logManager, quotaManager, partition, log, futureLog)
@@ -885,7 +913,7 @@ class ReplicaAlterLogDirsThreadTest {
     val fetchRequest = fetchRequestOpt.get
     assertFalse(fetchRequest.partitionData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
-    val fetchInfos = fetchRequest.fetchRequest.build().fetchData.asScala.toSeq
+    val fetchInfos = fetchRequest.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
@@ -899,7 +927,7 @@ class ReplicaAlterLogDirsThreadTest {
     val fetchRequest2 = fetchRequest2Opt.get
     assertFalse(fetchRequest2.partitionData.isEmpty)
     assertFalse(partitionsWithError2.nonEmpty)
-    val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData.asScala.toSeq
+    val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals(t1p0, fetchInfos2.head._1, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
@@ -912,7 +940,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError3.nonEmpty)
   }
 
-  def stub(logT1p0: Log, logT1p1: Log, futureLog: Log, partition: Partition,
+  def stub(logT1p0: UnifiedLog, logT1p1: UnifiedLog, futureLog: UnifiedLog, partition: Partition,
            replicaManager: ReplicaManager): IExpectationSetters[Option[Partition]] = {
     expect(replicaManager.localLog(t1p0)).andReturn(Some(logT1p0)).anyTimes()
     expect(replicaManager.localLogOrException(t1p0)).andReturn(logT1p0).anyTimes()
@@ -926,14 +954,15 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.onlinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
   }
 
-  def stubWithFetchMessages(logT1p0: Log, logT1p1: Log, futureLog: Log, partition: Partition, replicaManager: ReplicaManager,
-          responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]): IExpectationSetters[Unit] = {
+  def stubWithFetchMessages(logT1p0: UnifiedLog, logT1p1: UnifiedLog, futureLog: UnifiedLog, partition: Partition, replicaManager: ReplicaManager,
+                            responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]): IExpectationSetters[Unit] = {
     stub(logT1p0, logT1p1, futureLog, partition, replicaManager)
     expect(replicaManager.fetchMessages(
       EasyMock.anyLong(),
       EasyMock.anyInt(),
       EasyMock.anyInt(),
       EasyMock.anyInt(),
+      EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),

@@ -17,8 +17,8 @@
   "apiKey": 0,
   "type": "metadata",
   "name": "RegisterBrokerRecord",
-  "validVersions": "0-1",
-  "flexibleVersions": "1+",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },
@@ -48,7 +48,7 @@
     ]},
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The broker rack." },
-    { "name": "Fenced", "type": "bool", "versions": "1+", "default": "true",
+    { "name": "Fenced", "type": "bool", "versions": "0+", "default": "true",
       "about": "True if the broker is fenced." }
   ]
 }

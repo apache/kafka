@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -33,6 +34,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -54,6 +57,11 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     not supported by the fetch request version
  * - {@link Errors#CORRUPT_MESSAGE} If corrupt message encountered, e.g. when the broker scans the log to find
  *     the fetch offset after the index lookup
+ * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker or a partition in the session has
+ *     an ID that differs from the broker
+ * - {@link Errors#FETCH_SESSION_TOPIC_ID_ERROR} If the request version supports topic IDs but the session does not or vice versa,
+ *     or a topic ID in the request is inconsistent with a topic ID in the session
+ * - {@link Errors#INCONSISTENT_TOPIC_ID} If a topic ID in the session does not match the topic ID in the log
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse extends AbstractResponse {
@@ -71,6 +79,14 @@ public class FetchResponse extends AbstractResponse {
         return data;
     }
 
+    /**
+     * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
+     * Version 13 introduces topic IDs which can lead to a few new errors. If there is any unknown topic ID in the request, the
+     * response will contain a top-level UNKNOWN_TOPIC_ID error.
+     * If a request's topic ID usage is inconsistent with the session, we will return a top level FETCH_SESSION_TOPIC_ID_ERROR error.
+     * We may also return INCONSISTENT_TOPIC_ID error as a top-level error when a partition in the session has a topic ID
+     * inconsistent with the log.
+     */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
@@ -80,15 +96,23 @@ public class FetchResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData() {
+    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
                     responseData = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse ->
+                    data.responses().forEach(topicResponse -> {
+                        String name;
+                        if (version < 13) {
+                            name = topicResponse.topic();
+                        } else {
+                            name = topicNames.get(topicResponse.topicId());
+                        }
+                        if (name != null) {
                             topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition))
-                    );
+                                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                        }
+                    });
                 }
             }
         }
@@ -119,18 +143,27 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    // Fetch versions 13 and above should have topic IDs for all topics.
+    // Fetch versions < 13 should return the empty set.
+    public Set<Uuid> topicIds() {
+        return data.responses().stream().map(FetchResponseData.FetchableTopicResponse::topicId).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
+    }
+
     /**
      * Convenience method to find the size of a response.
      *
      * @param version       The version of the response to use.
      * @param partIterator  The partition iterator.
+     * @param topicIds      The mapping from topic name to topic ID.
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+                             Iterator<Map.Entry<TopicPartition,
+                             FetchResponseData.PartitionData>> partIterator,
+                             Map<String, Uuid> topicIds) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator);
+        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, topicIds);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -189,17 +222,20 @@ public class FetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
+    // TODO: remove as a part of KAFKA-12410
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
                                    int sessionId,
-                                   LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData) {
-        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
+                                   LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData,
+                                   Map<String, Uuid> topicIds) {
+        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), topicIds));
     }
 
     private static FetchResponseData toMessage(Errors error,
                                                int throttleTimeMs,
                                                int sessionId,
-                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator,
+                                               Map<String, Uuid> topicIds) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         partIterator.forEachRemaining(entry -> {
             FetchResponseData.PartitionData partitionData = entry.getValue();
@@ -216,6 +252,7 @@ public class FetchResponse extends AbstractResponse {
                 partitionResponses.add(partitionData);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                     .setTopic(entry.getKey().topic())
+                    .setTopicId(topicIds.getOrDefault(entry.getKey().topic(), Uuid.ZERO_UUID))
                     .setPartitions(partitionResponses));
             }
         });

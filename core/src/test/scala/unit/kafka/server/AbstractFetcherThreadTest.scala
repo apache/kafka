@@ -30,7 +30,8 @@ import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
+import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException, UnknownTopicIdException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -39,6 +40,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -51,6 +53,8 @@ import scala.compat.java8.OptionConverters._
 class AbstractFetcherThreadTest {
 
   val truncateOnFetch = true
+  val topicIds = Map("topic1" -> Uuid.randomUuid(), "topic2" -> Uuid.randomUuid()).asJava
+  val version = ApiKeys.FETCH.latestVersion()
   private val partition1 = new TopicPartition("topic1", 0)
   private val partition2 = new TopicPartition("topic2", 0)
   private val failedPartitions = new FailedPartitions
@@ -139,6 +143,46 @@ class AbstractFetcherThreadTest {
     val replicaState = fetcher.replicaPartitionState(partition)
     assertEquals(2L, replicaState.logEndOffset)
     assertEquals(2L, replicaState.highWatermark)
+  }
+
+  @Test
+  def testDelay(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val fetchBackOffMs = 250
+
+    class ErrorMockFetcherThread(fetchBackOffMs: Int)
+      extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
+
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+         throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
+      }
+    }
+    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = fetchBackOffMs)
+
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition -> initialFetchState(0L, leaderEpoch = 0)))
+
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0,
+      new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
+    val leaderState = MockFetcherThread.PartitionState(Seq(batch), leaderEpoch = 0, highWatermark = 2L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    // Do work for the first time. This should result in all partitions in error.
+    val timeBeforeFirst = System.currentTimeMillis()
+    fetcher.doWork()
+    val timeAfterFirst = System.currentTimeMillis()
+    val firstWorkDuration = timeAfterFirst - timeBeforeFirst
+
+    // The second doWork will pause for fetchBackOffMs since all partitions will be delayed
+    val timeBeforeSecond = System.currentTimeMillis()
+    fetcher.doWork()
+    val timeAfterSecond = System.currentTimeMillis()
+    val secondWorkDuration = timeAfterSecond - timeBeforeSecond
+
+    assertTrue(firstWorkDuration < secondWorkDuration)
+    // The second call should have taken more than fetchBackOffMs
+    assertTrue(fetchBackOffMs <= secondWorkDuration,
+      "secondWorkDuration: " + secondWorkDuration + " was not greater than or equal to fetchBackOffMs: " + fetchBackOffMs)
   }
 
   @Test
@@ -434,6 +478,48 @@ class AbstractFetcherThreadTest {
     // No truncations occurred and we have fetched another record
     assertEquals(1, truncations)
     assertEquals(2, replicaState.logEndOffset)
+  }
+
+  @Test
+  def testTruncationOnFetchSkippedIfPartitionRemoved(): Unit = {
+    assumeTrue(truncateOnFetch)
+    val partition = new TopicPartition("topic", 0)
+    var truncations = 0
+    val fetcher = new MockFetcherThread {
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        truncations += 1
+        super.truncate(topicPartition, truncationState)
+      }
+    }
+    val replicaLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 2L)
+    fetcher.setReplicaState(partition, replicaState)
+
+    // Verify that truncation based on fetch response is performed if partition is owned by fetcher thread
+    fetcher.addPartitions(Map(partition -> initialFetchState(6L, leaderEpoch = 4)))
+    val endOffset = new EpochEndOffset()
+      .setPartition(partition.partition)
+      .setErrorCode(Errors.NONE.code)
+      .setLeaderEpoch(4)
+      .setEndOffset(3L)
+    fetcher.truncateOnFetchResponse(Map(partition -> endOffset))
+    assertEquals(1, truncations)
+
+    // Verify that truncation based on fetch response is not performed if partition is removed from fetcher thread
+    val offsets = fetcher.removePartitions(Set(partition))
+    assertEquals(Set(partition), offsets.keySet)
+    assertEquals(3L, offsets(partition).fetchOffset)
+    val newEndOffset = new EpochEndOffset()
+      .setPartition(partition.partition)
+      .setErrorCode(Errors.NONE.code)
+      .setLeaderEpoch(4)
+      .setEndOffset(2L)
+    fetcher.truncateOnFetchResponse(Map(partition -> newEndOffset))
+    assertEquals(1, truncations)
   }
 
   @Test
@@ -863,11 +949,12 @@ class AbstractFetcherThreadTest {
     }
   }
 
-  class MockFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1)
+  class MockFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1, fetchBackOffMs: Int = 0)
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
       failedPartitions,
+      fetchBackOffMs = fetchBackOffMs,
       brokerTopicStats = new BrokerTopicStats) {
 
     import MockFetcherThread.PartitionState
@@ -989,8 +1076,13 @@ class AbstractFetcherThreadTest {
             1024 * 1024, Optional.of[Integer](state.currentLeaderEpoch), lastFetchedEpoch))
         }
       }
-      val fetchRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 1, fetchData.asJava)
-      ResultWithPartitions(Some(ReplicaFetch(fetchData.asJava, fetchRequest)), Set.empty)
+      val fetchRequest = FetchRequest.Builder.forReplica(version, replicaId, 0, 1, fetchData.asJava, topicIds)
+      val fetchRequestOpt =
+        if (fetchData.isEmpty)
+          None
+        else
+          Some(ReplicaFetch(fetchData.asJava, fetchRequest))
+      ResultWithPartitions(fetchRequestOpt, Set.empty)
     }
 
     override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {

@@ -33,6 +33,7 @@ import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -40,6 +41,7 @@ import scala.jdk.CollectionConverters._
 class LogLoaderTest {
   var config: KafkaConfig = null
   val brokerTopicStats = new BrokerTopicStats
+  val maxProducerIdExpirationMs: Int = 60 * 60 * 1000
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
@@ -65,7 +67,7 @@ class LogLoaderTest {
     val logConfig = LogConfig(logProps)
     val logDirs = Seq(logDir)
     val topicPartition = new TopicPartition("foo", 0)
-    var log: Log = null
+    var log: UnifiedLog = null
     val time = new MockTime()
     var cleanShutdownInterceptedValue = false
     case class SimulateError(var hasError: Boolean = false)
@@ -78,36 +80,40 @@ class LogLoaderTest {
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
         retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
-        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size), keepPartitionMetadataFile = config.usesTopicId) {
+        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+        keepPartitionMetadataFile = config.usesTopicId, interBrokerProtocolVersion = config.interBrokerProtocolVersion) {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
-                             logStartOffsets: Map[TopicPartition, Long], topicConfigs: Map[String, LogConfig]): Log = {
+                             logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
+                             topicConfigs: Map[String, LogConfig]): UnifiedLog = {
           if (simulateError.hasError) {
             throw new RuntimeException("Simulated error")
           }
           cleanShutdownInterceptedValue = hadCleanShutdown
-          val topicPartition = Log.parseTopicPartitionName(logDir)
-          val config = topicConfigs.getOrElse(topicPartition.topic, currentDefaultConfig)
+          val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
+          val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
           val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val maxProducerIdExpirationMs = 60 * 60 * 1000
           val segments = new LogSegments(topicPartition)
-          val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+          val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
           val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, time)
           val loadLogParams = LoadLogParams(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
             maxProducerIdExpirationMs, leaderEpochCache, producerStateManager)
           val offsets = LogLoader.load(loadLogParams)
-          new Log(logDir, config, segments, offsets.logStartOffset, offsets.recoveryPoint,
-            offsets.nextOffsetMetadata, time.scheduler, brokerTopicStats, time,
-            LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-            producerStateManager, logDirFailureChannel, None, true)
+          val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+            offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+            logDirFailureChannel)
+          new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
+            LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+            producerStateManager, None, true)
         }
       }
     }
 
-    val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
+    val cleanShutdownFile = new File(logDir, LogLoader.CleanShutdownFile)
     locally {
       val logManager: LogManager = interceptedLogManager(logConfig, logDirs, simulateError)
       log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
@@ -115,12 +121,14 @@ class LogLoaderTest {
       // Load logs after a clean shutdown
       Files.createFile(cleanShutdownFile.toPath)
       cleanShutdownInterceptedValue = false
-      logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
+      var defaultConfig = logManager.currentDefaultConfig
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertTrue(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
       assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Load logs without clean shutdown file
       cleanShutdownInterceptedValue = true
-      logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
+      defaultConfig = logManager.currentDefaultConfig
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
       assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
       // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
@@ -134,12 +142,16 @@ class LogLoaderTest {
       log = logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
 
       // Simulate error
-      assertThrows(classOf[RuntimeException], () => logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty)))
+      assertThrows(classOf[RuntimeException], () => {
+        val defaultConfig = logManager.currentDefaultConfig
+        logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
+      })
       assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not have existed")
       // Do not simulate error on next call to LogManager#loadLogs. LogManager must understand that log had unclean shutdown the last time.
       simulateError.hasError = false
       cleanShutdownInterceptedValue = true
-      logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
+      val defaultConfig = logManager.currentDefaultConfig
+      logManager.loadLogs(defaultConfig, logManager.fetchTopicConfigOverrides(defaultConfig, Set.empty))
       assertFalse(cleanShutdownInterceptedValue, "Unexpected value for clean shutdown flag")
     }
   }
@@ -161,14 +173,14 @@ class LogLoaderTest {
                         recoveryPoint: Long = 0L,
                         scheduler: Scheduler = mockTime.scheduler,
                         time: Time = mockTime,
-                        maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+                        maxProducerIdExpirationMs: Int = maxProducerIdExpirationMs,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
-                        lastShutdownClean: Boolean = true): Log = {
+                        lastShutdownClean: Boolean = true): UnifiedLog = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean)
   }
 
-  private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
+  private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {
     LogTestUtils.initializeLogDirWithOverflowedSegment(logDir)
 
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
@@ -179,7 +191,7 @@ class LogLoaderTest {
     (log, segmentWithOverflow)
   }
 
-  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
+  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): UnifiedLog = {
     // method is called only in case of recovery from hard reset
     LogTestUtils.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler)
   }
@@ -203,8 +215,12 @@ class LogLoaderTest {
     builder.build()
   }
 
+  @nowarn("cat=deprecation")
   private def testProducerSnapshotsRecoveryAfterUncleanShutdown(messageFormatVersion: String): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 64 * 10, messageFormatVersion = messageFormatVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "640")
+    logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
+    val logConfig = LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
@@ -241,7 +257,7 @@ class LogLoaderTest {
 
     def createLogWithInterceptedReads(recoveryPoint: Long) = {
       val maxProducerIdExpirationMs = 60 * 60 * 1000
-      val topicPartition = Log.parseTopicPartitionName(logDir)
+      val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
       val logDirFailureChannel = new LogDirFailureChannel(10)
       // Intercept all segment read calls
       val interceptedLogSegments = new LogSegments(topicPartition) {
@@ -263,7 +279,7 @@ class LogLoaderTest {
           super.add(wrapper)
         }
       }
-      val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.messageFormatVersion.recordVersion, "")
+      val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
       val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs, mockTime)
       val loadLogParams = LoadLogParams(
         logDir,
@@ -280,10 +296,12 @@ class LogLoaderTest {
         leaderEpochCache,
         producerStateManager)
       val offsets = LogLoader.load(loadLogParams)
-      new Log(logDir, logConfig, interceptedLogSegments, offsets.logStartOffset, offsets.recoveryPoint,
-        offsets.nextOffsetMetadata, mockTime.scheduler, brokerTopicStats, mockTime,
-        LogManager.ProducerIdExpirationCheckIntervalMs, topicPartition, leaderEpochCache,
-        producerStateManager, logDirFailureChannel, _topicId = None, keepPartitionMetadataFile = true)
+      val localLog = new LocalLog(logDir, logConfig, interceptedLogSegments, offsets.recoveryPoint,
+        offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+        logDirFailureChannel)
+      new UnifiedLog(offsets.logStartOffset, localLog, brokerTopicStats,
+        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache, producerStateManager,
+        None, keepPartitionMetadataFile = true)
     }
 
     // Retain snapshots for the last 2 segments
@@ -331,12 +349,12 @@ class LogLoaderTest {
 
     EasyMock.replay(stateManager)
 
-    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
     val config = LogConfig(new Properties())
     val maxProducerIdExpirationMs = 300000
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -351,20 +369,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    val log = new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    val log = new UnifiedLog(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -398,7 +411,6 @@ class LogLoaderTest {
     EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
     // We skip directly to updating the map end offset
     EasyMock.expect(stateManager.updateMapEndOffset(1L))
-    EasyMock.expect(stateManager.onHighWatermarkUpdated(0L))
 
     // Finally, we take a snapshot
     stateManager.takeSnapshot()
@@ -444,6 +456,7 @@ class LogLoaderTest {
     log.close()
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
     val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
@@ -463,14 +476,14 @@ class LogLoaderTest {
 
     EasyMock.replay(stateManager)
 
-    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
     val config = LogConfig(logProps)
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -485,26 +498,22 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new UnifiedLog(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndCleanShutdown(): Unit = {
     val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
@@ -524,14 +533,14 @@ class LogLoaderTest {
 
     EasyMock.replay(stateManager)
 
-    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
     val config = LogConfig(logProps)
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -546,26 +555,22 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new UnifiedLog(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
     EasyMock.verify(stateManager)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testSkipTruncateAndReloadIfNewMessageFormatAndCleanShutdown(): Unit = {
     val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
@@ -587,14 +592,14 @@ class LogLoaderTest {
 
     EasyMock.replay(stateManager)
 
-    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logProps = new Properties()
     logProps.put(LogConfig.MessageFormatVersionProp, "0.11.0")
     val config = LogConfig(logProps)
     val maxProducerIdExpirationMs = 300000
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.messageFormatVersion.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val offsets = LogLoader.load(LoadLogParams(
       logDir,
       topicPartition,
@@ -609,20 +614,15 @@ class LogLoaderTest {
       maxProducerIdExpirationMs,
       leaderEpochCache,
       stateManager))
-    new Log(logDir,
-      config,
-      segments = segments,
-      logStartOffset = offsets.logStartOffset,
-      recoveryPoint = offsets.recoveryPoint,
-      nextOffsetMetadata = offsets.nextOffsetMetadata,
-      scheduler = mockTime.scheduler,
+    val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
+      logDirFailureChannel)
+    new UnifiedLog(offsets.logStartOffset,
+      localLog,
       brokerTopicStats = brokerTopicStats,
-      time = mockTime,
       producerIdExpirationCheckIntervalMs = 30000,
-      topicPartition = topicPartition,
       leaderEpochCache = leaderEpochCache,
       producerStateManager = stateManager,
-      logDirFailureChannel = logDirFailureChannel,
       _topicId = None,
       keepPartitionMetadataFile = true)
 
@@ -682,7 +682,7 @@ class LogLoaderTest {
     // We expect 3 snapshot files, two of which are for the first two segments, the last was written out during log closing.
     assertEquals(Seq(1, 2, 4), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
     // Inject a stray snapshot file within the bounds of the log at offset 3, it should be cleaned up after loading the log
-    val straySnapshotFile = Log.producerSnapshotFile(logDir, 3).toPath
+    val straySnapshotFile = UnifiedLog.producerSnapshotFile(logDir, 3).toPath
     Files.createFile(straySnapshotFile)
     assertEquals(Seq(1, 2, 3, 4), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
 
@@ -756,7 +756,7 @@ class LogLoaderTest {
     }
     log.close()
 
-    def verifyRecoveredLog(log: Log, expectedRecoveryPoint: Long): Unit = {
+    def verifyRecoveredLog(log: UnifiedLog, expectedRecoveryPoint: Long): Unit = {
       assertEquals(expectedRecoveryPoint, log.recoveryPoint, s"Unexpected recovery point")
       assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
       assertEquals(lastIndexOffset, log.activeSegment.offsetIndex.lastOffset, "Should have same last index offset as before.")
@@ -817,11 +817,16 @@ class LogLoaderTest {
   /**
    * Test that if messages format version of the messages in a segment is before 0.10.0, the time index should be empty.
    */
+  @nowarn("cat=deprecation")
   @Test
   def testRebuildTimeIndexForOldMessages(): Unit = {
     val numMessages = 200
     val segmentSize = 200
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = 1, messageFormatVersion = "0.9.0")
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, segmentSize.toString)
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.9.0")
+    val logConfig = LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
@@ -888,10 +893,10 @@ class LogLoaderTest {
    */
   @Test
   def testBogusIndexSegmentsAreRemoved(): Unit = {
-    val bogusIndex1 = Log.offsetIndexFile(logDir, 0)
-    val bogusTimeIndex1 = Log.timeIndexFile(logDir, 0)
-    val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
-    val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
+    val bogusIndex1 = UnifiedLog.offsetIndexFile(logDir, 0)
+    val bogusTimeIndex1 = UnifiedLog.timeIndexFile(logDir, 0)
+    val bogusIndex2 = UnifiedLog.offsetIndexFile(logDir, 5)
+    val bogusTimeIndex2 = UnifiedLog.timeIndexFile(logDir, 5)
 
     // The files remain absent until we first access it because we are doing lazy loading for time index and offset index
     // files but in this test case we need to create these files in order to test we will remove them.
@@ -1017,7 +1022,7 @@ class LogLoaderTest {
     //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = Integer.MAX_VALUE+2
     log.appendAsFollower(set2)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
+    assertTrue(UnifiedLog.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
     //This will go into the existing log
     log.appendAsFollower(set3)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
@@ -1035,17 +1040,22 @@ class LogLoaderTest {
     Utils.delete(logDir)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheClearedAfterStaticMessageFormatDowngrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 65536)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
     log.close()
 
     // reopen the log with an older message format version and check the cache
-    val downgradedLogConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
-      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, "1000")
+    logProps.put(LogConfig.IndexIntervalBytesProp, "1")
+    logProps.put(LogConfig.MaxMessageBytesProp, "65536")
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.10.2")
+    val downgradedLogConfig = LogConfig(logProps)
     val reopened = createLog(logDir, downgradedLogConfig, lastShutdownClean = false)
     LogTestUtils.assertLeaderEpochCacheEmpty(reopened)
 
@@ -1075,7 +1085,7 @@ class LogLoaderTest {
     //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = Integer.MAX_VALUE+2
     log.appendAsFollower(set2)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
+    assertTrue(UnifiedLog.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
     //This will go into the existing log
     log.appendAsFollower(set3)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
@@ -1115,11 +1125,11 @@ class LogLoaderTest {
     //This write will roll the segment, yielding a new segment with base offset = max(1, 3) = 3
     log.appendAsFollower(set2)
     assertEquals(3, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, 3).exists)
+    assertTrue(UnifiedLog.producerSnapshotFile(logDir, 3).exists)
     //This will also roll the segment, yielding a new segment with base offset = max(5, Integer.MAX_VALUE+4) = Integer.MAX_VALUE+4
     log.appendAsFollower(set3)
     assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 4).exists)
+    assertTrue(UnifiedLog.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 4).exists)
     //This will go into the existing log
     log.appendAsFollower(set4)
     assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
@@ -1165,11 +1175,11 @@ class LogLoaderTest {
     // Simulate recovery just after .cleaned file is created, before rename to .swap. On recovery, existing split
     // operation is aborted but the recovery process itself kicks off split which should complete.
     newSegments.reverse.foreach(segment => {
-      segment.changeFileSuffixes("", Log.CleanedFileSuffix)
+      segment.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
       segment.truncateTo(0)
     })
-    for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+    for (file <- logDir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")))
 
     val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog))
@@ -1191,13 +1201,13 @@ class LogLoaderTest {
     // operation is aborted but the recovery process itself kicks off split which should complete.
     newSegments.reverse.foreach { segment =>
       if (segment != newSegments.last)
-        segment.changeFileSuffixes("", Log.CleanedFileSuffix)
+        segment.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
       else
-        segment.changeFileSuffixes("", Log.SwapFileSuffix)
+        segment.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
       segment.truncateTo(0)
     }
-    for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+    for (file <- logDir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")))
 
     val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTestUtils.keysInLog(recoveredLog))
@@ -1218,10 +1228,10 @@ class LogLoaderTest {
     // Simulate recovery right after all new segments have been renamed to .swap. On recovery, existing split operation
     // is completed and the old segment must be deleted.
     newSegments.reverse.foreach(segment => {
-      segment.changeFileSuffixes("", Log.SwapFileSuffix)
+      segment.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
     })
-    for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+    for (file <- logDir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.DeletedFileSuffix, "")))
 
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
@@ -1244,9 +1254,9 @@ class LogLoaderTest {
 
     // Simulate recovery right after all new segments have been renamed to .swap and old segment has been deleted. On
     // recovery, existing split operation is completed.
-    newSegments.reverse.foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
+    newSegments.reverse.foreach(_.changeFileSuffixes("", UnifiedLog.SwapFileSuffix))
 
-    for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
+    for (file <- logDir.listFiles if file.getName.endsWith(UnifiedLog.DeletedFileSuffix))
       Utils.delete(file)
 
     // Truncate the old segment
@@ -1270,7 +1280,7 @@ class LogLoaderTest {
 
     // Simulate recovery right after one of the new segment has been renamed to .swap and the other to .log. On
     // recovery, existing split operation is completed.
-    newSegments.last.changeFileSuffixes("", Log.SwapFileSuffix)
+    newSegments.last.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
 
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
@@ -1528,7 +1538,7 @@ class LogLoaderTest {
     assertEquals(startOffset, log.logStartOffset)
     assertEquals(startOffset, log.logEndOffset)
     // Validate that the remaining segment matches our expectations
-    val onlySegment = log.segments.firstSegment.get
+    val onlySegment = log.logSegments.head
     assertEquals(startOffset, onlySegment.baseOffset)
     assertTrue(onlySegment.log.file().exists())
     assertTrue(onlySegment.lazyOffsetIndex.file.exists())
@@ -1603,7 +1613,7 @@ class LogLoaderTest {
     assertEquals(4, log.logEndOffset)
 
     val offsetsWithSnapshotFiles = (1 until 5)
-        .map(offset => SnapshotFile(Log.producerSnapshotFile(logDir, offset)))
+        .map(offset => SnapshotFile(UnifiedLog.producerSnapshotFile(logDir, offset)))
         .filter(snapshotFile => snapshotFile.file.exists())
         .map(_.offset)
     val inMemorySnapshotFiles = (1 until 5)
@@ -1654,6 +1664,6 @@ class LogLoaderTest {
     }
     assertTrue(offsetsWithMissingSnapshotFiles.isEmpty,
       s"Found offsets with missing producer state snapshot files: $offsetsWithMissingSnapshotFiles")
-    assertFalse(logDir.list().exists(_.endsWith(Log.DeletedFileSuffix)), "Expected no files to be present with the deleted file suffix")
+    assertFalse(logDir.list().exists(_.endsWith(UnifiedLog.DeletedFileSuffix)), "Expected no files to be present with the deleted file suffix")
   }
 }

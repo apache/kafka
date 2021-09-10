@@ -305,7 +305,7 @@ public class EmbeddedKafkaCluster {
         log.info("Describing topics {}", topicNames);
         try (Admin admin = createAdminClient()) {
             DescribeTopicsResult result = admin.describeTopics(topicNames);
-            Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+            Map<String, KafkaFuture<TopicDescription>> byName = result.topicNameValues();
             for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : byName.entrySet()) {
                 String topicName = entry.getKey();
                 try {
