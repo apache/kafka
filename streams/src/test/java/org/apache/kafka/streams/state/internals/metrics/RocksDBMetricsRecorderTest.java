@@ -43,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.mockStatic;
 
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
@@ -84,7 +85,7 @@ public class RocksDBMetricsRecorderTest {
 
     @Before
     public void setUp() {
-        rocksDBMetricsMockedStatic = Mockito.mockStatic(RocksDBMetrics.class);
+        rocksDBMetricsMockedStatic = mockStatic(RocksDBMetrics.class);
         setUpMetricsStubMock();
         when(streamsMetrics.rocksDBMetricsRecordingTrigger()).thenReturn(recordingTrigger);
         recorder.init(streamsMetrics, TASK_ID1);
