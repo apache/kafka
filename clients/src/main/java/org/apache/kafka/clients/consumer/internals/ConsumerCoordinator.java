@@ -199,7 +199,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         this.metadata.requestUpdate();
-        this.metadata.recordMetadataRequest();
     }
 
     @Override
@@ -231,11 +230,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
             metadata.requestUpdateForNewTopics();
-            metadata.recordMetadataRequest();
-        }
-
     }
 
     private ConsumerPartitionAssignor lookupAssignor(String name) {
@@ -265,10 +261,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 newSubscription.addAll(addedTopics);
                 newJoinedSubscription.addAll(addedTopics);
 
-                if (this.subscriptions.subscribeFromPattern(newSubscription)) {
+                if (this.subscriptions.subscribeFromPattern(newSubscription))
                     metadata.requestUpdateForNewTopics();
-                    metadata.recordMetadataRequest();
-                }
                 this.joinedSubscription = newJoinedSubscription;
             }
         }
@@ -476,7 +470,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
                         this.metadata.requestUpdate();
-                        this.metadata.recordMetadataRequest();
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
@@ -522,11 +515,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void updateGroupSubscription(Set<String> topics) {
         // the leader will begin watching for changes to any of the topics the group is interested in,
         // which ensures that all metadata changes will eventually be seen
-        if (this.subscriptions.groupSubscribe(topics)) {
+        if (this.subscriptions.groupSubscribe(topics))
             metadata.requestUpdateForNewTopics();
-            metadata.recordMetadataRequest();
-        }
-
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
@@ -1285,6 +1275,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
+
             this.commitSensor = metrics.sensor("commit-latency");
             this.commitSensor.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,

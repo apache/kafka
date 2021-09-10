@@ -101,7 +101,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
@@ -278,11 +277,6 @@ public class KafkaAdminClient extends AdminClient {
      * The metrics for this KafkaAdminClient.
      */
     private final Metrics metrics;
-
-    /**
-     * The sensor for rate of metadata requests sent by this KafkaAdminClient
-     */
-    private final Sensor adminClientMetadataRequestRateSensor;
 
     /**
      * The network client to use.
@@ -510,14 +504,6 @@ public class KafkaAdminClient extends AdminClient {
         this.time = time;
         this.metadataManager = metadataManager;
         this.metrics = metrics;
-        this.adminClientMetadataRequestRateSensor = metrics.sensor("admin-client-metadata-request-rate-sensor");
-        this.adminClientMetadataRequestRateSensor.add(new Meter(metrics.metricName("admin-client-metadata-request-rate",
-            "admin-client-metrics",
-            "The average per-second number of metadata request sent by the admin client"),
-            metrics.metricName("admin-client-metadata-request-sent-total",
-                "admin-client-metrics",
-                "The total number of metadata requests sent by the admin client")
-        ));
         this.client = client;
         this.runnable = new AdminClientRunnable();
         String threadName = NETWORK_THREAD_PREFIX + " | " + clientId;
@@ -1308,7 +1294,6 @@ public class KafkaAdminClient extends AdminClient {
                     // Since this only requests node information, it's safe to pass true
                     // for allowAutoTopicCreation (and it simplifies communication with
                     // older brokers)
-                    adminClientMetadataRequestRateSensor.record();
                     return new MetadataRequest.Builder(new MetadataRequestData()
                         .setTopics(Collections.emptyList())
                         .setAllowAutoTopicCreation(true));
@@ -1530,7 +1515,6 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                adminClientMetadataRequestRateSensor.record();
                 return MetadataRequest.Builder.allTopicsOnly();
             }
 
@@ -1586,7 +1570,6 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                adminClientMetadataRequestRateSensor.record();
                 if (supportsDisablingTopicCreation)
                     return new MetadataRequest.Builder(new MetadataRequestData()
                         .setTopics(convertToMetadataRequestTopic(topicNamesList))
@@ -1671,7 +1654,6 @@ public class KafkaAdminClient extends AdminClient {
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
                 // simplifies communication with older brokers)
-                adminClientMetadataRequestRateSensor.record();
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(Collections.emptyList())
                     .setAllowAutoTopicCreation(true)
@@ -2406,7 +2388,6 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                adminClientMetadataRequestRateSensor.record();
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(convertToMetadataRequestTopic(topics))
                     .setAllowAutoTopicCreation(false));
@@ -2941,7 +2922,6 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                adminClientMetadataRequestRateSensor.record();
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(Collections.emptyList())
                     .setAllowAutoTopicCreation(true));

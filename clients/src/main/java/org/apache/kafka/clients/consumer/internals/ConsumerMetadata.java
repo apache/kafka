@@ -18,9 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -34,8 +31,6 @@ public class ConsumerMetadata extends Metadata {
     private final boolean allowAutoTopicCreation;
     private final SubscriptionState subscription;
     private final Set<String> transientTopics;
-    private final Sensor metadataRequestRateSensor;
-    private final Metrics metrics;
 
     public ConsumerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
@@ -43,30 +38,16 @@ public class ConsumerMetadata extends Metadata {
                             boolean allowAutoTopicCreation,
                             SubscriptionState subscription,
                             LogContext logContext,
-                            ClusterResourceListeners clusterResourceListeners,
-                            Metrics metrics) {
+                            ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.includeInternalTopics = includeInternalTopics;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.subscription = subscription;
         this.transientTopics = new HashSet<>();
-        this.metrics = metrics;
-        this.metadataRequestRateSensor = metrics.sensor("consumer-metadata-request-rate");
-        this.metadataRequestRateSensor.add(new Meter(metrics.metricName("consumer-metadata-request-rate",
-            "consumer-metrics",
-            "The average per-second number of metadata request sent by the consumer"),
-            metrics.metricName("consumer-metadata-request-sent-total",
-                "consumer-metrics",
-                "The total number of metadata requests sent by the consumer")
-        ));
     }
 
     public boolean allowAutoTopicCreation() {
         return allowAutoTopicCreation;
-    }
-
-    public void recordMetadataRequest() {
-        this.metadataRequestRateSensor.record();
     }
 
     @Override

@@ -23,7 +23,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
@@ -159,7 +158,7 @@ public class OffsetForLeaderEpochClientTest {
         time = new MockTime(1);
         subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
         metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
-                subscriptions, logContext, new ClusterResourceListeners(), new Metrics());
+                subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
