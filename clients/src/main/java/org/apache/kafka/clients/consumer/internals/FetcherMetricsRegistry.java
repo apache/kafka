@@ -41,8 +41,6 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate recordsLeadMin;
     public MetricNameTemplate fetchThrottleTimeAvg;
     public MetricNameTemplate fetchThrottleTimeMax;
-    public MetricNameTemplate metadataRequestRate;
-    public MetricNameTemplate metadataRequestTotal;
     public MetricNameTemplate topicFetchSizeAvg;
     public MetricNameTemplate topicFetchSizeMax;
     public MetricNameTemplate topicBytesConsumedRate;
@@ -57,6 +55,8 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLeadMin;
     public MetricNameTemplate partitionRecordsLeadAvg;
     public MetricNameTemplate partitionPreferredReadReplica;
+    public MetricNameTemplate consumerMetadataRequestRate;
+    public MetricNameTemplate consumerMetadataRequestTotal;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -96,10 +96,6 @@ public class FetcherMetricsRegistry {
                 "The number of fetch requests per second.", tags);
         this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
                 "The total number of fetch requests.", tags);
-        this.metadataRequestTotal = new MetricNameTemplate("consumer-metadata-request-sent-total",
-            "consumer-metrics", "The total number of metadata requests sent by the consumer", tags);
-        this.metadataRequestRate = new MetricNameTemplate("consumer-metadata-request-rate", "consumer-metrics",
-            "The average per-second number of metadata request sent by the consumer", tags);
         this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
                 "The maximum lag in terms of number of records for any partition in this window", tags);
         this.recordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
@@ -148,6 +144,13 @@ public class FetcherMetricsRegistry {
         this.partitionPreferredReadReplica = new MetricNameTemplate(
                 "preferred-read-replica", "consumer-fetch-manager-metrics",
                 "The current read replica for the partition, or -1 if reading from leader", partitionTags);
+        this.consumerMetadataRequestRate = new MetricNameTemplate(
+                "consumer-metadata-send-rate",
+                "consumer-metrics",
+                "The average per-second number of metadata request sent by the consumer", tags);
+        this.consumerMetadataRequestTotal = new MetricNameTemplate("consumer-metadata-send-total",
+                "consumer-metrics",
+            "The total number of metadata requests sent by the consumer", tags);
     }
 
     public List<MetricNameTemplate> getAllTemplates() {
@@ -181,8 +184,8 @@ public class FetcherMetricsRegistry {
             partitionRecordsLeadMin,
             partitionRecordsLeadAvg,
             partitionPreferredReadReplica,
-            metadataRequestRate,
-            metadataRequestTotal
+            consumerMetadataRequestRate,
+            consumerMetadataRequestTotal
         );
     }
 

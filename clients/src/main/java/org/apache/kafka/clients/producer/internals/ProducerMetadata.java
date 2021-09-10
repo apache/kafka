@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -74,13 +75,13 @@ public class ProducerMetadata extends Metadata {
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.metrics = metrics;
         this.metadataRequestRateSensor = metrics.sensor("producer-metadata-request-rate");
-        this.metadataRequestRateSensor.add(new Meter(metrics.metricName("producer-metadata-request-rate",
+        MetricName metadataRequestRate = metrics.metricName("producer-metadata-request-rate",
             "producer-metrics",
-            "The average per-second number of metadata request sent by the producer"),
-            metrics.metricName("producer-metadata-request-sent-total",
-                "producer-metrics",
-                "The total number of metadata requests sent by the producer")
-        ));
+            "The average per-second number of metadata request sent by the producer");
+        MetricName metadataRequestTotal = metrics.metricName("producer-metadata-request-total",
+            "producer-metrics",
+            "The total number of metadata requests sent by the producer");
+        this.metadataRequestRateSensor.add(new Meter(metadataRequestRate, metadataRequestTotal));
     }
     public void recordMetadataRequest() {
         this.metadataRequestRateSensor.record();

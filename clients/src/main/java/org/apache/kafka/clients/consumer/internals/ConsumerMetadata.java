@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -51,14 +52,16 @@ public class ConsumerMetadata extends Metadata {
         this.subscription = subscription;
         this.transientTopics = new HashSet<>();
         this.metrics = metrics;
-        this.metadataRequestRateSensor = metrics.sensor("consumer-metadata-request-rate");
-        this.metadataRequestRateSensor.add(new Meter(metrics.metricName("consumer-metadata-request-rate",
+        this.metadataRequestRateSensor = metrics.sensor("consumer-metadata-requests");
+        MetricName metadataRequestRate = metrics.metricName("consumer-metadata-send-rate",
             "consumer-metrics",
-            "The average per-second number of metadata request sent by the consumer"),
-            metrics.metricName("consumer-metadata-request-sent-total",
-                "consumer-metrics",
-                "The total number of metadata requests sent by the consumer")
-        ));
+            "The average per-second number of metadata request sent by the consumer");
+
+        MetricName metadataRequestTotal = metrics.metricName("consumer-metadata-send-total",
+            "consumer-metrics",
+            "The total number of metadata requests sent by the consumer");
+
+        this.metadataRequestRateSensor.add(new Meter(metadataRequestRate, metadataRequestTotal));
     }
 
     public boolean allowAutoTopicCreation() {
