@@ -193,8 +193,6 @@ public class MemoryRecords extends AbstractRecords {
                 boolean needToSetDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && (containsTombstones || containsMarkerForEmptyTxn)
                     && !batch.deleteHorizonMs().isPresent();
                 if (writeOriginalBatch && !needToSetDeleteHorizon) {
-                    if (batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP) > filterResult.latestDeleteHorizon())
-                        filterResult.updateLatestDeleteHorizon(batch.deleteHorizonMs().getAsLong());
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
@@ -205,8 +203,6 @@ public class MemoryRecords extends AbstractRecords {
                     else
                         deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
                     builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
-                    if (deleteHorizonMs > filterResult.latestDeleteHorizon())
-                        filterResult.updateLatestDeleteHorizon(deleteHorizonMs);
 
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
@@ -407,18 +403,9 @@ public class MemoryRecords extends AbstractRecords {
         private long maxOffset = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
-        private long latestDeleteHorizonMs = RecordBatch.NO_TIMESTAMP;
 
         private FilterResult(ByteBuffer outputBuffer) {
             this.outputBuffer = outputBuffer;
-        }
-
-        public void updateLatestDeleteHorizon(long deleteHorizon) {
-            this.latestDeleteHorizonMs = deleteHorizon;
-        }
-
-        public long latestDeleteHorizon() {
-            return latestDeleteHorizonMs;
         }
 
         private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {

@@ -288,12 +288,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   @volatile var partitionMetadataFile : PartitionMetadataFile = null
 
-  /* Keep track of the largest deleteHorizonMs that is present from records in the log. This value helps streamline the
-   * deletion of tombstones in compacted logs. The LogCleanerManager can use this value to determine if the log can
-   * be cleaned to remove eligible tombstones without waiting for the log's dirty section to grow large enough.
-   */
-  @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
-
   locally {
     initializePartitionMetadata()
     updateLogStartOffset(logStartOffset)

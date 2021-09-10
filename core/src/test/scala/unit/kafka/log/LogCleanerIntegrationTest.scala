@@ -18,7 +18,6 @@
 package kafka.log
 
 import java.io.PrintWriter
-import java.util.Properties
 
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -180,36 +179,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
       s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")
   }
 
-  @Test
-  def testTombstoneCleanWithLowThroughput() : Unit = {
-    val tombstoneRetentionMs = 1000 // this is in milliseconds -> 1 second 
-
-    val topicPartitions = Array(new TopicPartition("log-partition", 0))
-    val props = new Properties()
-    props.put(LogConfig.DeleteRetentionMsProp, "1000")
-    cleaner = makeCleaner(partitions = topicPartitions, propertyOverrides = props, backOffMs = 100L)
-
-    val log = cleaner.logs.get(topicPartitions(0))
-
-    val T0 = time.milliseconds
-    writeKeyDups(numKeys = 1, numDups = 1, log, CompressionType.NONE, timestamp = T0, 
-                 startValue = 0, step = 1, isRecordTombstone = true)
-
-    // roll the active segment
-    log.roll()
-
-    cleaner.startup()
-
-    val latestOffset: Long = log.logEndOffset
-
-    assertTrue(cleaner.awaitCleaned(new TopicPartition("log-partition", 0),
-                                    latestOffset, maxWaitMs = 5000))
-    assertEquals(log.latestDeleteHorizon, T0 + tombstoneRetentionMs)
-
-    time.sleep(tombstoneRetentionMs + 1)
-    TestUtils.waitUntilTrue(() => log.size == 0, "Log should be empty")
-  }
-
   private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
@@ -219,17 +188,13 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
-                           startValue: Int, step: Int, isRecordTombstone: Boolean = false): Seq[(Int, Int)] = {
+                           startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val curValue = valCounter
-      if (isRecordTombstone)
-        log.appendAsLeader(TestUtils.singletonRecords(value = null, codec = codec,
-          key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
-      else 
-        log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
-          key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
-
+      log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
+        key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       valCounter += step
       (key, curValue)

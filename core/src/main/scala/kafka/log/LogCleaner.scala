@@ -509,8 +509,6 @@ private[log] class Cleaner(val id: Int,
       }
 
     val log = cleanable.log
-    log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
-
     val stats = new CleanerStats()
 
     // build the offset map
@@ -586,10 +584,8 @@ private[log] class Cleaner(val id: Int,
           s"${if(retainLegacyDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
             log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
-          if (log.latestDeleteHorizon < latestDeleteHorizon)
-            log.latestDeleteHorizon = latestDeleteHorizon
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -635,8 +631,6 @@ private[log] class Cleaner(val id: Int,
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
    * @param currentTime The time at which the clean was initiated
-   *
-   * @return the latestDeleteHorizon that is found from the FilterResult of the cleaning
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
@@ -648,7 +642,7 @@ private[log] class Cleaner(val id: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             currentTime: Long): Long = {
+                             currentTime: Long): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
       var discardBatchRecords: Boolean = _
 
@@ -696,7 +690,6 @@ private[log] class Cleaner(val id: Int,
       }
     }
 
-    var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
     var position = 0
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
@@ -708,9 +701,6 @@ private[log] class Cleaner(val id: Int,
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
-      if (result.latestDeleteHorizon() > latestDeleteHorizon) {
-        latestDeleteHorizon = result.latestDeleteHorizon()
-      }
 
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
@@ -737,7 +727,6 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
-    latestDeleteHorizon
   }
 
 
