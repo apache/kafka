@@ -49,13 +49,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-        MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
             Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, transportLayer, listenerName);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.warn("Failed to create channel due to ", e);
             throw new KafkaException(e);

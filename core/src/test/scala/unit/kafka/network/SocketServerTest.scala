@@ -37,13 +37,12 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData
 import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, ClientInformation, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.AppInfoParser
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
 import org.apache.log4j.Level
 import org.junit.Assert._
@@ -62,7 +61,7 @@ class SocketServerTest {
   props.put("socket.send.buffer.bytes", "300000")
   props.put("socket.receive.buffer.bytes", "300000")
   props.put("queued.max.requests", "50")
-  props.put("socket.request.max.bytes", "100")
+  props.put("socket.request.max.bytes", "50")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
@@ -189,16 +188,6 @@ class SocketServerTest {
     serializedBytes
   }
 
-  private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
-    val request = new ApiVersionsRequest.Builder().build(version)
-    val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    val buffer = request.serialize(header)
-    buffer.rewind()
-    val bytes = new Array[Byte](buffer.remaining())
-    buffer.get(bytes)
-    bytes
-  }
-
   @Test
   def simpleRequest(): Unit = {
     val plainSocket = connect()
@@ -209,55 +198,6 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
     verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = false)
-  }
-
-  private def testClientInformation(version: Short, expectedClientSoftwareName: String,
-    expectedClientSoftwareVersion: String): Unit = {
-    val plainSocket = connect()
-    val address = plainSocket.getLocalAddress
-    val clientId = "clientId"
-
-    // Send ApiVersionsRequest - unknown expected
-    sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
-    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
-
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
-
-    // Send ProduceRequest - client info expected
-    sendRequest(plainSocket, producerRequestBytes())
-    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
-
-    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
-    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
-
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
-
-    // Close the socket
-    plainSocket.setSoLinger(true, 0)
-    plainSocket.close()
-
-    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
-  }
-
-  @Test
-  def testClientInformationWithLatestApiVersionsRequest(): Unit = {
-    testClientInformation(
-      ApiKeys.API_VERSIONS.latestVersion,
-      "linkedin-kafka-java",
-      AppInfoParser.getVersion
-    )
-  }
-
-  @Test
-  def testClientInformationWithOldestApiVersionsRequest(): Unit = {
-    testClientInformation(
-      ApiKeys.API_VERSIONS.oldestVersion,
-      ClientInformation.UNKNOWN_NAME_OR_VERSION,
-      ClientInformation.UNKNOWN_NAME_OR_VERSION
-    )
   }
 
   @Test
@@ -579,7 +519,7 @@ class SocketServerTest {
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test
@@ -594,7 +534,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted after sending out the response.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test
@@ -606,7 +546,7 @@ class SocketServerTest {
 
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test
@@ -619,7 +559,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test

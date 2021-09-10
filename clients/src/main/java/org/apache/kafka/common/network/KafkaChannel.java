@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
@@ -121,7 +121,6 @@ public class KafkaChannel implements AutoCloseable {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
-    private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -134,8 +133,7 @@ public class KafkaChannel implements AutoCloseable {
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
-        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -143,7 +141,6 @@ public class KafkaChannel implements AutoCloseable {
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
         this.memoryPool = memoryPool;
-        this.metadataRegistry = metadataRegistry;
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
@@ -151,7 +148,7 @@ public class KafkaChannel implements AutoCloseable {
 
     public void close() throws IOException {
         this.disconnected = true;
-        Utils.closeAll(transportLayer, authenticator, receive, metadataRegistry);
+        Utils.closeAll(transportLayer, authenticator, receive);
     }
 
     /**
@@ -331,7 +328,7 @@ public class KafkaChannel implements AutoCloseable {
     /**
      * Returns true if this channel has been explicitly muted using {@link KafkaChannel#mute()}
      */
-    public boolean isMuted() {
+    public boolean isMute() {
         return muteState != ChannelMuteState.NOT_MUTED;
     }
 
@@ -378,56 +375,32 @@ public class KafkaChannel implements AutoCloseable {
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
-    public Send maybeCompleteSend() {
-        if (send != null && send.completed()) {
-            midWrite = false;
-            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-            Send result = send;
-            send = null;
-            return result;
-        }
-        return null;
-    }
+    public NetworkReceive read() throws IOException {
+        NetworkReceive result = null;
 
-    public long read() throws IOException {
         if (receive == null) {
             receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
 
-        long bytesReceived = receive(this.receive);
-
-        if (this.receive.requiredMemoryAmountKnown() && !this.receive.memoryAllocated() && isInMutableState()) {
+        receive(receive);
+        if (receive.complete()) {
+            receive.payload().rewind();
+            result = receive;
+            receive = null;
+        } else if (receive.requiredMemoryAmountKnown() && !receive.memoryAllocated() && isInMutableState()) {
             //pool must be out of memory, mute ourselves.
             mute();
         }
-        return bytesReceived;
+        return result;
     }
 
-    public NetworkReceive currentReceive() {
-        return receive;
-    }
-
-    public NetworkReceive maybeCompleteReceive() {
-        if (receive != null && receive.complete()) {
-            receive.payload().rewind();
-            NetworkReceive result = receive;
-            receive = null;
-            return result;
+    public Send write() throws IOException {
+        Send result = null;
+        if (send != null && send(send)) {
+            result = send;
+            send = null;
         }
-        return null;
-    }
-
-
-    public long write() throws IOException {
-        if (send == null)
-            return 0;
-
-        midWrite = true;
-        if (send.completed()) {
-            midWrite = false;
-            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-        }
-        return send.writeTo(transportLayer);
+        return result;
     }
 
     /**
@@ -449,6 +422,16 @@ public class KafkaChannel implements AutoCloseable {
 
     private long receive(NetworkReceive receive) throws IOException {
         return receive.readFrom(transportLayer);
+    }
+
+    private boolean send(Send send) throws IOException {
+        midWrite = true;
+        send.writeTo(transportLayer);
+        if (send.completed()) {
+            midWrite = false;
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+        }
+        return send.completed();
     }
 
     /**
@@ -479,12 +462,12 @@ public class KafkaChannel implements AutoCloseable {
     public String toString() {
         return super.toString() + " id=" + id;
     }
-
+    
     /**
      * Return the number of times this instance has successfully authenticated. This
      * value can only exceed 1 when re-authentication is enabled and it has
      * succeeded at least once.
-     *
+     * 
      * @return the number of times this instance has successfully authenticated
      */
     public int successfulAuthentications() {
@@ -496,7 +479,7 @@ public class KafkaChannel implements AutoCloseable {
      * 1 second has passed since the prior re-authentication (if any) started then
      * begin the process of re-authenticating the connection and return true,
      * otherwise return false
-     *
+     * 
      * @param saslHandshakeNetworkReceive
      *            the mandatory {@link NetworkReceive} containing the
      *            {@code SaslHandshakeRequest} that has been received on the server
@@ -506,7 +489,7 @@ public class KafkaChannel implements AutoCloseable {
      *            nanoseconds as per {@code System.nanoTime()} and is therefore only
      *            useful when compared to such a value -- it's absolute value is
      *            meaningless.
-     *
+     * 
      * @return true if this is a server-side connection that has an expiration time
      *         and at least 1 second has passed since the prior re-authentication
      *         (if any) started to indicate that the re-authentication process has
@@ -520,10 +503,10 @@ public class KafkaChannel implements AutoCloseable {
      *             if this channel is not "ready"
      */
     public boolean maybeBeginServerReauthentication(NetworkReceive saslHandshakeNetworkReceive,
-        Supplier<Long> nowNanosSupplier) throws AuthenticationException, IOException {
+            Supplier<Long> nowNanosSupplier) throws AuthenticationException, IOException {
         if (!ready())
             throw new IllegalStateException(
-                "KafkaChannel should be \"ready\" when processing SASL Handshake for potential re-authentication");
+                    "KafkaChannel should be \"ready\" when processing SASL Handshake for potential re-authentication");
         /*
          * Re-authentication is disabled if there is no session expiration time, in
          * which case the SASL handshake network receive will be processed normally,
@@ -537,18 +520,18 @@ public class KafkaChannel implements AutoCloseable {
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.
          */
-        long nowNanos = nowNanosSupplier.get();
+        long nowNanos = nowNanosSupplier.get().longValue();
         /*
          * Cannot re-authenticate more than once every second; an attempt to do so will
          * result in the SASL handshake network receive being processed normally, which
          * results in a failure result being sent to the client.
          */
         if (lastReauthenticationStartNanos != 0
-            && nowNanos - lastReauthenticationStartNanos < MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS)
+                && nowNanos - lastReauthenticationStartNanos < MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS)
             return false;
         lastReauthenticationStartNanos = nowNanos;
         swapAuthenticatorsAndBeginReauthentication(
-            new ReauthenticationContext(authenticator, saslHandshakeNetworkReceive, nowNanos));
+                new ReauthenticationContext(authenticator, saslHandshakeNetworkReceive, nowNanos));
         return true;
     }
 
@@ -557,13 +540,13 @@ public class KafkaChannel implements AutoCloseable {
      * in-progress write, and there is a session expiration time defined that has
      * past then begin the process of re-authenticating the connection and return
      * true, otherwise return false
-     *
+     * 
      * @param nowNanosSupplier
      *            {@code Supplier} of the current time. The value must be in
      *            nanoseconds as per {@code System.nanoTime()} and is therefore only
      *            useful when compared to such a value -- it's absolute value is
      *            meaningless.
-     *
+     * 
      * @return true if this is a client-side connection that is not muted, there is
      *         no in-progress write, and there is a session expiration time defined
      *         that has past to indicate that the re-authentication process has
@@ -577,12 +560,12 @@ public class KafkaChannel implements AutoCloseable {
      *             if this channel is not "ready"
      */
     public boolean maybeBeginClientReauthentication(Supplier<Long> nowNanosSupplier)
-        throws AuthenticationException, IOException {
+            throws AuthenticationException, IOException {
         if (!ready())
             throw new IllegalStateException(
-                "KafkaChannel should always be \"ready\" when it is checked for possible re-authentication");
+                    "KafkaChannel should always be \"ready\" when it is checked for possible re-authentication");
         if (muteState != ChannelMuteState.NOT_MUTED || midWrite
-            || authenticator.clientSessionReauthenticationTimeNanos() == null)
+                || authenticator.clientSessionReauthenticationTimeNanos() == null)
             return false;
         /*
          * We've delayed getting the time as long as possible in case we don't need it,
@@ -595,14 +578,14 @@ public class KafkaChannel implements AutoCloseable {
         receive = null;
         return true;
     }
-
+    
     /**
      * Return the number of milliseconds that elapsed while re-authenticating this
      * session from the perspective of this instance, if applicable, otherwise null.
      * The server-side perspective will yield a lower value than the client-side
      * perspective of the same re-authentication because the client-side observes an
      * additional network round-trip.
-     *
+     * 
      * @return the number of milliseconds that elapsed while re-authenticating this
      *         session from the perspective of this instance, if applicable,
      *         otherwise null
@@ -614,7 +597,7 @@ public class KafkaChannel implements AutoCloseable {
     /**
      * Return true if this is a server-side channel and the given time is past the
      * session expiration time, if any, otherwise false
-     *
+     * 
      * @param nowNanos
      *            the current time in nanoseconds as per {@code System.nanoTime()}
      * @return true if this is a server-side channel and the given time is past the
@@ -624,7 +607,7 @@ public class KafkaChannel implements AutoCloseable {
         Long serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
         return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos > 0;
     }
-
+    
     /**
      * Return the (always non-null but possibly empty) client-side
      * {@link NetworkReceive} responses that arrived during re-authentication that
@@ -632,7 +615,7 @@ public class KafkaChannel implements AutoCloseable {
      * prior to the beginning of re-authentication; the requests were made when the
      * channel was successfully authenticated, and the responses arrived during the
      * re-authentication process.
-     *
+     * 
      * @return the (always non-null but possibly empty) client-side
      *         {@link NetworkReceive} responses that arrived during
      *         re-authentication that are unrelated to re-authentication, if any
@@ -640,11 +623,11 @@ public class KafkaChannel implements AutoCloseable {
     public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
         return authenticator.getAndClearResponsesReceivedDuringReauthentication();
     }
-
+    
     /**
      * Return true if this is a server-side channel and the connected client has
      * indicated that it supports re-authentication, otherwise false
-     *
+     * 
      * @return true if this is a server-side channel and the connected client has
      *         indicated that it supports re-authentication, otherwise false
      */
@@ -653,14 +636,10 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private void swapAuthenticatorsAndBeginReauthentication(ReauthenticationContext reauthenticationContext)
-        throws IOException {
+            throws IOException {
         // it is up to the new authenticator to close the old one
         // replace with a new one and begin the process of re-authenticating
         authenticator = authenticatorCreator.get();
         authenticator.reauthenticate(reauthenticationContext);
-    }
-
-    public ChannelMetadataRegistry channelMetadataRegistry() {
-        return metadataRegistry;
     }
 }

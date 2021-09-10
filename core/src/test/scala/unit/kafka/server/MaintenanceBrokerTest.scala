@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 import kafka.server.KafkaConfig.fromProps
 import kafka.utils.CoreUtils._
@@ -201,7 +201,7 @@ class MaintenanceBrokerTest extends ZooKeeperTestHarness {
   }
 
   def setMaintenanceBrokers(brokerIds: Seq[Int]): Unit = {
-    val propstring = brokerIds.mkString(",")
+    var propstring = brokerIds.mkString(",")
     adminZkClient.changeBrokerConfig(None,
       propsWith((DynamicConfig.Broker.MaintenanceBrokerListProp, propstring)))
 
