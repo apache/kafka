@@ -270,7 +270,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
-        this(topology, config, null);
+        this(topology, config, (Instant) null);
     }
 
     /**
@@ -282,6 +282,17 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Instant initialWallClockTimeMs) {
         this(topology, new Properties(), initialWallClockTimeMs);
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param topology the topology to be tested
+     * @param wallClockTime internal wall-clock time ({@link MockTime MockTime} by default)
+     */
+    public TopologyTestDriver(final Topology topology,
+                              final Time wallClockTime) {
+        this(topology.internalTopologyBuilder, new Properties(), wallClockTime == null ? new MockTime(System.currentTimeMillis()) : wallClockTime);
     }
 
     /**
@@ -303,6 +314,22 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Create a new test diver instance.
      *
+     * @param topology        the topology to be tested
+     * @param config          the configuration for the topology
+     * @param wallClockTime   internal wall-clock time ({@link MockTime MockTime} by default)
+     */
+    public TopologyTestDriver(final Topology topology,
+                              final Properties config,
+                              final Time wallClockTime) {
+        this(
+            topology.internalTopologyBuilder,
+            config,
+            wallClockTime == null ? new MockTime(System.currentTimeMillis()) : wallClockTime);
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
@@ -310,6 +337,19 @@ public class TopologyTestDriver implements Closeable {
     private TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
+        this(builder, config, new MockTime(initialWallClockTimeMs));
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     * @param wallClockTime internal wall-clock time ({@link MockTime MockTime} by default)
+     */
+    private TopologyTestDriver(final InternalTopologyBuilder builder,
+                               final Properties config,
+                               final Time wallClockTime) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
@@ -319,7 +359,7 @@ public class TopologyTestDriver implements Closeable {
         logIfTaskIdleEnabled(streamsConfig);
 
         logContext = new LogContext("topology-test-driver ");
-        mockWallClockTime = new MockTime(initialWallClockTimeMs);
+        mockWallClockTime = wallClockTime;
         processingMode = StreamThread.processingMode(streamsConfig);
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
@@ -496,7 +536,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics
             );
 
-            final InternalProcessorContext context = new ProcessorContextImpl(
+            final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 TASK_ID,
                 streamsConfig,
                 stateManager,
@@ -707,16 +747,52 @@ public class TopologyTestDriver implements Closeable {
      * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
      *
      * @param advance the amount of time to advance wall-clock time
+     * @throws IllegalArgumentException if advance is negative
      */
     public void advanceWallClockTime(final Duration advance) {
         Objects.requireNonNull(advance, "advance cannot be null");
+        if (advance.isNegative()) {
+            throw new IllegalArgumentException("advance cannot be negative.");
+        }
         mockWallClockTime.sleep(advance.toMillis());
+        advancedWallClockTime();
+    }
+
+    /**
+     * Advances the internally mocked wall-clock time.
+     * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
+     *
+     * @param advanceMs the amount of milliseconds to advance wall-clock time
+     * @throws IllegalArgumentException if advanceMs is negative
+     */
+    public void advanceWallClockTime(final long advanceMs) {
+        if (advanceMs < 0) {
+            throw new IllegalArgumentException("advanceMs cannot be negative.");
+        }
+        mockWallClockTime.sleep(advanceMs);
+        advancedWallClockTime();
+    }
+
+    /**
+     * Should be called after wall-clock time has been advanced externally, i.e. {@code getWallClockTime().sleep(60000)}.
+     * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
+     */
+    public void advancedWallClockTime() {
         if (task != null) {
             task.maybePunctuateSystemTime();
             commit(task.prepareCommit());
             task.postCommit(true);
         }
         completeAllProcessableWork();
+    }
+
+    /**
+     * @return internal wall-clock time ({@link MockTime MockTime} by default)
+     */
+    public Time getWallClockTime() {
+        return mockWallClockTime;
     }
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
@@ -842,7 +918,7 @@ public class TopologyTestDriver implements Closeable {
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
-    final long getQueueSize(final String topic) {
+    public final long getQueueSize(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> queue = getRecordsQueue(topic);
         if (queue == null) {
             //Return 0 if not initialized, getRecordsQueue throw exception if non existing topic
@@ -851,7 +927,7 @@ public class TopologyTestDriver implements Closeable {
         return queue.size();
     }
 
-    final boolean isEmpty(final String topic) {
+    public final boolean isEmpty(final String topic) {
         return getQueueSize(topic) == 0;
     }
 
@@ -910,7 +986,7 @@ public class TopologyTestDriver implements Closeable {
         return getStateStore(name, true);
     }
 
-    private StateStore getStateStore(final String name,
+    public StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
             final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().getStore(name);
@@ -1130,11 +1206,14 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    static class MockTime implements Time {
-        private final AtomicLong timeMs;
-        private final AtomicLong highResTimeNs;
+    /**
+     * Mocked wall-clock time
+     */
+    public static class MockTime implements Time {
+        protected final AtomicLong timeMs;
+        protected final AtomicLong highResTimeNs;
 
-        MockTime(final long startTimestampMs) {
+        public MockTime(final long startTimestampMs) {
             this.timeMs = new AtomicLong(startTimestampMs);
             this.highResTimeNs = new AtomicLong(startTimestampMs * 1000L * 1000L);
         }
