@@ -61,24 +61,10 @@ class ZooKeeperClient(connectString: String,
                       time: Time,
                       metricGroup: String,
                       metricType: String,
-                      name: Option[String],
-                      zkClientConfig: Option[ZKClientConfig]) extends Logging with KafkaMetricsGroup {
+                      private[zookeeper] val clientConfig: ZKClientConfig,
+                      name: String) extends Logging with KafkaMetricsGroup {
 
-  def this(connectString: String,
-           sessionTimeoutMs: Int,
-           connectionTimeoutMs: Int,
-           maxInFlightRequests: Int,
-           time: Time,
-           metricGroup: String,
-           metricType: String) = {
-    this(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, None,
-      None)
-  }
-
-  this.logIdent = name match {
-    case Some(n) => s"[ZooKeeperClient $n] "
-    case _ => "[ZooKeeperClient] "
-  }
+  this.logIdent = s"[ZooKeeperClient $name] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -109,13 +95,10 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
-  private val clientConfig = zkClientConfig getOrElse new ZKClientConfig()
-
   info(s"Initializing a new session to $connectString.")
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher,
     clientConfig)
-  private[zookeeper] def getClientConfig = clientConfig
 
   newGauge("SessionState", () => connectionState.toString)
 
@@ -436,7 +419,7 @@ class ZooKeeperClient(connectString: String,
     }, delayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
-  private def threadPrefix: String = name.map(n => n.replaceAll("\\s", "") + "-").getOrElse("")
+  private def threadPrefix: String = name.replaceAll("\\s", "") + "-"
 
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {

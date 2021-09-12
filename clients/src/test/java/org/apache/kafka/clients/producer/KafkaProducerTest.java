@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
@@ -813,6 +815,41 @@ public class KafkaProducerTest {
         }
     }
 
+    private static Double getMetricValue(final KafkaProducer<?, ?> producer, final String name) {
+        Metrics metrics = producer.metrics;
+        Metric metric =  metrics.metric(metrics.metricName(name, "producer-metrics"));
+        return (Double) metric.metricValue();
+    }
+
+    @Test
+    public void testFlushMeasureLatency() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(
+            configs,
+            new StringSerializer(),
+            new StringSerializer(),
+            metadata,
+            client,
+            null,
+            time
+        )) {
+            producer.flush();
+            double first = getMetricValue(producer, "flush-time-ns-total");
+            assertTrue(first > 0);
+            producer.flush();
+            assertTrue(getMetricValue(producer, "flush-time-ns-total") > first);
+        }
+    }
+
     @Test
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
@@ -952,6 +989,36 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testMeasureAbortTransactionDuration() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            producer.abortTransaction();
+            double first = getMetricValue(producer, "txn-abort-time-ns-total");
+            assertTrue(first > 0);
+
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            producer.abortTransaction();
+            assertTrue(getMetricValue(producer, "txn-abort-time-ns-total") > first);
+        }
+    }
+
+    @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
@@ -985,6 +1052,62 @@ public class KafkaProducerTest {
             producer.beginTransaction();
             producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(groupId));
             producer.commitTransaction();
+        }
+    }
+
+    private void assertDurationAtLeast(KafkaProducer<?, ?> producer, String name, double floor) {
+        getAndAssertDurationAtLeast(producer, name, floor);
+    }
+
+    private double getAndAssertDurationAtLeast(KafkaProducer<?, ?> producer, String name, double floor) {
+        double value = getMetricValue(producer, name);
+        assertTrue(value >= floor);
+        return value;
+    }
+
+    @Test
+    public void testMeasureTransactionDurations() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Duration tick = Duration.ofSeconds(1);
+        Time time = new MockTime(tick.toMillis());
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            assertDurationAtLeast(producer, "txn-init-time-ns-total", tick.toNanos());
+
+            client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
+            client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+            client.prepareResponse(txnOffsetsCommitResponse(Collections.singletonMap(
+                new TopicPartition("topic", 0), Errors.NONE)));
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            double beginFirst = getAndAssertDurationAtLeast(producer, "txn-begin-time-ns-total", tick.toNanos());
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
+            double sendOffFirst = getAndAssertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", tick.toNanos());
+            producer.commitTransaction();
+            double commitFirst = getAndAssertDurationAtLeast(producer, "txn-commit-time-ns-total", tick.toNanos());
+
+            client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
+            client.prepareResponse(txnOffsetsCommitResponse(Collections.singletonMap(
+                new TopicPartition("topic", 0), Errors.NONE)));
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            assertDurationAtLeast(producer, "txn-begin-time-ns-total", beginFirst + tick.toNanos());
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
+            assertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", sendOffFirst + tick.toNanos());
+            producer.commitTransaction();
+            assertDurationAtLeast(producer, "txn-commit-time-ns-total", commitFirst + tick.toNanos());
         }
     }
 

@@ -1372,11 +1372,15 @@ public class ConfigDef {
      */
     private void getConfigKeyRst(ConfigKey key, StringBuilder b) {
         b.append("``").append(key.name).append("``").append("\n");
-        for (String docLine : key.documentation.split("\n")) {
-            if (docLine.length() == 0) {
-                continue;
+        if (key.documentation != null) {
+            for (String docLine : key.documentation.split("\n")) {
+                if (docLine.length() == 0) {
+                    continue;
+                }
+                b.append("  ").append(docLine).append("\n\n");
             }
-            b.append("  ").append(docLine).append("\n\n");
+        } else {
+            b.append("\n");
         }
         b.append("  * Type: ").append(getConfigValue(key, "Type")).append("\n");
         if (key.hasDefault()) {
@@ -1556,7 +1560,9 @@ public class ConfigDef {
                     "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
                     "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
-            b.append(key.documentation.replaceAll("\n", "<br>"));
+            if (key.documentation != null) {
+                b.append(key.documentation.replaceAll("\n", "<br>"));
+            }
             b.append("</p>\n");
 
             b.append("<table>" +
