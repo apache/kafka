@@ -36,8 +36,21 @@ import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
 import scala.collection.{Map, mutable, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
+
+  def unmarshalIncrementalRequest(incrementalRequest: IncrementalAlterConfigsRequest): (Map[ConfigResource, Seq[AlterConfigOp]], Boolean) = {
+    (incrementalRequest.data.resources.iterator.asScala.map { alterConfigResource =>
+      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
+        alterConfigResource.resourceName)
+      configResource -> alterConfigResource.configs.iterator.asScala.map {
+        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
+          OpType.forId(alterConfig.configOperation))
+      }.toBuffer
+    }.toMap, incrementalRequest.data.validateOnly)
+  }
+
 
   def getBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
@@ -142,15 +155,37 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     resource -> ApiError.NONE
   }
 
-  def unmarshalIncrementalRequest(incrementalRequest: IncrementalAlterConfigsRequest): (Map[ConfigResource, Seq[AlterConfigOp]], Boolean) = {
-    (incrementalRequest.data.resources.iterator.asScala.map { alterConfigResource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
-        alterConfigResource.resourceName)
-      configResource -> alterConfigResource.configs.iterator.asScala.map {
-        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
-          OpType.forId(alterConfig.configOperation))
-      }.toBuffer
-    }.toMap, incrementalRequest.data.validateOnly)
+  def tryValidateIncrementalBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean, metadataSupport: MetadataSupport): Try[(ConfigResource, ApiError)] = {
+    def prepareThenValidateIncrementalAlterBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): (ConfigResource, ApiError) = {
+      val brokerId = getAndValidateBrokerId(resource)
+      val perBrokerConfig = brokerId.nonEmpty
+      val configProps = metadataSupport match {
+        // Get old configs before applying the config alteration
+        case ZkSupport(adminManager, _, _, _, _) =>
+          val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
+          this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+        case RaftSupport(_,_) =>
+          val persistentProps = if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
+          else this.config.dynamicConfig.currentDynamicDefaultConfigs
+          val configProps = new Properties()
+          configProps.putAll(persistentProps.asJava)
+          configProps
+      }
+      // Apply config alterations to the old configs
+      prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+      // Validate the configs
+      validateBrokerConfigs(resource, validateOnly, configProps)
+    }
+    Try(prepareThenValidateIncrementalAlterBrokerConfigs(resource, alterConfigOps, validateOnly))
+  }
+
+  def tryValidateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): Try[(ConfigResource, ApiError)] = {
+    def validateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): (ConfigResource, ApiError) = {
+      getAndValidateBrokerId(resource)
+      this.validateLogLevelConfigs(alterConfigOps)
+      resource -> ApiError.NONE
+    }
+    Try(validateLogLevelConfigs(resource, alterConfigOps))
   }
 
   def handleValidateAlterConfigsError(exception: Throwable, resource: ConfigResource, configProps: Option[Properties], alterOps: Option[Seq[AlterConfigOp]]): (ConfigResource, ApiError) = {

@@ -30,7 +30,6 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients.admin.{AlterConfigOp}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
@@ -2679,9 +2678,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def validateAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
-    def tryValidateBrokerConfigs(resource: ConfigResource, validateOnly: Boolean, configProps: Properties): Try[(ConfigResource, ApiError)] = {
-      Try(configHelper.validateBrokerConfigs(resource, validateOnly, configProps))
-    }
     val alterConfigsRequest = request.body[AlterConfigsRequest]
 
     // Per broker config alterations should be validated on the broker that the config(s) are for before forwarding them to the Zk or KRaft controller.
@@ -2692,7 +2688,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       config.entries.asScala.filter(_.value != null).foreach { configEntry =>
         configProps.setProperty(configEntry.name, configEntry.value)
       }
-      tryValidateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps) match {
+      Try(configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps)) match {
         case Success(i) => i
         case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, Some(configProps), None)
       }
@@ -2840,50 +2836,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def validateIncrementalAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
-    def tryValidateBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): Try[(ConfigResource, ApiError)] = {
-      def validateBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): (ConfigResource, ApiError) = {
-        val brokerId = configHelper.getAndValidateBrokerId(resource)
-        val perBrokerConfig = brokerId.nonEmpty
-        val configProps = metadataSupport match {
-          // Get old configs before applying the config alteration
-          case ZkSupport(adminManager, _, _, _, _) =>
-            val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
-            this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-          case RaftSupport(_,_) =>
-            val persistentProps = if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
-            else this.config.dynamicConfig.currentDynamicDefaultConfigs
-            val configProps = new Properties()
-            configProps.putAll(persistentProps.asJava)
-            configProps
-        }
-        // Apply config alterations to the old configs
-        configHelper.prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
-        // Validate the configs
-        configHelper.validateBrokerConfigs(resource, validateOnly, configProps)
-      }
-      Try(validateBrokerConfigs(resource, alterConfigOps, validateOnly))
-    }
-    def tryValidateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): Try[(ConfigResource, ApiError)] = {
-      def validateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): (ConfigResource, ApiError) = {
-        configHelper.getAndValidateBrokerId(resource)
-        configHelper.validateLogLevelConfigs(alterConfigOps)
-        resource -> ApiError.NONE
-      }
-      Try(validateLogLevelConfigs(resource, alterConfigOps))
-    }
-
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
     val (configs, validateOnly) = configHelper.unmarshalIncrementalRequest(alterConfigsRequest)
 
     // Config alterations should be validated on the broker that the config(s) are for before forwarding them to the Zk or KRaft controller.
     val results = configs.map { case (resource, alterConfigOps) =>
         if (resource.`type` == ConfigResource.Type.BROKER) {
-          tryValidateBrokerConfigs(resource, alterConfigOps.toSeq, validateOnly) match {
+          configHelper.tryValidateIncrementalBrokerConfigs(resource, alterConfigOps.toSeq, validateOnly, metadataSupport) match {
             case Success(i) => i
             case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, None, Some(alterConfigOps.toSeq))
           }
         } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
-          tryValidateLogLevelConfigs(resource, alterConfigOps.toSeq) match {
+          configHelper.tryValidateLogLevelConfigs(resource, alterConfigOps.toSeq) match {
             case Success(i) => i
             case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, None, Some(alterConfigOps.toSeq))
           }
