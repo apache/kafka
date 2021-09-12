@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
@@ -789,7 +788,6 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldWriteLatestOffsetsToCheckpointOnShutdown() throws Exception {
-
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
@@ -837,29 +835,33 @@ public class EosIntegrationTest {
             expectedState.remove(kv2);
         });
 
-        // Verify that the checkpointed offsets in the match exactly to max offset of the records in the changelog
+        // Verify that the checkpointed offsets match exactly with max offset of the records in the changelog
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateStoreDir + ".checkpoint"));
         final Map<TopicPartition, Long> checkpointedOffsets = checkpoint.read();
-        checkpointedOffsets.forEach((tp, checkpointedOffset) ->
-                assertEquals("Checkpointed offset does not match end of changelog", getMaxOffset(tp), checkpointedOffset)
-        );
+        checkpointedOffsets.forEach(this::verifyChangelogMaxRecordOffsetMatchesCheckpointedOffset);
     }
 
-    private Long getMaxOffset(final TopicPartition tp) {
+    private void verifyChangelogMaxRecordOffsetMatchesCheckpointedOffset(final TopicPartition tp, final long checkpointedOffset) {
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerConfig(CLUSTER.bootstrapServers(), Serdes.ByteArray().deserializer().getClass(), Serdes.ByteArray().deserializer().getClass()));
+        final List<TopicPartition> partitions = Collections.singletonList(tp);
+        consumer.assign(partitions);
+        consumer.seekToEnd(partitions);
+        final long topicEndOffset = consumer.position(tp);
 
-        consumer.assign(Collections.singletonList(tp));
-        consumer.seekToEnd(Collections.singletonList(tp));
-        long offset = consumer.position(tp);
-        while (offset >= 0) {
-            consumer.seek(tp, offset--);
-            final ConsumerRecords<String, String> poll = consumer.poll(Duration.ofMillis(50));
-            final List<ConsumerRecord<String, String>> records = poll.records(tp);
+        assertTrue("changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset,
+                topicEndOffset >= checkpointedOffset);
+
+        consumer.seekToBeginning(partitions);
+
+        Long maxRecordOffset = null;
+        while (consumer.position(tp) != topicEndOffset) {
+            final List<ConsumerRecord<String, String>> records = consumer.poll(Duration.ofMillis(0)).records(tp);
             if (!records.isEmpty()) {
-                return records.get(records.size() - 1).offset();
+                maxRecordOffset = records.get(records.size() - 1).offset();
             }
         }
-        return null;
+
+        assertEquals("Checkpointed offset does not match end of changelog", maxRecordOffset, (Long) checkpointedOffset);
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
