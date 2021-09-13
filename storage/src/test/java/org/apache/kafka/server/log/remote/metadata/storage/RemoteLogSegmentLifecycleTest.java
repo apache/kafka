@@ -433,12 +433,22 @@ public class RemoteLogSegmentLifecycleTest {
 
         @Override
         public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
-            topicBasedRlmm().addRemoteLogSegmentMetadata(segmentMetadata);
+            try {
+                // Wait until the segment is added successfully.
+                topicBasedRlmm().addRemoteLogSegmentMetadata(segmentMetadata).get();
+            } catch (Exception e) {
+                throw new RemoteStorageException(e);
+            }
         }
 
         @Override
         public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate) throws RemoteStorageException {
-            topicBasedRlmm().updateRemoteLogSegmentMetadata(segmentMetadataUpdate);
+            try {
+                // Wait until the segment is updated successfully.
+                topicBasedRlmm().updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
+            } catch (Exception e) {
+                throw new RemoteStorageException(e);
+            }
         }
 
         @Override
