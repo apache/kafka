@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
-import scala.jdk.javaapi.CollectionConverters;
+import scala.collection.JavaConverters;
 
 
 public class LogManagerBuilder {
@@ -146,9 +146,8 @@ public class LogManagerBuilder {
         if (brokerTopicStats == null) throw new RuntimeException("you must set brokerTopicStats");
         if (logDirFailureChannel == null) throw new RuntimeException("you must set logDirFailureChannel");
 
-        return new LogManager(0,
-                              CollectionConverters.asScala(logDirs),
-                              CollectionConverters.asScala(initialOfflineDirs),
+        return new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
+                              JavaConverters.asScalaIteratorConverter(initialOfflineDirs.iterator()).asScala().toSeq(),
                               configRepository,
                               initialDefaultConfig,
                               cleanerConfig,
