@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -83,14 +84,14 @@ public class RegexSchemaRenamer<R extends ConnectRecord<R>> implements Transform
     private static final String PURPOSE = "rename schemas";
 
     private Pattern regex;
-    private String replacemnt;
+    private String replacement;
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         regex = parseRegex(config.getString(REGEX_CONFIG));
-        replacemnt = config.getString(REPLACEMENT_CONFIG);
+        replacement = config.getString(REPLACEMENT_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
@@ -115,7 +116,7 @@ public class RegexSchemaRenamer<R extends ConnectRecord<R>> implements Transform
     boolean hasSchema(R record) {
         Schema key = record.keySchema();
         Schema value = record.valueSchema();
-        return (key != null && key instanceof Struct)  || (value != null && value instanceof Struct);
+        return (key != null && Type.STRUCT.equals(key.type()))  || (value != null && Type.STRUCT.equals(value.type()));
     }
 
 
@@ -158,11 +159,13 @@ public class RegexSchemaRenamer<R extends ConnectRecord<R>> implements Transform
     }
     
     String newSchemaName(Schema schema) {
+        if (schema == null)
+            return null;
         String name = schema.name(); 
         if (name == null)
             return null;
         if (regex.matcher(name).find())
-            return regex.matcher(name).replaceFirst(replacemnt);
+            return regex.matcher(name).replaceFirst(replacement);
         return name;
     }
     
@@ -193,7 +196,7 @@ public class RegexSchemaRenamer<R extends ConnectRecord<R>> implements Transform
         } catch (PatternSyntaxException e) {
             throw new ConfigException("Invalid regex expression", e);
         }
-    }
+    }    
     
     public class RenamedSchema {
         public final Boolean isRenamed;
