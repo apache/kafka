@@ -1235,4 +1235,76 @@ class KafkaConfigTest {
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
+
+  @Test
+  def testPopulateSynonymsOnEmptyMap(): Unit = {
+    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
+  }
+
+  @Test
+  def testPopulateSynonymsOnMapWithoutNodeId(): Unit = {
+    val input =  new util.HashMap[String, String]()
+    input.put(KafkaConfig.BrokerIdProp, "4")
+    val expectedOutput = new util.HashMap[String, String]()
+    expectedOutput.put(KafkaConfig.BrokerIdProp, "4")
+    expectedOutput.put(KafkaConfig.NodeIdProp, "4")
+    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
+  }
+
+  @Test
+  def testPopulateSynonymsOnMapWithoutBrokerId(): Unit = {
+    val input =  new util.HashMap[String, String]()
+    input.put(KafkaConfig.NodeIdProp, "4")
+    val expectedOutput = new util.HashMap[String, String]()
+    expectedOutput.put(KafkaConfig.BrokerIdProp, "4")
+    expectedOutput.put(KafkaConfig.NodeIdProp, "4")
+    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
+  }
+
+  @Test
+  def testNodeIdMustNotBeDifferentThanBrokerId(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.BrokerIdProp, "1")
+    props.setProperty(KafkaConfig.NodeIdProp, "2")
+    assertEquals("You must set `node.id` to the same value as `broker.id`.",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
+  }
+
+  @Test
+  def testNodeIdOrBrokerIdMustBeSetWithKraft(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    assertEquals("Missing configuration `node.id` which is required when `process.roles` " +
+      "is defined (i.e. when running in KRaft mode).",
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
+  }
+
+  @Test
+  def testNodeIdIsInferredByBrokerIdWithKraft(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.setProperty(KafkaConfig.BrokerIdProp, "3")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(3, config.brokerId)
+    assertEquals(3, config.nodeId)
+    val originals = config.originals()
+    assertEquals("3", originals.get(KafkaConfig.BrokerIdProp))
+    assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
+  }
+
+  @Test
+  def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.setProperty(KafkaConfig.NodeIdProp, "3")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(3, config.brokerId)
+    assertEquals(3, config.nodeId)
+    val originals = config.originals()
+    assertEquals("3", originals.get(KafkaConfig.BrokerIdProp))
+    assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
+  }
 }
