@@ -146,7 +146,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     outerJoinStore.ifPresent(store -> {
                         // blind-delete the joined record from the non-joined outer window store;
-                        // we do not use the delete() call since that would incur an extra get
+                        // we may delete some values with the same key early but since we are going
+                        // range over all values of the same key this is okay;
+                        // we do not use the delete() call since that would incur an extra get;
                         store.put(TimestampedKeyAndJoinSide.make(!isLeftSide, key, otherRecordTimestamp), null);
                     });
 
@@ -237,6 +239,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     context().forward(key, nullJoinedValue, To.all().withTimestamp(timestamp));
 
                     // blind-delete the key from the outer window store now it is emitted;
+                    // we may delete some values of the same key which has not been iterated yet,
+                    // but since the iterator would still return that key this is fine.
                     // we do not use the delete() call since that would incur an extra get
                     store.put(timestampedKeyAndJoinSide, null);
                 }

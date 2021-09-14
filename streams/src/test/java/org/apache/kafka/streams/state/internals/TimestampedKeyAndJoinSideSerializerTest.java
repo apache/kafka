@@ -24,7 +24,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThrows;
 
-public class TimestampedTimestampedKeyAndJoinSideSerializerTest {
+public class TimestampedKeyAndJoinSideSerializerTest {
     private static final String TOPIC = "some-topic";
 
     private static final TimestampedKeyAndJoinSideSerde<String> STRING_SERDE =

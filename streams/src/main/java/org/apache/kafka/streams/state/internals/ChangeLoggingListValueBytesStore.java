@@ -19,9 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class ChangeLoggingTimeOrderedKeyValueBytesStore extends ChangeLoggingKeyValueBytesStore {
+public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytesStore {
 
-    ChangeLoggingTimeOrderedKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
+    ChangeLoggingListValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
     }
 
@@ -29,8 +29,9 @@ public class ChangeLoggingTimeOrderedKeyValueBytesStore extends ChangeLoggingKey
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        // we need to log the new value, which is different from the put value;
-        // if the value is a tombstone we can save on the get call
+        // the provided new value will be added to the list in the inner put()
+        // we need to log the full new list and thus call get() on the inner store below
+        // if the value is a tombstone, we delete the whole list and thus can save the get call
         if (value == null) {
             log(key, null);
         } else {

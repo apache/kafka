@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.Serde;
 /**
  * A wrapper key-value store that serializes the record values bytes as a list.
  * As a result put calls would be interpreted as a get-append-put to the underlying RocksDB store.
+ * A put(k,null) will still delete the key, ie, the full list of all values of this key.
  * Range iterators would also flatten the value lists and return the values one-by-one.
  *
  * This store is used for cases where we do not want to de-duplicate values of the same keys but want to retain all such values.
@@ -85,7 +86,9 @@ public class ListValueStore
 
     @Override
     public byte[] get(final Bytes key) {
-        return wrapped().get(key);
+        // we intentionally disable get calls since the returned bytes would
+        // represent a list, not a single value; we need to have a new API for delete if we do need it
+        throw new UnsupportedOperationException("get not supported");
     }
 
     @Override
@@ -95,7 +98,7 @@ public class ListValueStore
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new WrappedStoreIterator(wrapped().all());
+        return new ValueListIterator(wrapped().all());
     }
 
     @Override
@@ -103,7 +106,7 @@ public class ListValueStore
         return wrapped().approximateNumEntries();
     }
 
-    private static class WrappedStoreIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
+    private static class ValueListIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
         implements KeyValueIterator<Bytes, byte[]> {
 
         private final KeyValueIterator<Bytes, byte[]> bytesIterator;
@@ -111,7 +114,7 @@ public class ListValueStore
         private KeyValue<Bytes, byte[]> next;
         private Bytes nextKey;
 
-        WrappedStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator) {
+        ValueListIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator) {
             this.bytesIterator = bytesIterator;
         }
 

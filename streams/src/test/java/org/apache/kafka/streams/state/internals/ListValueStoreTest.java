@@ -34,6 +34,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.Collections;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
@@ -153,22 +154,29 @@ public class ListValueStoreTest {
     }
 
     @Test
-    public void shouldEarlyClosedIteratorStillGetAllRecords() {
-        listStore.put(0, "zero");
+    public void shouldAllowDeleteWhileIterateRecords() {
+        listStore.put(0, "zero1");
+        listStore.put(0, "zero2");
         listStore.put(1, "one");
 
-        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> zero1 = KeyValue.pair(0, "zero1");
+        final KeyValue<Integer, String> zero2 = KeyValue.pair(0, "zero2");
         final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
 
         final KeyValueIterator<Integer, String> it = listStore.all();
-        assertEquals(zero, it.next());
+        assertEquals(zero1, it.next());
+
+        listStore.put(0, null);
+
+        // zero2 should still be returned from the iterator after the delete call
+        assertEquals(zero2, it.next());
+
         it.close();
 
-        // A new all() iterator after a previous all() iterator was closed should return all elements.
+        // A new all() iterator after a previous all() iterator was closed should not return deleted records.
         assertEquals(
-            asList(zero, one),
-            toList(listStore.all())
+                Collections.singletonList(one),
+                toList(listStore.all())
         );
     }
-
 }

@@ -58,6 +58,6 @@ public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyV
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingTimeOrderedKeyValueBytesStore(inner);
+        return new ChangeLoggingListValueBytesStore(inner);
     }
 }
