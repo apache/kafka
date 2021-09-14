@@ -22,39 +22,61 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
+@RunWith(Parameterized.class)
 public class ListValueStoreTest {
-    private static final String STORE_NAME = "rocksDB list value store";
+    private enum StoreType { InMemory, RocksDB }
 
-    MockRecordCollector recordCollector;
-    KeyValueStore<Integer, String> listStore;
-    InternalMockProcessorContext<Integer, String> context;
+    private final StoreType storeType;
+    private KeyValueStore<Integer, String> listStore;
 
     final File baseDir = TestUtils.tempDirectory("test");
+
+    public ListValueStoreTest(final StoreType type) {
+        this.storeType = type;
+    }
+
+    @Parameterized.Parameters(name = "store type = {0}")
+    public static Collection<Object[]> data() {
+        final List<Object[]> values = new ArrayList<>();
+        for (final StoreType type : Arrays.asList(StoreType.InMemory, StoreType.RocksDB)) {
+            values.add(new Object[]{type});
+        }
+        return values;
+    }
 
     @Before
     public void setup() {
         listStore = buildStore(Serdes.Integer(), Serdes.String());
 
-        recordCollector = new MockRecordCollector();
-        context = new InternalMockProcessorContext<>(
+        final MockRecordCollector recordCollector = new MockRecordCollector();
+        final InternalMockProcessorContext<Integer, String> context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
             Serdes.Integer(),
@@ -76,7 +98,8 @@ public class ListValueStoreTest {
     <K, V> KeyValueStore<K, V> buildStore(final Serde<K> keySerde,
                                           final Serde<V> valueSerde) {
         return new ListValueStoreBuilder<>(
-            new RocksDbKeyValueBytesStoreSupplier(STORE_NAME, false),
+            storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
+                : Stores.inMemoryKeyValueStore("in-memory list store"),
             keySerde,
             valueSerde,
             Time.SYSTEM)
@@ -174,9 +197,20 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertEquals(
-                Collections.singletonList(one),
-                toList(listStore.all())
-        );
+        assertEquals(Collections.singletonList(one), toList(listStore.all()));
+    }
+
+    @Test
+    public void shouldNotReturnMoreDataWhenIteratorClosed() {
+        listStore.put(0, "zero1");
+        listStore.put(0, "zero2");
+        listStore.put(1, "one");
+
+        final KeyValueIterator<Integer, String> it = listStore.all();
+
+        it.close();
+
+        // A new all() iterator after a previous all() iterator was closed should not return deleted records.
+        assertThrows(InvalidStateStoreException.class, it::next);
     }
 }

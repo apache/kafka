@@ -86,9 +86,7 @@ public class ListValueStore
 
     @Override
     public byte[] get(final Bytes key) {
-        // we intentionally disable get calls since the returned bytes would
-        // represent a list, not a single value; we need to have a new API for delete if we do need it
-        throw new UnsupportedOperationException("get not supported");
+        return wrapped().get(key);
     }
 
     @Override
@@ -145,6 +143,9 @@ public class ListValueStore
         @Override
         public void close() {
             bytesIterator.close();
+            // also need to clear the current list buffer since
+            // otherwise even after close the iter can still return data
+            currList.clear();
         }
     }
 }
