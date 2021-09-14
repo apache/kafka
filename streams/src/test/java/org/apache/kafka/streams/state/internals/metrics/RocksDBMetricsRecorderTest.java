@@ -27,7 +27,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.rocksdb.Cache;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
@@ -40,10 +39,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.*;
 
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
@@ -82,6 +78,7 @@ public class RocksDBMetricsRecorderTest {
 
     private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
     private MockedStatic<RocksDBMetrics> rocksDBMetricsMockedStatic;
+    private RocksDBMetricContext metricsContext;
 
     @Before
     public void setUp() {
@@ -101,7 +98,7 @@ public class RocksDBMetricsRecorderTest {
         setUpMetricsMock();
 
         recorder.init(streamsMetrics, TASK_ID1);
-
+        verifyMetricsMock();
         assertThat(recorder.taskId(), is(TASK_ID1));
     }
 
@@ -312,6 +309,7 @@ public class RocksDBMetricsRecorderTest {
     public void shouldNotCloseStatisticsWhenValueProvidersWithoutStatisticsAreRemoved() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
         reset(statisticsToAdd1);
+        statisticsToAdd1.close();
 
         recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
     }
@@ -429,10 +427,58 @@ public class RocksDBMetricsRecorderTest {
     }
 
     private void setUpMetricsMock() {
-        rocksDBMetricsMockedStatic.close();
-        rocksDBMetricsMockedStatic = Mockito.mockStatic(RocksDBMetrics.class);
-        final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+        metricsContext = new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(bytesWrittenToDatabaseSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(bytesReadFromDatabaseSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableBytesFlushedSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(memtableBytesFlushedSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(memtableHitRatioSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.writeStallDurationSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(writeStallDurationSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(blockCacheDataHitRatioSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(blockCacheIndexHitRatioSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(blockCacheFilterHitRatioSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(bytesWrittenDuringCompactionSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(bytesReadDuringCompactionSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfOpenFilesSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(numberOfOpenFilesSensor);
+        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfFileErrorsSensor(eq(streamsMetrics), eq(metricsContext)))
+            .thenReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumEntriesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumDeletesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumDeletesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addMemTableFlushPending(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumRunningFlushesMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addCompactionPendingMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumRunningCompactionsMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addEstimatePendingCompactionBytesMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addTotalSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addLiveSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addNumLiveVersionMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addBlockCacheCapacityMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addBlockCacheUsageMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), any());
+        RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), any());
+    }
+
+    private void setUpMetricsStubMock() {
+        metricsContext = new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
             .thenReturn(bytesWrittenToDatabaseSensor);
         rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
@@ -481,55 +527,18 @@ public class RocksDBMetricsRecorderTest {
         RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), any());
     }
 
-    private void setUpMetricsStubMock() {
-        final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
-
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
-            .thenReturn(bytesWrittenToDatabaseSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
-            .thenReturn(bytesReadFromDatabaseSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricsContext))
-            .thenReturn(memtableBytesFlushedSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.memtableHitRatioSensor(streamsMetrics, metricsContext))
-            .thenReturn(memtableHitRatioSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.writeStallDurationSensor(streamsMetrics, metricsContext))
-            .thenReturn(writeStallDurationSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(streamsMetrics, metricsContext))
-            .thenReturn(blockCacheDataHitRatioSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(streamsMetrics, metricsContext))
-            .thenReturn(blockCacheIndexHitRatioSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(streamsMetrics, metricsContext))
-            .thenReturn(blockCacheFilterHitRatioSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(streamsMetrics, metricsContext))
-            .thenReturn(bytesWrittenDuringCompactionSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricsContext))
-            .thenReturn(bytesReadDuringCompactionSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricsContext))
-            .thenReturn(numberOfOpenFilesSensor);
-        rocksDBMetricsMockedStatic.when(() -> RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
-            .thenReturn(numberOfFileErrorsSensor);
-        RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumEntriesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumDeletesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumDeletesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addMemTableFlushPending(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumRunningFlushesMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addCompactionPendingMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumRunningCompactionsMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addEstimatePendingCompactionBytesMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addTotalSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addLiveSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addNumLiveVersionMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addBlockCacheCapacityMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addBlockCacheUsageMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), any());
-        RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), any());
+    private void verifyMetricsMock() {
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.memtableHitRatioSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.writeStallDurationSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.blockCacheDataHitRatioSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.blockCacheIndexHitRatioSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.blockCacheFilterHitRatioSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.bytesWrittenDuringCompactionSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricsContext), atLeastOnce());
+        rocksDBMetricsMockedStatic.verify(() -> RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext), atLeastOnce());
     }
 }
