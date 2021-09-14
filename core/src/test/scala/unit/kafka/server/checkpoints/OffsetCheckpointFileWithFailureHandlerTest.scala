@@ -26,7 +26,7 @@ import org.mockito.Mockito
 
 import scala.collection.Map
 
-class OffsetCheckpointFileTest extends Logging {
+class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit = {
@@ -93,7 +93,7 @@ class OffsetCheckpointFileTest extends Logging {
   def shouldThrowIfVersionIsNotRecognised(): Unit = {
     val file = TestUtils.tempFile()
     val logDirFailureChannel = new LogDirFailureChannel(10)
-    val checkpointFile = new CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1,
+    val checkpointFile = new CheckpointFileWithFailureHandler(file, OffsetCheckpointFile.CurrentVersion + 1,
       OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
     checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
     assertThrows(classOf[KafkaStorageException], () => new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read())

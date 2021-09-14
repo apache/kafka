@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -467,14 +468,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public void put(final long time,
-                    final K key,
-                    final Change<V> value,
+                    final Record<K, Change<V>> record,
                     final ProcessorRecordContext recordContext) {
-        requireNonNull(value, "value cannot be null");
+        requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, value);
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, record.key()));
+        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, record.value());
 
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;

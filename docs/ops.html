@@ -1891,6 +1891,16 @@ $ bin/kafka-acls.sh \
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>io-wait-time-ns-total</td>
+        <td>The total time the I/O thread spent waiting in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>io-waittime-total</td>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent waiting in nanoseconds. Replacement is <code>io-wait-time-ns-total</code>.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>io-wait-ratio</td>
         <td>The fraction of time the I/O thread spent waiting.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
@@ -1898,6 +1908,16 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>io-time-ns-avg</td>
         <td>The average length of time for I/O per select call in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>io-time-ns-total</td>
+        <td>The total time the I/O thread spent doing I/O in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iotime-total</td>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent doing I/O in nanoseconds. Replacement is <code>io-time-ns-total</code>.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -2070,6 +2090,16 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>bufferpool-wait-time</td>
         <td>The fraction of time an appender waits for space allocation.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-time-total</td>
+        <td><b>*Deprecated*</b> The total time an appender waits for space allocation in nanoseconds. Replacement is <code>bufferpool-wait-time-ns-total</code></td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-time-ns-total</td>
+        <td>The total time an appender waits for space allocation in nanoseconds.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
 

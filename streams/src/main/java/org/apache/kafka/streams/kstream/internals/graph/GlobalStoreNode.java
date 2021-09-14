@@ -22,8 +22,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-import java.util.Properties;
-
 public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreNode<S> {
 
     private final String sourceName;
@@ -49,7 +47,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,
                                        sourceName,

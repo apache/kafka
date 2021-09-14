@@ -83,6 +83,7 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         assertUnmappedKey(partitionErrors(Errors.NOT_COORDINATOR));
         assertUnmappedKey(partitionErrors(Errors.COORDINATOR_NOT_AVAILABLE));
         assertRetriableError(partitionErrors(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+        assertRetriableError(partitionErrors(Errors.REBALANCE_IN_PROGRESS));
     }
 
     @Test
@@ -94,7 +95,6 @@ public class AlterConsumerGroupOffsetsHandlerTest {
         assertFatalError(partitionErrors(Errors.OFFSET_METADATA_TOO_LARGE));
         assertFatalError(partitionErrors(Errors.ILLEGAL_GENERATION));
         assertFatalError(partitionErrors(Errors.UNKNOWN_MEMBER_ID));
-        assertFatalError(partitionErrors(Errors.REBALANCE_IN_PROGRESS));
         assertFatalError(partitionErrors(Errors.INVALID_COMMIT_OFFSET_SIZE));
         assertFatalError(partitionErrors(Errors.UNKNOWN_SERVER_ERROR));
     }

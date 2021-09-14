@@ -577,7 +577,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
-        if (commitNeeded) {
+        if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
