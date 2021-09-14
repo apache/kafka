@@ -22,19 +22,189 @@ import java.util.{Collections, Properties}
 import kafka.log.LogConfig
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse, IncrementalAlterConfigsRequest}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, mutable, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Try
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
+
+  def unmarshalIncrementalRequest(incrementalRequest: IncrementalAlterConfigsRequest): (Map[ConfigResource, Seq[AlterConfigOp]], Boolean) = {
+    (incrementalRequest.data.resources.iterator.asScala.map { alterConfigResource =>
+      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
+        alterConfigResource.resourceName)
+      configResource -> alterConfigResource.configs.iterator.asScala.map {
+        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
+          OpType.forId(alterConfig.configOperation))
+      }.toBuffer
+    }.toMap, incrementalRequest.data.validateOnly)
+  }
+
+
+  def getBrokerId(resource: ConfigResource) = {
+    if (resource.name == null || resource.name.isEmpty)
+      None
+    else {
+      Some(resourceNameToBrokerId(resource.name))
+    }
+  }
+
+  def getAndValidateBrokerId(resource: ConfigResource) = {
+    val id = getBrokerId(resource)
+    if (id.nonEmpty && (id.get != this.config.brokerId))
+      throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
+    id
+  }
+
+  def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+
+    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
+      val configKey = configKeys(configName)
+      if (configKey == null)
+        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
+      configKey.`type` == ConfigDef.Type.LIST
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry.name
+      alterConfigOp.opType() match {
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
+        case OpType.APPEND => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+        case OpType.SUBTRACT => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+      }
+    }
+  }
+
+  def validateLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
+    def validateLoggerNameExists(loggerName: String): Unit = {
+      if (!Log4jController.loggerExists(loggerName))
+        throw new ConfigException(s"Logger $loggerName does not exist!")
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val loggerName = alterConfigOp.configEntry.name
+      alterConfigOp.opType() match {
+        case OpType.SET =>
+          validateLoggerNameExists(loggerName)
+          val logLevel = alterConfigOp.configEntry.value
+          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
+            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
+            throw new ConfigException(
+              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
+              s"Valid log levels are $validLevelsStr"
+            )
+          }
+        case OpType.DELETE =>
+          validateLoggerNameExists(loggerName)
+          if (loggerName == Log4jController.ROOT_LOGGER)
+            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
+        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+      }
+    }
+  }
+
+  def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
+    configProps.asScala.map {
+      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
+  def validateBrokerConfigs(resource: ConfigResource, 
+                            validateOnly: Boolean, 
+                            configProps: Properties): (ConfigResource, ApiError) = {
+    val brokerId = getAndValidateBrokerId(resource)
+    val perBrokerConfig = brokerId.nonEmpty
+    // Validate and process the reconfiguration
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  def tryValidateIncrementalBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean, metadataSupport: MetadataSupport): Try[(ConfigResource, ApiError)] = {
+    def prepareThenValidateIncrementalAlterBrokerConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp], validateOnly: Boolean): (ConfigResource, ApiError) = {
+      val brokerId = getAndValidateBrokerId(resource)
+      val perBrokerConfig = brokerId.nonEmpty
+      val configProps = metadataSupport match {
+        // Get old configs before applying the config alteration
+        case ZkSupport(adminManager, _, _, _, _) =>
+          val persistentProps = adminManager.fetchBrokerConfigOrDefault(brokerId)
+          this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+        case RaftSupport(_,_) =>
+          val persistentProps = if (perBrokerConfig) this.config.dynamicConfig.currentDynamicBrokerConfigs 
+          else this.config.dynamicConfig.currentDynamicDefaultConfigs
+          val configProps = new Properties()
+          configProps.putAll(persistentProps.asJava)
+          configProps
+      }
+      // Apply config alterations to the old configs
+      prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+      // Validate the configs
+      validateBrokerConfigs(resource, validateOnly, configProps)
+    }
+    Try(prepareThenValidateIncrementalAlterBrokerConfigs(resource, alterConfigOps, validateOnly))
+  }
+
+  def tryValidateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): Try[(ConfigResource, ApiError)] = {
+    def validateLogLevelConfigs(resource: ConfigResource, alterConfigOps: Seq[AlterConfigOp]): (ConfigResource, ApiError) = {
+      getAndValidateBrokerId(resource)
+      this.validateLogLevelConfigs(alterConfigOps)
+      resource -> ApiError.NONE
+    }
+    Try(validateLogLevelConfigs(resource, alterConfigOps))
+  }
+
+  def handleValidateAlterConfigsError(exception: Throwable, resource: ConfigResource, configProps: Option[Properties], alterOps: Option[Seq[AlterConfigOp]]): (ConfigResource, ApiError) = {
+    exception match {
+      case e @ (_: ConfigException | _: IllegalArgumentException) =>
+        val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+        info(message)
+        resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+      case e: Throwable =>
+        // Log client errors at a lower level than unexpected exceptions
+        val configs = if (configProps.nonEmpty) toLoggableProps(resource, configProps.get).mkString(",") else alterOps.getOrElse("No incremental alter config operations define")
+        val message = s"Error processing alter configs request for resource $resource, config $configs"
+        if (e.isInstanceOf[ApiException])
+          info(message, e)
+        else
+          error(message, e)
+        resource -> ApiError.fromThrowable(e)
+    }
+  }
 
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,

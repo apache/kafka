@@ -30,8 +30,6 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
@@ -75,6 +73,7 @@ import org.apache.kafka.server.authorizer._
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
+import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
@@ -198,7 +197,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
         case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
-        case ApiKeys.ALTER_CONFIGS => maybeForwardToController(request, handleAlterConfigsRequest)
+        case ApiKeys.ALTER_CONFIGS => handleDynamicConfigs(request, handleAlterConfigsRequest, 
+          validateAlterBrokerConfigs)
         case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
@@ -210,7 +210,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal)
         case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
-        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForwardToController(request, handleIncrementalAlterConfigsRequest)
+        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleDynamicConfigs(request, handleIncrementalAlterConfigsRequest, 
+          validateIncrementalAlterBrokerConfigs)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request, requestLocal)
@@ -2622,6 +2623,27 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setTopics(endOffsetsForAllTopics)))
   }
 
+  def handleDynamicConfigs(request: RequestChannel.Request, persist: RequestChannel.Request => Unit, 
+    validate: RequestChannel.Request => Boolean): Unit = {
+    val shouldPersist = if (config.requiresZookeeper) {
+      metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request)).controller.isActive
+    } else {
+      false
+    }
+    if (request.isForwarded) {
+      if (shouldPersist)
+        // Only persist the configs here if the request ended up at the active zookeeper controller after validation and 
+        // being forwarded. In KRaft, the configs are persisted in ControllerApis.
+        persist(request)
+    } else {
+      // Validate the configs on the broker that the configs are for
+      if (validate(request))
+        // It is possible that a zookeeper broker is also the active controller. If that is the case persist the configs. 
+        // Otherwise, forward the request.
+        if (shouldPersist) persist(request) else forwardToControllerOrFail(request)
+    }
+  }
+
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val alterConfigsRequest = request.body[AlterConfigsRequest]
@@ -2653,6 +2675,43 @@ class KafkaApis(val requestChannel: RequestChannel,
       new AlterConfigsResponse(data)
     }
     requestHelper.sendResponseMaybeThrottle(request, responseCallback)
+  }
+
+  def validateAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
+    val alterConfigsRequest = request.body[AlterConfigsRequest]
+
+    // Per broker config alterations should be validated on the broker that the config(s) are for before forwarding them to the Zk or KRaft controller.
+    val brokerConfigs = alterConfigsRequest.configs.asScala.filter(entry => entry._1.`type` == ConfigResource.Type.BROKER)
+    // Validate per-broker dynamic configs
+    val results = brokerConfigs.map { case (resource, config) =>
+      val configProps = new Properties
+      config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+        configProps.setProperty(configEntry.name, configEntry.value)
+      }
+      Try(configHelper.validateBrokerConfigs(resource, alterConfigsRequest.validateOnly, configProps)) match {
+        case Success(i) => i
+        case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, Some(configProps), None)
+      }
+    }.toMap
+
+    val shouldForwardRequest = results.filterNot(_._2 == ApiError.NONE).isEmpty && !alterConfigsRequest.validateOnly
+    if (!shouldForwardRequest) {
+      // If validation fails for any reason or if validateOnly is true, send response back to the client and return false indicating that validation has failed.
+      def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+        val data = new AlterConfigsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+        results.foreach{ case (resource, error) =>
+          data.responses().add(new AlterConfigsResourceResponse()
+            .setErrorCode(error.error.code)
+            .setErrorMessage(error.message)
+            .setResourceName(resource.name)
+            .setResourceType(resource.`type`.id))
+        }
+        new AlterConfigsResponse(data)
+      }
+      requestHelper.sendResponseMaybeThrottle(request, responseCallback)
+    } 
+    shouldForwardRequest
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
@@ -2755,14 +2814,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
 
-    val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
-        alterConfigResource.resourceName)
-      configResource -> alterConfigResource.configs.iterator.asScala.map {
-        alterConfig => new AlterConfigOp(new ConfigEntry(alterConfig.name, alterConfig.value),
-          OpType.forId(alterConfig.configOperation))
-      }.toBuffer
-    }.toMap
+    val (configs, validateOnly) = configHelper.unmarshalIncrementalRequest(alterConfigsRequest)
 
     val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
       resource.`type` match {
@@ -2774,13 +2826,43 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
       requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
+  }
+
+  def validateIncrementalAlterBrokerConfigs(request: RequestChannel.Request): Boolean = {
+    val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
+    val (configs, validateOnly) = configHelper.unmarshalIncrementalRequest(alterConfigsRequest)
+
+    // Config alterations should be validated on the broker that the config(s) are for before forwarding them to the Zk or KRaft controller.
+    val results = configs.map { case (resource, alterConfigOps) =>
+        if (resource.`type` == ConfigResource.Type.BROKER) {
+          configHelper.tryValidateIncrementalBrokerConfigs(resource, alterConfigOps.toSeq, validateOnly, metadataSupport) match {
+            case Success(i) => i
+            case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, None, Some(alterConfigOps.toSeq))
+          }
+        } else if (resource.`type` == ConfigResource.Type.BROKER_LOGGER) {
+          configHelper.tryValidateLogLevelConfigs(resource, alterConfigOps.toSeq) match {
+            case Success(i) => i
+            case Failure(i) => configHelper.handleValidateAlterConfigsError(i, resource, None, Some(alterConfigOps.toSeq))
+          }
+        } else {
+            resource -> ApiError.NONE
+        }
+    }.toMap
+
+    val shouldForwardRequest = results.filterNot(_._2 == ApiError.NONE).isEmpty && !validateOnly
+    if (!shouldForwardRequest) {
+      // If validation fails for any reason or if validateOnly is true, send response back to the client and return false indicating that validation has failed.
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
+        requestThrottleMs, results.asJava))
+    } 
+    shouldForwardRequest
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {

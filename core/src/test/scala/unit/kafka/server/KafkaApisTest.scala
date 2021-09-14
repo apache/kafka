@@ -286,7 +286,7 @@ class KafkaApisTest {
     val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
       clientId, 0)
 
-    EasyMock.expect(controller.isActive).andReturn(true)
+    EasyMock.expect(controller.isActive).andReturn(true).anyTimes
 
     authorizeResource(authorizer, operation, ResourceType.TOPIC, resourceName, AuthorizationResult.ALLOWED)
 
@@ -4059,21 +4059,9 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
-  }
-
-  @Test
   def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
-  }
-
-  @Test
-  def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
   }
 
   @Test

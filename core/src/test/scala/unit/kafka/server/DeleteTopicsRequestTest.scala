@@ -167,7 +167,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testNotController(): Unit = {
+  def testNotControllerErrorAbsentWhenRequestsForwarded(): Unit = {
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
           .setTopicNames(Collections.singletonList("not-controller"))
@@ -175,7 +175,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
     val error = response.data.responses.find("not-controller").errorCode()
-    assertEquals(Errors.NOT_CONTROLLER.code,  error, "Expected controller error when routed incorrectly")
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,  error, 
+      "Expected unknow topic or partition error instead of not controller error now that request forwarding is enabled.")
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
