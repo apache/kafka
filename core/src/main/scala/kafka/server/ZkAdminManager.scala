@@ -26,7 +26,7 @@ import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
-import kafka.utils._
+import kafka.utils.{immutable => _, _}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 
-import scala.collection.{Map, mutable, _}
+import scala.collection.{Map, _}
 import scala.jdk.CollectionConverters._
 
 class ZkAdminManager(val config: KafkaConfig,
@@ -874,7 +874,7 @@ class ZkAdminManager(val config: KafkaConfig,
                 props.setProperty(op.key, value.toString)
               case ConfigDef.Type.LONG | ConfigDef.Type.INT =>
                 val epsilon = 1e-6
-                val intValue = if (key.`type` == ConfigDef.Type.LONG)
+                val intValue: Long = if (key.`type` == ConfigDef.Type.LONG)
                   (value + epsilon).toLong
                 else
                   (value + epsilon).toInt

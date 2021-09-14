@@ -150,7 +150,7 @@ class KafkaNetworkChannel(
           request.createdTimeMs,
           destination = node,
           request = buildRequest(request.data),
-          handler = onComplete
+          handler = onComplete(_)
         ))
 
       case None =>

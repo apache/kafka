@@ -28,14 +28,15 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.14'
-def defaultScala30Version = '3.0.0'
+def defaultScala30Version = '3.0.2'
 def defaultScala213Version = '2.13.6'
 if (hasProperty('scalaVersion')) {
+  println("has scalaversion " + scalaVersion)
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
   } else if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
-  } else if (scalaVersion == '3.0') {
+  } else if (scalaVersion.startsWith('3.0')) {
     versions["scala"] = defaultScala30Version
     versions["baseScala"] = '3'
     versions["baseScalaForSpecialLibs"] = '2.13'
@@ -45,7 +46,7 @@ if (hasProperty('scalaVersion')) {
     versions["scala"] = scalaVersion
   }
 } else {
-  versions["scala"] = defaultScala212Version
+  versions["scala"] = defaultScala30Version
 }
 
 /* Resolve base Scala version according to these patterns:
@@ -201,7 +202,7 @@ libs += [
   scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScalaForSpecialLibs:$versions.scalaJava8Compat",
   scalaLibrary: "org.scala-lang:scala$versions.postfixScala-library$versions.postfixScalaOptionalVersion:$versions.scala",
   scalaCompiler: "org.scala-lang:scala$versions.postfixScala-compiler$versions.postfixScalaOptionalVersion:$versions.scala",
-  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScalaForSpecialLibs:$versions.scalaLogging",
+  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",

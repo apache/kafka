@@ -172,7 +172,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   }
 
   def overriddenConfigsAsLoggableString: String = {
-    val overriddenTopicProps = props.asScala.collect {
+    val overriddenTopicProps: Map[String, Object] = props.asScala.collect {
       case (k: String, v) if overriddenConfigs.contains(k) => (k, v.asInstanceOf[AnyRef])
     }
     ConfigUtils.configMapToRedactedString(overriddenTopicProps.asJava, configDef)

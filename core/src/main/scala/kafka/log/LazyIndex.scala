@@ -21,7 +21,7 @@ import java.io.File
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.locks.ReentrantLock
 
-import LazyIndex._
+
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.threadsafe
 import org.apache.kafka.common.utils.Utils
@@ -46,8 +46,8 @@ import org.apache.kafka.common.utils.Utils
   *                  `AbstractIndex` instance.
   */
 @threadsafe
-class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper: IndexWrapper, loadIndex: File => T) {
-
+class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper: LazyIndex.IndexWrapper, loadIndex: File => T) {
+  import LazyIndex._
   private val lock = new ReentrantLock()
 
   def file: File = indexWrapper.file

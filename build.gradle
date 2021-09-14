@@ -561,28 +561,31 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.additionalParameters = [
-      "-deprecation",
-      "-unchecked",
-      "-encoding", "utf8",
-      "-Xlog-reflective-calls",
-      "-feature",
-      "-language:postfixOps",
-      "-language:implicitConversions",
-      "-language:existentials",
-      "-Xlint:constant",
-      "-Xlint:delayedinit-select",
-      "-Xlint:doc-detached",
-      "-Xlint:missing-interpolator",
-      "-Xlint:nullary-unit",
-      "-Xlint:option-implicit",
-      "-Xlint:package-object-classes",
-      "-Xlint:poly-implicit-overload",
-      "-Xlint:private-shadow",
-      "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow",
-      "-Xlint:unused"
-    ]
+    scalaCompileOptions.additionalParameters = []
+    if (versions.baseScala == '2.13') {
+      scalaCompileOptions.additionalParameters += [
+              "-deprecation",
+              "-unchecked",
+              "-encoding", "utf8",
+              "-Xlog-reflective-calls",
+              "-feature",
+              "-language:postfixOps",
+              "-language:implicitConversions",
+              "-language:existentials",
+              "-Xlint:constant",
+              "-Xlint:delayedinit-select",
+              "-Xlint:doc-detached",
+              "-Xlint:missing-interpolator",
+              "-Xlint:nullary-unit",
+              "-Xlint:option-implicit",
+              "-Xlint:package-object-classes",
+              "-Xlint:poly-implicit-overload",
+              "-Xlint:private-shadow",
+              "-Xlint:stars-align",
+              "-Xlint:type-parameter-shadow",
+              "-Xlint:unused"
+      ]
+    }
 
     // See README.md for details on this option and the meaning of each value
     if (userScalaOptimizerMode.equals("method"))
@@ -598,14 +601,14 @@ subprojects {
       scalaCompileOptions.additionalParameters += inlineFrom
     }
 
-    if (versions.baseScala != '2.12') {
+    if (versions.baseScala == '2.13') {
       scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
       // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
       scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
     }
 
     if (versions.baseScala == '3') {
-      scalaCompileOptions.additionalParameters += ["-Ytasty-reader"]
+      scalaCompileOptions.additionalParameters += ["-source:3.0-migration"]
     }
 
     // these options are valid for Scala versions < 2.13 only

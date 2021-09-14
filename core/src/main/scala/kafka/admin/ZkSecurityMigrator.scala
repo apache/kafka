@@ -279,7 +279,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
         }
         future match {
           case Some(a) =>
-            Await.result(a, 6000 millis)
+            Await.result(a, 6000.millis)
             futures.synchronized { futures.dequeue() }
             recurse()
           case None =>
