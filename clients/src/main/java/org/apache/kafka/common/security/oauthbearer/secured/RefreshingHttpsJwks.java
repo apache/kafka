@@ -122,15 +122,17 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
     private void refreshInternal() {
         try {
-            log.info("JWKS validation key refresh processing");
+            log.info("JWKS validation key refresh of {} starting", getLocation());
 
             // Call the *actual* refresh implementation.
             refresh();
+
+            log.info("JWKS validation key refresh of {} complete", getLocation());
         } catch (JoseException | IOException e) {
             // Let's wait a random, but short amount of time before trying again.
             long waitMs = ThreadLocalRandom.current().nextLong(1000, 10000);
 
-            String message = String.format("JWKS validation key refresh encountered an error connecting to %s; waiting %s ms before trying again",
+            String message = String.format("JWKS validation key refresh of %s encountered an error; waiting %s ms before trying again",
                 getLocation(),
                 waitMs);
             log.warn(message, e);

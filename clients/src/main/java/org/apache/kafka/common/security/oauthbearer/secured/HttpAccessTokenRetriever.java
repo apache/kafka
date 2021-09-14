@@ -126,18 +126,20 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             loginRetryWaitMs,
             loginMaxWaitMs);
 
-        HttpURLConnection con = (HttpURLConnection) new URL(tokenEndpointUri).openConnection();
-
-        if (sslSocketFactory != null && con instanceof HttpsURLConnection)
-            ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
-
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
-        String responseBody = retry.execute(() -> post(con,
-            headers,
-            requestBody,
-            loginConnectTimeoutMs,
-            loginReadTimeoutMs));
+        String responseBody = retry.execute(() -> {
+            HttpURLConnection con = (HttpURLConnection) new URL(tokenEndpointUri).openConnection();
+
+            if (sslSocketFactory != null && con instanceof HttpsURLConnection)
+                ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+
+            try {
+                return post(con, headers, requestBody, loginConnectTimeoutMs, loginReadTimeoutMs);
+            } finally {
+                con.disconnect();
+            }
+        });
         log.debug("retrieve - responseBody: {}", responseBody);
 
         return parseAccessToken(responseBody);
@@ -149,6 +151,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         Integer connectTimeoutMs,
         Integer readTimeoutMs)
         throws IOException {
+        log.debug("Starting post for {}", con.getURL());
         con.setRequestMethod("POST");
         con.setRequestProperty("Accept", "application/json");
 
@@ -191,21 +194,26 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         int responseCode = con.getResponseCode();
         log.debug("post - responseCode: {}", responseCode);
 
+        String responseBody = null;
+
+        try (InputStream is = con.getInputStream()) {
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            log.debug("post - preparing to read request body to {}", con.getURL());
+            copy(is, os);
+            responseBody = os.toString(StandardCharsets.UTF_8.name());
+        } catch (Exception e) {
+            log.warn("post - error retrieving data", e);
+        }
+
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
-            String responseBody;
-
-            try (InputStream is = con.getInputStream()) {
-                ByteArrayOutputStream os = new ByteArrayOutputStream();
-                log.debug("post - preparing to read request body to {}", con.getURL());
-                copy(is, os);
-                responseBody = os.toString(StandardCharsets.UTF_8.name());
-            }
-
-            if (responseBody.isEmpty())
+            if (responseBody == null || responseBody.isEmpty())
                 throw new IOException("The token endpoint response was unexpectedly empty");
+
+            log.debug("post - response: {}", responseBody);
 
             return responseBody;
         } else {
+            log.warn("post - error response code: {}, error response body: {}", responseCode, responseBody);
             throw new IOException(String.format("The unexpected response code %s was encountered reading the token endpoint response", responseCode));
         }
     }

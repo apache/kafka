@@ -90,7 +90,7 @@ public class ConfigurationUtils {
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(sslClientConfig);
         SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
-        log.warn("socketFactory: {}", socketFactory);
+        log.debug("Created SSLSocketFactory: {}", sslClientConfig);
         return socketFactory;
     }
 
@@ -99,7 +99,7 @@ public class ConfigurationUtils {
             throw new ValidateException(String.format("The OAuth configuration option %s value must be non-null", name));
 
         if (value.isEmpty())
-            throw new ValidateException(String.format("The OAuth configuration option%s value must be non-empty", name));
+            throw new ValidateException(String.format("The OAuth configuration option %s value must be non-empty", name));
 
         value = value.trim();
 
