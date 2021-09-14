@@ -21,7 +21,7 @@ import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
-import kafka.log.{Log, LogManager, LogOffsetSnapshot}
+import kafka.log.{UnifiedLog, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
@@ -208,7 +208,7 @@ class ReplicaManagerQuotasTest {
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.highWatermark).andReturn(5).anyTimes()

@@ -22,14 +22,14 @@ import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo};
+import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util
 import java.util.{Arrays, Collections, Optional}
@@ -38,7 +38,8 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
-class RaftClusterTest {
+@Tag("integration")
+class KRaftClusterTest {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -63,7 +64,7 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -89,7 +90,7 @@ class RaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -126,7 +127,7 @@ class RaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
@@ -159,7 +160,7 @@ class RaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -316,7 +317,7 @@ class RaftClusterTest {
   private def waitForRunningBrokers(count: Int, waitTime: FiniteDuration)
                                    (implicit cluster: KafkaClusterTestKit): Seq[BrokerServer] = {
     def getRunningBrokerServers: Seq[BrokerServer] = cluster.brokers.values.asScala.toSeq
-      .filter(brokerServer => brokerServer.currentState() == BrokerState.RUNNING)
+      .filter(brokerServer => brokerServer.brokerState == BrokerState.RUNNING)
 
     val (runningBrokerServers, hasRunningBrokers) = TestUtils.computeUntilTrue(getRunningBrokerServers, waitTime.toMillis)(_.nonEmpty)
     assertTrue(hasRunningBrokers,
@@ -392,7 +393,7 @@ class RaftClusterTest {
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
         TestUtils.waitUntilTrue( () => {
-          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).all().get()
+          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).allTopicNames().get()
           if (topicInfoMap.containsKey("foo")) {
             currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
             expectedMapping.equals(currentMapping)
@@ -401,11 +402,44 @@ class RaftClusterTest {
           }
         }, "Timed out waiting for replica assignments for topic foo. " +
           s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
+
+        checkReplicaManager(
+          cluster,
+          List(
+            (0, List(true, true, false, true)),
+            (1, List(true, true, false, true)),
+            (2, List(true, true, true, true)),
+            (3, List(false, false, true, true))
+          )
+        )
       } finally {
         admin.close()
       }
     } finally {
       cluster.close()
+    }
+  }
+
+  private def checkReplicaManager(cluster: KafkaClusterTestKit, expectedHosting: List[(Int, List[Boolean])]): Unit = {
+    for ((brokerId, partitionsIsHosted) <- expectedHosting) {
+      val broker = cluster.brokers().get(brokerId)
+
+      for ((isHosted, partitionId) <- partitionsIsHosted.zipWithIndex) {
+        val topicPartition = new TopicPartition("foo", partitionId)
+        if (isHosted) {
+          assertNotEquals(
+            HostedPartition.None,
+            broker.replicaManager.getPartition(topicPartition),
+            s"topicPartition = $topicPartition"
+          )
+        } else {
+          assertEquals(
+            HostedPartition.None,
+            broker.replicaManager.getPartition(topicPartition),
+            s"topicPartition = $topicPartition"
+          )
+        }
+      }
     }
   }
 

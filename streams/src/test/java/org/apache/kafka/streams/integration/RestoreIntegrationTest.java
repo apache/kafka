@@ -151,7 +151,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -217,7 +217,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
@@ -371,7 +371,7 @@ public class RestoreIntegrationTest {
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        final long initialNunRestoredCount = restoreListener.totalNumRestored();
 
         client2.close();
         waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -381,7 +381,7 @@ public class RestoreIntegrationTest {
         waitForCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
         // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2

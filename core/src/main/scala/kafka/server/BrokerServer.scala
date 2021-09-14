@@ -84,6 +84,8 @@ class BrokerServer(
   val supportedFeatures: util.Map[String, VersionRange]
 ) extends KafkaBroker {
 
+  override def brokerState: BrokerState = lifecycleManager.state
+
   import kafka.server.Server._
 
   private val logContext: LogContext = new LogContext(s"[BrokerServer id=${config.nodeId}] ")
@@ -113,7 +115,7 @@ class BrokerServer(
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
 
-  var replicaManager: ReplicaManager = null
+  @volatile private[this] var _replicaManager: ReplicaManager = null
 
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
@@ -172,6 +174,8 @@ class BrokerServer(
     }
     true
   }
+
+  def replicaManager: ReplicaManager = _replicaManager
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -246,11 +250,11 @@ class BrokerServer(
         scheduler = kafkaScheduler,
         time = time,
         brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch()
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterIsrManager.start()
 
-      this.replicaManager = new ReplicaManager(config, metrics, time, None,
+      this._replicaManager = new ReplicaManager(config, metrics, time, None,
         kafkaScheduler, logManager, isShuttingDown, quotaManagers,
         brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
         threadNamePrefix)
@@ -268,7 +272,7 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch(),
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager,
         config.requestTimeoutMs
       )
@@ -388,6 +392,9 @@ class BrokerServer(
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       metadataListener.startPublishing(metadataPublisher).get()
+
+      // Log static broker configurations.
+      new KafkaConfig(config.originals(), true)
 
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
@@ -510,7 +517,5 @@ class BrokerServer(
   }
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
-
-  def currentState(): BrokerState = lifecycleManager.state()
 
 }

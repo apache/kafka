@@ -17,26 +17,25 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.TopologyTestDriver.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TopologyTestDriver.WindowStoreFacade;
-import org.easymock.EasyMock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class WindowStoreFacadeTest {
-    private final TimestampedWindowStore<String, String> mockedWindowTimestampStore = EasyMock.mock(TimestampedWindowStore.class);
+    @SuppressWarnings("unchecked")
+    private final TimestampedWindowStore<String, String> mockedWindowTimestampStore = mock(TimestampedWindowStore.class);
 
     private WindowStoreFacade<String, String> windowStoreFacade;
 
@@ -50,87 +49,67 @@ public class WindowStoreFacadeTest {
     public void shouldForwardDeprecatedInit() {
         final ProcessorContext context = mock(ProcessorContext.class);
         final StateStore store = mock(StateStore.class);
-        mockedWindowTimestampStore.init(context, store);
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
 
         windowStoreFacade.init(context, store);
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore)
+            .init(context, store);
     }
 
     @Test
     public void shouldForwardInit() {
         final StateStoreContext context = mock(StateStoreContext.class);
         final StateStore store = mock(StateStore.class);
-        mockedWindowTimestampStore.init(context, store);
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
 
         windowStoreFacade.init(context, store);
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore)
+            .init(context, store);
     }
 
     @Test
     public void shouldPutWindowStartTimestampWithUnknownTimestamp() {
-        mockedWindowTimestampStore.put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP), 21L);
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
-
         windowStoreFacade.put("key", "value", 21L);
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore)
+            .put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP), 21L);
     }
 
     @Test
     public void shouldForwardFlush() {
-        mockedWindowTimestampStore.flush();
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
-
         windowStoreFacade.flush();
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore).flush();
     }
 
     @Test
     public void shouldForwardClose() {
-        mockedWindowTimestampStore.close();
-        expectLastCall();
-        replay(mockedWindowTimestampStore);
-
         windowStoreFacade.close();
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore).close();
     }
 
     @Test
     public void shouldReturnName() {
-        expect(mockedWindowTimestampStore.name()).andReturn("name");
-        replay(mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.name()).thenReturn("name");
 
         assertThat(windowStoreFacade.name(), is("name"));
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore).name();
     }
 
     @Test
     public void shouldReturnIsPersistent() {
-        expect(mockedWindowTimestampStore.persistent())
-            .andReturn(true)
-            .andReturn(false);
-        replay(mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.persistent())
+            .thenReturn(true, false);
 
         assertThat(windowStoreFacade.persistent(), is(true));
         assertThat(windowStoreFacade.persistent(), is(false));
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore, times(2)).persistent();
     }
 
     @Test
     public void shouldReturnIsOpen() {
-        expect(mockedWindowTimestampStore.isOpen())
-            .andReturn(true)
-            .andReturn(false);
-        replay(mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.isOpen())
+            .thenReturn(true, false);
 
         assertThat(windowStoreFacade.isOpen(), is(true));
         assertThat(windowStoreFacade.isOpen(), is(false));
-        verify(mockedWindowTimestampStore);
+        verify(mockedWindowTimestampStore, times(2)).isOpen();
     }
 
 }

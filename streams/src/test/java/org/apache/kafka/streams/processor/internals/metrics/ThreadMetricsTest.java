@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 import org.junit.Test;
+
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Map;
+import org.mockito.ArgumentCaptor;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
@@ -386,5 +392,56 @@ public class ThreadMetricsTest {
         final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);
 
         assertThat(sensor, is(expectedSensor));
+    }
+
+    @Test
+    public void shouldAddThreadStartTimeMetric() {
+        // Given:
+        final long startTime = 123L;
+
+        // When:
+        ThreadMetrics.addThreadStartTimeMetric(
+            "bongo",
+            streamsMetrics,
+            startTime
+        );
+
+        // Then:
+        verify(streamsMetrics).addThreadLevelImmutableMetric(
+            "thread-start-time",
+            "The time that the thread was started",
+            "bongo",
+            startTime
+        );
+    }
+
+    @Test
+    public void shouldAddTotalBlockedTimeMetric() {
+        // Given:
+        final double startTime = 123.45;
+        final StreamThreadTotalBlockedTime blockedTime = mock(StreamThreadTotalBlockedTime.class);
+        when(blockedTime.compute()).thenReturn(startTime);
+
+        // When:
+        ThreadMetrics.addThreadBlockedTimeMetric(
+            "burger",
+            blockedTime,
+            streamsMetrics
+        );
+
+        // Then:
+        final ArgumentCaptor<Gauge<Double>> captor = gaugeCaptor();
+        verify(streamsMetrics).addThreadLevelMutableMetric(
+            eq("blocked-time-ns-total"),
+            eq("The total time the thread spent blocked on kafka in nanoseconds"),
+            eq("burger"),
+            captor.capture()
+        );
+        assertThat(captor.getValue().value(null, 678L), is(startTime));
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Gauge<Double>> gaugeCaptor() {
+        return ArgumentCaptor.forClass(Gauge.class);
     }
 }

@@ -154,6 +154,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     DATA_LOG_DIR_1 = "%s-1" % (DATA_LOG_DIR_PREFIX)
     DATA_LOG_DIR_2 = "%s-2" % (DATA_LOG_DIR_PREFIX)
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+    METADATA_LOG_DIR = os.path.join (PERSISTENT_ROOT, "kafka-metadata-logs")
+    METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
+    METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
     ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
@@ -308,7 +311,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     jmx_attributes=jmx_attributes,
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
-                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft
+                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
+                    server_prop_overrides=server_prop_overrides
                 )
                 self.controller_quorum = self.remote_controller_quorum
 
@@ -1120,6 +1124,49 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
+
+    def has_under_replicated_partitions(self):
+        """
+        Check whether the cluster has under-replicated partitions.
+
+        :return True if there are under-replicated partitions, False otherwise.
+        """
+        return len(self.describe_under_replicated_partitions()) > 0
+
+    def await_no_under_replicated_partitions(self, timeout_sec=30):
+        """
+        Wait for all under-replicated partitions to clear.
+
+        :param timeout_sec: the maximum time in seconds to wait
+        """
+        wait_until(lambda: not self.has_under_replicated_partitions(),
+                   timeout_sec = timeout_sec,
+                   err_msg="Timed out waiting for under-replicated-partitions to clear")
+
+    def describe_under_replicated_partitions(self):
+        """
+        Use the topic tool to find the under-replicated partitions in the cluster.
+
+        :return the under-replicated partitions as a list of dictionaries
+                (e.g. [{"topic": "foo", "partition": 1}, {"topic": "bar", "partition": 0}, ... ])
+        """
+
+        node = self.nodes[0]
+        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --describe --under-replicated-partitions" % \
+            self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection)
+
+        self.logger.debug("Running topic command to describe under-replicated partitions\n%s" % cmd)
+        output = ""
+        for line in node.account.ssh_capture(cmd):
+            output += line
+
+        under_replicated_partitions = self.parse_describe_topic(output)["partitions"]
+        self.logger.debug("Found %d under-replicated-partitions" % len(under_replicated_partitions))
+
+        return under_replicated_partitions
 
     def describe_topic(self, topic, node=None):
         if node is None:
