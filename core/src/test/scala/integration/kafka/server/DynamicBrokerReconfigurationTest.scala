@@ -528,7 +528,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MinInSyncReplicasProp, "3"))
     // Verify that all broker defaults have been updated again
     servers.foreach { server =>
-      props.forEach { (k, v) =>
+      props.asScala.foreach { case (k, v) =>
         assertEquals(v, server.config.originals.get(k).toString, s"Not reconfigured $k")
       }
     }
@@ -577,7 +577,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Verify that all broker defaults have been updated
     servers.foreach { server =>
-      props.forEach { (k, v) =>
+      props.asScala.foreach { case (k, v) =>
         assertEquals(server.config.originals.get(k).toString, v, s"Not reconfigured $k")
       }
     }
@@ -1605,7 +1605,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val propsFile = TestUtils.tempFile()
     val propsWriter = new FileWriter(propsFile)
     try {
-      clientProps(SecurityProtocol.SSL).forEach {
+      clientProps(SecurityProtocol.SSL).asScala.foreach {
         case (k, v) => propsWriter.write(s"$k=$v\n")
       }
     } finally {

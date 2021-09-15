@@ -33,7 +33,7 @@ import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.server.quota._
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType, ClientQuotaEntity}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 

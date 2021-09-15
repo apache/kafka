@@ -1271,7 +1271,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion) {
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion.toInt to ApiKeys.TXN_OFFSET_COMMIT.latestVersion.toInt) {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
 
       val topicPartition = new TopicPartition(topic, 1)
@@ -1332,7 +1332,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.INIT_PRODUCER_ID.oldestVersion to ApiKeys.INIT_PRODUCER_ID.latestVersion) {
+    for (version <- ApiKeys.INIT_PRODUCER_ID.oldestVersion.toInt to ApiKeys.INIT_PRODUCER_ID.latestVersion.toInt) {
 
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
@@ -1402,7 +1402,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.ADD_OFFSETS_TO_TXN.oldestVersion to ApiKeys.ADD_OFFSETS_TO_TXN.latestVersion) {
+    for (version <- ApiKeys.ADD_OFFSETS_TO_TXN.oldestVersion.toInt to ApiKeys.ADD_OFFSETS_TO_TXN.latestVersion.toInt) {
 
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator, txnCoordinator)
 
@@ -1464,7 +1464,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion to ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion) {
+    for (version <- ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion.toInt to ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion.toInt) {
 
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
@@ -1522,7 +1522,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.END_TXN.oldestVersion to ApiKeys.END_TXN.latestVersion) {
+    for (version <- ApiKeys.END_TXN.oldestVersion.toInt to ApiKeys.END_TXN.latestVersion.toInt) {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val capturedResponse: Capture[AbstractResponse] = EasyMock.newCapture()
@@ -1576,7 +1576,7 @@ class KafkaApisTest {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
 
-    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
+    for (version <- ApiKeys.PRODUCE.oldestVersion.toInt to ApiKeys.PRODUCE.latestVersion.toInt) {
 
       EasyMock.reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
@@ -2500,7 +2500,7 @@ class KafkaApisTest {
 
   @Test
   def testJoinGroupWhenAnErrorOccurs(): Unit = {
-    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
+    for (version <- ApiKeys.JOIN_GROUP.oldestVersion.toInt to ApiKeys.JOIN_GROUP.latestVersion.toInt) {
       testJoinGroupWhenAnErrorOccurs(version.asInstanceOf[Short])
     }
   }
@@ -2570,7 +2570,7 @@ class KafkaApisTest {
 
   @Test
   def testJoinGroupProtocolType(): Unit = {
-    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion) {
+    for (version <- ApiKeys.JOIN_GROUP.oldestVersion.toInt to ApiKeys.JOIN_GROUP.latestVersion.toInt) {
       testJoinGroupProtocolType(version.asInstanceOf[Short])
     }
   }
@@ -2644,7 +2644,7 @@ class KafkaApisTest {
 
   @Test
   def testSyncGroupProtocolTypeAndName(): Unit = {
-    for (version <- ApiKeys.SYNC_GROUP.oldestVersion to ApiKeys.SYNC_GROUP.latestVersion) {
+    for (version <- ApiKeys.SYNC_GROUP.oldestVersion.toInt to ApiKeys.SYNC_GROUP.latestVersion.toInt) {
       testSyncGroupProtocolTypeAndName(version.asInstanceOf[Short])
     }
   }
@@ -2707,7 +2707,7 @@ class KafkaApisTest {
 
   @Test
   def testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(): Unit = {
-    for (version <- ApiKeys.SYNC_GROUP.oldestVersion to ApiKeys.SYNC_GROUP.latestVersion) {
+    for (version <- ApiKeys.SYNC_GROUP.oldestVersion.toInt to ApiKeys.SYNC_GROUP.latestVersion.toInt) {
       testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(version.asInstanceOf[Short])
     }
   }

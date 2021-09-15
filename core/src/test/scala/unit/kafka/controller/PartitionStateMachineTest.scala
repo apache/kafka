@@ -259,7 +259,7 @@ class PartitionStateMachineTest {
       .andReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
 
-    EasyMock.expect(mockZkClient.getLogConfigs(Set.empty, config.originals()))
+    EasyMock.expect(mockZkClient.getLogConfigs(Set.empty, config.originals))
       .andReturn((Map(partition.topic -> LogConfig()), Map.empty))
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
@@ -428,7 +428,7 @@ class PartitionStateMachineTest {
     prepareMockToGetTopicPartitionsStatesRaw()
 
     def prepareMockToGetLogConfigs(): Unit = {
-      EasyMock.expect(mockZkClient.getLogConfigs(Set.empty, config.originals()))
+      EasyMock.expect(mockZkClient.getLogConfigs(Set.empty, config.originals))
         .andReturn(Map.empty, Map.empty)
     }
     prepareMockToGetLogConfigs()

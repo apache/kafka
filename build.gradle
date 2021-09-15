@@ -566,13 +566,13 @@ subprojects {
             "-encoding",
             "UTF-8",
             "-feature",
+            "-language:postfixOps",
             "-language:implicitConversions"
     ]
     if (versions.baseScala == '2.13') {
       scalaCompileOptions.additionalParameters += [
               "-deprecation",
               "-Xlog-reflective-calls",
-              "-language:postfixOps",
               "-language:existentials",
               "-Xlint:constant",
               "-Xlint:delayedinit-select",

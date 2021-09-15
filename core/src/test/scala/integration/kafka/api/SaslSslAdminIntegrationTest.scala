@@ -482,7 +482,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     def initializeAcls(): Unit = {
       val authorizer = CoreUtils.createObject[Authorizer](authorizerForInitClass.getName)
       try {
-        authorizer.configure(configs.head.originals())
+        authorizer.configure(configs.head.originals)
         val ace = new AccessControlEntry(WildcardPrincipalString, WildcardHost, ALL, ALLOW)
         authorizer.createAcls(null, List(new AclBinding(new ResourcePattern(TOPIC, "*", LITERAL), ace)).asJava)
         authorizer.createAcls(null, List(new AclBinding(new ResourcePattern(GROUP, "*", LITERAL), ace)).asJava)

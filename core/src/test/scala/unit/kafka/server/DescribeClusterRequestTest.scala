@@ -73,7 +73,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
       Int.MinValue
     }
 
-    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
+    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion.toInt to ApiKeys.DESCRIBE_CLUSTER.latestVersion.toInt) {
       val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
         .setIncludeClusterAuthorizedOperations(includeClusterAuthorizedOperations))
         .build(version.toShort)

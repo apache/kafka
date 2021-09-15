@@ -1308,7 +1308,7 @@ object TestUtils extends Logging {
       .build()
 
     val sslProps = new Properties()
-    sslConfigs.forEach { (k, v) => sslProps.put(k, v) }
+    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
   }
 

@@ -94,7 +94,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   info("Configuration:")
   info("---------------------------------------------------------------")
-  config.forEach { (key, value) =>
+  config.asScala.foreach { case (key, value) =>
     info(s"\t$key: $value")
   }
   info("---------------------------------------------------------------")
@@ -359,7 +359,7 @@ object MiniKdc {
           throw new RuntimeException(s"Specified configuration does not exist: ${configFile.getAbsolutePath}")
 
         val userConfig = Utils.loadProps(configFile.getAbsolutePath)
-        userConfig.forEach { (key, value) =>
+        userConfig.asScala.foreach { case (key, value) =>
           config.put(key, value)
         }
         val keytabFile = new File(keytabPath).getAbsoluteFile

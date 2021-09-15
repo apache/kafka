@@ -91,7 +91,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     val topicResource = new ResourcePattern(ResourceType.TOPIC, AclEntry.WildcardResource, PatternType.LITERAL)
 
     try {
-      authorizer.configure(this.configs.head.originals())
+      authorizer.configure(this.configs.head.originals)
       val result = authorizer.createAcls(null, List(
         new AclBinding(clusterResource, accessControlEntry(
           JaasTestUtils.KafkaServerPrincipalUnqualifiedName, CLUSTER_ACTION)),
