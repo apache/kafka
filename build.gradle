@@ -102,8 +102,22 @@ ext {
 
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
-  if (JavaVersion.current() == JavaVersion.VERSION_16)  
-    defaultJvmArgs.add("--illegal-access=permit")
+  
+  // "JEP 403: Strongly Encapsulate JDK Internals" causes some tests to fail when they try
+  // to access internals (often via mocking libraries). We use `--add-opens` as a workaround
+  // for now and we'll fix it properly (where possible) via KAFKA-13275.
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
+    defaultJvmArgs.addAll(
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio.file=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.regex=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
+      "--add-opens=java.base/java.text=ALL-UNNAMED",
+      "--add-opens=java.base/java.time=ALL-UNNAMED",
+      "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
+    )
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
@@ -359,7 +373,7 @@ subprojects {
   // The suites are for running sets of tests in IDEs.
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
-  // Exclude PowerMock tests when running with Java 16 until a version of PowerMock that supports Java 16 is released
+  // Exclude PowerMock tests when running with Java 16 or newer until a version of PowerMock that supports the relevant versions is released
   // The relevant issues are https://github.com/powermock/powermock/issues/1094 and https://github.com/powermock/powermock/issues/1099
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
@@ -370,10 +384,9 @@ subprojects {
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*", "**/WorkerTest.*", "**/RestServerTest.*",
+      "**/WorkerTaskTest.*", "**/WorkerTest.*",
       // streams tests
-      "**/KafkaStreamsTest.*", "**/RepartitionTopicsTest.*", "**/RocksDBMetricsRecorderTest.*",
-      "**/StreamsMetricsImplTest.*", "**/StateManagerUtilTest.*", "**/TableSourceNodeTest.*"
+      "**/KafkaStreamsTest.*"
     ])
   }
 
@@ -2467,6 +2480,7 @@ project(':connect:file') {
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiter
+    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
