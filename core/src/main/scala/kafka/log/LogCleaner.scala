@@ -504,7 +504,7 @@ private[log] class Cleaner(val id: Int,
 
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
-    // this timestamp is only used on the older message formats newer than MAGIC_VALUE_V2
+    // this timestamp is only used on the older message formats older than MAGIC_VALUE_V2
     val legacyDeleteHorizonMs =
       cleanable.log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
         case None => 0L
