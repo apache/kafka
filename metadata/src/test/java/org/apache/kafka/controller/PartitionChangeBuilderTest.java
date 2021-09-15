@@ -107,6 +107,14 @@ public class PartitionChangeBuilderTest {
             shouldTryElection());
         assertFalse(createFooBuilder(false).setTargetIsr(Arrays.asList(2, 1)).
             shouldTryElection());
+
+        assertTrue(createFooBuilder(true)
+            .setTargetIsr(Arrays.asList(3))
+            .shouldTryElection());
+        assertTrue(createFooBuilder(true)
+            .setTargetIsr(Arrays.asList(4))
+            .setTargetReplicas(Arrays.asList(2, 1, 3, 4))
+            .shouldTryElection());
     }
 
     private static void testTriggerLeaderEpochBumpIfNeededLeader(PartitionChangeBuilder builder,
