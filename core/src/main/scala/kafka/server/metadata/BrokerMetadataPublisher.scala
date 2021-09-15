@@ -117,6 +117,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                        delta: MetadataDelta,
                        newImage: MetadataImage): Unit = {
     try {
+      trace(s"Publishing delta $delta with highest offset $newHighestMetadataOffset")
+
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 

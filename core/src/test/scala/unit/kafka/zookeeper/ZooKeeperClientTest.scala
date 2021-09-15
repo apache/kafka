@@ -25,6 +25,7 @@ import scala.collection.Seq
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.server.KafkaConfig
 import kafka.metrics.KafkaYammerMetrics
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -33,7 +34,7 @@ import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertTrue, assertThrows, fail}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -46,7 +47,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @BeforeEach
   override def setUp(): Unit = {
-    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@BeforeEach")
+    TestUtils.verifyNoUnexpectedThreads("@BeforeEach")
     cleanMetricsRegistry()
     super.setUp()
     zooKeeperClient = newZooKeeperClient()
@@ -58,7 +59,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       zooKeeperClient.close()
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@AfterEach")
+    TestUtils.verifyNoUnexpectedThreads("@AfterEach")
   }
 
   @Test

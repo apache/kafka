@@ -201,4 +201,12 @@ public final class TopicsDelta {
 
         return new LocalReplicaChanges(deletes, leaders, followers);
     }
+
+    @Override
+    public String toString() {
+        return "TopicsDelta(" +
+            "changedTopics=" + changedTopics +
+            ", deletedTopicIds=" + deletedTopicIds +
+            ')';
+    }
 }

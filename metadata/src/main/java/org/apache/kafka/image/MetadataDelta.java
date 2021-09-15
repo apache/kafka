@@ -256,4 +256,15 @@ public final class MetadataDelta {
         return new MetadataImage(newFeatures, newCluster, newTopics, newConfigs,
             newClientQuotas);
     }
+
+    @Override
+    public String toString() {
+        return "MetadataDelta(" +
+            "featuresDelta=" + featuresDelta +
+            ", clusterDelta=" + clusterDelta +
+            ", topicsDelta=" + topicsDelta +
+            ", configsDelta=" + configsDelta +
+            ", clientQuotasDelta=" + clientQuotasDelta +
+            ')';
+    }
 }
