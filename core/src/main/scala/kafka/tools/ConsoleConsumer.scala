@@ -27,7 +27,7 @@ import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, _}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig => ClientConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
@@ -147,11 +147,11 @@ object ConsoleConsumer extends Logging {
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
-      props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
+    props.put(ClientConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+    if (props.getProperty(ClientConsumerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ClientConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
-      props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
+      props, ClientConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props
   }
 
@@ -169,9 +169,9 @@ object ConsoleConsumer extends Logging {
   def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
     val (earliestConfigValue, latestConfigValue) = ("earliest", "latest")
 
-    if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
+    if (props.containsKey(ClientConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
       // auto.offset.reset parameter was specified on the command line
-      val autoResetOption = props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)
+      val autoResetOption = props.getProperty(ClientConsumerConfig.AUTO_OFFSET_RESET_CONFIG)
       if (config.options.has(config.resetBeginningOpt) && earliestConfigValue != autoResetOption) {
         // conflicting options - latest und earliest, throw an error
         System.err.println(s"Can't simultaneously specify --from-beginning and 'auto.offset.reset=$autoResetOption', " +
@@ -184,7 +184,7 @@ object ConsoleConsumer extends Logging {
       // no explicit value for auto.offset.reset was specified
       // if --from-beginning was specified use earliest, otherwise default to latest
       val autoResetOption = if (config.options.has(config.resetBeginningOpt)) earliestConfigValue else latestConfigValue
-      props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoResetOption)
+      props.put(ClientConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoResetOption)
     }
   }
 
@@ -315,10 +315,10 @@ object ConsoleConsumer extends Logging {
     val formatter: MessageFormatter = messageFormatterClass.getDeclaredConstructor().newInstance().asInstanceOf[MessageFormatter]
 
     if (keyDeserializer != null && keyDeserializer.nonEmpty) {
-      formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
+      formatterArgs.setProperty(ClientConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
     }
     if (valueDeserializer != null && valueDeserializer.nonEmpty) {
-      formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
+      formatterArgs.setProperty(ClientConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
     formatter.configure(formatterArgs.asScala.asJava)
@@ -371,8 +371,8 @@ object ConsoleConsumer extends Logging {
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
       Option(options.valueOf(groupIdOpt)), // via --group
-      Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
-      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
+      Option(consumerProps.get(ClientConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
+      Option(extraConsumerProps.get(ClientConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
     if (groupIdsProvided.size > 1) {
@@ -383,13 +383,13 @@ object ConsoleConsumer extends Logging {
 
     groupIdsProvided.headOption match {
       case Some(group) =>
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+        consumerProps.put(ClientConsumerConfig.GROUP_ID_CONFIG, group)
       case None =>
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+        consumerProps.put(ClientConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
         // By default, avoid unnecessary expansion of the coordinator cache since
         // the auto-generated group and its offsets is not intended to be used again
-        if (!consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
-          consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+        if (!consumerProps.containsKey(ClientConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
+          consumerProps.put(ClientConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
 

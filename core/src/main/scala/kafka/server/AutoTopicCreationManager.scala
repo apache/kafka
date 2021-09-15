@@ -256,11 +256,10 @@ class DefaultAutoTopicCreationManager(
   private def convertToTopicConfigCollections(config: Properties): CreateableTopicConfigCollection = {
     val topicConfigs = new CreateableTopicConfigCollection()
     config.asScala.foreach {
-      (name: Object, value: Object) => {
+     case (name, value) => {
         topicConfigs.add(new CreateableTopicConfig()
           .setName(name.toString)
           .setValue(value.toString))
-        Unit
       }
     }
     topicConfigs

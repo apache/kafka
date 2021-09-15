@@ -27,7 +27,7 @@ import kafka.message._
 import kafka.utils.Implicits._
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig => ClientProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
@@ -87,36 +87,36 @@ object ConsoleProducer {
     props ++= config.extraProducerProps
 
     if (config.bootstrapServer != null)
-      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+      props.put(ClientProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     else
-      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+      props.put(ClientProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
 
-    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
-    if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null)
-      props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
-    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put(ClientProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
+    if (props.getProperty(ClientProducerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ClientProducerConfig.CLIENT_ID_CONFIG, "console-producer")
+    props.put(ClientProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    props.put(ClientProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
+      props, ClientProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.ACKS_CONFIG, config.options, config.requestRequiredAcksOpt)
+      props, ClientProducerConfig.ACKS_CONFIG, config.options, config.requestRequiredAcksOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.options, config.requestTimeoutMsOpt)
+      props, ClientProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.options, config.requestTimeoutMsOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.RETRIES_CONFIG, config.options, config.messageSendMaxRetriesOpt)
+      props, ClientProducerConfig.RETRIES_CONFIG, config.options, config.messageSendMaxRetriesOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.options, config.retryBackoffMsOpt)
+      props, ClientProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.options, config.retryBackoffMsOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.SEND_BUFFER_CONFIG, config.options, config.socketBufferSizeOpt)
+      props, ClientProducerConfig.SEND_BUFFER_CONFIG, config.options, config.socketBufferSizeOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
+      props, ClientProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
+      props, ClientProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.METADATA_MAX_AGE_CONFIG, config.options, config.metadataExpiryMsOpt)
+      props, ClientProducerConfig.METADATA_MAX_AGE_CONFIG, config.options, config.metadataExpiryMsOpt)
     CommandLineUtils.maybeMergeOptions(
-      props, ProducerConfig.MAX_BLOCK_MS_CONFIG, config.options, config.maxBlockMsOpt)
+      props, ClientProducerConfig.MAX_BLOCK_MS_CONFIG, config.options, config.maxBlockMsOpt)
 
     props
   }

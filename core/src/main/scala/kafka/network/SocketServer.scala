@@ -17,44 +17,28 @@
 
 package kafka.network
 
-import java.io.IOException
 import java.net._
-import java.nio.ByteBuffer
-import java.nio.channels.{Selector => NSelector, _}
-import java.util
 import java.util.Optional
 import java.util.concurrent._
-import java.util.concurrent.atomic._
 
-import kafka.cluster.{BrokerEndPoint, EndPoint}
+import kafka.cluster.EndPoint
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.ConnectionQuotas._
-import kafka.network.Processor._
-import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
 import kafka.utils.Implicits._
 import kafka.utils._
-import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.config.internals.QuotaConfigs
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
-import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkSend, Selectable, Send, Selector => KSelector}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
-import org.slf4j.event.Level
+import org.apache.kafka.common.{Endpoint, KafkaException}
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 
 import scala.collection._
-import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.util.control.ControlThrowable
 
 /**
  * Handles new connections, requests and responses to and from broker.

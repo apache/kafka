@@ -561,16 +561,18 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.additionalParameters = []
+    scalaCompileOptions.additionalParameters = [
+            "-unchecked",
+            "-encoding",
+            "UTF-8",
+            "-feature",
+            "-language:implicitConversions"
+    ]
     if (versions.baseScala == '2.13') {
       scalaCompileOptions.additionalParameters += [
               "-deprecation",
-              "-unchecked",
-              "-encoding", "utf8",
               "-Xlog-reflective-calls",
-              "-feature",
               "-language:postfixOps",
-              "-language:implicitConversions",
               "-language:existentials",
               "-Xlint:constant",
               "-Xlint:delayedinit-select",

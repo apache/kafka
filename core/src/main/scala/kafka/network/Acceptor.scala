@@ -1,6 +1,6 @@
 package kafka.network
 
-import java.nio.channels.{Selector as NSelector, _}
+import java.nio.channels.{Selector => NSelector}
 import kafka.cluster.EndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
