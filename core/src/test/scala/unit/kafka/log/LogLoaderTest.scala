@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
 
 class LogLoaderTest {
   var config: KafkaConfig = null
-  val brokerTopicStats = new BrokerTopicStats
+  val brokerTopicStats = new BrokerTopicStats()
   val maxProducerIdExpirationMs: Int = 60 * 60 * 1000
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
@@ -90,7 +90,7 @@ class LogLoaderTest {
         maxPidExpirationMs = 60 * 60 * 1000,
         interBrokerProtocolVersion = config.interBrokerProtocolVersion,
         scheduler = time.scheduler,
-        brokerTopicStats = new BrokerTopicStats,
+        brokerTopicStats = new BrokerTopicStats(),
         logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
         time = time,
         keepPartitionMetadataFile = config.usesTopicId) {
