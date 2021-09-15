@@ -1404,7 +1404,8 @@ class ReplicaManager(val config: KafkaConfig,
                     stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
                       s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
                       s"id $correlationId epoch $controllerEpoch")
-                    topicIdUpdatePartitions.put(partition, partitionState)
+                    if (partitionState.leader != localBrokerId)
+                      topicIdUpdatePartitions.put(partition, partitionState)
                     Errors.NONE
                   case _ =>
                     stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
@@ -1423,10 +1424,6 @@ class ReplicaManager(val config: KafkaConfig,
           }
           val partitionsToBeFollower = partitionStates.filter { case (k, _) => !partitionsToBeLeader.contains(k) }
 
-          val partitionsToUpdateIdForFollower = topicIdUpdatePartitions.filter { case (_, partitionState) =>
-            partitionState.leader != localBrokerId
-          }
-
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
@@ -1442,8 +1439,8 @@ class ReplicaManager(val config: KafkaConfig,
           val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
           updateLeaderAndFollowerMetrics(followerTopicSet)
 
-          updateTopicIdForFollowers(controllerId, controllerEpoch, partitionsToUpdateIdForFollower, correlationId,
-            responseMap, topicIdFromRequest)
+          if (topicIdUpdatePartitions.nonEmpty)
+            updateTopicIdForFollowers(controllerId, controllerEpoch, topicIdUpdatePartitions, correlationId, topicIdFromRequest)
 
           leaderAndIsrRequest.partitionStates.forEach { partitionState =>
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1554,7 +1551,7 @@ class ReplicaManager(val config: KafkaConfig,
           // replica from source dir to destination dir
           logManager.abortAndPauseCleaning(topicPartition)
 
-          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic()), leader,
+          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, log.highWatermark))
         }
       }
@@ -1769,19 +1766,10 @@ class ReplicaManager(val config: KafkaConfig,
                                         controllerEpoch: Int,
                                         partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                                         correlationId: Int,
-                                        responseMap: mutable.Map[TopicPartition, Errors],
                                         topicIds: String => Option[Uuid]) : Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-    // Do we need this?
-    partitionStates.forKeyValue { (partition, partitionState) =>
-      if (traceLoggingEnabled)
-        stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-          s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
-          s"${partitionState.leader}")
-      responseMap.put(partition.topicPartition, Errors.NONE)
-    }
 
-    val partitionsToUpdateFollower: mutable.Set[Partition] = mutable.Set()
+    val partitionsToUpdateFollower = mutable.Set.empty[Partition]
     try {
       partitionStates.forKeyValue { (partition, partitionState) =>
         val newLeaderBrokerId = partitionState.leader
@@ -1808,16 +1796,13 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
       } else {
-        val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToUpdateFollower.map { partition =>
+        val partitionsToUpdateFollowerWithLeader = partitionsToUpdateFollower.map { partition =>
           val leaderNode = partition.leaderReplicaIdOpt.flatMap(leaderId => metadataCache.
             getAliveBrokerNode(leaderId, config.interBrokerListenerName)).getOrElse(Node.noNode())
           val leader = new BrokerEndPoint(leaderNode.id(), leaderNode.host(), leaderNode.port())
-          val log = partition.localLogOrException
-          val fetchOffset = initialFetchOffset(log)
-          partition.topicPartition -> InitialFetchState(topicIds(partition.topic), leader, partition.getLeaderEpoch, fetchOffset)
-        }.toMap
-
-        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+          (partition.topicPartition, BrokerAndFetcherId(leader, replicaFetcherManager.getFetcherId(partition.topicPartition)))
+        }
+        replicaFetcherManager.addTopicIdsToFetcherThread(partitionsToUpdateFollowerWithLeader, topicIds)
       }
     } catch {
       case e: Throwable =>

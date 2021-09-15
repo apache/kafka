@@ -2887,7 +2887,7 @@ class ReplicaManagerTest {
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
       // Append a couple of messages.
-      for (i <- 1 to 10) {
+      for (i <- 1 to 20) {
         val records = TestUtils.singletonRecords(s"message $i".getBytes)
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
           assertEquals(Errors.NONE, response.error)

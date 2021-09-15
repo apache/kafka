@@ -263,8 +263,6 @@ class ReplicaAlterLogDirsThread(name: String,
   private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
-    val topicId = fetchState.topicId
-    val topicIds = Collections.singletonMap(tp.topic(), topicId.getOrElse(Uuid.ZERO_UUID))
 
     try {
       val logStartOffset = replicaMgr.futureLocalLogOrException(tp).logStartOffset
@@ -283,14 +281,14 @@ class ReplicaAlterLogDirsThread(name: String,
     val fetchRequestOpt = if (requestMap.isEmpty) {
       None
     } else {
-      val version: Short = if (topicId.isEmpty)
+      val version: Short = if (fetchState.topicId.isEmpty)
         12
       else
         ApiKeys.FETCH.latestVersion
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
       val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap,
-        topicIds).setMaxBytes(maxBytes)
+        Collections.singletonMap(tp.topic(), fetchState.topicId.getOrElse(Uuid.ZERO_UUID))).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))
     }
 

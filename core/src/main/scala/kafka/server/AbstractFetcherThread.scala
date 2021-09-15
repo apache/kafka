@@ -495,6 +495,19 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
+  def addTopicIdsToThread(partitions: Set[TopicPartition], topicIds: String => Option[Uuid]) = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      partitions.foreach { tp =>
+        val currentState = partitionStates.stateValue(tp)
+        val updatedState = currentState.updateTopicId(topicIds(tp.topic))
+        partitionStates.updateAndMoveToEnd(tp, updatedState)
+      }
+
+      partitionMapCond.signalAll()
+    } finally partitionMapLock.unlock()
+  }
+
   /**
     * Loop through all partitions, updating their fetch offset and maybe marking them as
     * truncation completed if their offsetTruncationState indicates truncation completed
@@ -861,7 +874,7 @@ case class PartitionFetchState(topicId: Option[Uuid],
   }
 
   def updateTopicId(topicId: Option[Uuid]): PartitionFetchState = {
-    PartitionFetchState(topicId, fetchOffset, lag, currentLeaderEpoch, delay, state, lastFetchedEpoch)
+    this.copy(topicId = topicId)
   }
 }
 
