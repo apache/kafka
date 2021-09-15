@@ -504,6 +504,7 @@ private[log] class Cleaner(val id: Int,
 
     // figure out the timestamp below which it is safe to remove delete tombstones
     // this position is defined to be a configurable time beneath the last modified time of the last clean segment
+    // this timestamp is only used on the older message formats newer than MAGIC_VALUE_V2
     val legacyDeleteHorizonMs =
       cleanable.log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
         case None => 0L
@@ -680,7 +681,7 @@ private[log] class Cleaner(val id: Int,
             BatchRetention.DELETE
           else
             BatchRetention.DELETE_EMPTY
-        new RecordFilter.BatchRetentionResult(batchRetention, canDiscardBatch)
+        new RecordFilter.BatchRetentionResult(batchRetention, canDiscardBatch && batch.isControlBatch)
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
@@ -1082,7 +1083,7 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
 
 /**
   * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
-  * the reason why it is being cleaned, and whether it needs compaction immediately.
+  * and whether it needs compaction immediately.
   */
 private case class LogToClean(topicPartition: TopicPartition,
                               log: UnifiedLog,
@@ -1133,8 +1134,6 @@ private[log] class CleanedTransactionMetadata {
         case ControlRecordType.ABORT =>
           ongoingAbortedTxns.remove(producerId) match {
             // Retain the marker until all batches from the transaction have been removed.
-            // We may retain a record from an aborted transaction if it is the last entry
-            // written by a given producerId.
             case Some(abortedTxnMetadata) if abortedTxnMetadata.lastObservedBatchOffset.isDefined =>
               cleanedIndex.foreach(_.append(abortedTxnMetadata.abortedTxn))
               false
