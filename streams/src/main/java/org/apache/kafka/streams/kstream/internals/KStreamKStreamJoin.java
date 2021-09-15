@@ -145,11 +145,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
                     final long otherRecordTimestamp = otherRecord.key;
 
                     outerJoinStore.ifPresent(store -> {
-                        // blind-delete the joined record from the non-joined outer window store;
+                        // use putIfAbsent to first read and see if there's any values for the key,
+                        // if yes delete the key, otherwise do not issue a put;
                         // we may delete some values with the same key early but since we are going
-                        // range over all values of the same key this is okay;
-                        // we do not use the delete() call since that would incur an extra get;
-                        store.put(TimestampedKeyAndJoinSide.make(!isLeftSide, key, otherRecordTimestamp), null);
+                        // range over all values of the same key even after failure, since the other window-store
+                        // is only cleaned up by stream time, so this is okay for at-least-once.
+                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, key, otherRecordTimestamp), null);
                     });
 
                     context().forward(
@@ -211,6 +212,8 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
+                TimestampedKeyAndJoinSide<K> prevKey = null;
+
                 while (it.hasNext()) {
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> record = it.next();
 
@@ -238,11 +241,21 @@ class KStreamKStreamJoin<K, R, V1, V2> implements org.apache.kafka.streams.proce
 
                     context().forward(key, nullJoinedValue, To.all().withTimestamp(timestamp));
 
-                    // blind-delete the key from the outer window store now it is emitted;
-                    // we may delete some values of the same key which has not been iterated yet,
-                    // but since the iterator would still return that key this is fine.
-                    // we do not use the delete() call since that would incur an extra get
-                    store.put(timestampedKeyAndJoinSide, null);
+                    if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
+                        // blind-delete the previous key from the outer window store now it is emitted;
+                        // we do this because this delete would remove the whole list of values of the same key,
+                        // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
+                        // values in the list.
+                        // we do not use delete() calls since it would incur extra get()
+                        store.put(prevKey, null);
+                    }
+
+                    prevKey = timestampedKeyAndJoinSide;
+                }
+
+                // at the end of the iteration, we need to delete the last key
+                if (prevKey != null) {
+                    store.put(prevKey, null);
                 }
             }
         }

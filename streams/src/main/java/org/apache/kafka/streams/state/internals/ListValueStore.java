@@ -49,18 +49,18 @@ public class ListValueStore
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key, final byte[] addedValue) {
         // if the value is null we can skip the get and blind delete
-        if (value == null) {
+        if (addedValue == null) {
             wrapped().put(key, null);
         } else {
             final byte[] oldValue = wrapped().get(key);
 
             if (oldValue == null) {
-                wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(value)));
+                wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(addedValue)));
             } else {
                 final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
-                list.add(value);
+                list.add(addedValue);
 
                 wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
             }
@@ -68,8 +68,25 @@ public class ListValueStore
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
-        throw new UnsupportedOperationException("putIfAbsent not supported");
+    public byte[] putIfAbsent(final Bytes key, final byte[] addedValue) {
+        final byte[] oldValue = wrapped().get(key);
+
+        if (oldValue != null) {
+            // if the value is null we can skip the get and blind delete
+            if (addedValue == null) {
+                wrapped().put(key, null);
+            } else {
+                final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
+                list.add(addedValue);
+
+                wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
+            }
+        }
+
+        // TODO: here we always return null so that deser would not fail.
+        //       we only do this since we know the only caller (stream-stream join processor)
+        //       would not need the actual value at all
+        return null;
     }
 
     @Override
