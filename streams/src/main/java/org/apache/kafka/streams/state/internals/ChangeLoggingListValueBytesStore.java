@@ -53,7 +53,10 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
             }
         }
 
-        return oldValue;
+        // TODO: here we always return null so that deser would not fail.
+        //       we only do this since we know the only caller (stream-stream join processor)
+        //       would not need the actual value at all
+        return null;
     }
 
 }
