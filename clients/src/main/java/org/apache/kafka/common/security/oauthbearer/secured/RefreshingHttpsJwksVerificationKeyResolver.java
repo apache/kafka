@@ -46,13 +46,13 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private final RefreshingHttpsJwks httpsJkws;
+    private final RefreshingHttpsJwks httpsJwks;
 
     private final VerificationKeyResolver delegate;
 
-    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks httpsJkws) {
-        this.httpsJkws = httpsJkws;
-        this.delegate = new HttpsJwksVerificationKeyResolver(httpsJkws);
+    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks httpsJwks) {
+        this.httpsJwks = httpsJwks;
+        this.delegate = new HttpsJwksVerificationKeyResolver(httpsJwks);
     }
 
     @Override
@@ -60,7 +60,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
         try {
             log.debug("init started");
 
-            httpsJkws.init();
+            httpsJwks.init();
         } finally {
             log.debug("init completed");
         }
@@ -71,7 +71,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
         try {
             log.debug("close started");
 
-            httpsJkws.close();
+            httpsJwks.close();
         } finally {
             log.debug("close completed");
         }

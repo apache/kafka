@@ -145,7 +145,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        log.warn("validate - accessToken: {}", accessToken);
+        log.debug("validate - accessToken: {}", accessToken);
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 
         JwtContext jwt;

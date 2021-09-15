@@ -1608,6 +1608,7 @@ project(':tools') {
     implementation libs.slf4jApi
     implementation libs.log4j
 
+    implementation libs.jose4j
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
