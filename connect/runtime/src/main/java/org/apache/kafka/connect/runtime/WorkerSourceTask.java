@@ -95,7 +95,7 @@ class WorkerSourceTask extends WorkerTask {
     private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
-    private Map<Map<String, Object>, Map<String, Object>> offsets;
+    private volatile Map<Map<String, Object>, Map<String, Object>> offsets;
     private final SubmittedRecords submittedRecords;
     private final CountDownLatch stopRequestedLatch;
 
