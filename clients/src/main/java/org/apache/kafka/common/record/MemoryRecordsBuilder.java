@@ -80,9 +80,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+    private long deleteHorizonMs;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
-    private Long firstTimestamp = null;
+    private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
     private boolean aborted = false;
@@ -99,7 +100,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 boolean isTransactional,
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
-                                int writeLimit) {
+                                int writeLimit,
+                                long deleteHorizonMs) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
@@ -109,6 +111,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 throw new IllegalArgumentException("Control records are not supported for magic " + magic);
             if (compressionType == CompressionType.ZSTD)
                 throw new IllegalArgumentException("ZStandard compression is not supported for magic " + magic);
+            if (deleteHorizonMs != RecordBatch.NO_TIMESTAMP)
+                throw new IllegalArgumentException("Delete horizon timestamp is not supported for magic " + magic);
         }
 
         this.magic = magic;
@@ -125,6 +129,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
         this.isControlBatch = isControlBatch;
+        this.deleteHorizonMs = deleteHorizonMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
@@ -133,6 +138,28 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
+
+        if (hasDeleteHorizonMs()) {
+            this.baseTimestamp = deleteHorizonMs;
+        }
+    }
+
+    public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
+                                byte magic,
+                                CompressionType compressionType,
+                                TimestampType timestampType,
+                                long baseOffset,
+                                long logAppendTime,
+                                long producerId,
+                                short producerEpoch,
+                                int baseSequence,
+                                boolean isTransactional,
+                                boolean isControlBatch,
+                                int partitionLeaderEpoch,
+                                int writeLimit) {
+        this(bufferStream, magic, compressionType, timestampType, baseOffset, logAppendTime, producerId,
+             producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit,
+             RecordBatch.NO_TIMESTAMP);
     }
 
     /**
@@ -195,6 +222,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public boolean isTransactional() {
         return isTransactional;
+    }
+
+    public boolean hasDeleteHorizonMs() {
+        return magic >= RecordBatch.MAGIC_VALUE_V2 && deleteHorizonMs >= 0L;
     }
 
     /**
@@ -369,8 +400,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             maxTimestamp = this.maxTimestamp;
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
-                partitionLeaderEpoch, numRecords);
+                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
+                hasDeleteHorizonMs(), partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
         return writtenCompressed;
@@ -416,8 +447,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
                 throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
-            if (firstTimestamp == null)
-                firstTimestamp = timestamp;
+            if (baseTimestamp == null)
+                baseTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
@@ -624,12 +655,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             int offsetDelta = (int) (offset - baseOffset);
             long timestamp = record.timestamp();
-            if (firstTimestamp == null)
-                firstTimestamp = timestamp;
+            if (baseTimestamp == null)
+                baseTimestamp = timestamp;
 
             int sizeInBytes = DefaultRecord.writeTo(appendStream,
                 offsetDelta,
-                timestamp - firstTimestamp,
+                timestamp - baseTimestamp,
                 record.key(),
                 record.value(),
                 record.headers());
@@ -683,7 +714,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                      Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
-        long timestampDelta = timestamp - firstTimestamp;
+        long timestampDelta = timestamp - baseTimestamp;
         int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
         recordWritten(offset, timestamp, sizeInBytes);
     }
@@ -788,7 +819,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
-            long timestampDelta = firstTimestamp == null ? 0 : timestamp - firstTimestamp;
+            long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
         }
 

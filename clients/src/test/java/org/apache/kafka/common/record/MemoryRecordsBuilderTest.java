@@ -19,6 +19,9 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -35,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -753,6 +757,48 @@ public class MemoryRecordsBuilderTest {
                 break;
         }
         assertTrue(iterations < 100, "Memory usage too high: " + memUsed);
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(V2MemoryRecordsBuilderArgumentsProvider.class)
+    public void testRecordTimestampsWithDeleteHorizon(Args args) {
+        long deleteHorizon = 100;
+        int payloadLen = 1024 * 1024;
+        ByteBuffer buffer = ByteBuffer.allocate(payloadLen * 2);
+        ByteBufferOutputStream byteBufferOutputStream = new ByteBufferOutputStream(buffer);
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(byteBufferOutputStream, args.magic, args.compressionType,
+                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, 0, deleteHorizon);
+
+        builder.append(50L, "0".getBytes(), "0".getBytes());
+        builder.append(100L, "1".getBytes(), null);
+        builder.append(150L, "2".getBytes(), "2".getBytes());
+
+        MemoryRecords records = builder.build();
+        List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+        assertEquals(OptionalLong.of(deleteHorizon), batches.get(0).deleteHorizonMs());
+
+        CloseableIterator<Record> recordIterator = batches.get(0).streamingIterator(BufferSupplier.create());
+        Record record = recordIterator.next();
+        assertEquals(50L, record.timestamp());
+        record = recordIterator.next();
+        assertEquals(100L, record.timestamp());
+        record = recordIterator.next();
+        assertEquals(150L, record.timestamp());
+        recordIterator.close();
+    }
+
+    private static class V2MemoryRecordsBuilderArgumentsProvider implements ArgumentsProvider {
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+            List<Arguments> values = new ArrayList<>();
+            for (int bufferOffset : Arrays.asList(0, 15))
+                for (CompressionType type: CompressionType.values()) {
+                    values.add(Arguments.of(new Args(bufferOffset, type, MAGIC_VALUE_V2)));
+                }
+            return values.stream();
+        }
     }
 
     private void verifyRecordsProcessingStats(CompressionType compressionType, RecordConversionStats processingStats,
