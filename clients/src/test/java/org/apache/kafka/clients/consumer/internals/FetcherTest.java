@@ -3147,10 +3147,10 @@ public class FetcherTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter() {
+        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
             @Override
-            protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                return BatchRetention.DELETE_EMPTY;
+            protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
+                return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
             }
 
             @Override
