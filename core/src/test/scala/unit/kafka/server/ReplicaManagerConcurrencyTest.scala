@@ -66,7 +66,7 @@ class ReplicaManagerConcurrencyTest {
   }
 
   @Test
-  def testIsrExpansionWithConcurrentProduce(): Unit = {
+  def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
     val channel = new ControllerChannel
@@ -84,6 +84,8 @@ class ReplicaManagerConcurrencyTest {
     val controller = new ControllerModel(topicModel, channel, replicaManager)
 
     submit(new Clock(time))
+    replicaManager.startup()
+
     submit(controller)
     controller.initialize()
 
@@ -100,17 +102,23 @@ class ReplicaManagerConcurrencyTest {
     }
 
     // Start the remote replica fetcher and wait for it to join the ISR
-    submit(new FetcherModel(
+    val fetcher = new FetcherModel(
       clientId = s"replica-$remoteId",
       replicaId = remoteId,
       topicModel.topicId,
       topicPartition,
       replicaManager
-    ))
+    )
 
+    submit(fetcher)
     TestUtils.waitUntilTrue(() => {
       partition.inSyncReplicaIds == Set(localId, remoteId)
     }, "Test timed out before ISR was expanded")
+
+    fetcher.shutdown()
+    TestUtils.waitUntilTrue(() => {
+      partition.inSyncReplicaIds == Set(localId)
+    }, "Test timed out before ISR was shrunk")
   }
 
   private class Clock(
@@ -132,6 +140,7 @@ class ReplicaManagerConcurrencyTest {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.NodeIdProp, localId.toString)
     props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
+    props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
 
     val config = new KafkaConfig(props, doLog = false)
 
