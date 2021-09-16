@@ -42,7 +42,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     resourceToConfigNames.map { case resource =>
 
       def allConfigs(config: AbstractConfig) = {
-        config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
+        config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
       }
 
       def createResponseConfig(configs: Map[String, Any],
