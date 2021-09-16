@@ -305,14 +305,12 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(
-            Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
-            0,
-            added.size() * 10L
-        )) {
-            final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(iterator);
-            verifyKeyValueList(added, actual);
-        }
+        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(cachingStore.findSessions(
+                Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
+                0,
+                added.size() * 10L
+        ));
+        verifyKeyValueList(added, actual);
     }
 
     @Test

@@ -24,49 +24,49 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThrows;
 
-public class KeyAndJoinSideSerializerTest {
+public class TimestampedKeyAndJoinSideSerializerTest {
     private static final String TOPIC = "some-topic";
 
-    private static final KeyAndJoinSideSerde<String> STRING_SERDE =
-        new KeyAndJoinSideSerde<>(Serdes.String());
+    private static final TimestampedKeyAndJoinSideSerde<String> STRING_SERDE =
+        new TimestampedKeyAndJoinSideSerde<>(Serdes.String());
 
     @Test
     public void shouldSerializeKeyWithJoinSideAsTrue() {
         final String value = "some-string";
 
-        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(true, value);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(true, value, 10);
 
         final byte[] serialized =
-            STRING_SERDE.serializer().serialize(TOPIC, keyAndJoinSide);
+            STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
 
         assertThat(serialized, is(notNullValue()));
 
-        final KeyAndJoinSide<String> deserialized =
+        final TimestampedKeyAndJoinSide<String> deserialized =
             STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
 
-        assertThat(deserialized, is(keyAndJoinSide));
+        assertThat(deserialized, is(timestampedKeyAndJoinSide));
     }
 
     @Test
     public void shouldSerializeKeyWithJoinSideAsFalse() {
         final String value = "some-string";
 
-        final KeyAndJoinSide<String> keyAndJoinSide = KeyAndJoinSide.make(false, value);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(false, value, 20);
 
         final byte[] serialized =
-            STRING_SERDE.serializer().serialize(TOPIC, keyAndJoinSide);
+            STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
 
         assertThat(serialized, is(notNullValue()));
 
-        final KeyAndJoinSide<String> deserialized =
+        final TimestampedKeyAndJoinSide<String> deserialized =
             STRING_SERDE.deserializer().deserialize(TOPIC, serialized);
 
-        assertThat(deserialized, is(keyAndJoinSide));
+        assertThat(deserialized, is(timestampedKeyAndJoinSide));
     }
 
     @Test
     public void shouldThrowIfSerializeNullData() {
         assertThrows(NullPointerException.class,
-            () -> STRING_SERDE.serializer().serialize(TOPIC, KeyAndJoinSide.make(true, null)));
+            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.make(true, null, 0)));
     }
 }

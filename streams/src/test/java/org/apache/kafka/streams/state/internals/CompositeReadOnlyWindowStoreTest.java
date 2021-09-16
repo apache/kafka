@@ -80,14 +80,10 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        try (final WindowStoreIterator<String> iterator =
-                 windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
-            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
-
-            assertEquals(
+        assertEquals(
                 asList(new KeyValue<>(0L, "my-value"), new KeyValue<>(10L, "my-later-value")),
-                results);
-        }
+                StreamsTestUtils.toList(windowStore.fetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L)))
+        );
     }
 
     @Test
@@ -95,14 +91,10 @@ public class CompositeReadOnlyWindowStoreTest {
         underlyingWindowStore.put("my-key", "my-value", 0L);
         underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
-        try (final WindowStoreIterator<String> iterator =
-                 windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L))) {
-            final List<KeyValue<Long, String>> results = StreamsTestUtils.toList(iterator);
-
-            assertEquals(
+        assertEquals(
                 asList(new KeyValue<>(10L, "my-later-value"), new KeyValue<>(0L, "my-value")),
-                results);
-        }
+                StreamsTestUtils.toList(windowStore.backwardFetch("my-key", ofEpochMilli(0L), ofEpochMilli(25L)))
+        );
     }
 
     @Test

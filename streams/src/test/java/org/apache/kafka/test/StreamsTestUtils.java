@@ -26,6 +26,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -130,6 +132,13 @@ public final class StreamsTestUtils {
         while (iterator.hasNext()) {
             results.add(iterator.next());
         }
+
+        if (iterator instanceof Closeable) {
+            try {
+                ((Closeable) iterator).close();
+            } catch (IOException e) { /* do nothing */ }
+        }
+
         return results;
     }
 
