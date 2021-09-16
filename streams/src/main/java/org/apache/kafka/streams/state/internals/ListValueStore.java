@@ -55,15 +55,7 @@ public class ListValueStore
             wrapped().put(key, null);
         } else {
             final byte[] oldValue = wrapped().get(key);
-
-            if (oldValue == null) {
-                wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(addedValue)));
-            } else {
-                final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
-                list.add(addedValue);
-
-                wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
-            }
+            putInternal(key, addedValue, oldValue);
         }
     }
 
@@ -76,14 +68,23 @@ public class ListValueStore
             if (addedValue == null) {
                 wrapped().put(key, null);
             } else {
-                final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
-                list.add(addedValue);
-
-                wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
+                putInternal(key, addedValue, oldValue);
             }
         }
 
         return oldValue;
+    }
+
+    // this function assumes the addedValue is not null; callers should check null themselves
+    private void putInternal(final Bytes key, final byte[] addedValue, final byte[] oldValue) {
+        if (oldValue == null) {
+            wrapped().put(key, LIST_SERDE.serializer().serialize(null, Collections.singletonList(addedValue)));
+        } else {
+            final List<byte[]> list = LIST_SERDE.deserializer().deserialize(null, oldValue);
+            list.add(addedValue);
+
+            wrapped().put(key, LIST_SERDE.serializer().serialize(null, list));
+        }
     }
 
     @Override
