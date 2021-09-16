@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +54,7 @@ public class RemoteLogMetadataSnapshotFile {
     private static final int HEADER_SIZE = 30;
 
     private final File metadataStoreFile;
+    private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
 
     /**
      * Creates a CommittedLogMetadataSnapshotFile instance backed by a file with the name `remote_log_snapshot` in
@@ -81,21 +81,21 @@ public class RemoteLogMetadataSnapshotFile {
      * @throws IOException if there4 is any error in writing the given snapshot to the file.
      */
     public synchronized void write(Snapshot snapshot) throws IOException {
-        File newMetadataSnapshotFile = new File(metadataStoreFile.getAbsolutePath() + ".new");
+        File newMetadataSnapshotFile = new File(metadataStoreFile.getAbsolutePath() + ".tmp");
         try (WritableByteChannel fileChannel = Channels.newChannel(new FileOutputStream(newMetadataSnapshotFile))) {
 
             ByteBuffer headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
 
             // Write version
-            headerBuffer.putShort(snapshot.version);
+            headerBuffer.putShort(snapshot.version());
 
             // Write topic-id
-            headerBuffer.putLong(snapshot.topicId.getMostSignificantBits());
-            headerBuffer.putLong(snapshot.topicId.getLeastSignificantBits());
+            headerBuffer.putLong(snapshot.topicId().getMostSignificantBits());
+            headerBuffer.putLong(snapshot.topicId().getLeastSignificantBits());
 
             // Write metadata partition and metadata partition offset
-            headerBuffer.putInt(snapshot.metadataPartition);
-            headerBuffer.putLong(snapshot.metadataPartitionOffset);
+            headerBuffer.putInt(snapshot.metadataPartition());
+            headerBuffer.putLong(snapshot.metadataPartitionOffset());
             headerBuffer.flip();
 
             // Write header
@@ -103,9 +103,8 @@ public class RemoteLogMetadataSnapshotFile {
 
             // Write each entry
             ByteBuffer lenBuffer = ByteBuffer.allocate(4);
-            RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
-            for (RemoteLogSegmentMetadata remoteLogSegmentMetadata : snapshot.remoteLogMetadatas) {
-                final byte[] serializedBytes = serde.serialize(remoteLogSegmentMetadata);
+            for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : snapshot.remoteLogSegmentMetadataSnapshots()) {
+                final byte[] serializedBytes = serde.serialize(metadataSnapshot);
                 // Write length
                 lenBuffer.putInt(serializedBytes.length);
                 lenBuffer.flip();
@@ -143,13 +142,16 @@ public class RemoteLogMetadataSnapshotFile {
             int metadataPartition = headerBuffer.getInt();
             long metadataPartitionOffset = headerBuffer.getLong();
 
-            RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
-
-            List<RemoteLogSegmentMetadata> result = new ArrayList<>();
-
+            List<RemoteLogSegmentMetadataSnapshot> result = new ArrayList<>();
             ByteBuffer lenBuffer = ByteBuffer.allocate(4);
-            while (channel.read(lenBuffer) > 0) {
+            int lenBufferReadCt;
+            while ((lenBufferReadCt = channel.read(lenBuffer)) > 0) {
                 lenBuffer.rewind();
+
+                if (lenBufferReadCt != lenBuffer.capacity()) {
+                    throw new IOException("Invalid amount of data read for the length of an entry, file may have been corrupted.");
+                }
+
                 // Read the length of each entry
                 final int len = lenBuffer.getInt();
                 lenBuffer.rewind();
@@ -163,7 +165,8 @@ public class RemoteLogMetadataSnapshotFile {
 
                 // We are always adding RemoteLogSegmentMetadata only as you can see in #write() method.
                 // Did not add a specific serde for RemoteLogSegmentMetadata and reusing RemoteLogMetadataSerde
-                final RemoteLogSegmentMetadata remoteLogSegmentMetadata = (RemoteLogSegmentMetadata) serde.deserialize(data.array());
+                final RemoteLogSegmentMetadataSnapshot remoteLogSegmentMetadata =
+                        (RemoteLogSegmentMetadataSnapshot) serde.deserialize(data.array());
                 result.add(remoteLogSegmentMetadata);
             }
 
@@ -181,25 +184,25 @@ public class RemoteLogMetadataSnapshotFile {
         private final Uuid topicId;
         private final int metadataPartition;
         private final long metadataPartitionOffset;
-        private final Collection<RemoteLogSegmentMetadata> remoteLogMetadatas;
+        private final Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots;
 
         public Snapshot(Uuid topicId,
                         int metadataPartition,
                         long metadataPartitionOffset,
-                        Collection<RemoteLogSegmentMetadata> remoteLogMetadatas) {
-            this(CURRENT_VERSION, topicId, metadataPartition, metadataPartitionOffset, remoteLogMetadatas);
+                        Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots) {
+            this(CURRENT_VERSION, topicId, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
         }
 
         public Snapshot(short version,
                         Uuid topicId,
                         int metadataPartition,
                         long metadataPartitionOffset,
-                        Collection<RemoteLogSegmentMetadata> remoteLogMetadatas) {
+                        Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots) {
             this.version = version;
             this.topicId = topicId;
             this.metadataPartition = metadataPartition;
             this.metadataPartitionOffset = metadataPartitionOffset;
-            this.remoteLogMetadatas = remoteLogMetadatas;
+            this.remoteLogSegmentMetadataSnapshots = remoteLogSegmentMetadataSnapshots;
         }
 
         public short version() {
@@ -218,8 +221,8 @@ public class RemoteLogMetadataSnapshotFile {
             return metadataPartitionOffset;
         }
 
-        public Collection<RemoteLogSegmentMetadata> remoteLogMetadatas() {
-            return remoteLogMetadatas;
+        public Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots() {
+            return remoteLogSegmentMetadataSnapshots;
         }
 
         @Override
@@ -234,6 +237,16 @@ public class RemoteLogMetadataSnapshotFile {
         @Override
         public int hashCode() {
             return Objects.hash(version, topicId, metadataPartition, metadataPartitionOffset);
+        }
+
+        @Override
+        public String toString() {
+            return "Snapshot{" +
+                    "version=" + version +
+                    ", topicId=" + topicId +
+                    ", metadataPartition=" + metadataPartition +
+                    ", metadataPartitionOffset=" + metadataPartitionOffset +
+                    '}';
         }
     }
 }

@@ -72,7 +72,6 @@ class ConsumerTask implements Runnable, Closeable {
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final Time time;
 
-
     // It indicates whether the closing process has been started or not. If it is set as true,
     // consumer will stop consuming messages and it will not allow partition assignments to be updated.
     private volatile boolean closing = false;
@@ -121,7 +120,7 @@ class ConsumerTask implements Runnable, Closeable {
 
         Map<Integer, Long> committedOffsets = Collections.emptyMap();
         try {
-            // load committed offset and assign them in the consumer
+            // Load committed offset and assign them in the consumer.
             committedOffsets = committedOffsetsFile.readEntries();
         } catch (IOException e) {
             // Ignore the error and consumer consumes from the earliest offset.
@@ -131,7 +130,7 @@ class ConsumerTask implements Runnable, Closeable {
         final Set<Map.Entry<Integer, Long>> entries = committedOffsets.entrySet();
 
         if (!entries.isEmpty()) {
-            // assign topic partitions from the earlier committed offsets file.
+            // Assign topic partitions from the earlier committed offsets file.
             Set<Integer> earlierAssignedPartitions = committedOffsets.keySet();
             assignedMetaPartitions = Collections.unmodifiableSet(earlierAssignedPartitions);
             Set<TopicPartition> metadataTopicPartitions = earlierAssignedPartitions.stream()
@@ -145,6 +144,7 @@ class ConsumerTask implements Runnable, Closeable {
                 consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
             }
 
+            committedPartitionToConsumedOffsets = committedOffsets;
         }
     }
 
@@ -164,7 +164,7 @@ class ConsumerTask implements Runnable, Closeable {
                     partitionToConsumedOffsets.put(record.partition(), record.offset());
                 }
 
-                syncCommittedDataAndOffsets(false);
+                maybeSyncCommittedDataAndOffsets(false);
             }
         } catch (Exception e) {
             log.error("Error occurred in consumer task, close:[{}]", closing, e);
@@ -174,7 +174,7 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    private void syncCommittedDataAndOffsets(boolean forceSync) {
+    private void maybeSyncCommittedDataAndOffsets(boolean forceSync) {
         boolean noOffsetUpdates = committedPartitionToConsumedOffsets.equals(partitionToConsumedOffsets);
         if (noOffsetUpdates || !forceSync && time.milliseconds() - lastSyncedTimeMs < committedOffsetSyncIntervalMs) {
             log.debug("Skip syncing committed offsets, noOffsetUpdates: {}, forceSync: {}", noOffsetUpdates, forceSync);
@@ -182,15 +182,21 @@ class ConsumerTask implements Runnable, Closeable {
         }
 
         try {
-            // todo sync the snapshot file
+            HashMap<Integer, Long> syncedPartitionToConsumedOffsets = new HashMap<>();
             for (TopicIdPartition topicIdPartition : assignedTopicPartitions) {
                 int metadataPartition = topicPartitioner.metadataPartition(topicIdPartition);
-                remotePartitionMetadataEventHandler.syncLogMetadataDataFile(topicIdPartition, metadataPartition,
-                                                                            partitionToConsumedOffsets.get(metadataPartition));
+                Long offset = partitionToConsumedOffsets.get(metadataPartition);
+                if (offset != null && !offset.equals(committedPartitionToConsumedOffsets.get(metadataPartition))) {
+                    remotePartitionMetadataEventHandler.syncLogMetadataDataFile(topicIdPartition, metadataPartition, offset);
+                    syncedPartitionToConsumedOffsets.put(metadataPartition, offset);
+                } else {
+                    log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and offset:{} ",
+                            topicIdPartition, metadataPartition, offset);
+                }
             }
 
             committedOffsetsFile.writeEntries(partitionToConsumedOffsets);
-            committedPartitionToConsumedOffsets = new HashMap<>(partitionToConsumedOffsets);
+            committedPartitionToConsumedOffsets = syncedPartitionToConsumedOffsets;
             lastSyncedTimeMs = time.milliseconds();
         } catch (IOException e) {
             log.error("Error encountered while writing committed offsets to a local file", e);
@@ -253,10 +259,10 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     private void executeReassignment(Set<Integer> assignedMetaPartitionsSnapshot) {
-        Set<TopicPartition> assignedMetaTopicPartitions = assignedMetaPartitionsSnapshot.stream()
-                                                                                        .map(partitionNum -> new TopicPartition(
-                                                                                                REMOTE_LOG_METADATA_TOPIC_NAME, partitionNum))
-                                                                                        .collect(Collectors.toSet());
+        Set<TopicPartition> assignedMetaTopicPartitions =
+                assignedMetaPartitionsSnapshot.stream()
+                                              .map(partitionNum -> new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partitionNum))
+                                              .collect(Collectors.toSet());
         log.info("Reassigning partitions to consumer task [{}]", assignedMetaTopicPartitions);
         consumer.assign(assignedMetaTopicPartitions);
     }
@@ -318,7 +324,7 @@ class ConsumerTask implements Runnable, Closeable {
                 // if the closing is already set.
                 closing = true;
                 consumer.wakeup();
-                syncCommittedDataAndOffsets(true);
+                maybeSyncCommittedDataAndOffsets(true);
                 assignPartitionsLock.notifyAll();
             }
         }

@@ -19,8 +19,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -52,7 +51,7 @@ public class RemoteLogMetadataSnapshotFileTest {
 
         // There should be an empty snapshot as the written snapshot did not have any remote log segment metadata.
         Assertions.assertTrue(snapshotFile.read().isPresent());
-        Assertions.assertTrue(snapshotFile.read().get().remoteLogMetadatas().isEmpty());
+        Assertions.assertTrue(snapshotFile.read().get().remoteLogSegmentMetadataSnapshots().isEmpty());
     }
 
     @Test
@@ -61,13 +60,14 @@ public class RemoteLogMetadataSnapshotFileTest {
         File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
-        List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = new ArrayList<>();
+        List<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadatas = new ArrayList<>();
         long startOffset = 0;
         for (int i = 0; i < 100; i++) {
             long endOffset = startOffset + 100L;
             remoteLogSegmentMetadatas.add(
-                    new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset,
-                                                 System.currentTimeMillis(), 1, 100, 1024, Collections.singletonMap(i, startOffset)));
+                    new RemoteLogSegmentMetadataSnapshot(Uuid.randomUuid(), startOffset, endOffset,
+                                                         System.currentTimeMillis(), 1, 100, 1024,
+                                                         RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(i, startOffset)));
             startOffset = endOffset + 1;
         }
 
@@ -79,6 +79,7 @@ public class RemoteLogMetadataSnapshotFileTest {
         Assertions.assertTrue(maybeReadSnapshot.isPresent());
 
         Assertions.assertEquals(snapshot, maybeReadSnapshot.get());
-        Assertions.assertEquals(new HashSet<>(snapshot.remoteLogMetadatas()), new HashSet<>(maybeReadSnapshot.get().remoteLogMetadatas()));
+        Assertions.assertEquals(new HashSet<>(snapshot.remoteLogSegmentMetadataSnapshots()),
+                                new HashSet<>(maybeReadSnapshot.get().remoteLogSegmentMetadataSnapshots()));
     }
 }

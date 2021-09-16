@@ -14,11 +14,11 @@
 // limitations under the License.
 
 {
-  "apiKey": 0,
-  "type": "data",
-  "name": "RemoteLogSegmentMetadataRecordSnapshot",
+  "apiKey": 3,
+  "type": "metadata",
+  "name": "RemoteLogSegmentMetadataSnapshotRecord",
   "validVersions": "0",
-  "flexibleVersions": "none",
+  "flexibleVersions": "0+",
   "fields": [
     {
       "name": "SegmentId",
@@ -42,16 +42,16 @@
       "name": "BrokerId",
       "type": "int32",
       "versions": "0+",
-      "about": "Broker (controller or leader) id from which this event is created. DELETE_PARTITION_MARKED is sent by the controller. DELETE_PARTITION_STARTED and DELETE_PARTITION_FINISHED are sent by remote log metadata topic partition leader."
+      "about": "Broker (controller or leader) id from which this event is created or updated."
     },
     {
-      "name": "MaxTimestamp",
+      "name": "MaxTimestampMs",
       "type": "int64",
       "versions": "0+",
       "about": "Maximum timestamp with in this segment."
     },
     {
-      "name": "EventTimestamp",
+      "name": "EventTimestampMs",
       "type": "int64",
       "versions": "0+",
       "about": "Event timestamp of this segment."
@@ -60,7 +60,7 @@
       "name": "SegmentLeaderEpochs",
       "type": "[]SegmentLeaderEpochEntry",
       "versions": "0+",
-      "about": "Event timestamp of this segment.",
+      "about": "Leader epochs of this segment.",
       "fields": [
         {
           "name": "LeaderEpoch",

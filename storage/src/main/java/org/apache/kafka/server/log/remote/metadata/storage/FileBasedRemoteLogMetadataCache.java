@@ -18,9 +18,15 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This is a wrapper around {@link RemoteLogMetadataCache} providing a file based snapshot of
@@ -28,7 +34,7 @@ import java.nio.file.Path;
  * {@code partitionDir}.
  */
 public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
-
+    private static final Logger log = LoggerFactory.getLogger(FileBasedRemoteLogMetadataCache.class);
     private final RemoteLogMetadataSnapshotFile snapshotFile;
     private final TopicIdPartition topicIdPartition;
 
@@ -42,10 +48,36 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
         snapshotFile = new RemoteLogMetadataSnapshotFile(partitionDir);
 
         try {
-            snapshotFile.read().ifPresent(snapshot -> loadRemoteLogSegmentMetadata(snapshot.remoteLogMetadatas()));
+            snapshotFile.read().ifPresent(snapshot -> loadRemoteLogSegmentMetadata(snapshot));
         } catch (IOException e) {
             throw new KafkaException(e);
         }
+    }
+
+    protected void loadRemoteLogSegmentMetadata(RemoteLogMetadataSnapshotFile.Snapshot snapshot) {
+        log.info("Loading snapshot for partition {} is: {}", topicIdPartition, snapshot);
+        for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : snapshot.remoteLogSegmentMetadataSnapshots()) {
+            switch (metadataSnapshot.state()) {
+                case COPY_SEGMENT_STARTED:
+                    addCopyInProgressSegment(createRemoteLogSegmentMetadata(metadataSnapshot));
+                    break;
+                case COPY_SEGMENT_FINISHED:
+                    handleSegmentWithCopySegmentFinishedState(createRemoteLogSegmentMetadata(metadataSnapshot));
+                    break;
+                case DELETE_SEGMENT_STARTED:
+                    handleSegmentWithDeleteSegmentStartedState(createRemoteLogSegmentMetadata(metadataSnapshot));
+                    break;
+                case DELETE_SEGMENT_FINISHED:
+                default:
+                    throw new IllegalArgumentException("Given remoteLogSegmentMetadata has invalid state: " + metadataSnapshot);
+            }
+        }
+    }
+
+    private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentMetadataSnapshot snapshot) {
+        return new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, snapshot.segmentId()), snapshot.startOffset(), snapshot.endOffset(),
+                                            snapshot.maxTimestampMs(), snapshot.brokerId(), snapshot.eventTimestampMs(),
+                                            snapshot.segmentSizeInBytes(), snapshot.state(), snapshot.segmentLeaderEpochs());
     }
 
     /**
@@ -58,7 +90,12 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
      */
     public void flushToFile(int metadataPartition,
                             Long metadataPartitionOffset) throws IOException {
+        List<RemoteLogSegmentMetadataSnapshot> snapshots =
+                idToSegmentMetadata.values()
+                                   .stream()
+                                   .map(metadata -> RemoteLogSegmentMetadataSnapshot.create(metadata))
+                                   .collect(Collectors.toList());
         snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(topicIdPartition.topicId(), metadataPartition, metadataPartitionOffset,
-                                                                      idToSegmentMetadata.values()));
+                                                                      snapshots));
     }
 }

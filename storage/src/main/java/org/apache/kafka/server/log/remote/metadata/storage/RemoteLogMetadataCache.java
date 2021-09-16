@@ -24,7 +24,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
@@ -175,7 +174,7 @@ public class RemoteLogMetadataCache {
         }
     }
 
-    private void handleSegmentWithCopySegmentFinishedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    protected final void handleSegmentWithCopySegmentFinishedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
                 RemoteLogLeaderEpochState::handleSegmentWithCopySegmentFinishedState);
 
@@ -183,7 +182,7 @@ public class RemoteLogMetadataCache {
         idToSegmentMetadata.put(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata);
     }
 
-    private void handleSegmentWithDeleteSegmentStartedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    protected final void handleSegmentWithDeleteSegmentStartedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Cleaning up the state for : [{}]", remoteLogSegmentMetadata);
 
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
@@ -304,25 +303,6 @@ public class RemoteLogMetadataCache {
         if (!RemoteLogSegmentState.isValidTransition(existingState, targetState)) {
             throw new IllegalStateException(
                     "Current state: " + existingState + " can not be transitioned to target state: " + targetState);
-        }
-    }
-
-    protected void loadRemoteLogSegmentMetadata(Collection<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas) {
-        for (RemoteLogSegmentMetadata remoteLogSegmentMetadata : remoteLogSegmentMetadatas) {
-            switch (remoteLogSegmentMetadata.state()) {
-                case COPY_SEGMENT_STARTED:
-                    addCopyInProgressSegment(remoteLogSegmentMetadata);
-                    break;
-                case COPY_SEGMENT_FINISHED:
-                    handleSegmentWithCopySegmentFinishedState(remoteLogSegmentMetadata);
-                    break;
-                case DELETE_SEGMENT_STARTED:
-                    handleSegmentWithDeleteSegmentStartedState(remoteLogSegmentMetadata);
-                    break;
-                case DELETE_SEGMENT_FINISHED:
-                default:
-                    throw new IllegalArgumentException("Given remoteLogSegmentMetadata has invalid state: " + remoteLogSegmentMetadata);
-            }
         }
     }
 

@@ -69,7 +69,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         if (remoteLogMetadataCache != null) {
             remoteLogMetadataCache.addCopyInProgressSegment(remoteLogSegmentMetadata);
         } else {
-            log.error("No partition metadata found for : " + topicIdPartition);
+            log.warn("No partition metadata found for : " + topicIdPartition);
         }
     }
 
@@ -87,10 +87,10 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             try {
                 remoteLogMetadataCache.updateRemoteLogSegmentMetadata(rlsmUpdate);
             } catch (RemoteResourceNotFoundException e) {
-                log.error("Error occurred while updating the remote log segment.");
+                log.warn("Error occurred while updating the remote log segment.", e);
             }
         } else {
-            log.error("No partition metadata found for : " + topicIdPartition);
+            log.warn("No partition metadata found for : " + topicIdPartition);
         }
     }
 
@@ -113,7 +113,6 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     public void syncLogMetadataDataFile(TopicIdPartition topicIdPartition,
                                         int metadataPartition,
                                         Long metadataPartitionOffset) throws IOException {
-        //todo-tier write partitions
         RemotePartitionDeleteMetadata partitionDeleteMetadata = idToPartitionDeleteMetadata.get(topicIdPartition);
         if (partitionDeleteMetadata != null) {
             log.info("Skipping syncing of metadata snapshot as remote partition [{}] is with state: [{}] ", topicIdPartition,
