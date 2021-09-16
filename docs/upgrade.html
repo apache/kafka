@@ -19,6 +19,15 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
+<ul>
+    <li>Apache Kafka supports Java 17.</li>
+    <li>The following metrics have been deprecated: <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>,
+        and <code>iotime-total</code>. Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>,
+        and <code>io-time-ns-total</code> instead. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-773%3A+Differentiate+consistently+metric+latency+measured+in+millis+and+nanos">KIP-773</a>
+        for more details.</li>
+</ul>
+
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>

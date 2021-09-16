@@ -27,6 +27,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -36,7 +37,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class KStreamFlatMapTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
@@ -85,5 +89,13 @@ public class KStreamFlatMapTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed().get(i));
         }
+    }
+
+    @Test
+    public void testKeyValueMapperResultNotNull() {
+        final KStreamFlatMap<String, Integer, String, Integer> supplier = new KStreamFlatMap<>((key, value) -> null);
+        final Throwable throwable = assertThrows(NullPointerException.class,
+                () -> supplier.get().process(new Record<>("K", 0, 0L)));
+        assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
     }
 }

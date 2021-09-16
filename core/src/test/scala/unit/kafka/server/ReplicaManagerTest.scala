@@ -51,13 +51,16 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
-import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage }
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentMatchers, Mockito}
+
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1951,7 +1954,8 @@ class ReplicaManagerTest {
     timer: MockTimer,
     brokerId: Int = 0,
     aliveBrokerIds: Seq[Int] = Seq(0, 1),
-    propsModifier: Properties => Unit = _ => {}
+    propsModifier: Properties => Unit = _ => {},
+    mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
@@ -1979,7 +1983,24 @@ class ReplicaManagerTest {
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName),
-      alterIsrManager)
+      alterIsrManager) {
+
+      override protected def createReplicaFetcherManager(
+        metrics: Metrics,
+        time: Time,
+        threadNamePrefix: Option[String],
+        quotaManager: ReplicationQuotaManager
+      ): ReplicaFetcherManager = {
+        mockReplicaFetcherManager.getOrElse {
+          super.createReplicaFetcherManager(
+            metrics,
+            time,
+            threadNamePrefix,
+            quotaManager
+          )
+        }
+      }
+    }
   }
 
   @Test
@@ -2692,6 +2713,36 @@ class ReplicaManagerTest {
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionMarkedOfflineIfLogCantBeCreated(becomeLeader: Boolean): Unit = {
+    val dataDir = TestUtils.tempDir()
+    val topicPartition = new TopicPartition(topic, 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+    )
+
+    try {
+      // Delete the data directory to trigger a storage exception
+      Utils.delete(dataDir)
+
+      val request = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = topicPartition,
+        replicas = Seq(0, 1),
+        leaderAndIsr = LeaderAndIsr(if (becomeLeader) 0 else 1, List(0, 1)),
+        isNew = true
+      )
+
+      replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
+
+      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def leaderAndIsrRequest(
     topicId: Uuid,
     topicPartition: TopicPartition,
@@ -3182,6 +3233,118 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeltaToLeaderOrFollowerMarksPartitionOfflineIfLogCantBeCreated(isStartIdLeader: Boolean): Unit = {
+    val localId = 1
+    val topicPartition = new TopicPartition("foo", 0)
+    val dataDir = TestUtils.tempDir()
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+    )
+
+    try {
+      // Delete the data directory to trigger a storage exception
+      Utils.delete(dataDir)
+
+      // Make the local replica the leader
+      val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
+      val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
+      replicaManager.applyDelta(leaderMetadataImage, topicsDelta)
+
+      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testDeltaFollowerStopFetcherBeforeCreatingInitialFetchOffset(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val topicPartition = new TopicPartition("foo", 0)
+
+    val mockReplicaFetcherManager = Mockito.mock(classOf[ReplicaFetcherManager])
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId,
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+    )
+
+    try {
+      // The first call to removeFetcherForPartitions should be ignored.
+      Mockito.when(mockReplicaFetcherManager.removeFetcherForPartitions(
+        Set(topicPartition))
+      ).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
+
+      // Make the local replica the follower
+      var followerTopicsDelta = topicsCreateDelta(localId, false)
+      var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerMetadataImage, followerTopicsDelta)
+
+      // Check the state of that partition
+      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      assertFalse(followerPartition.isLeader)
+      assertEquals(0, followerPartition.getLeaderEpoch)
+      assertEquals(0, followerPartition.localLogOrException.logEndOffset)
+
+      // Verify that addFetcherForPartitions was called with the correct
+      // init offset.
+      Mockito.verify(mockReplicaFetcherManager, Mockito.times(1))
+        .addFetcherForPartitions(
+          Map(topicPartition -> InitialFetchState(
+            leader = BrokerEndPoint(otherId, "localhost", 9093),
+            currentLeaderEpoch = 0,
+            initOffset = 0
+          ))
+        )
+
+      // The second call to removeFetcherForPartitions simulate the case
+      // where the fetcher write to the log before being shutdown.
+      Mockito.when(mockReplicaFetcherManager.removeFetcherForPartitions(
+        Set(topicPartition))
+      ).thenAnswer { _ =>
+        replicaManager.getPartition(topicPartition) match {
+          case HostedPartition.Online(partition) =>
+            partition.appendRecordsToFollowerOrFutureReplica(
+              records = MemoryRecords.withRecords(CompressionType.NONE, 0,
+                new SimpleRecord("first message".getBytes)),
+              isFuture = false
+            )
+
+          case _ =>
+        }
+
+        Map.empty[TopicPartition, PartitionFetchState]
+      }
+
+      // Apply changes that bumps the leader epoch.
+      followerTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), localId, false)
+      followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerMetadataImage, followerTopicsDelta)
+
+      assertFalse(followerPartition.isLeader)
+      assertEquals(1, followerPartition.getLeaderEpoch)
+      assertEquals(1, followerPartition.localLogOrException.logEndOffset)
+
+      // Verify that addFetcherForPartitions was called with the correct
+      // init offset.
+      Mockito.verify(mockReplicaFetcherManager, Mockito.times(1))
+        .addFetcherForPartitions(
+          Map(topicPartition -> InitialFetchState(
+            leader = BrokerEndPoint(otherId, "localhost", 9093),
+            currentLeaderEpoch = 1,
+            initOffset = 1
+          ))
+        )
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
 
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
