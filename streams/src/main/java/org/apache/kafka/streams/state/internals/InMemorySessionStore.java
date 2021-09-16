@@ -54,12 +54,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private final long retentionPeriod;
 
-    private final static String INVALID_RANGE_WARN_MSG =
-        "Returning empty iterator for fetch with invalid key range: from > to. " +
-        "This may be due to range arguments set in the wrong order, " +
-        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-        "Note that the built-in numerical serdes do not follow this for negative numbers";
-
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
     private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
 
@@ -211,10 +205,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
         removeExpiredSegments();
 
-        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn(INVALID_RANGE_WARN_MSG);
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
@@ -230,10 +230,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                           final Bytes keyTo,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
         removeExpiredSegments();
 
-        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn(INVALID_RANGE_WARN_MSG);
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
@@ -269,17 +275,24 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
 
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
         removeExpiredSegments();
 
-        return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), false);
+
+        return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), true);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
         removeExpiredSegments();
 
         return registerNewIterator(
-            keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), true);
+            keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), false);
     }
 
     @Override
@@ -444,22 +457,17 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             while (endTimeIterator.hasNext()) {
                 final Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> nextEndTimeEntry = endTimeIterator.next();
                 currentEndTime = nextEndTimeEntry.getKey();
-
-                final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> subKVMap;
-                if (keyFrom == null && keyTo == null) {
-                    subKVMap = nextEndTimeEntry.getValue();
-                } else if (keyFrom == null) {
-                    subKVMap = nextEndTimeEntry.getValue().headMap(keyTo, true);
-                } else if (keyTo == null) {
-                    subKVMap = nextEndTimeEntry.getValue().tailMap(keyFrom, true);
-                } else {
-                    subKVMap = nextEndTimeEntry.getValue().subMap(keyFrom, true, keyTo, true);
-                }
-
                 if (forward) {
-                    keyIterator = subKVMap.entrySet().iterator();
+                    keyIterator = nextEndTimeEntry.getValue()
+                                                  .subMap(keyFrom, true, keyTo, true)
+                                                  .entrySet()
+                                                  .iterator();
                 } else {
-                    keyIterator = subKVMap.descendingMap().entrySet().iterator();
+                    keyIterator = nextEndTimeEntry.getValue()
+                                                  .subMap(keyFrom, true, keyTo, true)
+                                                  .descendingMap()
+                                                  .entrySet()
+                                                  .iterator();
                 }
 
                 if (setInnerIterators()) {
