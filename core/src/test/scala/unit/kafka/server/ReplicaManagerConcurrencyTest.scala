@@ -89,8 +89,14 @@ class ReplicaManagerConcurrencyTest {
     submit(controller)
     controller.initialize()
 
+    TestUtils.waitUntilTrue(() => {
+      replicaManager.getPartition(topicPartition) match {
+        case HostedPartition.Online(partition) => partition.isLeader
+        case _ => false
+      }
+    }, "Timed out waiting for partition to initialize")
+
     val partition = replicaManager.getPartitionOrException(topicPartition)
-    assertTrue(partition.isLeader)
 
     // Start several producers which are actively writing to the partition
     (0 to 2).foreach { i =>
@@ -115,6 +121,7 @@ class ReplicaManagerConcurrencyTest {
       partition.inSyncReplicaIds == Set(localId, remoteId)
     }, "Test timed out before ISR was expanded")
 
+    // Stop the fetcher so that the replica is removed from the ISR
     fetcher.shutdown()
     TestUtils.waitUntilTrue(() => {
       partition.inSyncReplicaIds == Set(localId)
@@ -281,7 +288,7 @@ class ReplicaManagerConcurrencyTest {
   }
 
   sealed trait ControllerEvent
-  case class InitializeEvent(future: CompletableFuture[Unit]) extends ControllerEvent
+  case object InitializeEvent extends ControllerEvent
   case object ShutdownEvent extends ControllerEvent
   case class AlterIsrEvent(
     future: CompletableFuture[LeaderAndIsr],
@@ -305,10 +312,8 @@ class ReplicaManagerConcurrencyTest {
       future
     }
 
-    def initialize(): CompletableFuture[Unit] = {
-      val future = new CompletableFuture[Unit]()
-      eventQueue.offer(InitializeEvent(future))
-      future
+    def initialize(): Unit = {
+      eventQueue.offer(InitializeEvent)
     }
 
     def shutdown(): Unit = {
@@ -324,7 +329,7 @@ class ReplicaManagerConcurrencyTest {
     private var latestImage = MetadataImage.EMPTY
 
     def initialize(): Unit = {
-      channel.initialize().get()
+      channel.initialize()
     }
 
     override def shutdown(): Unit = {
@@ -333,22 +338,23 @@ class ReplicaManagerConcurrencyTest {
       super.awaitShutdown()
     }
 
-    private def applyDelta(fn: MetadataDelta => Unit): Unit = {
+    private def updateImage(fn: MetadataDelta => Unit): MetadataDelta = {
       val delta = new MetadataDelta(latestImage)
       fn(delta)
       latestImage = delta.apply()
-      replicaManager.applyDelta(latestImage, delta.topicsDelta)
+      delta
     }
 
     override def doWork(): Unit = {
       channel.poll() match {
-        case InitializeEvent(future) =>
-          applyDelta(topic.initialize)
-          future.complete(())
+        case InitializeEvent =>
+          val delta = updateImage(topic.initialize)
+          replicaManager.applyDelta(latestImage, delta.topicsDelta)
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
-          applyDelta(delta => topic.alterIsr(topicPartition, leaderAndIsr, delta))
+          val delta = updateImage(delta => topic.alterIsr(topicPartition, leaderAndIsr, delta))
           future.complete(leaderAndIsr)
+          replicaManager.applyDelta(latestImage, delta.topicsDelta)
 
         case ShutdownEvent =>
       }
