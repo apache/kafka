@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import java.util.Objects;
 
 /**
- * This class is used in combination of {@link KeyAndJoinSide}. The {@link KeyAndJoinSide} class
+ * This class is used in combination of {@link TimestampedKeyAndJoinSide}. The {@link TimestampedKeyAndJoinSide} class
  * combines a key with a boolean value that specifies if the key is found in the left side of a
  * join or on the right side. This {@link LeftOrRightValue} object contains either the V1 value,
  * which is found in the left topic, or V2 value if it is found in the right topic.
