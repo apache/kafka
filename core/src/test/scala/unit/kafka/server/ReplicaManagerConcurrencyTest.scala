@@ -25,6 +25,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.server.metadata.MockConfigRepository
+import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -89,7 +90,7 @@ class ReplicaManagerConcurrencyTest {
     submit(controller)
     controller.initialize()
 
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
       replicaManager.getPartition(topicPartition) match {
         case HostedPartition.Online(partition) => partition.isLeader
         case _ => false
@@ -117,13 +118,13 @@ class ReplicaManagerConcurrencyTest {
     )
 
     submit(fetcher)
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
       partition.inSyncReplicaIds == Set(localId, remoteId)
     }, "Test timed out before ISR was expanded")
 
     // Stop the fetcher so that the replica is removed from the ISR
     fetcher.shutdown()
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
       partition.inSyncReplicaIds == Set(localId)
     }, "Test timed out before ISR was shrunk")
   }
@@ -338,22 +339,19 @@ class ReplicaManagerConcurrencyTest {
       super.awaitShutdown()
     }
 
-    private def updateImage(fn: MetadataDelta => Unit): MetadataDelta = {
-      val delta = new MetadataDelta(latestImage)
-      fn(delta)
-      latestImage = delta.apply()
-      delta
-    }
-
     override def doWork(): Unit = {
       channel.poll() match {
         case InitializeEvent =>
-          val delta = updateImage(topic.initialize)
+          val delta = new MetadataDelta(latestImage)
+          topic.initialize(delta)
+          latestImage = delta.apply()
           replicaManager.applyDelta(latestImage, delta.topicsDelta)
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
-          val delta = updateImage(delta => topic.alterIsr(topicPartition, leaderAndIsr, delta))
-          future.complete(leaderAndIsr)
+          val delta = new MetadataDelta(latestImage)
+          val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
+          latestImage = delta.apply()
+          future.complete(updatedLeaderAndIsr)
           replicaManager.applyDelta(latestImage, delta.topicsDelta)
 
         case ShutdownEvent =>
@@ -383,7 +381,7 @@ class ReplicaManagerConcurrencyTest {
       topicPartition: TopicPartition,
       leaderAndIsr: LeaderAndIsr,
       delta: MetadataDelta
-    ): Unit = {
+    ): LeaderAndIsr = {
       val partitionModel = partitions.getOrElse(topicPartition.partition,
         throw new IllegalStateException(s"Unexpected partition $topicPartition")
       )
@@ -399,7 +397,7 @@ class ReplicaManagerConcurrencyTest {
     def alterIsr(
       leaderAndIsr: LeaderAndIsr,
       delta: MetadataDelta
-    ): Unit = {
+    ): LeaderAndIsr = {
       delta.replay(new PartitionChangeRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
@@ -410,6 +408,8 @@ class ReplicaManagerConcurrencyTest {
         .changedTopic(topic.topicId)
         .partitionChanges
         .get(partitionId)
+
+      leaderAndIsr.withZkVersion(registration.partitionEpoch)
     }
 
     private def toList(ints: Array[Int]): util.List[Integer] = {
