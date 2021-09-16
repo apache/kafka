@@ -76,7 +76,7 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
-    val topicIds = request.data().topics().asScala.map { topic => (topic.topic(), topic.topicId()) }.toMap
+    val topicIds = request.data().topics().asScala.map(topic => (topic.topic, topic.topicId)).toMap
     val topicNames = topicIds.map(_.swap)
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {

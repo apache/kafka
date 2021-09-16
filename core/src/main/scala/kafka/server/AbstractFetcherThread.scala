@@ -459,11 +459,7 @@ abstract class AbstractFetcherThread(name: String,
    */
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
-      if (currentState.topicId.isEmpty && initialFetchState.topicId.isDefined) {
-        currentState.updateTopicId(initialFetchState.topicId)
-      } else {
-        currentState
-      }
+      currentState
     } else if (initialFetchState.initOffset < 0) {
       fetchOffsetAndTruncate(tp, initialFetchState.topicId, initialFetchState.currentLeaderEpoch)
     } else if (isTruncationOnFetchSupported) {
@@ -495,13 +491,15 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def addTopicIdsToThread(partitions: Set[TopicPartition], topicIds: String => Option[Uuid]) = {
+  def maybeAddTopicIdsToThread(partitions: Set[TopicPartition], topicIds: String => Option[Uuid]) = {
     partitionMapLock.lockInterruptibly()
     try {
       partitions.foreach { tp =>
         val currentState = partitionStates.stateValue(tp)
-        val updatedState = currentState.updateTopicId(topicIds(tp.topic))
-        partitionStates.updateAndMoveToEnd(tp, updatedState)
+        if (currentState != null) {
+          val updatedState = currentState.updateTopicId(topicIds(tp.topic))
+          partitionStates.updateAndMoveToEnd(tp, updatedState)
+        }
       }
 
       partitionMapCond.signalAll()

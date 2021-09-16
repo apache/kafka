@@ -163,13 +163,12 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
   }
 
-  def addTopicIdsToFetcherThread(partitionsToUpdate: Set[(TopicPartition, BrokerAndFetcherId)], topicIds: String => Option[Uuid]): Unit = {
+  def addTopicIdsToFetcherThread(partitionsToUpdate: Set[(TopicPartition, Int)], topicIds: String => Option[Uuid]): Unit = {
     lock synchronized {
-      val partitionsPerFetcher = partitionsToUpdate.groupMap(_._2)(_._1)
+      val partitionsPerFetcher = partitionsToUpdate.groupMap(partitionsToUpdate => BrokerIdAndFetcherId(partitionsToUpdate._2, getFetcherId(partitionsToUpdate._1)))(_._1)
 
-      for ((brokerAndFetcherId, partitions) <- partitionsPerFetcher) {
-        val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
-        fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.addTopicIdsToThread(partitions, topicIds))
+      for ((brokerIdAndFetcherId, partitions) <- partitionsPerFetcher) {
+        fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.maybeAddTopicIdsToThread(partitions, topicIds))
       }
     }
   }
