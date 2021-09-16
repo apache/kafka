@@ -77,24 +77,28 @@ object LogTestUtils {
                 time: Time,
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
+                maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
                 maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
                 keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
-    UnifiedLog(dir = dir,
+    UnifiedLog(
+      dir = dir,
       config = config,
       logStartOffset = logStartOffset,
       recoveryPoint = recoveryPoint,
       scheduler = scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
       maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile
+    )
   }
 
   /**

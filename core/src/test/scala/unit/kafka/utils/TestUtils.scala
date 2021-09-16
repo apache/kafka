@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -1247,6 +1247,7 @@ object TestUtils extends Logging {
                    flushRecoveryOffsetCheckpointMs = 10000L,
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
+                   maxTransactionTimeoutMs = 5 * 60 * 1000,
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
@@ -1989,6 +1990,15 @@ object TestUtils extends Logging {
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
+  }
+
+  def yammerGaugeValue[T](metricName: String): Option[T] = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values
+      .headOption
+      .map(_.asInstanceOf[Gauge[T]])
+      .map(_.value)
   }
 
   def meterCount(metricName: String): Long = {
