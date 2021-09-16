@@ -62,6 +62,26 @@ final class BrokerLocalStorage(val brokerId: Int,
     }
   }
 
+  def waitForAtLeastEarliestOffset(topicPartition: TopicPartition, offset: Long): Unit = {
+    val timer = time.timer(TimeUnit.SECONDS.toMillis(storageWaitTimeoutSec))
+    var earliestOffset = (0L, Seq[String]())
+
+    while (timer.notExpired() && earliestOffset._1 < offset) {
+      timer.sleep(TimeUnit.SECONDS.toMillis(storagePollPeriodSec))
+      earliestOffset = getEarliestOffset(topicPartition)
+    }
+
+    val relativePos = if (earliestOffset._1 < offset) Some("smaller than") else None
+
+    relativePos.map { pos =>
+      val message = s"[BrokerId=$brokerId] The base offset of the first log segment of $topicPartition in the log " +
+        s"directory is ${earliestOffset._1} which is $pos the expected offset $offset. The directory of " +
+        s"$topicPartition is made of the following files: \n${earliestOffset._2.mkString("\n")}"
+
+      throw new AssertionError(message)
+    }
+  }
+
   def eraseStorage(): Unit = {
     val (files, dirs) = brokerStorageDirectory.listFiles().partition(_.isFile)
     files.foreach(_.delete())

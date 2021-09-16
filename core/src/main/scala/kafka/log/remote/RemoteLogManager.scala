@@ -761,7 +761,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       accumulator(searchResult.abortedTransactions)
       if (!searchResult.isComplete) {
         if (!searchInLocalLog) {
-          nextSegmentMetadataOpt = findNextSegmentMetadata(segmentMetadata)
+          nextSegmentMetadataOpt = nextSegmentMetadataOpt.flatMap(x => findNextSegmentMetadata(x))
           txnIndexOpt = nextSegmentMetadataOpt.map(x => indexCache.getIndexEntry(x).txnIndex)
           if (txnIndexOpt.isEmpty) {
             searchInLocalLog = true

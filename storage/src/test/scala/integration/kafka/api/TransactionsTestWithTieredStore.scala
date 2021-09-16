@@ -127,23 +127,25 @@ class TransactionsTestWithTieredStore extends TransactionsTest {
     overridingProps
   }
 
-  override def maybeWaitForSegmentUpload(topicPartition: TopicPartition, earliestLocalOffset: Long): Unit = {
-    val localStorages = servers.map(s => new BrokerLocalStorage(s.config.brokerId, s.config.logDirs.head,
-      storageWaitTimeoutSec))
-    localStorages
-      //
-      // Select brokers which are assigned a replica of the topic-partition
-      //
-      .filter(s => isAssignedReplica(topicPartition, s.brokerId))
-      //
-      // Filter out inactive brokers, which may still contain log segments we would expect
-      // to be deleted based on the retention configuration.
-      //
-      .filter(s => isActive(s.brokerId))
-      //
-      // Wait until the brokers local storage have been cleared from the inactive log segments.
-      //
-      .foreach(_.waitForEarliestOffset(topicPartition, earliestLocalOffset))
+  override def maybeWaitForAtLeastOneSegmentUpload(topicPartitions: TopicPartition*): Unit = {
+    topicPartitions.foreach(topicPartition => {
+      val localStorages = servers.map(s => new BrokerLocalStorage(s.config.brokerId, s.config.logDirs.head,
+        storageWaitTimeoutSec))
+      localStorages
+        //
+        // Select brokers which are assigned a replica of the topic-partition
+        //
+        .filter(s => isAssignedReplica(topicPartition, s.brokerId))
+        //
+        // Filter out inactive brokers, which may still contain log segments we would expect
+        // to be deleted based on the retention configuration.
+        //
+        .filter(s => isActive(s.brokerId))
+        //
+        // Wait until the brokers local storage have been cleared from the inactive log segments.
+        //
+        .foreach(_.waitForAtLeastEarliestOffset(topicPartition, 1L))
+    })
   }
 
   private def isAssignedReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
