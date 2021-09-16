@@ -260,7 +260,10 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   def shouldFailWith(msg: String, args: Array[String]): Unit = {
-    val e = assertThrows(classOf[Exception], () => ReassignPartitionsCommand.validateAndParseArgs(args),
+    val e = assertThrows(classOf[Exception], () => {
+      ReassignPartitionsCommand.validateAndParseArgs(args)
+      ()
+    },
       () => s"Should have failed with [$msg] but no failure occurred.")
     assertTrue(e.getMessage.startsWith(msg), s"Expected exception with message:\n[$msg]\nbut was\n[${e.getMessage}]")
   }

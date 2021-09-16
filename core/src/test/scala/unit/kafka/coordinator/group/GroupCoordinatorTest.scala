@@ -3844,7 +3844,10 @@ class GroupCoordinatorTest {
   }
 
   private def verifyDelayedTaskNotCompleted(firstJoinFuture: Future[JoinGroupResult]) = {
-    assertThrows(classOf[TimeoutException], () => await(firstJoinFuture, 1),
+    assertThrows(classOf[TimeoutException], () => {
+      await(firstJoinFuture, 1)
+      ()
+    },
       () => "should have timed out as rebalance delay not expired")
   }
 

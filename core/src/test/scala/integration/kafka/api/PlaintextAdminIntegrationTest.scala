@@ -481,8 +481,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try a newCount which would be a decrease
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(1)).asJava, option)
-      
-      var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      var e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidPartitionsException when newCount is a decrease")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
       assertEquals("Topic currently has 3 partitions, which is higher than the requested 1.", e.getCause.getMessage, desc)
@@ -491,7 +493,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try a newCount which would be a noop (without assignment)
       alterResult = client.createPartitions(Map(topic2 ->
         NewPartitions.increaseTo(3)).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic2).get
+        ()
+      },
         () => s"$desc: Expect InvalidPartitionsException when requesting a noop")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
       assertEquals("Topic already has 3 partitions.", e.getCause.getMessage, desc)
@@ -517,7 +522,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val unknownTopic = "an-unknown-topic"
       alterResult = client.createPartitions(Map(unknownTopic ->
         NewPartitions.increaseTo(2)).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(unknownTopic).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(unknownTopic).get
+        ()
+      },
         () => s"$desc: Expect InvalidTopicException when using an unknown topic")
       assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], desc)
       assertEquals("The topic 'an-unknown-topic' does not exist.", e.getCause.getMessage, desc)
@@ -525,7 +533,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try an invalid newCount
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(-22)).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidPartitionsException when newCount is invalid")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
       assertEquals("Topic currently has 3 partitions, which is higher than the requested -22.", e.getCause.getMessage,
@@ -535,7 +546,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try assignments where the number of brokers != replication factor
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(4, asList(asList(1, 2)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidPartitionsException when #brokers != replication factor")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
@@ -546,7 +560,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try #assignments < with the increase
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(6, asList(asList(1)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Increasing the number of partitions by 3 but 1 assignments provided.", e.getCause.getMessage, desc)
@@ -555,7 +572,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try #assignments > with the increase
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Increasing the number of partitions by 1 but 2 assignments provided.", e.getCause.getMessage, desc)
@@ -564,7 +584,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try with duplicate brokers in assignments
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(4, asList(asList(1, 1)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments has duplicate brokers")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Duplicate brokers not allowed in replica assignment: 1, 1 for partition id 3.",
@@ -574,7 +597,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try assignments with differently sized inner lists
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(5, asList(asList(1), asList(1, 0)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Inconsistent replication factor between partitions, partition 0 has 1 " +
@@ -584,7 +610,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try assignments with unknown brokers
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(4, asList(asList(12)))).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments contains an unknown broker")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Unknown broker(s) in replica assignment: 12.", e.getCause.getMessage, desc)
@@ -593,7 +622,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try with empty assignments
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(4, Collections.emptyList())).asJava, option)
-      e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+      e = assertThrows(classOf[ExecutionException], () => {
+        alterResult.values.get(topic1).get
+        ()
+      },
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments is empty")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals("Increasing the number of partitions by 1 but 0 assignments provided.", e.getCause.getMessage, desc)
@@ -617,7 +649,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4)).asJava, validateOnly)
-    e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
+    e = assertThrows(classOf[ExecutionException], () => {
+      alterResult.values.get(topic1).get
+      ()
+    },
       () => "Expect InvalidTopicException when the topic is queued for deletion")
     assertTrue(e.getCause.isInstanceOf[InvalidTopicException])
     assertEquals("The topic is queued for deletion.", e.getCause.getMessage)

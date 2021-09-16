@@ -585,6 +585,7 @@ subprojects {
               "-Xlint:private-shadow",
               "-Xlint:stars-align",
               "-Xlint:type-parameter-shadow",
+              "-Ytasty-reader",
               "-Xlint:unused"
       ]
     }

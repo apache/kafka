@@ -303,8 +303,8 @@ object ReplicationQuotasTestRig {
         s"<p>- BrokerCount: ${config.brokers}" +
         s"<p>- PartitionCount: ${config.partitions}" +
         f"<p>- Throttle: ${config.throttle.toDouble}%,.0f MB/s" +
-        f"<p>- MsgCount: ${config.msgsPerPartition}%,.0f " +
-        f"<p>- MsgSize: ${config.msgSize}%,.0f" +
+        f"<p>- MsgCount: ${config.msgsPerPartition.toDouble}%,.0f " +
+        f"<p>- MsgSize: ${config.msgSize.toDouble}%,.0f" +
         s"<p>- TargetBytesPerBrokerMB: ${config.targetBytesPerBrokerMB}<p>"
       append(message)
     }

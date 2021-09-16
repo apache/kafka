@@ -233,7 +233,10 @@ class LogManagerTest {
     assertEquals(log.numberOfSegments * 4 + 1, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
 
-    assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0), () => "Should get exception from fetching earlier.")
+    assertThrows(classOf[OffsetOutOfRangeException], () => {
+      readLog(log, 0)
+      ()
+    }, () => "Should get exception from fetching earlier.")
     // log should still be appendable
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }

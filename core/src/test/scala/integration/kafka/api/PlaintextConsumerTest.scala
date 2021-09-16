@@ -1036,7 +1036,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue)
     assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue)
     // send invalid record
-    assertThrows(classOf[Throwable], () => testProducer.send(null), () => "Should not allow sending a null record")
+    assertThrows(classOf[Throwable], () => {
+      testProducer.send(null)
+      ()
+    }, () => "Should not allow sending a null record")
     assertEquals(1, MockProducerInterceptor.ON_ERROR_COUNT.intValue, "Interceptor should be notified about exception")
     assertEquals(0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue(), "Interceptor should not receive metadata with an exception when record is null")
 

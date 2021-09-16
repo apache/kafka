@@ -44,6 +44,8 @@ class JsonValueTest {
     |}
    """.stripMargin
 
+  implicit val m: Manifest[JsonMappingException] = Manifest.classType(classOf[JsonMappingException])
+
   private def parse(s: String): JsonValue =
     Json.parseFull(s).getOrElse(sys.error("Failed to parse json: " + s))
 
