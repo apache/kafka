@@ -39,7 +39,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
@@ -130,6 +136,7 @@ public class RocksDBMetricsRecorderTest {
         statisticsToAdd1.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
 
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        verify(statisticsToAdd1, times(2)).setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
     }
 
     @Test
@@ -276,6 +283,7 @@ public class RocksDBMetricsRecorderTest {
         recordingTrigger.addMetricsRecorder(recorder);
 
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        verify(recordingTrigger, times(2)).addMetricsRecorder(recorder);
     }
 
     @Test
@@ -286,6 +294,8 @@ public class RocksDBMetricsRecorderTest {
         recordingTrigger.addMetricsRecorder(recorder);
 
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
+
+        verify(recordingTrigger, times(2)).addMetricsRecorder(recorder);
     }
 
     @Test
@@ -303,6 +313,7 @@ public class RocksDBMetricsRecorderTest {
         statisticsToAdd1.close();
 
         recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
+        verify(statisticsToAdd1, times(2)).close();
     }
 
     @Test
@@ -312,6 +323,7 @@ public class RocksDBMetricsRecorderTest {
         statisticsToAdd1.close();
 
         recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
+        verify(statisticsToAdd1).close();
     }
 
     @Test
@@ -326,6 +338,7 @@ public class RocksDBMetricsRecorderTest {
         recordingTrigger.removeMetricsRecorder(recorder);
 
         recorder.removeValueProviders(SEGMENT_STORE_NAME_2);
+        verify(recordingTrigger, times(2)).removeMetricsRecorder(recorder);
     }
 
     @Test
@@ -404,6 +417,7 @@ public class RocksDBMetricsRecorderTest {
         numberOfFileErrorsSensor.record(11 + 34, 0L);
 
         recorder.record(0L);
+        verifyMetricsMock();
     }
 
     @Test
@@ -411,6 +425,7 @@ public class RocksDBMetricsRecorderTest {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
 
         recorder.record(0L);
+        verifyMetricsMock();
     }
 
     @Test
