@@ -25,7 +25,7 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.collection.{Iterable, Seq}
 import scala.jdk.CollectionConverters._
@@ -45,7 +45,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     TestUtils.clearYammerMetrics()
   }
 
-  @Timeout(90)
   @Test
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20

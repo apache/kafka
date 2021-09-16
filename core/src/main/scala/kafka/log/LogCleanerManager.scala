@@ -103,14 +103,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val lastClean = allCleanerCheckpoints
             val now = Time.SYSTEM.milliseconds
             partitions.iterator.map { tp =>
-              Option(logs.get(tp)).map(
-                log => {
+              Option(logs.get(tp)).map {
+                log =>
                   val lastCleanOffset = lastClean.get(tp)
                   val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
                   val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
                   uncleanableBytes
-                }
-              ).getOrElse(0L)
+              }.getOrElse(0L)
             }.sum
           case None => 0
         }
@@ -520,19 +519,18 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     // Remove deleted partitions from uncleanablePartitions
     inLock(lock) {
       // Remove non-existing logDir
-      // Note: we don't use retain or filterInPlace method in this function because retain in deprecated in
+      // Note: we don't use retain or filterInPlace method in this function because retain is deprecated in
       // scala 2.13 while filterInPlace is not available in scala 2.12.
-      uncleanablePartitions.filterNot {
+      val logDirsToRemove = uncleanablePartitions.filterNot {
         case (logDir, _) => logDirs.map(_.getAbsolutePath).contains(logDir)
-      }.keys.foreach {
-        uncleanablePartitions.remove(_)
-      }
+      }.keys.toList
+      logDirsToRemove.foreach { uncleanablePartitions.remove(_) }
 
       uncleanablePartitions.values.foreach {
-        // Remove deleted partitions
-        partitions => partitions.filterNot(logs.contains(_)).foreach {
-          partitions.remove(_)
-        }
+        partitions =>
+          // Remove deleted partitions
+          val partitionsToRemove = partitions.filterNot(logs.contains(_)).toList
+          partitionsToRemove.foreach { partitions.remove(_) }
       }
     }
   }

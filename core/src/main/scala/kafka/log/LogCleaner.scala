@@ -103,8 +103,8 @@ class LogCleaner(initialConfig: CleanerConfig,
   @volatile private var config = initialConfig
 
   // Visible for testing
-  val housekeepingDelayMs = 30000
-  val housekeepingIntervalMs = 30000
+  val housekeepingDelayMs = 300000  // 5 minutes
+  val housekeepingIntervalMs = 300000  // 5 minutes
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
