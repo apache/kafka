@@ -203,7 +203,6 @@ public class MirrorSourceConnector extends SourceConnector {
     List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(targetAdminClient).stream()
-            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
             .filter(t -> !t.equals(config.checkpointsTopic()))
             .collect(Collectors.toSet());
         return describeTopics(targetAdminClient, topics).stream()
@@ -403,7 +402,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     static Map<String, String> configToMap(Config config) {
-        return config.entries().stream()
+        return config.entries().stream().filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
                 .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
