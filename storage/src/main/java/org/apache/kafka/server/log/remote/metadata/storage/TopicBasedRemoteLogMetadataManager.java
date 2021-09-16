@@ -49,7 +49,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -86,7 +88,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
 
     @Override
-    public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
+    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -105,15 +107,15 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            doPublishMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
-                              remoteLogSegmentMetadata);
+            return storeRemoteLogMetadata(remoteLogSegmentMetadata.remoteLogSegmentId().topicIdPartition(),
+                                          remoteLogSegmentMetadata);
         } finally {
             lock.readLock().unlock();
         }
     }
 
     @Override
-    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
+    public CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
             throws RemoteStorageException {
         Objects.requireNonNull(segmentMetadataUpdate, "segmentMetadataUpdate can not be null");
 
@@ -129,14 +131,14 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
 
             // Publish the message to the topic.
-            doPublishMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+            return storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
         } finally {
             lock.readLock().unlock();
         }
     }
 
     @Override
-    public void putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
+    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
@@ -144,22 +146,39 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         try {
             ensureInitializedAndNotClosed();
 
-            doPublishMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
+            return storeRemoteLogMetadata(remotePartitionDeleteMetadata.topicIdPartition(), remotePartitionDeleteMetadata);
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    private void doPublishMetadata(TopicIdPartition topicIdPartition, RemoteLogMetadata remoteLogMetadata)
+    /**
+     * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata} into
+     * the remote log metadata topic and the internal consumer is caught up until the produced record's offset.
+     *
+     * @param topicIdPartition partition of the given remoteLogMetadata.
+     * @param remoteLogMetadata RemoteLogMetadata to be stored.
+     * @return
+     * @throws RemoteStorageException if there are any storage errors occur.
+     */
+    private CompletableFuture<Void> storeRemoteLogMetadata(TopicIdPartition topicIdPartition,
+                                                           RemoteLogMetadata remoteLogMetadata)
             throws RemoteStorageException {
-        log.debug("Publishing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
+        log.debug("Storing metadata for partition: [{}] with context: [{}]", topicIdPartition, remoteLogMetadata);
 
         try {
-            // Publish the message to the topic.
-            RecordMetadata recordMetadata = producerManager.publishMessage(remoteLogMetadata);
-            // Wait until the consumer catches up with this offset. This will ensure read-after-write consistency
-            // semantics.
-            consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
+            // Publish the message to the metadata topic.
+            CompletableFuture<RecordMetadata> produceFuture = producerManager.publishMessage(remoteLogMetadata);
+
+            // Create and return a `CompletableFuture` instance which completes when the consumer is caught up with the produced record's offset.
+            return produceFuture.thenApplyAsync(recordMetadata -> {
+                try {
+                    consumerManager.waitTillConsumptionCatchesUp(recordMetadata);
+                } catch (TimeoutException e) {
+                    throw new KafkaException(e);
+                }
+                return null;
+            });
         } catch (KafkaException e) {
             if (e instanceof RetriableException) {
                 throw e;

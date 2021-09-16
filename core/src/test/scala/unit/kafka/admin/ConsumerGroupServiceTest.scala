@@ -32,7 +32,6 @@ import org.mockito.Mockito._
 import org.mockito.ArgumentMatcher
 
 import scala.jdk.CollectionConverters._
-import org.apache.kafka.clients.admin.internals.CoordinatorKey
 import org.apache.kafka.common.internals.KafkaFutureImpl
 
 class ConsumerGroupServiceTest {
@@ -112,7 +111,7 @@ class ConsumerGroupServiceTest {
     val future = new KafkaFutureImpl[ConsumerGroupDescription]()
     future.complete(consumerGroupDescription)
     when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(group)), any()))
-      .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future)))
+      .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(group, future)))
     when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(group), any()))
       .thenReturn(AdminClientTestUtils.listConsumerGroupOffsetsResult(commitedOffsets))
     when(admin.listOffsets(
@@ -190,7 +189,7 @@ class ConsumerGroupServiceTest {
       new Node(1, "localhost", 9092))
     val future = new KafkaFutureImpl[ConsumerGroupDescription]()
     future.complete(description)
-    new DescribeConsumerGroupsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future))
+    new DescribeConsumerGroupsResult(Collections.singletonMap(group, future))
   }
 
   private def listGroupOffsetsResult: ListConsumerGroupOffsetsResult = {

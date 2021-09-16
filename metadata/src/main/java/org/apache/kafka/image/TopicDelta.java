@@ -138,4 +138,11 @@ public final class TopicDelta {
 
         return new LocalReplicaChanges(deletes, leaders, followers);
     }
+
+    @Override
+    public String toString() {
+        return "TopicDelta(" +
+            "partitionChanges=" + partitionChanges +
+            ')';
+    }
 }
