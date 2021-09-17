@@ -17,17 +17,24 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Map;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
 
-public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializer<KeyAndJoinSide<K>, K, Void> {
+/**
+ * The deserializer that is used for {@link TimestampedKeyAndJoinSide}, which is a combo key format of <timestamp, left/right flag, raw-key>
+ * @param <K> the raw key type
+ */
+public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializer<TimestampedKeyAndJoinSide<K>, K, Void> {
     private Deserializer<K> keyDeserializer;
+    private final Deserializer<Long> timestampDeserializer = new LongDeserializer();
 
-    KeyAndJoinSideDeserializer(final Deserializer<K> keyDeserializer) {
+    TimestampedKeyAndJoinSideDeserializer(final Deserializer<K> keyDeserializer) {
         this.keyDeserializer = keyDeserializer;
     }
 
@@ -47,16 +54,23 @@ public class KeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializ
     }
 
     @Override
-    public KeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
-        final boolean bool = data[0] == 1;
+    public TimestampedKeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
+        final boolean bool = data[StateSerdes.TIMESTAMP_SIZE] == 1;
         final K key = keyDeserializer.deserialize(topic, rawKey(data));
+        final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp(data));
 
-        return KeyAndJoinSide.make(bool, key);
+        return TimestampedKeyAndJoinSide.make(bool, key, timestamp);
+    }
+
+    private byte[] rawTimestamp(final byte[] data) {
+        final byte[] rawTimestamp = new byte[8];
+        System.arraycopy(data, 0, rawTimestamp, 0, 8);
+        return rawTimestamp;
     }
 
     private byte[] rawKey(final byte[] data) {
-        final byte[] rawKey = new byte[data.length - 1];
-        System.arraycopy(data, 1, rawKey, 0, rawKey.length);
+        final byte[] rawKey = new byte[data.length - StateSerdes.TIMESTAMP_SIZE - StateSerdes.BOOLEAN_SIZE];
+        System.arraycopy(data, StateSerdes.TIMESTAMP_SIZE + StateSerdes.BOOLEAN_SIZE, rawKey, 0, rawKey.length);
         return rawKey;
     }
 

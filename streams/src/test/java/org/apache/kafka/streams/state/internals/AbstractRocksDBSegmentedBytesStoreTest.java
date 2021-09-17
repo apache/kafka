@@ -109,7 +109,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             // expire it.
             nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
         }
-        if (schema instanceof WindowKeySchema || schema instanceof TimeOrderedKeySchema) {
+        if (schema instanceof WindowKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
@@ -463,10 +463,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
             return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
-        } else if (schema instanceof TimeOrderedKeySchema) {
-            return TimeOrderedKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
-        } else {
+        } else if (schema instanceof WindowKeySchema) {
             return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+        } else {
+            throw new IllegalStateException("Unrecognized serde schema");
         }
     }
 
@@ -490,23 +490,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
-            } else if (schema instanceof TimeOrderedKeySchema) {
-                final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                    TimeOrderedKeySchema.fromStoreKey(
-                        next.key.get(),
-                        windowSizeForTimeWindow,
-                        stateSerdes.keyDeserializer(),
-                        stateSerdes.topic()
-                    ),
-                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
-                );
-                results.add(deserialized);
-            } else {
+            } else if (schema instanceof SessionKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                     SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
+            } else {
+                throw new IllegalStateException("Unrecognized serde schema");
             }
         }
         return results;
