@@ -72,7 +72,10 @@ public class ListValueStore
             }
         }
 
-        return oldValue;
+        // TODO: here we always return null so that deser would not fail.
+        //       we only do this since we know the only caller (stream-stream join processor)
+        //       would not need the actual value at all; the changelogging wrapper would not call this function
+        return null;
     }
 
     // this function assumes the addedValue is not null; callers should check null themselves
