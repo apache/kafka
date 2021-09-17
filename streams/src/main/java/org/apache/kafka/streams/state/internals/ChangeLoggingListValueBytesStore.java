@@ -40,17 +40,10 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
 
     @Override
     public byte[] putIfAbsent(final Bytes key, final byte[] value) {
-        final byte[] oldValue = wrapped().putIfAbsent(key, value);
+        final byte[] oldValue = wrapped().get(key);
 
         if (oldValue != null) {
-            // the provided new value will be added to the list in the inner put()
-            // we need to log the full new list and thus call get() on the inner store below
-            // if the value is a tombstone, we delete the whole list and thus can save the get call
-            if (value == null) {
-                log(key, null);
-            } else {
-                log(key, wrapped().get(key));
-            }
+            put(key, value);
         }
 
         // TODO: here we always return null so that deser would not fail.
