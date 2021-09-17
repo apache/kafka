@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
-import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{UnifiedLog, LogManager, LogOffsetSnapshot}
@@ -249,9 +248,16 @@ class ReplicaManagerQuotasTest {
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler, logManager,
-      new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId),
+      logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
+      alterIsrManager = alterIsrManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

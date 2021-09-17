@@ -257,10 +257,20 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
-      this._replicaManager = new ReplicaManager(config, metrics, time, None,
-        kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-        brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
-        threadNamePrefix)
+      this._replicaManager = new ReplicaManager(
+        config = config,
+        metrics = metrics,
+        time = time,
+        scheduler = kafkaScheduler,
+        logManager = logManager,
+        quotaManagers = quotaManagers,
+        metadataCache = metadataCache,
+        logDirFailureChannel = logDirFailureChannel,
+        alterIsrManager = alterIsrManager,
+        brokerTopicStats = brokerTopicStats,
+        isShuttingDown = isShuttingDown,
+        zkClient = None,
+        threadNamePrefix = threadNamePrefix)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -368,10 +378,26 @@ class BrokerServer(
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
-      dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
-        replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
-        config.nodeId, config, metadataCache, metadataCache, metrics, authorizer, quotaManagers,
-        fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
+      dataPlaneRequestProcessor = new KafkaApis(
+        requestChannel = socketServer.dataPlaneRequestChannel,
+        metadataSupport = raftSupport,
+        replicaManager = replicaManager,
+        groupCoordinator = groupCoordinator,
+        txnCoordinator = transactionCoordinator,
+        autoTopicCreationManager = autoTopicCreationManager,
+        brokerId = config.nodeId,
+        config = config,
+        configRepository = metadataCache,
+        metadataCache = metadataCache,
+        metrics = metrics,
+        authorizer = authorizer,
+        quotas = quotaManagers,
+        fetchManager = fetchManager,
+        brokerTopicStats = brokerTopicStats,
+        clusterId = clusterId,
+        time = time,
+        tokenManager = tokenManager,
+        apiVersionManager = apiVersionManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

@@ -21,7 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.file.Files
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
@@ -101,9 +101,16 @@ class ReplicaManagerTest {
   @Test
   def testHighWaterMarkDirectoryMapping(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = alterIsrManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -121,9 +128,16 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = alterIsrManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -138,9 +152,17 @@ class ReplicaManagerTest {
   @Test
   def testIllegalRequiredAcks(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, Option(this.getClass.getName))
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = alterIsrManager,
+      threadNamePrefix = Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
@@ -185,9 +207,16 @@ class ReplicaManagerTest {
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
     val metadataCache: MetadataCache = Mockito.mock(classOf[MetadataCache])
     mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
-    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = alterIsrManager)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -1797,11 +1826,22 @@ class ReplicaManagerTest {
         .setLeaderEpoch(leaderEpochFromLeader)
         .setEndOffset(offsetFromLeader)).asJava,
       BrokerEndPoint(1, "host1" ,1), time)
-    val replicaManager = new ReplicaManager(config, metrics, time, None, mockScheduler, mockLogMgr,
-      new AtomicBoolean(false), quotaManager, mockBrokerTopicStats,
-      metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName),
-      alterIsrManager) {
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = mockScheduler,
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      brokerTopicStats = mockBrokerTopicStats,
+      metadataCache = metadataCache,
+      logDirFailureChannel = mockLogDirFailureChannel,
+      alterIsrManager = alterIsrManager,
+      delayedProducePurgatoryParam = Some(mockProducePurgatory),
+      delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
+      delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
+      delayedElectLeaderPurgatoryParam = Some(mockElectLeaderPurgatory),
+      threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
@@ -1979,11 +2019,21 @@ class ReplicaManagerTest {
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
-    new ReplicaManager(config, metrics, time, None, scheduler, mockLogMgr,
-      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName),
-      alterIsrManager) {
+    new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = scheduler,
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = alterIsrManager,
+      delayedProducePurgatoryParam = Some(mockProducePurgatory),
+      delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
+      delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
+      delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
+      threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(
         metrics: Metrics,
@@ -2207,12 +2257,28 @@ class ReplicaManagerTest {
     mockGetAliveBrokerFunctions(metadataCache1, aliveBrokers)
 
     // each replica manager is for a broker
-    val rm0 = new ReplicaManager(config0, metrics, time, None, new MockScheduler(time), mockLogMgr0,
-      new AtomicBoolean(false), quotaManager,
-      brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size), alterIsrManager)
-    val rm1 = new ReplicaManager(config1, metrics, time, None, new MockScheduler(time), mockLogMgr1,
-      new AtomicBoolean(false), quotaManager,
-      brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size), alterIsrManager)
+    val rm0 = new ReplicaManager(
+      metrics = metrics,
+      config = config0,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr0,
+      quotaManagers = quotaManager,
+      brokerTopicStats = brokerTopicStats1,
+      metadataCache = metadataCache0,
+      logDirFailureChannel = new LogDirFailureChannel(config0.logDirs.size),
+      alterIsrManager = alterIsrManager)
+    val rm1 = new ReplicaManager(
+      metrics = metrics,
+      config = config1,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr1,
+      quotaManagers = quotaManager,
+      brokerTopicStats = brokerTopicStats2,
+      metadataCache = metadataCache1,
+      logDirFailureChannel = new LogDirFailureChannel(config1.logDirs.size),
+      alterIsrManager = alterIsrManager)
 
     (rm0, rm1)
   }
@@ -2453,9 +2519,16 @@ class ReplicaManagerTest {
       val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-      new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
-        new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-        MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager) {
+      new ReplicaManager(
+        metrics = metrics,
+        config = config,
+        time = time,
+        scheduler = new MockScheduler(time),
+        logManager = mockLogMgr,
+        quotaManagers = quotaManager,
+        metadataCache = MetadataCache.zkMetadataCache(config.brokerId),
+        logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+        alterIsrManager = alterIsrManager) {
         override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
           throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
         }

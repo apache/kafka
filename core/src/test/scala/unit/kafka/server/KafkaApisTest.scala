@@ -171,25 +171,26 @@ class KafkaApisTest {
     }
     val apiVersionManager = new SimpleApiVersionManager(listenerType, enabledApis)
 
-    new KafkaApis(requestChannel,
-      metadataSupport,
-      replicaManager,
-      groupCoordinator,
-      txnCoordinator,
-      autoTopicCreationManager,
-      brokerId,
-      config,
-      configRepository,
-      metadataCache,
-      metrics,
-      authorizer,
-      quotas,
-      fetchManager,
-      brokerTopicStats,
-      clusterId,
-      time,
-      null,
-      apiVersionManager)
+    new KafkaApis(
+      metadataSupport = metadataSupport,
+      requestChannel = requestChannel,
+      replicaManager = replicaManager,
+      groupCoordinator = groupCoordinator,
+      txnCoordinator = txnCoordinator,
+      autoTopicCreationManager = autoTopicCreationManager,
+      brokerId = brokerId,
+      config = config,
+      configRepository = configRepository,
+      metadataCache = metadataCache,
+      metrics = metrics,
+      authorizer = authorizer,
+      quotas = quotas,
+      fetchManager = fetchManager,
+      brokerTopicStats = brokerTopicStats,
+      clusterId = clusterId,
+      time = time,
+      tokenManager = null,
+      apiVersionManager = apiVersionManager)
   }
 
   @Test
