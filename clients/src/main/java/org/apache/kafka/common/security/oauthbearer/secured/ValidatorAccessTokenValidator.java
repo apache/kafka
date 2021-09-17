@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
+import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
@@ -124,7 +126,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             jwtConsumerBuilder.setExpectedIssuer(expectedIssuer);
 
         this.jwtConsumer = jwtConsumerBuilder
-            .setJwsAlgorithmConstraints(ConstraintType.PERMIT, AlgorithmIdentifiers.RSA_USING_SHA256)
+            .setJwsAlgorithmConstraints(DISALLOW_NONE)
             .setRequireExpirationTime()
             .setRequireIssuedAt()
             .setRequireSubject()
