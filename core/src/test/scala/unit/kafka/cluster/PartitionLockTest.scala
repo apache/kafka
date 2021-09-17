@@ -307,13 +307,15 @@ class PartitionLockTest extends Logging {
         new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
-    when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
-      .thenReturn(None)
+    when(offsetCheckpoints.fetch(
+      ArgumentMatchers.anyString,
+      ArgumentMatchers.eq(topicPartition)
+    )).thenReturn(None)
     when(alterIsrManager.submit(
       ArgumentMatchers.eq(topicPartition),
       ArgumentMatchers.any[LeaderAndIsr],
-      ArgumentMatchers.anyInt()))
-      .thenReturn(new CompletableFuture[LeaderAndIsr]())
+      ArgumentMatchers.anyInt()
+    )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
