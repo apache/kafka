@@ -442,6 +442,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     enrichedConfigDef,
                     connectorProps
             );
+            connectorProps.entrySet().stream()
+                .filter(e -> e.getValue() == null)
+                .map(Map.Entry::getKey)
+                .forEach(prop ->
+                    validatedConnectorConfig.computeIfAbsent(prop, ConfigValue::new)
+                        .addErrorMessage("The JSON literal `null` may not be used in connector configurations")
+            );
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
