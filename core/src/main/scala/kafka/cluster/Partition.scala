@@ -769,7 +769,7 @@ class Partition(val topicPartition: TopicPartition,
       }
       // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
-      alterIsrUpdateOpt.foreach(alterIsr)
+      alterIsrUpdateOpt.foreach(submitAlterIsr)
     }
   }
 
@@ -952,7 +952,7 @@ class Partition(val topicPartition: TopicPartition,
       }
       // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
-      alterIsrUpdateOpt.foreach(alterIsr)
+      alterIsrUpdateOpt.foreach(submitAlterIsr)
     }
   }
 
@@ -1347,7 +1347,7 @@ class Partition(val topicPartition: TopicPartition,
     updatedState
   }
 
-  private def alterIsr(proposedIsrState: PendingIsrChange): CompletableFuture[LeaderAndIsr] = {
+  private def submitAlterIsr(proposedIsrState: PendingIsrChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(topicPartition, proposedIsrState.sentLeaderAndIsr, controllerEpoch)
     future.whenComplete { (leaderAndIsr, e) =>
@@ -1375,7 +1375,7 @@ class Partition(val topicPartition: TopicPartition,
       // Send the AlterIsr request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
       if (shouldRetry) {
-        alterIsr(proposedIsrState)
+        submitAlterIsr(proposedIsrState)
       }
     }
   }
