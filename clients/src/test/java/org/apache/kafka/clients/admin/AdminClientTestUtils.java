@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
@@ -101,5 +102,12 @@ public class AdminClientTestUtils {
 
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<TopicPartition, OffsetAndMetadata> offsets) {
         return new ListConsumerGroupOffsetsResult(KafkaFuture.completedFuture(offsets));
+    }
+
+    /**
+     * Helper to create a KafkaAdminClient with a custom HostResolver accessible to tests outside this package.
+     */
+    public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
     }
 }
