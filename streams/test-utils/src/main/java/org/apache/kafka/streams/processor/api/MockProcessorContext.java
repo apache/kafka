@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -281,6 +282,21 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("Not available in the mock context.");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("Not available in the mock context.");
+    }
+
+    @Override
+    public Map<TopicPartition, Long> currentPositions() {
+        throw new UnsupportedOperationException("Not available in the mock context.");
     }
 
     @Override

@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -548,6 +551,84 @@ public abstract class TopologyTestDriverTest {
         assertEquals(key1, outputRecord.key());
         assertEquals(value1, outputRecord.value());
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldReturnCurrentTimeAndPosition() {
+        final Topology topology = new Topology();
+
+        topology.addSource("source1", SOURCE_TOPIC_1);
+        topology.addSource("source2", SOURCE_TOPIC_2);
+        final AtomicLong systemTimeOnPunctuate = new AtomicLong();
+        final AtomicLong streamTimeOnPunctuate = new AtomicLong();
+        final AtomicReference<Map<TopicPartition, Long>> positionOnPunctuate =
+            new AtomicReference<>();
+        final AtomicLong systemTimeOnProcess = new AtomicLong();
+        final AtomicLong streamTimeOnProcess = new AtomicLong();
+        final AtomicReference<Map<TopicPartition, Long>> positionOnProcess = new AtomicReference<>();
+
+        topology.addProcessor("processor", () -> new Processor<Object, Object, Object, Object>() {
+            private ProcessorContext<Object, Object> context;
+            @Override
+            public void init(final ProcessorContext<Object, Object> context) {
+                this.context = context;
+                context.schedule(
+                    Duration.ofMillis(100),
+                    PunctuationType.WALL_CLOCK_TIME,
+                    timestamp -> {
+                        assertThat(timestamp, equalTo(context.currentSystemTimeMs()));
+                        positionOnPunctuate.set(context.currentPositions());
+                        streamTimeOnPunctuate.set(context.currentStreamTimeMs());
+                        systemTimeOnPunctuate.set(this.context.currentSystemTimeMs());
+                    }
+                );
+            }
+
+            @Override
+            public void process(final Record<Object, Object> record1) {
+                positionOnProcess.set(context.currentPositions());
+                streamTimeOnProcess.set(context.currentStreamTimeMs());
+                systemTimeOnProcess.set(this.context.currentSystemTimeMs());
+            }
+        }, "source1", "source2");
+
+        testDriver = new TopologyTestDriver(topology, config, Instant.ofEpochMilli(1000L));
+
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, headers, 10L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, headers, 20L));
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, headers, 30L));
+        pipeRecord(SOURCE_TOPIC_2, new TestRecord<>(key1, value1, headers, 40L));
+        pipeRecord(SOURCE_TOPIC_2, new TestRecord<>(key1, value1, headers, 39L));
+
+        // fire the punctuator (note, this won't re-run the processor itself,
+        // so none of the *OnProcess get updated)
+        testDriver.advanceWallClockTime(Duration.ofMillis(101L));
+
+        // Check *OnProcess
+        assertThat(
+            positionOnProcess.get(),
+            equalTo(
+                mkMap(
+                    mkEntry(new TopicPartition(SOURCE_TOPIC_1, 0), 3L),
+                    mkEntry(new TopicPartition(SOURCE_TOPIC_2, 0), 2L)
+                )
+            )
+        );
+        assertThat(streamTimeOnProcess.get(), equalTo(40L));
+        assertThat(systemTimeOnProcess.get(), equalTo(1000L));
+
+        // Check *OnPunctuate
+        assertThat(
+            positionOnPunctuate.get(),
+            equalTo(
+                mkMap(
+                    mkEntry(new TopicPartition(SOURCE_TOPIC_1, 0), 3L),
+                    mkEntry(new TopicPartition(SOURCE_TOPIC_2, 0), 2L)
+                )
+            )
+        );
+        assertThat(streamTimeOnPunctuate.get(), equalTo(40L));
+        assertThat(systemTimeOnPunctuate.get(), equalTo(1101L));
     }
 
     @Test

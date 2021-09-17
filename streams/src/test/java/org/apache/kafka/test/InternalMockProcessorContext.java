@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -381,6 +382,11 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
+    }
+
+    @Override
+    public Map<TopicPartition, Long> currentPositions() {
         throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
     }
 

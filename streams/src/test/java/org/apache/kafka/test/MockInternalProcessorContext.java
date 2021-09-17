@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -63,6 +64,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public long currentSystemTimeMs() {
         return currentSystemTimeMs;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> currentPositions() {
+        throw new UnsupportedOperationException("this method is not supported in MockInternalProcessorContext");
     }
 
     @Override

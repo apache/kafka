@@ -44,6 +44,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -1212,7 +1213,13 @@ public class IntegrationTestUtils {
     public static KafkaStreams getRunningStreams(final Properties streamsConfig,
                                                  final StreamsBuilder builder,
                                                  final boolean clean) {
-        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        return getRunningStreams(streamsConfig, builder.build(), clean);
+    }
+
+    public static KafkaStreams getRunningStreams(final Properties streamsConfig,
+                                                 final Topology topology,
+                                                 final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(topology, streamsConfig);
         if (clean) {
             driver.cleanUp();
         }

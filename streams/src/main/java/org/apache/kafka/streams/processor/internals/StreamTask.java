@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -418,52 +419,81 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
-        final Map<TopicPartition, OffsetAndMetadata> committableOffsets;
+    public Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
 
         switch (state()) {
             case CREATED:
             case RESTORING:
-                committableOffsets = Collections.emptyMap();
-
-                break;
+                return Collections.emptyMap();
 
             case RUNNING:
             case SUSPENDED:
+                final Set<TopicPartition> committableTopicPartitions = consumedOffsets.keySet();
                 final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
-
-                committableOffsets = new HashMap<>(consumedOffsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                    final TopicPartition partition = entry.getKey();
-                    Long offset = partitionGroup.headRecordOffset(partition);
-                    if (offset == null) {
-                        try {
-                            offset = mainConsumer.position(partition);
-                        } catch (final TimeoutException error) {
-                            // the `consumer.position()` call should never block, because we know that we did process data
-                            // for the requested partition and thus the consumer should have a valid local position
-                            // that it can return immediately
-
-                            // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                            throw new IllegalStateException(error);
-                        } catch (final KafkaException fatal) {
-                            throw new StreamsException(fatal);
-                        }
-                    }
-                    final long partitionTime = partitionTimes.get(partition);
-                    committableOffsets.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
+                final Map<TopicPartition, Long> committableOffsets =
+                    getCurrentPositionForPartitions(committableTopicPartitions);
+                final Map<TopicPartition, OffsetAndMetadata> result =
+                    new HashMap<>(committableTopicPartitions.size());
+                for (final TopicPartition topicPartition : committableTopicPartitions) {
+                    final long partitionTime = partitionTimes.get(topicPartition);
+                    result.put(
+                        topicPartition,
+                        new OffsetAndMetadata(
+                            committableOffsets.get(topicPartition),
+                            encodeTimestamp(partitionTime)
+                        )
+                    );
                 }
-
-                break;
+                return result;
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while getting committable offsets for active task " + id);
 
             default:
-                throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
+                throw new IllegalStateException("Unknown state " + state() + " while getting committable offsets for active task " + id);
         }
+    }
 
-        return committableOffsets;
+    public Map<TopicPartition, Long> currentPositions() {
+        switch (state()) {
+            case CREATED:
+            case RESTORING:
+                return Collections.emptyMap();
+
+            case RUNNING:
+            case SUSPENDED:
+                return getCurrentPositionForPartitions(partitionGroup.partitions());
+
+            default:
+                throw new IllegalStateException("Illegal state " + state()
+                    + " while getting current positions for task " + id);
+        }
+    }
+
+    private Map<TopicPartition, Long> getCurrentPositionForPartitions(
+        final Set<TopicPartition> committableTopicPartitions) {
+
+        final Map<TopicPartition, Long> result =
+            new HashMap<>(committableTopicPartitions.size());
+        for (final TopicPartition partition : committableTopicPartitions) {
+            Long offset = partitionGroup.headRecordOffset(partition);
+            if (offset == null) {
+                try {
+                    offset = mainConsumer.position(partition);
+                } catch (final TimeoutException error) {
+                    // the `consumer.position()` call should never block, because we know that we did process data
+                    // for the requested partition and thus the consumer should have a valid local position
+                    // that it can return immediately hence, a `TimeoutException` indicates a bug
+                    // and thus we rethrow it as fatal `IllegalStateException`
+                    throw new IllegalStateException(error);
+                } catch (final KafkaException fatal) {
+                    throw new StreamsException(fatal);
+                }
+            }
+            Objects.requireNonNull(offset, "offset shouldn't have been null at this point.");
+            result.put(partition, offset);
+        }
+        return result;
     }
 
     @Override

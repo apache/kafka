@@ -565,6 +565,11 @@ public class TopologyTestDriver implements Closeable {
                                    final byte[] value,
                                    final Headers headers) {
         final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
+        // Since we're actually piping the records into the task buffer directly,
+        // we just need to keep the position updated to the correct offset on the consumer.
+        // The consumer's position should always be the next offset to fetch, so
+        // we set the consumer's position to the piped record's offset + 1.
+        consumer.seek(topicOrPatternPartition, offset + 1);
         task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
             inputTopic,
             topicOrPatternPartition.partition(),

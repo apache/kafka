@@ -306,6 +306,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     }
 
     @Override
+    public Map<TopicPartition, Long> currentPositions() {
+        return streamTask.currentPositions();
+    }
+
+    @Override
     public ProcessorNode<?, ?, ?, ?> currentNode() {
         throwUnsupportedOperationExceptionIfStandby("currentNode");
         return super.currentNode();

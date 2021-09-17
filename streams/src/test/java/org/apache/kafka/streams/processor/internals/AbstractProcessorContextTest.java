@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -235,6 +237,11 @@ public class AbstractProcessorContextTest {
 
         @Override
         public long currentStreamTimeMs() {
+            throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
+        }
+
+        @Override
+        public Map<TopicPartition, Long> currentPositions() {
             throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
         }
 

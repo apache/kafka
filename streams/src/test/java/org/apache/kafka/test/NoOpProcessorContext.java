@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -107,6 +108,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public Map<TopicPartition, Long> currentPositions() {
         throw new UnsupportedOperationException("Not implemented yet.");
     }
 
