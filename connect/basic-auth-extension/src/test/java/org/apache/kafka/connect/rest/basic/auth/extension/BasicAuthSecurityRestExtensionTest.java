@@ -36,9 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class BasicAuthSecurityRestExtensionTest {
@@ -60,7 +58,7 @@ public class BasicAuthSecurityRestExtensionTest {
     public void testJaasConfigurationNotOverwritten() {
         ArgumentCaptor<JaasBasicAuthFilter> jaasFilter = ArgumentCaptor.forClass(JaasBasicAuthFilter.class);
         Configurable<? extends Configurable<?>> configurable = mock(Configurable.class);
-        when(configurable.register(any())).thenReturn(null);
+        when(configurable.register(jaasFilter.capture())).thenReturn(null);
 
         ConnectRestExtensionContext context = mock(ConnectRestExtensionContext.class);
         when(context.configurable()).thenReturn((Configurable) configurable);
@@ -69,9 +67,6 @@ public class BasicAuthSecurityRestExtensionTest {
         Configuration overwrittenConfiguration = mock(Configuration.class);
         Configuration.setConfiguration(overwrittenConfiguration);
         extension.register(context);
-
-        verify(configurable)
-            .register(jaasFilter.capture());
 
         assertNotEquals(overwrittenConfiguration, jaasFilter.getValue().configuration,
             "Overwritten JAAS configuration should not be used by basic auth REST extension");
