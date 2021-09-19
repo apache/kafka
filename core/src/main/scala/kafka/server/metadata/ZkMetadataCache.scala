@@ -422,12 +422,12 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
       true
     }
   }
+}
 
-  case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
-                              topicIds: Map[String, Uuid],
-                              controllerId: Option[Int],
-                              aliveBrokers: mutable.LongMap[Broker],
-                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
-    val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
-  }
+private[server] final case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
+                                                  topicIds: Map[String, Uuid],
+                                                  controllerId: Option[Int],
+                                                  aliveBrokers: mutable.LongMap[Broker],
+                                                  aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+  val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
 }

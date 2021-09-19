@@ -97,23 +97,23 @@ object LeaderHwChange {
  *                       Same if high watermark is not changed. None is the default value and it means append failed
  *
  */
-case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
-                         var lastOffset: Long,
-                         var lastLeaderEpoch: Option[Int],
-                         var maxTimestamp: Long,
-                         var offsetOfMaxTimestamp: Long,
-                         var logAppendTime: Long,
-                         var logStartOffset: Long,
-                         var recordConversionStats: RecordConversionStats,
-                         sourceCodec: CompressionCodec,
-                         targetCodec: CompressionCodec,
-                         shallowCount: Int,
-                         validBytes: Int,
-                         offsetsMonotonic: Boolean,
-                         lastOffsetOfFirstBatch: Long,
-                         recordErrors: Seq[RecordError] = List(),
-                         errorMessage: String = null,
-                         leaderHwChange: LeaderHwChange = LeaderHwChange.None) {
+final case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
+                               var lastOffset: Long,
+                               var lastLeaderEpoch: Option[Int],
+                               var maxTimestamp: Long,
+                               var offsetOfMaxTimestamp: Long,
+                               var logAppendTime: Long,
+                               var logStartOffset: Long,
+                               var recordConversionStats: RecordConversionStats,
+                               sourceCodec: CompressionCodec,
+                               targetCodec: CompressionCodec,
+                               shallowCount: Int,
+                               validBytes: Int,
+                               offsetsMonotonic: Boolean,
+                               lastOffsetOfFirstBatch: Long,
+                               recordErrors: Seq[RecordError] = List(),
+                               errorMessage: String = null,
+                               leaderHwChange: LeaderHwChange = LeaderHwChange.None) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions
@@ -140,20 +140,20 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
  * of these offsets atomically without the possibility of a leader change affecting their consistency relative
  * to each other. See [[UnifiedLog.fetchOffsetSnapshot()]].
  */
-case class LogOffsetSnapshot(logStartOffset: Long,
-                             logEndOffset: LogOffsetMetadata,
-                             highWatermark: LogOffsetMetadata,
-                             lastStableOffset: LogOffsetMetadata)
+final case class LogOffsetSnapshot(logStartOffset: Long,
+                                   logEndOffset: LogOffsetMetadata,
+                                   highWatermark: LogOffsetMetadata,
+                                   lastStableOffset: LogOffsetMetadata)
 
 /**
  * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
  */
-case class LogReadInfo(fetchedData: FetchDataInfo,
-                       divergingEpoch: Option[FetchResponseData.EpochEndOffset],
-                       highWatermark: Long,
-                       logStartOffset: Long,
-                       logEndOffset: Long,
-                       lastStableOffset: Long)
+final case class LogReadInfo(fetchedData: FetchDataInfo,
+                             divergingEpoch: Option[FetchResponseData.EpochEndOffset],
+                             highWatermark: Long,
+                             logStartOffset: Long,
+                             logEndOffset: Long,
+                             lastStableOffset: Long)
 
 /**
  * A class used to hold useful metadata about a completed transaction. This is used to build
@@ -165,7 +165,7 @@ case class LogReadInfo(fetchedData: FetchDataInfo,
  *                   COMMIT/ABORT control record which indicates the transaction's completion.
  * @param isAborted Whether or not the transaction was aborted
  */
-case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
+final case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
   override def toString: String = {
     "CompletedTxn(" +
       s"producerId=$producerId, " +
@@ -178,12 +178,12 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
 /**
  * A class used to hold params required to decide to rotate a log segment or not.
  */
-case class RollParams(maxSegmentMs: Long,
-                      maxSegmentBytes: Int,
-                      maxTimestampInMessages: Long,
-                      maxOffsetInMessages: Long,
-                      messagesSize: Int,
-                      now: Long)
+final case class RollParams(maxSegmentMs: Long,
+                            maxSegmentBytes: Int,
+                            maxTimestampInMessages: Long,
+                            maxOffsetInMessages: Long,
+                            messagesSize: Int,
+                            now: Long)
 
 object RollParams {
   def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
@@ -2086,7 +2086,7 @@ object LogMetricNames {
   }
 }
 
-case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
+final case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     val retentionMs = log.config.retentionMs
     toDelete.foreach { segment =>
@@ -2102,7 +2102,7 @@ case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
   }
 }
 
-case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
+final case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     var size = log.size
     toDelete.foreach { segment =>
@@ -2113,7 +2113,7 @@ case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
   }
 }
 
-case class StartOffsetBreach(log: UnifiedLog) extends SegmentDeletionReason {
+final case class StartOffsetBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
   }

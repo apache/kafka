@@ -106,7 +106,7 @@ object MetaProperties {
   }
 }
 
-case class ZkMetaProperties(
+final case class ZkMetaProperties(
   clusterId: String,
   brokerId: Int
 ) {
@@ -123,7 +123,7 @@ case class ZkMetaProperties(
   }
 }
 
-case class MetaProperties(
+final case class MetaProperties(
   clusterId: String,
   nodeId: Int,
 ) {

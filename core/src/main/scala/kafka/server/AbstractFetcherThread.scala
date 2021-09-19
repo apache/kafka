@@ -747,8 +747,8 @@ abstract class AbstractFetcherThread(name: String,
 
 object AbstractFetcherThread {
 
-  case class ReplicaFetch(partitionData: util.Map[TopicPartition, FetchRequest.PartitionData], fetchRequest: FetchRequest.Builder)
-  case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
+  final case class ReplicaFetch(partitionData: util.Map[TopicPartition, FetchRequest.PartitionData], fetchRequest: FetchRequest.Builder)
+  final case class ResultWithPartitions[R](result: R, partitionsWithError: Set[TopicPartition])
 
 }
 
@@ -815,7 +815,7 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 
 }
 
-case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartition) {
+final case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartition) {
   override def toString: String = s"$clientId-$topicPartition"
 }
 
@@ -832,18 +832,18 @@ object PartitionFetchState {
 
 
 /**
- * case class to keep partition offset and its state(truncatingLog, delayed)
+ * final case class to keep partition offset and its state(truncatingLog, delayed)
  * This represents a partition as being either:
  * (1) Truncating its log, for example having recently become a follower
  * (2) Delayed, for example due to an error, where we subsequently back off a bit
  * (3) ReadyForFetch, the is the active state where the thread is actively fetching data.
  */
-case class PartitionFetchState(fetchOffset: Long,
-                               lag: Option[Long],
-                               currentLeaderEpoch: Int,
-                               delay: Option[DelayedItem],
-                               state: ReplicaState,
-                               lastFetchedEpoch: Option[Int]) {
+final case class PartitionFetchState(fetchOffset: Long,
+                                     lag: Option[Long],
+                                     currentLeaderEpoch: Int,
+                                     delay: Option[DelayedItem],
+                                     state: ReplicaState,
+                                     lastFetchedEpoch: Option[Int]) {
 
   def isReadyForFetch: Boolean = state == Fetching && !isDelayed
 
@@ -864,14 +864,14 @@ case class PartitionFetchState(fetchOffset: Long,
   }
 }
 
-case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
+final case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
 
   def this(offset: Long) = this(offset, true)
 
   override def toString: String = s"TruncationState(offset=$offset, completed=$truncationCompleted)"
 }
 
-case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {
+final case class OffsetAndEpoch(offset: Long, leaderEpoch: Int) {
   override def toString: String = {
     s"(offset=$offset, leaderEpoch=$leaderEpoch)"
   }

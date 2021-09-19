@@ -649,7 +649,7 @@ object ConfigCommand extends Config {
     adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
   }
 
-  case class Entity(entityType: String, sanitizedName: Option[String]) {
+  final case class Entity(entityType: String, sanitizedName: Option[String]) {
     val entityPath = sanitizedName match {
       case Some(n) => entityType + "/" + n
       case None => entityType
@@ -671,7 +671,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  case class ConfigEntity(root: Entity, child: Option[Entity]) {
+  final case class ConfigEntity(root: Entity, child: Option[Entity]) {
     val fullSanitizedName = root.sanitizedName.getOrElse("") + child.map(s => "/" + s.entityPath).getOrElse("")
 
     def getAllEntities(zkClient: KafkaZkClient) : Seq[ConfigEntity] = {

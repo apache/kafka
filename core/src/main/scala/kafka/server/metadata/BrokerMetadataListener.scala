@@ -165,17 +165,6 @@ class BrokerMetadataListener(
     }
   }
 
-  case class BatchLoadResults(numBatches: Int,
-                              numRecords: Int,
-                              elapsedUs: Long,
-                              numBytes: Long,
-                              highestMetadataOffset: Long) {
-    override def toString(): String = {
-      s"${numBatches} batch(es) with ${numRecords} record(s) in ${numBytes} bytes " +
-        s"ending at offset ${highestMetadataOffset} in ${elapsedUs} microseconds"
-    }
-  }
-
   private def loadBatches(delta: MetadataDelta,
                           iterator: util.Iterator[Batch[ApiMessageAndVersion]]): BatchLoadResults = {
     val startTimeNs = time.nanoseconds()
@@ -283,5 +272,16 @@ class BrokerMetadataListener(
       _image.write(this)
       future.complete(records)
     }
+  }
+}
+
+private[metadata] final case class BatchLoadResults(numBatches: Int,
+                                                    numRecords: Int,
+                                                    elapsedUs: Long,
+                                                    numBytes: Long,
+                                                    highestMetadataOffset: Long) {
+  override def toString(): String = {
+    s"${numBatches} batch(es) with ${numRecords} record(s) in ${numBytes} bytes " +
+      s"ending at offset ${highestMetadataOffset} in ${elapsedUs} microseconds"
   }
 }

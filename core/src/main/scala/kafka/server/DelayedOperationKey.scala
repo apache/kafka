@@ -31,7 +31,7 @@ object DelayedOperationKey {
 }
 
 /* used by delayed-produce and delayed-fetch operations */
-case class TopicPartitionOperationKey(topic: String, partition: Int) extends DelayedOperationKey {
+final case class TopicPartitionOperationKey(topic: String, partition: Int) extends DelayedOperationKey {
   override def keyLabel: String = "%s-%d".format(topic, partition)
 }
 
@@ -42,21 +42,21 @@ object TopicPartitionOperationKey {
 }
 
 /* used by delayed-join-group operations */
-case class MemberKey(groupId: String, consumerId: String) extends DelayedOperationKey {
+final case class MemberKey(groupId: String, consumerId: String) extends DelayedOperationKey {
   override def keyLabel: String = "%s-%s".format(groupId, consumerId)
 }
 
 /* used by delayed-join operations */
-case class GroupJoinKey(groupId: String) extends DelayedOperationKey {
+final case class GroupJoinKey(groupId: String) extends DelayedOperationKey {
   override def keyLabel: String = "join-%s".format(groupId)
 }
 
 /* used by delayed-sync operations */
-case class GroupSyncKey(groupId: String) extends DelayedOperationKey {
+final case class GroupSyncKey(groupId: String) extends DelayedOperationKey {
   override def keyLabel: String = "sync-%s".format(groupId)
 }
 
 /* used by delayed-topic operations */
-case class TopicKey(topic: String) extends DelayedOperationKey {
+final case class TopicKey(topic: String) extends DelayedOperationKey {
   override def keyLabel: String = topic
 }

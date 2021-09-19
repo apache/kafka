@@ -26,7 +26,7 @@ import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.KafkaConfig
-import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
+import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
 import kafka.zookeeper.ZooKeeperClient
@@ -46,7 +46,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 
 class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
 
@@ -69,7 +68,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     val jaasSections = JaasTestUtils.zkSections
     val serverJaas = jaasSections.filter(_.contextName == "Server")
     val clientJaas = jaasSections.filter(_.contextName == "Client")
-      .map(section => new TestableJaasSection(section.contextName, section.modules))
+      .map(section => JaasSection(section.contextName, section.modules))
     startSasl(serverJaas ++ clientJaas)
 
     // Increase maxUpdateRetries to avoid transient failures
@@ -176,11 +175,5 @@ class TestableDigestLoginModule extends DigestLoginModule {
       subject.getPrivateCredentials.add(newPassword)
       subject.getPrivateCredentials.remove(oldPassword)
     }
-  }
-}
-
-class TestableJaasSection(contextName: String, modules: Seq[JaasModule]) extends JaasSection(contextName, modules) {
-  override def toString: String = {
-    super.toString.replaceFirst(classOf[DigestLoginModule].getName, classOf[TestableDigestLoginModule].getName)
   }
 }

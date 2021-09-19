@@ -62,7 +62,7 @@ object EndPoint {
 /**
  * Part of the broker definition - matching host/port pair to a protocol
  */
-case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+final case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
   def connectionString: String = {
     val hostport =
       if (host == null)

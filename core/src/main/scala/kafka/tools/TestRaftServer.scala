@@ -148,13 +148,6 @@ class TestRaftServer(
   ) extends ShutdownableThread(name = "raft-workload-generator")
     with RaftClient.Listener[Array[Byte]] {
 
-    sealed trait RaftEvent
-    case class HandleClaim(epoch: Int) extends RaftEvent
-    case object HandleResign extends RaftEvent
-    case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
-    case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
-    case object Shutdown extends RaftEvent
-
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
     private val stats = new WriteStats(metrics, time, printIntervalMs = 5000)
     private val payload = new Array[Byte](recordSize)
@@ -281,7 +274,7 @@ class TestRaftServer(
 
 object TestRaftServer extends Logging {
 
-  case class PendingAppend(
+  final case class PendingAppend(
     offset: Long,
     appendTimeMs: Long
   ) {
@@ -471,3 +464,10 @@ object TestRaftServer extends Logging {
   }
 
 }
+
+private[tools] sealed trait RaftEvent
+private[tools] final case class HandleClaim(epoch: Int) extends RaftEvent
+private[tools] case object HandleResign extends RaftEvent
+private[tools] final case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
+private[tools] final case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
+private[tools] case object Shutdown extends RaftEvent

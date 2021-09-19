@@ -1466,7 +1466,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         "--delete-config", mechanism))
 
     val credentials = mutable.Map[String, Properties]()
-    case class CredentialChange(user: String, mechanisms: Set[String], iterations: Int) extends AdminZkClient(zkClient) {
+    final case class CredentialChange(user: String, mechanisms: Set[String], iterations: Int) extends AdminZkClient(zkClient) {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
         credentials.getOrElse(entityName, new Properties())
       }

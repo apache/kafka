@@ -96,12 +96,12 @@ object TopicCommand extends Logging {
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
   }
 
-  case class TopicDescription(topic: String,
-                              topicId: Uuid,
-                              numPartitions: Int,
-                              replicationFactor: Int,
-                              config: JConfig,
-                              markedForDeletion: Boolean) {
+  final case class TopicDescription(topic: String,
+                                    topicId: Uuid,
+                                    numPartitions: Int,
+                                    replicationFactor: Int,
+                                    config: JConfig,
+                                    markedForDeletion: Boolean) {
 
     def printDescription(): Unit = {
       val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
@@ -115,11 +115,11 @@ object TopicCommand extends Logging {
     }
   }
 
-  case class PartitionDescription(topic: String,
-                                  info: TopicPartitionInfo,
-                                  config: Option[JConfig],
-                                  markedForDeletion: Boolean,
-                                  reassignment: Option[PartitionReassignment]) {
+  final case class PartitionDescription(topic: String,
+                                        info: TopicPartitionInfo,
+                                        config: Option[JConfig],
+                                        markedForDeletion: Boolean,
+                                        reassignment: Option[PartitionReassignment]) {
 
     private def minIsrCount: Option[Int] = {
       config.map(_.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value.toInt)
@@ -209,7 +209,7 @@ object TopicCommand extends Logging {
       new TopicService(createAdminClient(commandConfig, bootstrapServer))
   }
 
-  case class TopicService private (adminClient: Admin) extends AutoCloseable {
+  final case class TopicService private (adminClient: Admin) extends AutoCloseable {
 
     def createTopic(opts: TopicCommandOptions): Unit = {
       val topic = new CommandTopicPartition(opts)

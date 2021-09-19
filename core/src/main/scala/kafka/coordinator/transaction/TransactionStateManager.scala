@@ -790,35 +790,35 @@ class TransactionStateManager(brokerId: Int,
 }
 
 
-private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
-                                                      metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
+private[transaction] final case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
+                                                            metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
   override def toString: String = {
     s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
   }
 }
 
-private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
-                                                               transactionMetadata: TransactionMetadata)
+private[transaction] final case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
+                                                                     transactionMetadata: TransactionMetadata)
 
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
-                                                  transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
-                                                  transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
-                                                  transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
-                                                  transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
-                                                  transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
-                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
-                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs,
-                                                  requestTimeoutMs: Int = Defaults.RequestTimeoutMs)
+private[transaction] final case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
+                                                        transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
+                                                        transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
+                                                        transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
+                                                        transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
+                                                        transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
+                                                        transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
+                                                        abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
+                                                        removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs,
+                                                        requestTimeoutMs: Int = Defaults.RequestTimeoutMs)
 
-case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
+final case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
   override def toString: String = {
     s"(transactionalId=$transactionalId, producerId=$producerId, producerEpoch=$producerEpoch)"
   }
 }
 
-case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
+final case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
 
-case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String, coordinatorEpoch: Int, transitMetadata: TxnTransitMetadata)
+final case class TransactionalIdCoordinatorEpochAndMetadata(transactionalId: String, coordinatorEpoch: Int, transitMetadata: TxnTransitMetadata)
 
-case class TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId: String, coordinatorEpoch: Int, result: TransactionResult, txnMetadata: TransactionMetadata, transitMetadata: TxnTransitMetadata)
+final case class TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId: String, coordinatorEpoch: Int, result: TransactionResult, txnMetadata: TransactionMetadata, transitMetadata: TxnTransitMetadata)

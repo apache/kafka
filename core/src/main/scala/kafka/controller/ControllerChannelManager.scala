@@ -209,7 +209,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   }
 }
 
-case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
+final case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                      callback: AbstractResponse => Unit, enqueueTimeMs: Long)
 
 class RequestSendThread(val controllerId: Int,
@@ -673,11 +673,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   }
 }
 
-case class ControllerBrokerStateInfo(networkClient: NetworkClient,
-                                     brokerNode: Node,
-                                     messageQueue: BlockingQueue[QueueItem],
-                                     requestSendThread: RequestSendThread,
-                                     queueSizeGauge: Gauge[Int],
-                                     requestRateAndTimeMetrics: Timer,
-                                     reconfigurableChannelBuilder: Option[Reconfigurable])
+final case class ControllerBrokerStateInfo(networkClient: NetworkClient,
+                                           brokerNode: Node,
+                                           messageQueue: BlockingQueue[QueueItem],
+                                           requestSendThread: RequestSendThread,
+                                           queueSizeGauge: Gauge[Int],
+                                           requestRateAndTimeMetrics: Timer,
+                                           reconfigurableChannelBuilder: Option[Reconfigurable])
 

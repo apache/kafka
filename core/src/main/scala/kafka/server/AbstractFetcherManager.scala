@@ -233,8 +233,8 @@ class FailedPartitions {
   }
 }
 
-case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
+final case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
+final case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
 
-case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)
+final case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

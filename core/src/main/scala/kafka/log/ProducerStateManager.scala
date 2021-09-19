@@ -40,10 +40,10 @@ class CorruptSnapshotException(msg: String) extends KafkaException(msg)
  * The last written record for a given producer. The last data offset may be undefined
  * if the only log entry for a producer is a transaction marker.
  */
-case class LastRecord(lastDataOffset: Option[Long], producerEpoch: Short)
+final case class LastRecord(lastDataOffset: Option[Long], producerEpoch: Short)
 
 
-private[log] case class TxnMetadata(
+private[log] final case class TxnMetadata(
   producerId: Long,
   firstOffset: LogOffsetMetadata,
   var lastOffset: Option[Long] = None
@@ -69,7 +69,7 @@ private[log] object ProducerStateEntry {
     currentTxnFirstOffset = None)
 }
 
-private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
+private[log] final case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
   def firstSeq: Int =  DefaultRecordBatch.decrementSequence(lastSeq, offsetDelta)
   def firstOffset: Long = lastOffset - offsetDelta
 
@@ -869,8 +869,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 }
 
-case class SnapshotFile private[log] (@volatile private var _file: File,
-                                      offset: Long) extends Logging {
+final case class SnapshotFile private[log] (@volatile private var _file: File,
+                                            offset: Long) extends Logging {
   def deleteIfExists(): Boolean = {
     val deleted = Files.deleteIfExists(file.toPath)
     if (deleted) {

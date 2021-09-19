@@ -481,23 +481,23 @@ sealed trait ZkOp {
   def toZookeeperOp: Op
 }
 
-case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
+final case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
   override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
 }
 
-case class DeleteOp(path: String, version: Int) extends ZkOp {
+final case class DeleteOp(path: String, version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.delete(path, version)
 }
 
-case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
+final case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.setData(path, data, version)
 }
 
-case class CheckOp(path: String, version: Int) extends ZkOp {
+final case class CheckOp(path: String, version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.check(path, version)
 }
 
-case class ZkOpResult(zkOp: ZkOp, rawOpResult: OpResult)
+final case class ZkOpResult(zkOp: ZkOp, rawOpResult: OpResult)
 
 sealed trait AsyncRequest {
   /**
@@ -509,40 +509,40 @@ sealed trait AsyncRequest {
   def ctx: Option[Any]
 }
 
-case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode,
+final case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode,
                          ctx: Option[Any] = None) extends AsyncRequest {
   type Response = CreateResponse
 }
 
-case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) extends AsyncRequest {
+final case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = DeleteResponse
 }
 
-case class ExistsRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
+final case class ExistsRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = ExistsResponse
 }
 
-case class GetDataRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
+final case class GetDataRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetDataResponse
 }
 
-case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
+final case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetDataResponse
 }
 
-case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
+final case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetAclResponse
 }
 
-case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
+final case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetAclResponse
 }
 
-case class GetChildrenRequest(path: String, registerWatch: Boolean, ctx: Option[Any] = None) extends AsyncRequest {
+final case class GetChildrenRequest(path: String, registerWatch: Boolean, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetChildrenResponse
 }
 
-case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
+final case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
   type Response = MultiResponse
 
   override def path: String = null
@@ -569,28 +569,28 @@ sealed abstract class AsyncResponse {
   def metadata: ResponseMetadata
 }
 
-case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
+final case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
   def responseTimeMs: Long = receivedTimeMs - sendTimeMs
 }
 
-case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String,
-                          metadata: ResponseMetadata) extends AsyncResponse
-case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any],
-                          metadata: ResponseMetadata) extends AsyncResponse
-case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                          metadata: ResponseMetadata) extends AsyncResponse
-case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat,
-                           metadata: ResponseMetadata) extends AsyncResponse
-case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                           metadata: ResponseMetadata) extends AsyncResponse
-case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat,
-                          metadata: ResponseMetadata) extends AsyncResponse
-case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                          metadata: ResponseMetadata) extends AsyncResponse
-case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
+final case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String,
+                                metadata: ResponseMetadata) extends AsyncResponse
+final case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any],
+                                metadata: ResponseMetadata) extends AsyncResponse
+final case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                                metadata: ResponseMetadata) extends AsyncResponse
+final case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat,
+                                 metadata: ResponseMetadata) extends AsyncResponse
+final case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                                 metadata: ResponseMetadata) extends AsyncResponse
+final case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat,
+                                metadata: ResponseMetadata) extends AsyncResponse
+final case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                                metadata: ResponseMetadata) extends AsyncResponse
+final case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
+                                     metadata: ResponseMetadata) extends AsyncResponse
+final case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
                                metadata: ResponseMetadata) extends AsyncResponse
-case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
-                         metadata: ResponseMetadata) extends AsyncResponse
 
 class ZooKeeperClientException(message: String) extends RuntimeException(message)
 class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)

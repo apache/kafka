@@ -55,7 +55,7 @@ object RequestChannel extends Logging {
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
 
-  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
+  final case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 

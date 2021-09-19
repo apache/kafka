@@ -532,15 +532,15 @@ object MetadataLogConfig {
   }
 }
 
-case class MetadataLogConfig(logSegmentBytes: Int,
-                             logSegmentMinBytes: Int,
-                             logSegmentMillis: Long,
-                             retentionMaxBytes: Long,
-                             retentionMillis: Long,
-                             maxBatchSizeInBytes: Int,
-                             maxFetchSizeInBytes: Int,
-                             fileDeleteDelayMs: Int,
-                             nodeId: Int)
+final case class MetadataLogConfig(logSegmentBytes: Int,
+                                   logSegmentMinBytes: Int,
+                                   logSegmentMillis: Long,
+                                   retentionMaxBytes: Long,
+                                   retentionMillis: Long,
+                                   maxBatchSizeInBytes: Int,
+                                   maxFetchSizeInBytes: Int,
+                                   fileDeleteDelayMs: Int,
+                                   nodeId: Int)
 
 object KafkaMetadataLog {
   def apply(

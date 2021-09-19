@@ -25,7 +25,7 @@ case object FetchLogEnd extends FetchIsolation
 case object FetchHighWatermark extends FetchIsolation
 case object FetchTxnCommitted extends FetchIsolation
 
-case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
-                         records: Records,
-                         firstEntryIncomplete: Boolean = false,
-                         abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]] = None)
+final case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
+                               records: Records,
+                               firstEntryIncomplete: Boolean = false,
+                               abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]] = None)

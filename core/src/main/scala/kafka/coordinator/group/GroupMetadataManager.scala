@@ -1340,7 +1340,7 @@ object GroupMetadataManager {
 
 }
 
-case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
+final case class GroupTopicPartition(group: String, topicPartition: TopicPartition) {
 
   def this(group: String, topic: String, partition: Int) =
     this(group, new TopicPartition(topic, partition))
@@ -1354,12 +1354,12 @@ trait BaseKey{
   def key: Any
 }
 
-case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
+final case class OffsetKey(version: Short, key: GroupTopicPartition) extends BaseKey {
 
   override def toString: String = key.toString
 }
 
-case class GroupMetadataKey(version: Short, key: String) extends BaseKey {
+final case class GroupMetadataKey(version: Short, key: String) extends BaseKey {
 
   override def toString: String = key
 }

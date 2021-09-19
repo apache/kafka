@@ -691,4 +691,4 @@ class TransactionCoordinator(brokerId: Int,
   }
 }
 
-case class InitProducerIdResult(producerId: Long, producerEpoch: Short, error: Errors)
+final case class InitProducerIdResult(producerId: Long, producerEpoch: Short, error: Errors)

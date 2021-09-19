@@ -20,4 +20,4 @@ package kafka.admin
   * @param rack the rack of the broker, which is used to in rack aware partition assignment for fault tolerance.
   *             Examples: "RACK1", "us-east-1d"
   */
-case class BrokerMetadata(id: Int, rack: Option[String])
+final case class BrokerMetadata(id: Int, rack: Option[String])

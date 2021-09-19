@@ -63,11 +63,11 @@ sealed trait MetadataSupport {
   def controllerId: Option[Int]
 }
 
-case class ZkSupport(adminManager: ZkAdminManager,
-                     controller: KafkaController,
-                     zkClient: KafkaZkClient,
-                     forwardingManager: Option[ForwardingManager],
-                     metadataCache: ZkMetadataCache) extends MetadataSupport {
+final case class ZkSupport(adminManager: ZkAdminManager,
+                           controller: KafkaController,
+                           zkClient: KafkaZkClient,
+                           forwardingManager: Option[ForwardingManager],
+                           metadataCache: ZkMetadataCache) extends MetadataSupport {
   val adminZkClient = new AdminZkClient(zkClient)
 
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
@@ -91,7 +91,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
   override def controllerId: Option[Int] =  metadataCache.getControllerId
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
+final case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
     extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException

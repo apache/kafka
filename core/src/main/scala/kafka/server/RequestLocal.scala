@@ -32,6 +32,6 @@ object RequestLocal {
  * When each request is handled by one thread, efficient data structures with no locking or atomic operations
  * can be used (see RequestLocal.withThreadConfinedCaching).
  */
-case class RequestLocal(bufferSupplier: BufferSupplier) {
+final case class RequestLocal(bufferSupplier: BufferSupplier) {
   def close(): Unit = bufferSupplier.close()
 }
