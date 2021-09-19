@@ -17,6 +17,8 @@
 
 package kafka.log
 
+import com.yammer.metrics.core.MetricName
+
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util.Optional
@@ -136,7 +138,7 @@ case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
 /**
  * Container class which represents a snapshot of the significant offsets for a partition. This allows fetching
  * of these offsets atomically without the possibility of a leader change affecting their consistency relative
- * to each other. See [[Log.fetchOffsetSnapshot()]].
+ * to each other. See [[UnifiedLog.fetchOffsetSnapshot()]].
  */
 case class LogOffsetSnapshot(logStartOffset: Long,
                              logEndOffset: LogOffsetMetadata,
@@ -248,18 +250,18 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *                                  will be deleted to avoid ID conflicts upon re-upgrade.
  */
 @threadsafe
-class Log(@volatile var logStartOffset: Long,
-          private val localLog: LocalLog,
-          brokerTopicStats: BrokerTopicStats,
-          val producerIdExpirationCheckIntervalMs: Int,
-          @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
-          val producerStateManager: ProducerStateManager,
-          @volatile private var _topicId: Option[Uuid],
-          val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
+class UnifiedLog(@volatile var logStartOffset: Long,
+                 private val localLog: LocalLog,
+                 brokerTopicStats: BrokerTopicStats,
+                 val producerIdExpirationCheckIntervalMs: Int,
+                 @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
+                 val producerStateManager: ProducerStateManager,
+                 @volatile private var _topicId: Option[Uuid],
+                 val keepPartitionMetadataFile: Boolean) extends Logging with KafkaMetricsGroup {
 
-  import kafka.log.Log._
+  import kafka.log.UnifiedLog._
 
-  this.logIdent = s"[Log partition=$topicPartition, dir=$parentDir] "
+  this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -351,13 +353,14 @@ class Log(@volatile var logStartOffset: Long,
 
   def logDirFailureChannel: LogDirFailureChannel = localLog.logDirFailureChannel
 
-  def updateConfig(newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
     val oldRecordVersion = oldConfig.recordVersion
     val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
+    oldConfig
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -540,6 +543,13 @@ class Log(@volatile var logStartOffset: Long,
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
+  // For compatibility, metrics are defined to be under `Log` class
+  override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
+    val pkg = getClass.getPackage
+    val pkgStr = if (pkg == null) "" else pkg.getName
+    explicitMetricName(pkgStr, "Log", name, tags)
+  }
+
   private def recordVersion: RecordVersion = config.recordVersion
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
@@ -553,17 +563,26 @@ class Log(@volatile var logStartOffset: Long,
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
   def assignTopicId(topicId: Uuid): Unit = {
-    if (keepPartitionMetadataFile) {
-      _topicId = Some(topicId)
-      if (!partitionMetadataFile.exists()) {
-        partitionMetadataFile.record(topicId)
-        scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
-      }
+    _topicId match {
+      case Some(currentId) =>
+        if (!currentId.equals(topicId)) {
+          throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
+            s"but log already contained topic ID $currentId")
+        }
+
+      case None =>
+        if (keepPartitionMetadataFile) {
+          _topicId = Some(topicId)
+          if (!partitionMetadataFile.exists()) {
+            partitionMetadataFile.record(topicId)
+            scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+          }
+        }
     }
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = Log.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
+    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -591,7 +610,7 @@ class Log(@volatile var logStartOffset: Long,
   private def rebuildProducerState(lastOffset: Long,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
-    Log.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
+    UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
       reloadFromCleanShutdown = false, logIdent)
   }
 
@@ -940,16 +959,16 @@ class Log(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
       case other => other
     }
 
-    if (updatedFirstStableOffset != this.firstUnstableOffsetMetadata) {
-      debug(s"First unstable offset updated to $updatedFirstStableOffset")
-      this.firstUnstableOffsetMetadata = updatedFirstStableOffset
+    if (updatedFirstUnstableOffset != this.firstUnstableOffsetMetadata) {
+      debug(s"First unstable offset updated to $updatedFirstUnstableOffset")
+      this.firstUnstableOffsetMetadata = updatedFirstUnstableOffset
     }
   }
 
@@ -1649,7 +1668,7 @@ class Log(@volatile var logStartOffset: Long,
   private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment]): Unit = {
     lock synchronized {
       localLog.checkIfMemoryMappedBufferClosed()
-      val deletedSegments = Log.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
+      val deletedSegments = UnifiedLog.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
         config, scheduler, logDirFailureChannel, logIdent)
       deleteProducerSnapshots(deletedSegments, asyncDelete = true)
     }
@@ -1690,17 +1709,17 @@ class Log(@volatile var logStartOffset: Long,
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
-    val result = Log.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+    val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
     deleteProducerSnapshots(result.deletedSegments, asyncDelete = true)
     result.newSegments.toList
   }
 
   private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    Log.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
+    UnifiedLog.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
   }
 }
 
-object Log extends Logging {
+object UnifiedLog extends Logging {
   val LogFileSuffix = LocalLog.LogFileSuffix
 
   val IndexFileSuffix = LocalLog.IndexFileSuffix
@@ -1738,17 +1757,17 @@ object Log extends Logging {
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
-            keepPartitionMetadataFile: Boolean): Log = {
+            keepPartitionMetadataFile: Boolean): UnifiedLog = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
-    val topicPartition = Log.parseTopicPartitionName(dir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = Log.maybeCreateLeaderEpochCache(
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
       dir,
       topicPartition,
       logDirFailureChannel,
       config.recordVersion,
-      s"[Log partition=$topicPartition, dir=${dir.getParent}] ")
+      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     val offsets = LogLoader.load(LoadLogParams(
       dir,
@@ -1766,7 +1785,7 @@ object Log extends Logging {
       producerStateManager))
     val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
-    new Log(offsets.logStartOffset,
+    new UnifiedLog(offsets.logStartOffset,
       localLog,
       brokerTopicStats,
       producerIdExpirationCheckIntervalMs,
@@ -2067,7 +2086,7 @@ object LogMetricNames {
   }
 }
 
-case class RetentionMsBreach(log: Log) extends SegmentDeletionReason {
+case class RetentionMsBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     val retentionMs = log.config.retentionMs
     toDelete.foreach { segment =>
@@ -2083,7 +2102,7 @@ case class RetentionMsBreach(log: Log) extends SegmentDeletionReason {
   }
 }
 
-case class RetentionSizeBreach(log: Log) extends SegmentDeletionReason {
+case class RetentionSizeBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     var size = log.size
     toDelete.foreach { segment =>
@@ -2094,7 +2113,7 @@ case class RetentionSizeBreach(log: Log) extends SegmentDeletionReason {
   }
 }
 
-case class StartOffsetBreach(log: Log) extends SegmentDeletionReason {
+case class StartOffsetBreach(log: UnifiedLog) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
   }

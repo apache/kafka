@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.PrintWriter
+
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import kafka.utils.{MockTime, TestUtils}
@@ -178,7 +179,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
       s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")
   }
 
-  private def readFromLog(log: Log): Iterable[(Int, Int)] = {
+  private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
@@ -186,12 +187,15 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType, timestamp: Long, startValue: Int, step: Int): Seq[(Int, Int)] = {
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
+                           startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val curValue = valCounter
       log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
         key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       valCounter += step
       (key, curValue)
     }

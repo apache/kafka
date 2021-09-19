@@ -122,7 +122,7 @@ public class MeteredSessionStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
@@ -134,7 +134,7 @@ public class MeteredSessionStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.namedTopology()),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );

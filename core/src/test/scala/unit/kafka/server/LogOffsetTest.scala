@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.log.{ClientRecordDeletion, Log, LogSegment}
+import kafka.log.{ClientRecordDeletion, UnifiedLog, LogSegment}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -255,7 +255,7 @@ class LogOffsetTest extends BaseRequestTest {
    * a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
-    val log: Log = EasyMock.niceMock(classOf[Log])
+    val log: UnifiedLog = EasyMock.niceMock(classOf[UnifiedLog])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
       private val value = new AtomicInteger(0)
@@ -272,7 +272,7 @@ class LogOffsetTest extends BaseRequestTest {
    * different (simulating a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
-    val log: Log = EasyMock.niceMock(classOf[Log])
+    val log: UnifiedLog = EasyMock.niceMock(classOf[UnifiedLog])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {
       new IAnswer[Iterable[LogSegment]] {
@@ -312,7 +312,7 @@ class LogOffsetTest extends BaseRequestTest {
       .partitions.asScala.find(_.partitionIndex == tp.partition).get
   }
 
-  private def createTopicAndGetLog(topic: String, topicPartition: TopicPartition): Log = {
+  private def createTopicAndGetLog(topic: String, topicPartition: TopicPartition): UnifiedLog = {
     createTopic(topic, 1, 1)
 
     val logManager = server.getLogManager

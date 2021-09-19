@@ -19,9 +19,9 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigType
-import kafka.server.{ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
@@ -64,7 +64,7 @@ object BrokerMetadataPublisher extends Logging {
    */
   def findStrayPartitions(brokerId: Int,
                           newTopicsImage: TopicsImage,
-                          logs: Iterable[Log]): Iterable[TopicPartition] = {
+                          logs: Iterable[UnifiedLog]): Iterable[TopicPartition] = {
     logs.flatMap { log =>
       val topicId = log.topicId.getOrElse {
         throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
@@ -117,6 +117,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                        delta: MetadataDelta,
                        newImage: MetadataImage): Unit = {
     try {
+      trace(s"Publishing delta $delta with highest offset $newHighestMetadataOffset")
+
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
@@ -152,11 +154,16 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // Handle the case where we have new local leaders or followers for the consumer
         // offsets topic.
         getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => groupCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.localChanges(brokerId)
+
+          changes.deletes.forEach { topicPartition =>
+            groupCoordinator.onResignation(topicPartition.partition, None)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+          }
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
         }
 
@@ -172,11 +179,16 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // If the transaction state topic changed in a way that's relevant to this broker,
         // notify the transaction coordinator.
         getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => txnCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.localChanges(brokerId)
+
+          changes.deletes.forEach { topicPartition =>
+            txnCoordinator.onResignation(topicPartition.partition, None)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+          }
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
         }
 
@@ -203,7 +215,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           }
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
-            dynamicConfigHandlers(t).processConfigChanges(configResource.name(), newProperties)
+            val maybeDefaultName = configResource.name() match {
+              case "" => ConfigEntityName.Default
+              case k => k
+            }
+            dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
           }
         }
       }

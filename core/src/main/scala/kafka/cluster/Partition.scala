@@ -243,9 +243,9 @@ class Partition(val topicPartition: TopicPartition,
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
   // completes and a switch to new location is performed.
   // log and futureLog variables defined below are used to capture this
-  @volatile var log: Option[Log] = None
+  @volatile var log: Option[UnifiedLog] = None
   // If ReplicaAlterLogDir command is in progress, this is future location of the log
-  @volatile var futureLog: Option[Log] = None
+  @volatile var futureLog: Option[UnifiedLog] = None
 
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
    * One way of doing that is through the controller's start replica state change command. When a new broker starts up
@@ -313,20 +313,28 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
-    isFutureReplica match {
-      case true if futureLog.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.futureLog = Option(log)
-      case false if log.isEmpty =>
-        val log = createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
-        this.log = Option(log)
-      case _ => trace(s"${if (isFutureReplica) "Future Log" else "Log"} already exists.")
+    def maybeCreate(logOpt: Option[UnifiedLog]): UnifiedLog = {
+      logOpt match {
+        case Some(log) =>
+          trace(s"${if (isFutureReplica) "Future UnifiedLog" else "UnifiedLog"} already exists.")
+          if (log.topicId.isEmpty)
+            topicId.foreach(log.assignTopicId)
+          log
+        case None =>
+          createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
+      }
+    }
+
+    if (isFutureReplica) {
+      this.futureLog = Some(maybeCreate(this.futureLog))
+    } else {
+      this.log = Some(maybeCreate(this.log))
     }
   }
 
   // Visible for testing
-  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
-    def updateHighWatermark(log: Log) = {
+  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
+    def updateHighWatermark(log: UnifiedLog) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
@@ -336,7 +344,7 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     logManager.initializingLog(topicPartition)
-    var maybeLog: Option[Log] = None
+    var maybeLog: Option[UnifiedLog] = None
     try {
       val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
       maybeLog = Some(log)
@@ -365,7 +373,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def getLocalLog(currentLeaderEpoch: Optional[Integer],
-                          requireLeader: Boolean): Either[Log, Errors] = {
+                          requireLeader: Boolean): Either[UnifiedLog, Errors] = {
     checkCurrentLeaderEpoch(currentLeaderEpoch) match {
       case Errors.NONE =>
         if (requireLeader && !isLeader) {
@@ -383,17 +391,17 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def localLogOrException: Log = log.getOrElse {
+  def localLogOrException: UnifiedLog = log.getOrElse {
     throw new NotLeaderOrFollowerException(s"Log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
-  def futureLocalLogOrException: Log = futureLog.getOrElse {
+  def futureLocalLogOrException: UnifiedLog = futureLog.getOrElse {
     throw new NotLeaderOrFollowerException(s"Future log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
-  def leaderLogIfLocal: Option[Log] = {
+  def leaderLogIfLocal: Option[UnifiedLog] = {
     log.filter(_ => isLeader)
   }
 
@@ -403,7 +411,7 @@ class Partition(val topicPartition: TopicPartition,
   def isLeader: Boolean = leaderReplicaIdOpt.contains(localBrokerId)
 
   private def localLogWithEpochOrException(currentLeaderEpoch: Optional[Integer],
-                                           requireLeader: Boolean): Log = {
+                                           requireLeader: Boolean): UnifiedLog = {
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
@@ -414,7 +422,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   // Visible for testing -- Used by unit tests to set log for this partition
-  def setLog(log: Log, isFutureLog: Boolean): Unit = {
+  def setLog(log: UnifiedLog, isFutureLog: Boolean): Unit = {
     if (isFutureLog)
       futureLog = Some(log)
     else
@@ -568,9 +576,9 @@ class Partition(val topicPartition: TopicPartition,
         remoteReplicas.foreach { replica =>
           replica.updateFetchState(
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
-            followerStartOffset = Log.UnknownOffset,
+            followerStartOffset = UnifiedLog.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset)
+            leaderEndOffset = UnifiedLog.UnknownOffset)
         }
       }
       // we may need to increment high watermark since ISR could be down to 1
@@ -583,9 +591,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   *  Make the local replica the follower by setting the new leader and ISR to empty
-   *  If the leader replica id does not change and the new epoch is equal or one
-   *  greater (that is, no updates have been missed), return false to indicate to the
+   * Make the local replica the follower by setting the new leader and ISR to empty
+   * If the leader replica id does not change and the new epoch is equal or one
+   * greater (that is, no updates have been missed), return false to indicate to the
    * replica manager that state is already correct and the become-follower steps can be skipped
    */
   def makeFollower(partitionState: LeaderAndIsrPartitionState,
@@ -835,7 +843,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * @return true if the HW was incremented, and false otherwise.
    */
-  private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
+  private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, curTime: Long = time.milliseconds): Boolean = {
     // maybeIncrementLeaderHW is in the hot path, the following code is written to
     // avoid unnecessary collection generation
     var newHighWatermark = leaderLog.logEndOffsetMetadata
@@ -899,38 +907,34 @@ class Partition(val topicPartition: TopicPartition,
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
   def maybeShrinkIsr(): Unit = {
-    val needsIsrUpdate = !isrState.isInflight && inReadLock(leaderIsrUpdateLock) {
-      needsShrinkIsr()
-    }
-    val leaderHWIncremented = needsIsrUpdate && inWriteLock(leaderIsrUpdateLock) {
-      leaderLogIfLocal.exists { leaderLog =>
-        val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-        if (outOfSyncReplicaIds.nonEmpty) {
-          val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-            val logEndOffsetMessage = getReplica(replicaId)
-              .map(_.logEndOffset.toString)
-              .getOrElse("unknown")
-            s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
-          }.mkString(" ")
-          val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
-          info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
-               s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
-               s"endOffset: ${leaderLog.logEndOffset}). " +
-               s"Out of sync replicas: $outOfSyncReplicaLog.")
-
-          shrinkIsr(outOfSyncReplicaIds)
-
-          // we may need to increment high watermark since ISR could be down to 1
-          maybeIncrementLeaderHW(leaderLog)
-        } else {
-          false
-        }
+    def needsIsrUpdate: Boolean = {
+      !isrState.isInflight && inReadLock(leaderIsrUpdateLock) {
+        needsShrinkIsr()
       }
     }
 
-    // some delayed operations may be unblocked after HW changed
-    if (leaderHWIncremented)
-      tryCompleteDelayedRequests()
+    if (needsIsrUpdate) {
+      inWriteLock(leaderIsrUpdateLock) {
+        leaderLogIfLocal.foreach { leaderLog =>
+          val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+          if (outOfSyncReplicaIds.nonEmpty) {
+            val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
+              val logEndOffsetMessage = getReplica(replicaId)
+                .map(_.logEndOffset.toString)
+                .getOrElse("unknown")
+              s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
+            }.mkString(" ")
+            val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
+            info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
+              s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
+              s"endOffset: ${leaderLog.logEndOffset}). " +
+              s"Out of sync replicas: $outOfSyncReplicaLog.")
+
+            shrinkIsr(outOfSyncReplicaIds)
+          }
+        }
+      }
+    }
   }
 
   private def needsShrinkIsr(): Boolean = {
@@ -1357,53 +1361,64 @@ class Partition(val topicPartition: TopicPartition,
    * or LeaderAndIsr
    */
   private def handleAlterIsrResponse(proposedIsrState: IsrState)(result: Either[Errors, LeaderAndIsr]): Unit = {
-    inWriteLock(leaderIsrUpdateLock) {
+    val hwIncremented = inWriteLock(leaderIsrUpdateLock) {
       if (isrState != proposedIsrState) {
         // This means isrState was updated through leader election or some other mechanism before we got the AlterIsr
         // response. We don't know what happened on the controller exactly, but we do know this response is out of date
         // so we ignore it.
         debug(s"Ignoring failed ISR update to $proposedIsrState since we have already updated state to $isrState")
-        return
-      }
-
-      result match {
-        case Left(error: Errors) =>
-          isrChangeListener.markFailed()
-          error match {
-            case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-              debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
-            case Errors.FENCED_LEADER_EPOCH =>
-              debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
-            case Errors.INVALID_UPDATE_VERSION =>
-              debug(s"Failed to update ISR to $proposedIsrState due to invalid version. Giving up.")
-            case _ =>
-              warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
-              sendAlterIsrRequest(proposedIsrState)
-          }
-        case Right(leaderAndIsr: LeaderAndIsr) =>
-          // Success from controller, still need to check a few things
-          if (leaderAndIsr.leaderEpoch != leaderEpoch) {
-            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
+        false
+      } else {
+        result match {
+          case Left(error: Errors) =>
             isrChangeListener.markFailed()
-          } else if (leaderAndIsr.zkVersion < zkVersion) {
-            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
-            isrChangeListener.markFailed()
-          } else {
-            // This is one of two states:
-            //   1) leaderAndIsr.zkVersion > zkVersion: Controller updated to new version with proposedIsrState.
-            //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
-            // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
-
-            isrState = CommittedIsr(leaderAndIsr.isr.toSet)
-            zkVersion = leaderAndIsr.zkVersion
-            info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
-            proposedIsrState match {
-              case PendingExpandIsr(_, _) => isrChangeListener.markExpand()
-              case PendingShrinkIsr(_, _) => isrChangeListener.markShrink()
-              case _ => // nothing to do, shouldn't get here
+            error match {
+              case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
+              case Errors.FENCED_LEADER_EPOCH =>
+                debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
+              case Errors.INVALID_UPDATE_VERSION =>
+                debug(s"Failed to update ISR to $proposedIsrState due to invalid version. Giving up.")
+              case _ =>
+                warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
+                sendAlterIsrRequest(proposedIsrState)
             }
-          }
+            false
+
+          case Right(leaderAndIsr: LeaderAndIsr) =>
+            // Success from controller, still need to check a few things
+            if (leaderAndIsr.leaderEpoch != leaderEpoch) {
+              debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
+              isrChangeListener.markFailed()
+              false
+            } else if (leaderAndIsr.zkVersion < zkVersion) {
+              debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
+              isrChangeListener.markFailed()
+              false
+            } else {
+              // This is one of two states:
+              //   1) leaderAndIsr.zkVersion > zkVersion: Controller updated to new version with proposedIsrState.
+              //   2) leaderAndIsr.zkVersion == zkVersion: No update was performed since proposed and actual state are the same.
+              // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
+
+              isrState = CommittedIsr(leaderAndIsr.isr.toSet)
+              zkVersion = leaderAndIsr.zkVersion
+              info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
+              proposedIsrState match {
+                case PendingExpandIsr(_, _) => isrChangeListener.markExpand()
+                case PendingShrinkIsr(_, _) => isrChangeListener.markShrink()
+                case _ => // nothing to do, shouldn't get here
+              }
+
+              // we may need to increment high watermark since ISR could be down to 1
+              leaderLogIfLocal.exists(log => maybeIncrementLeaderHW(log))
+            }
+        }
       }
+    }
+
+    if (hwIncremented) {
+      tryCompleteDelayedRequests()
     }
   }
 

@@ -141,6 +141,9 @@ public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
 
+    private static final Set<Class<? extends Throwable>> EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS =
+        new HashSet<>(Arrays.asList(IllegalStateException.class, IllegalArgumentException.class));
+
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
     // of the co-location of stream thread's consumers. It is for internal
@@ -151,7 +154,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Metrics metrics;
     private final StreamsConfig config;
     protected final List<StreamThread> threads;
-    private final StateDirectory stateDirectory;
+    protected final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
@@ -349,9 +352,15 @@ public class KafkaStreams implements AutoCloseable {
         return state;
     }
 
-    private boolean isRunningOrRebalancing() {
+    protected boolean isRunningOrRebalancing() {
         synchronized (stateLock) {
             return state.isRunningOrRebalancing();
+        }
+    }
+
+    protected boolean hasStartedOrFinishedShuttingDown() {
+        synchronized (stateLock) {
+            return state.hasStartedOrFinishedShuttingDown();
         }
     }
 
@@ -489,9 +498,24 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private boolean wrappedExceptionIsIn(final Throwable throwable, final Set<Class<? extends Throwable>> exceptionsOfInterest) {
+        return throwable.getCause() != null && exceptionsOfInterest.contains(throwable.getCause().getClass());
+    }
+
+    private StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse getActionForThrowable(final Throwable throwable,
+                                                                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action;
+        if (wrappedExceptionIsIn(throwable, EXCEPTIONS_NOT_TO_BE_HANDLED_BY_USERS)) {
+            action = SHUTDOWN_CLIENT;
+        } else {
+            action = streamsUncaughtExceptionHandler.handle(throwable);
+        }
+        return action;
+    }
+
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = getActionForThrowable(throwable, streamsUncaughtExceptionHandler);
         if (oldHandler) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                     "The old handler will be ignored as long as a new handler is set.");
@@ -503,7 +527,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
-                        "and the registered exception handler opted to " + action + "." +
+                        "and Kafka Streams opted to " + action + "." +
                         " The streams client is going to shut down now. ", throwable);
                 closeToError();
                 break;
@@ -875,8 +899,9 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-        ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, this.topologyMetadata.topologyDescriptionString());
+        ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        threads = Collections.synchronizedList(new LinkedList<>());
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> getNumLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(
@@ -909,7 +934,6 @@ public class KafkaStreams implements AutoCloseable {
             globalThreadState = globalStreamThread.state();
         }
 
-        threads = Collections.synchronizedList(new LinkedList<>());
         threadState = new HashMap<>(numStreamThreads);
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
@@ -1283,14 +1307,6 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             throw new IllegalStateException("The client is either already started or already stopped, cannot re-start");
         }
-
-        if (topologyMetadata.isEmpty()) {
-            if (setState(State.RUNNING)) {
-                log.debug("Transitioning directly to RUNNING for app with no named topologies");
-            } else {
-                throw new IllegalStateException("Unexpected error in transitioning KafkaStreams with empty processing topology to RUNNING");
-            }
-        }
     }
 
     /**
@@ -1314,6 +1330,7 @@ public class KafkaStreams implements AutoCloseable {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
             processStreamThread(StreamThread::shutdown);
+            topologyMetadata.wakeupThreads();
 
             processStreamThread(thread -> {
                 try {
@@ -1597,7 +1614,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
-    private void processStreamThread(final Consumer<StreamThread> consumer) {
+    protected void processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
     }
