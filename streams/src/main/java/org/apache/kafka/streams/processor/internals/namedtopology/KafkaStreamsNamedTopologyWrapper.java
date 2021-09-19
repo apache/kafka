@@ -118,31 +118,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * independent topology that can be executed by this {@link KafkaStreams}.
      *
      * @param topologyName              The name for this topology
-     * @param topologyConfigs           The properties and any config overrides for this topology
+     * @param topologyOverrides           The properties and any config overrides for this topology
      *
      * @throws IllegalArgumentException if the name contains the character sequence "__"
      */
-    public NamedTopologyBuilder newNamedTopologyBuilder(final String topologyName, final Properties topologyConfigs) {
+    public NamedTopologyBuilder newNamedTopologyBuilder(final String topologyName, final Properties topologyOverrides) {
         if (topologyName.contains(TaskId.NAMED_TOPOLOGY_DELIMITER)) {
             throw new IllegalArgumentException("The character sequence '__' is not allowed in a NamedTopology, please select a new name");
         }
-        return new NamedTopologyBuilder(topologyName, applicationConfigs, topologyConfigs);
-    }
-
-    /**
-     * Returns an empty topology for full control over the graph of streams and processor nodes that define the processing
-     * logic to be executed by this {@link KafkaStreams}.
-     *
-     * @param topologyName              The name for this topology
-     * @param topologyConfigs           The properties and any config overrides for this topology
-     *
-     * @throws IllegalArgumentException if the name contains the character sequence "__"
-     */
-    public NamedTopology newNamedTopology(final String topologyName, final Properties topologyConfigs) {
-        if (topologyName.contains(TaskId.NAMED_TOPOLOGY_DELIMITER)) {
-            throw new IllegalArgumentException("The character sequence '__' is not allowed in a NamedTopology, please select a new name");
-        }
-        return new NamedTopology(topologyName, applicationConfigs, topologyConfigs);
+        return new NamedTopologyBuilder(topologyName, applicationConfigs, topologyOverrides);
     }
 
     /**

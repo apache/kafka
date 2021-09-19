@@ -26,17 +26,23 @@ import java.util.Properties;
 public class NamedTopology extends Topology {
     private final String name;
 
-    private final TopologyConfig topologyConfigs;
+    private final TopologyConfig topologyOverrides;
 
     NamedTopology(final String topologyName, final StreamsConfig applicationConfigs, final Properties topologyOverrides) {
         name = topologyName;
-        topologyConfigs = new TopologyConfig(topologyName, applicationConfigs, topologyOverrides);
+        this.topologyOverrides = new TopologyConfig(topologyName, applicationConfigs, topologyOverrides);
     }
 
+    /**
+     * @return the name of this topology
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * @return the list of all source topics this topology is subscribed to
+     */
     public List<String> sourceTopics() {
         return super.internalTopologyBuilder.fullSourceTopicNames();
     }
@@ -46,11 +52,11 @@ public class NamedTopology extends Topology {
     }
 
     TopologyConfig topologyConfigs() {
-        return topologyConfigs;
+        return topologyOverrides;
     }
 
     @Override
     protected InternalTopologyBuilder newInternalTopologyBuilder() {
-        return new InternalTopologyBuilder(this, topologyConfigs);
+        return new InternalTopologyBuilder(this, topologyOverrides);
     }
 }

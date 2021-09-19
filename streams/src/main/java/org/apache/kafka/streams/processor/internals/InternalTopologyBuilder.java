@@ -71,10 +71,10 @@ public class InternalTopologyBuilder {
         this.namedTopology = null;
     }
 
-    public InternalTopologyBuilder(final NamedTopology namedTopology, final TopologyConfig topologyConfigs) {
+    public InternalTopologyBuilder(final NamedTopology namedTopology, final TopologyConfig topologyOverrides) {
         this.topologyName = namedTopology.name();
         this.namedTopology = namedTopology;
-        this.topologyConfigs = topologyConfigs;
+        this.topologyConfigs = topologyOverrides;
     }
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
@@ -361,10 +361,6 @@ public class InternalTopologyBuilder {
         this.applicationId = applicationId;
 
         return this;
-    }
-
-    public synchronized final void setTopologyOverrides(final Properties props) {
-        this.topologyOverrides = props;
     }
 
     public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
