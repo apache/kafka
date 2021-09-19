@@ -163,12 +163,20 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
   }
 
-  def addTopicIdsToFetcherThread(partitionsToUpdate: Set[(TopicPartition, Int)], topicIds: String => Option[Uuid]): Unit = {
+  /**
+   * If the fetcher and partition state exist, update all to include the topic ID
+   *
+   * @param partitionsToUpdate a mapping of partitions to be updated to their leader IDs
+   * @param topicIds           the mappings from topic name to ID or None if it does not exist
+   */
+  def maybeUpdateTopicIds(partitionsToUpdate: Map[TopicPartition, Int], topicIds: String => Option[Uuid]): Unit = {
     lock synchronized {
-      val partitionsPerFetcher = partitionsToUpdate.groupMap(partitionsToUpdate => BrokerIdAndFetcherId(partitionsToUpdate._2, getFetcherId(partitionsToUpdate._1)))(_._1)
+      val partitionsPerFetcher = partitionsToUpdate.groupBy { case (topicPartition, leaderId) =>
+        BrokerIdAndFetcherId(leaderId, getFetcherId(topicPartition))
+      }.view.mapValues(_.keySet).toMap
 
       for ((brokerIdAndFetcherId, partitions) <- partitionsPerFetcher) {
-        fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.maybeAddTopicIdsToThread(partitions, topicIds))
+        fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.maybeUpdateTopicIds(partitions, topicIds))
       }
     }
   }

@@ -2812,6 +2812,12 @@ class ReplicaManagerTest {
     replicaManager.calculateDeltaChanges(TEST_DELTA))
   }
 
+  def assertFetcherHasTopicId[T <: AbstractFetcherThread](manager: AbstractFetcherManager[T], tp: TopicPartition, expectedTopicId: Option[Uuid]): Unit = {
+    val fetchState = manager.getFetcher(tp).flatMap(_.fetchState(tp))
+    assertTrue(fetchState.isDefined)
+    assertEquals(expectedTopicId, fetchState.get.topicId)
+  }
+
   @Test
   def testPartitionFetchStateUpdatesWithTopicIdAdded(): Unit = {
     val aliveBrokersIds = Seq(0, 1)
@@ -2819,38 +2825,19 @@ class ReplicaManagerTest {
       brokerId = 0, aliveBrokersIds)
     try {
       val tp = new TopicPartition(topic, 0)
-      val replicas = aliveBrokersIds.toList.map(Int.box).asJava
+      val leaderAndIsr = new LeaderAndIsr(1, 0, List(0,1), 0)
 
-      def leaderAndIsrRequest(epoch: Int, topicIds: util.Map[String, Uuid]): LeaderAndIsrRequest =
-        new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
-          Seq(new LeaderAndIsrPartitionState()
-            .setTopicName(topic)
-            .setPartitionIndex(0)
-            .setControllerEpoch(0)
-            .setLeader(1)
-            .setLeaderEpoch(epoch)
-            .setIsr(replicas)
-            .setZkVersion(0)
-            .setReplicas(replicas)
-            .setIsNew(true)).asJava,
-          topicIds,
-          Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-
-      val leaderAndIsrRequest1 = leaderAndIsrRequest(0, Collections.emptyMap())
+      val leaderAndIsrRequest1 = leaderAndIsrRequest(Uuid.ZERO_UUID, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
 
-      val fetchState = replicaManager.replicaFetcherManager.getFetcher(tp).flatMap(fetcher => fetcher.fetchState(tp))
-      assertTrue(fetchState.isDefined)
-      assertEquals(None, fetchState.get.topicId)
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, None)
 
-      val leaderAndIsrRequest2 = leaderAndIsrRequest(0, topicIds.asJava)
+      val leaderAndIsrRequest2 = leaderAndIsrRequest(topicId, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
 
-      val fetchState2 = replicaManager.replicaFetcherManager.getFetcher(tp).flatMap(fetcher => fetcher.fetchState(tp))
-      assertTrue(fetchState2.isDefined)
-      assertEquals(Some(topicId), fetchState2.get.topicId)
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, Some(topicId))
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -2861,33 +2848,20 @@ class ReplicaManagerTest {
   def testReplicaAlterLogDirsWithAndWithoutIds(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
-      val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+      val tp = new TopicPartition(topic, 0)
+      val leaderAndIsr = new LeaderAndIsr(0, 0, List(0,1), 0)
 
-      def leaderAndIsrRequest(version: Short, epoch: Int, topicIds: util.Map[String, Uuid]): LeaderAndIsrRequest =
-        new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
-          Seq(new LeaderAndIsrPartitionState()
-            .setTopicName(topic)
-            .setPartitionIndex(0)
-            .setControllerEpoch(0)
-            .setLeader(0)
-            .setLeaderEpoch(epoch)
-            .setIsr(brokerList)
-            .setZkVersion(0)
-            .setReplicas(brokerList)
-            .setIsNew(true)).asJava,
-          topicIds,
-          Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(4, 0, Collections.emptyMap()), (_, _) => ())
+      val leaderAndIsrRequest1 = leaderAndIsrRequest(Uuid.ZERO_UUID, tp, Seq(0,1), leaderAndIsr, version = 4)
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       var partition = replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
       // Append a couple of messages.
-      for (i <- 1 to 20) {
+      for (i <- 1 to 40) {
         val records = TestUtils.singletonRecords(s"message $i".getBytes)
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
           assertEquals(Errors.NONE, response.error)
@@ -2899,9 +2873,7 @@ class ReplicaManagerTest {
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
 
-      val fetchState = replicaManager.replicaAlterLogDirsManager.getFetcher(partition.topicPartition).flatMap(fetcher => fetcher.fetchState(partition.topicPartition))
-      assertTrue(fetchState.isDefined)
-      assertEquals(None, fetchState.get.topicId)
+      assertFetcherHasTopicId(replicaManager.replicaAlterLogDirsManager, partition.topicPartition, None)
 
       // make sure the future log is created
       replicaManager.futureLocalLogOrException(topicPartition)
@@ -2913,7 +2885,8 @@ class ReplicaManagerTest {
         replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty
       }, s"ReplicaAlterLogDirsThread should be gone")
 
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.latestVersion, 0, topicIds.asJava), (_, _) => ())
+      val leaderAndIsrRequest2 = leaderAndIsrRequest(topicId, tp, Seq(0,1), leaderAndIsr)
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
       partition = replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
@@ -2922,9 +2895,7 @@ class ReplicaManagerTest {
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder2.getAbsolutePath))
 
-      val fetchState2 = replicaManager.replicaAlterLogDirsManager.getFetcher(partition.topicPartition).flatMap(fetcher => fetcher.fetchState(partition.topicPartition))
-      assertTrue(fetchState2.isDefined)
-      assertEquals(Some(topicId), fetchState2.get.topicId)
+      assertFetcherHasTopicId(replicaManager.replicaAlterLogDirsManager, partition.topicPartition, Some(topicId))
 
       // make sure the future log is created
       replicaManager.futureLocalLogOrException(topicPartition)

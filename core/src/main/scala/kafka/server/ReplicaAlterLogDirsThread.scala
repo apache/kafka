@@ -76,8 +76,13 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
-    val topicIds = request.data().topics().asScala.map(topic => (topic.topic, topic.topicId)).toMap
-    val topicNames = topicIds.map(_.swap)
+    val topicIds = new mutable.HashMap[String, Uuid](request.data.topics.size, 1)
+    val topicNames = new mutable.HashMap[Uuid, String](request.data.topics.size, 1)
+    request.data.topics.asScala.foreach { topic =>
+      topicIds.put(topic.topic, topic.topicId)
+      topicNames.put(topic.topicId, topic.topic)
+    }
+
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
@@ -288,7 +293,7 @@ class ReplicaAlterLogDirsThread(name: String,
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
       val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap,
-        Collections.singletonMap(tp.topic(), fetchState.topicId.getOrElse(Uuid.ZERO_UUID))).setMaxBytes(maxBytes)
+        Collections.singletonMap(tp.topic, fetchState.topicId.getOrElse(Uuid.ZERO_UUID))).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))
     }
 

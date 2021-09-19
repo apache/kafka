@@ -1780,12 +1780,9 @@ class ReplicaManager(val config: KafkaConfig,
         }
       } else {
         val partitionsToUpdateFollowerWithLeader = partitionStates.map { partition =>
-          val leaderNode = partition.leaderReplicaIdOpt.flatMap(leaderId => metadataCache.
-            getAliveBrokerNode(leaderId, config.interBrokerListenerName)).getOrElse(Node.noNode())
-          val leaderId = leaderNode.id
-          (partition.topicPartition, leaderId)
-        }
-        replicaFetcherManager.addTopicIdsToFetcherThread(partitionsToUpdateFollowerWithLeader, topicIds)
+          partition.topicPartition -> partition.leaderReplicaIdOpt.getOrElse(-1)
+        }.toMap
+        replicaFetcherManager.maybeUpdateTopicIds(partitionsToUpdateFollowerWithLeader, topicIds)
       }
     } catch {
       case e: Throwable =>

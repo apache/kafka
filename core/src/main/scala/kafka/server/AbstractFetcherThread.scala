@@ -491,7 +491,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def maybeAddTopicIdsToThread(partitions: Set[TopicPartition], topicIds: String => Option[Uuid]) = {
+  def maybeUpdateTopicIds(partitions: Set[TopicPartition], topicIds: String => Option[Uuid]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       partitions.foreach { tp =>
@@ -501,7 +501,6 @@ abstract class AbstractFetcherThread(name: String,
           partitionStates.updateAndMoveToEnd(tp, updatedState)
         }
       }
-
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
   }

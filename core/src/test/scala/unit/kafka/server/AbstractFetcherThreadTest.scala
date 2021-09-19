@@ -886,6 +886,29 @@ class AbstractFetcherThreadTest {
     fetcher.verifyLastFetchedEpoch(partition, Some(5))
   }
 
+  @Test
+  def testMaybeUpdateTopicIds(): Unit = {
+    val partition = new TopicPartition("topic1", 0)
+    val fetcher = new MockFetcherThread
+
+    // Start with no topic IDs
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition -> initialFetchState(None, 0L, leaderEpoch = 0)))
+
+
+    def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
+      assertTrue(fetchState.isDefined)
+      assertEquals(expectedTopicId, fetchState.get.topicId)
+    }
+
+    verifyFetchState(fetcher.fetchState(partition), None)
+
+    // Add topic ID
+    fetcher.maybeUpdateTopicIds(Set(partition), topicName => topicIds.get(topicName))
+
+    verifyFetchState(fetcher.fetchState(partition), topicIds.get(partition.topic))
+  }
+
   object MockFetcherThread {
     class PartitionState(var log: mutable.Buffer[RecordBatch],
                          var leaderEpoch: Int,
