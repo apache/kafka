@@ -1121,7 +1121,7 @@ public abstract class ConsumerCoordinatorTest {
                     sync.groupAssignments().isEmpty();
         }, syncGroupResponse(assigned, Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
@@ -1187,7 +1187,7 @@ public abstract class ConsumerCoordinatorTest {
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(metadataResponse);
 
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(assigned.size(), subscriptions.numAssignedPartitions());
@@ -1261,7 +1261,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(-1, consumerId, "leader-id", Errors.MEMBER_ID_REQUIRED));
 
         // execute join group
-        coordinator.joinGroupIfNeeded(time.timer(0));
+        coordinator.joinGroupIfNeeded(time.timer(0),null);
 
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(body -> {
@@ -1284,7 +1284,7 @@ public abstract class ConsumerCoordinatorTest {
         // join initially, but let coordinator rebalance on sync
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_SERVER_ERROR));
-        assertThrows(KafkaException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertThrows(KafkaException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null));
     }
 
     @Test
@@ -1305,7 +1305,7 @@ public abstract class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -1326,7 +1326,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -1350,7 +1350,7 @@ public abstract class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -1626,7 +1626,7 @@ public abstract class ConsumerCoordinatorTest {
         subscriptions.subscribe(new HashSet<>(Arrays.asList(topic1, otherTopic)), rebalanceListener);
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         Collection<TopicPartition> revoked = getRevoked(assigned, assigned);
         Collection<TopicPartition> added = getAdded(assigned, assigned);
@@ -1650,7 +1650,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
@@ -1670,7 +1670,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // coordinator doesn't like the session timeout
         client.prepareResponse(joinGroupFollowerResponse(0, consumerId, "", Errors.INVALID_SESSION_TIMEOUT));
-        assertThrows(ApiException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertThrows(ApiException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null));
     }
 
     @Test
@@ -1817,7 +1817,7 @@ public abstract class ConsumerCoordinatorTest {
 
             client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-            coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+            coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
 
             subscriptions.seek(t1p, 100);
 
@@ -2285,7 +2285,7 @@ public abstract class ConsumerCoordinatorTest {
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
 
-        coordinator.ensureActiveGroup(time.timer(0L));
+        coordinator.ensureActiveGroup(time.timer(0L),null);
 
         assertTrue(coordinator.rejoinNeededOrPending());
         assertNull(coordinator.generationIfStable());
@@ -2801,7 +2801,7 @@ public abstract class ConsumerCoordinatorTest {
             MockTime time = new MockTime(1);
 
             // onJoinPrepare will be executed and onJoinComplete will not.
-            boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
+            boolean res = coordinator.joinGroupIfNeeded(time.timer(2),null);
 
             assertFalse(res);
             assertFalse(client.hasPendingResponses());
@@ -2818,7 +2818,7 @@ public abstract class ConsumerCoordinatorTest {
             client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
             // Join future should succeed but generation already cleared so result of join is false.
-            res = coordinator.joinGroupIfNeeded(time.timer(1));
+            res = coordinator.joinGroupIfNeeded(time.timer(1),null);
 
             assertFalse(res);
 
@@ -2832,7 +2832,7 @@ public abstract class ConsumerCoordinatorTest {
             client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-            res = coordinator.joinGroupIfNeeded(time.timer(3000));
+            res = coordinator.joinGroupIfNeeded(time.timer(3000),null);
 
             assertTrue(res);
             assertFalse(client.hasPendingResponses());
@@ -2914,7 +2914,7 @@ public abstract class ConsumerCoordinatorTest {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-            coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+            coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
         } else {
             subscriptions.assignFromUser(singleton(t1p));
         }
@@ -3136,7 +3136,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assignment, Errors.NONE));
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE),null);
     }
 
     private void prepareOffsetCommitRequest(Map<TopicPartition, Long> expectedOffsets, Errors error) {

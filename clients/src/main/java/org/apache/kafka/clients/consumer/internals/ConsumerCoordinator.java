@@ -66,15 +66,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -505,7 +497,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
 
                 // if not wait for join group, we would just use a timer of 0
-                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L))) {
+                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L), timer)) {
                     // since we may use a different timer in the callee, we'd still need
                     // to update the original timer's current time after the call
                     timer.update(time.milliseconds());
@@ -670,10 +662,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    protected void onJoinPrepare(int generation, String memberId, final Timer pollTimer) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
+        //The timer whose commitOffset timed out is no longer time.timer(rebalanceConfig.rebalanceTimeoutMs), and is changed to the timer passed by the customer
+        maybeAutoCommitOffsetsSync(pollTimer);
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -1054,6 +1047,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void maybeAutoCommitOffsetsSync(Timer timer) {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+
+            cleanUpConsumedOffsets(allConsumedOffsets);
+
             try {
                 log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
                 if (!commitOffsetsSync(allConsumedOffsets, timer))
@@ -1066,6 +1062,37 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // consistent with async auto-commit failures, we do not propagate the exception
                 log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
             }
+        }
+    }
+
+    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> willCommitOffsets) {
+
+        if (willCommitOffsets.isEmpty())
+            return;
+
+        Set<String> subscription = subscriptions.subscription();
+        Set<TopicPartition> toGiveUpTopicPartitions = new HashSet<>();
+
+        Iterator<Map.Entry<TopicPartition, OffsetAndMetadata>> iterator = willCommitOffsets.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+
+            Map.Entry<TopicPartition, OffsetAndMetadata> entry = iterator.next();
+
+            if (!subscription.contains(entry.getKey().topic())) {
+
+                toGiveUpTopicPartitions.add(entry.getKey());
+                iterator.remove();
+            }
+
+        }
+
+        if (toGiveUpTopicPartitions.size() > 0) {
+
+            //Because toGiveUpTopicPartitions may receive `UnknownTopicOrPartitionException` when submitting their offsets.
+            //We are prepared to abandon them. The worst effect is that these partitions may repeatedly consume some messages
+            log.warn("Synchronous auto-commit of offsets {} will be abandoned", toGiveUpTopicPartitions);
+
         }
     }
 

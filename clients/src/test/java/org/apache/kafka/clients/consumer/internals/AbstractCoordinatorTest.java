@@ -278,7 +278,7 @@ public class AbstractCoordinatorTest {
         ExecutorService executor = Executors.newFixedThreadPool(1);
         try {
             Timer firstAttemptTimer = mockTime.timer(REQUEST_TIMEOUT_MS);
-            Future<Boolean> firstAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(firstAttemptTimer));
+            Future<Boolean> firstAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(firstAttemptTimer, null));
 
             mockTime.sleep(REQUEST_TIMEOUT_MS);
             assertFalse(firstAttempt.get());
@@ -288,7 +288,7 @@ public class AbstractCoordinatorTest {
             mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
             Timer secondAttemptTimer = mockTime.timer(REQUEST_TIMEOUT_MS);
-            Future<Boolean> secondAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(secondAttemptTimer));
+            Future<Boolean> secondAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(secondAttemptTimer, null));
 
             assertTrue(secondAttempt.get());
         } finally {
@@ -614,7 +614,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, PROTOCOL_NAME));
 
         // No exception shall be thrown as the generation is reset.
-        coordinator.joinGroupIfNeeded(mockTime.timer(100L));
+        coordinator.joinGroupIfNeeded(mockTime.timer(100L), null);
     }
 
     private boolean joinGroupWithProtocolTypeAndName(String joinGroupResponseProtocolType,
@@ -643,7 +643,7 @@ public class AbstractCoordinatorTest {
                 && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
 
-        return coordinator.joinGroupIfNeeded(mockTime.timer(5000L));
+        return coordinator.joinGroupIfNeeded(mockTime.timer(5000L), null);
     }
 
     @Test
@@ -874,7 +874,7 @@ public class AbstractCoordinatorTest {
         coordinator.requestRejoin("test");
 
         TestUtils.waitForCondition(() -> {
-            coordinator.ensureActiveGroup(new MockTime(1L).timer(100L));
+            coordinator.ensureActiveGroup(new MockTime(1L).timer(100L), null);
             return !coordinator.heartbeat().hasInflight();
         },
             2000,
@@ -1574,7 +1574,7 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected void onJoinPrepare(int generation, String memberId) {
+        protected void onJoinPrepare(int generation, String memberId, Timer pollTimer) {
             onJoinPrepareInvokes++;
         }
 
