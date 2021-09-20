@@ -132,6 +132,14 @@ public class ReplicationControlManager {
             this.id = id;
             this.parts = new TimelineHashMap<>(snapshotRegistry, 0);
         }
+
+        public String name() {
+            return name;
+        }
+
+        public Uuid topicId() {
+            return id;
+        }
     }
 
     private final SnapshotRegistry snapshotRegistry;
@@ -587,6 +595,11 @@ public class ReplicationControlManager {
     }
 
     // VisibleForTesting
+    TopicControlInfo getTopic(Uuid topicId) {
+        return topics.get(topicId);
+    }
+
+    // VisibleForTesting
     BrokersToIsrs brokersToIsrs() {
         return brokersToIsrs;
     }
@@ -787,7 +800,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
-        boolean uncleanOk = electionTypeIsUnclean(request.electionType());
+        ElectionType electionType = electionType(request.electionType());
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
@@ -804,11 +817,16 @@ public class ReplicationControlManager {
                 TopicControlInfo topic = topics.get(topicEntry.getValue());
                 if (topic != null) {
                     for (int partitionId : topic.parts.keySet()) {
-                        ApiError error = electLeader(topicName, partitionId, uncleanOk, records);
-                        topicResults.partitionResult().add(new PartitionResult().
-                            setPartitionId(partitionId).
-                            setErrorCode(error.error().code()).
-                            setErrorMessage(error.message()));
+                        ApiError error = electLeader(topicName, partitionId, electionType, records);
+
+                        // When electing leaders for all partitions, we do not return
+                        // partitions which already have the desired leader.
+                        if (error.error() != Errors.ELECTION_NOT_NEEDED) {
+                            topicResults.partitionResult().add(new PartitionResult().
+                                setPartitionId(partitionId).
+                                setErrorCode(error.error().code()).
+                                setErrorMessage(error.message()));
+                        }
                     }
                 }
             }
@@ -818,7 +836,7 @@ public class ReplicationControlManager {
                     new ReplicaElectionResult().setTopic(topic.topic());
                 response.replicaElectionResults().add(topicResults);
                 for (int partitionId : topic.partitions()) {
-                    ApiError error = electLeader(topic.topic(), partitionId, uncleanOk, records);
+                    ApiError error = electLeader(topic.topic(), partitionId, electionType, records);
                     topicResults.partitionResult().add(new PartitionResult().
                         setPartitionId(partitionId).
                         setErrorCode(error.error().code()).
@@ -829,17 +847,15 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, response);
     }
 
-    static boolean electionTypeIsUnclean(byte electionType) {
-        ElectionType type;
+    private static ElectionType electionType(byte electionType) {
         try {
-            type = ElectionType.valueOf(electionType);
+            return ElectionType.valueOf(electionType);
         } catch (IllegalArgumentException e) {
             throw new InvalidRequestException("Unknown election type " + (int) electionType);
         }
-        return type == ElectionType.UNCLEAN;
     }
 
-    ApiError electLeader(String topic, int partitionId, boolean uncleanOk,
+    ApiError electLeader(String topic, int partitionId, ElectionType electionType,
                          List<ApiMessageAndVersion> records) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
@@ -856,21 +872,24 @@ public class ReplicationControlManager {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such partition as " + topic + "-" + partitionId);
         }
+        if ((electionType == ElectionType.PREFERRED && partition.hasPreferredLeader())
+            || (electionType == ElectionType.UNCLEAN && partition.hasLeader())) {
+            return new ApiError(Errors.ELECTION_NOT_NEEDED);
+        }
+
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
             topicId,
             partitionId,
             r -> clusterControl.unfenced(r),
-            () -> uncleanOk || configurationControl.uncleanLeaderElectionEnabledForTopic(topic));
-        builder.setAlwaysElectPreferredIfPossible(true);
+            () -> electionType == ElectionType.UNCLEAN);
+
+        builder.setAlwaysElectPreferredIfPossible(electionType == ElectionType.PREFERRED);
         Optional<ApiMessageAndVersion> record = builder.build();
         if (!record.isPresent()) {
-            if (partition.leader == NO_LEADER) {
-                // If we can't find any leader for the partition, return an error.
-                return new ApiError(Errors.LEADER_NOT_AVAILABLE,
-                    "Unable to find any leader for the partition.");
+            if (electionType == ElectionType.PREFERRED) {
+                return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
             } else {
-                // There is nothing to do.
-                return ApiError.NONE;
+                return new ApiError(Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE);
             }
         }
         records.add(record.get());

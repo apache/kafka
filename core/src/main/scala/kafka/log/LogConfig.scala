@@ -381,9 +381,9 @@ object LogConfig {
     // config names.
     logConfigDef
       // This define method is not overridden in LogConfig as these configs do not have server defaults yet.
-      .define(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, MEDIUM, RemoteLogStorageEnableDoc)
-      .define(LocalLogRetentionMsProp, LONG, Defaults.LocalRetentionMs, atLeast(-2), MEDIUM, LocalLogRetentionMsDoc)
-      .define(LocalLogRetentionBytesProp, LONG, Defaults.LocalRetentionBytes, atLeast(-2), MEDIUM, LocalLogRetentionBytesDoc)
+      .defineInternal(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, null, MEDIUM, RemoteLogStorageEnableDoc)
+      .defineInternal(LocalLogRetentionMsProp, LONG, Defaults.LocalRetentionMs, atLeast(-2), MEDIUM, LocalLogRetentionMsDoc)
+      .defineInternal(LocalLogRetentionBytesProp, LONG, Defaults.LocalRetentionBytes, atLeast(-2), MEDIUM, LocalLogRetentionBytesDoc)
 
     logConfigDef
   }

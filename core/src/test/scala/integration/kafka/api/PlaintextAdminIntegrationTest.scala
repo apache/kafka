@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.io.File
+import java.net.InetAddress
 import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.Arrays.asList
@@ -24,13 +25,13 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
-
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
 import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -98,6 +99,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       nodeStrs = nodes.map ( node => s"${node.host}:${node.port}" ).toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
+  }
+
+  @Test
+  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
+    val config = createConfig
+    config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
+    val returnBadAddressFirst = new HostResolver {
+      override def resolve(host: String): Array[InetAddress] = {
+        Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
+      }
+    }
+    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
+    // simply check that a call, e.g. describeCluster, returns normally
+    client.describeCluster().nodes().get()
   }
 
   @Test
