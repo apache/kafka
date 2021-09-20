@@ -17,20 +17,22 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
+
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -48,12 +50,16 @@ trait AlterIsrManager {
 
   def shutdown(): Unit = {}
 
-  def submit(alterIsrItem: AlterIsrItem): Boolean
+  def submit(
+    topicPartition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    controllerEpoch: Int
+  ): CompletableFuture[LeaderAndIsr]
 }
 
 case class AlterIsrItem(topicPartition: TopicPartition,
                         leaderAndIsr: LeaderAndIsr,
-                        callback: Either[Errors, LeaderAndIsr] => Unit,
+                        future: CompletableFuture[LeaderAndIsr],
                         controllerEpoch: Int) // controllerEpoch needed for Zk impl
 
 object AlterIsrManager {
@@ -126,10 +132,21 @@ class DefaultAlterIsrManager(
     controllerChannelManager.shutdown()
   }
 
-  override def submit(alterIsrItem: AlterIsrItem): Boolean = {
+  override def submit(
+    topicPartition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    controllerEpoch: Int
+  ): CompletableFuture[LeaderAndIsr] = {
+    val future = new CompletableFuture[LeaderAndIsr]()
+    val alterIsrItem = AlterIsrItem(topicPartition, leaderAndIsr, future, controllerEpoch)
     val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
-    maybePropagateIsrChanges()
-    enqueued
+    if (enqueued) {
+      maybePropagateIsrChanges()
+    } else {
+      future.completeExceptionally(new OperationNotAttemptedException(
+        s"Failed to enqueue ISR change state $leaderAndIsr for partition $topicPartition"))
+    }
+    future
   }
 
   private[server] def maybePropagateIsrChanges(): Unit = {
@@ -250,19 +267,24 @@ class DefaultAlterIsrManager(
         // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterIsrRequest
-        inflightAlterIsrItems.foreach(inflightAlterIsr =>
-          if (partitionResponses.contains(inflightAlterIsr.topicPartition)) {
-            try {
-              inflightAlterIsr.callback.apply(partitionResponses(inflightAlterIsr.topicPartition))
-            } finally {
-              // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-              unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
-            }
-          } else {
-            // Don't remove this partition from the update map so it will get re-sent
-            warn(s"Partition ${inflightAlterIsr.topicPartition} was sent but not included in the response")
+        inflightAlterIsrItems.foreach { inflightAlterIsr =>
+          partitionResponses.get(inflightAlterIsr.topicPartition) match {
+            case Some(leaderAndIsrOrError) =>
+              try {
+                leaderAndIsrOrError match {
+                  case Left(error) => inflightAlterIsr.future.completeExceptionally(error.exception)
+                  case Right(leaderAndIsr) => inflightAlterIsr.future.complete(leaderAndIsr)
+                }
+              } finally {
+                // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
+                unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              }
+            case None =>
+              // Don't remove this partition from the update map so it will get re-sent
+              warn(s"Partition ${inflightAlterIsr.topicPartition} was sent but not included in the response")
           }
-        )
+        }
+
       case e: Errors =>
         warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
     }

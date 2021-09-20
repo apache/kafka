@@ -1385,13 +1385,31 @@ object KafkaConfig {
     }
     if (maybeSensitive) Password.HIDDEN else value
   }
+
+  /**
+   * Copy a configuration map, populating some keys that we want to treat as synonyms.
+   */
+  def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
+    val output = new util.HashMap[Any, Any](input)
+    val brokerId = output.get(KafkaConfig.BrokerIdProp)
+    val nodeId = output.get(KafkaConfig.NodeIdProp)
+    if (brokerId == null && nodeId != null) {
+      output.put(KafkaConfig.BrokerIdProp, nodeId)
+    } else if (brokerId != null && nodeId == null) {
+      output.put(KafkaConfig.NodeIdProp, brokerId)
+    }
+    output
+  }
 }
 
-class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
+class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynamicConfigOverride: Option[DynamicBrokerConfig])
   extends AbstractConfig(KafkaConfig.configDef, props, doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(props, true, None)
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
+  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props), None)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props), None)
+  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) =
+    this(doLog, KafkaConfig.populateSynonyms(props), dynamicConfigOverride)
+
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
   private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
@@ -1512,15 +1530,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
-  var brokerId: Int = {
-    val nodeId = getInt(KafkaConfig.NodeIdProp)
-    if (nodeId < 0) {
-      getInt(KafkaConfig.BrokerIdProp)
-    } else {
-      nodeId
-    }
-  }
-  val nodeId: Int = brokerId
+  var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
+  val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
   val processRoles: Set[ProcessRole] = parseProcessRoles()
   val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
   val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)
@@ -1901,6 +1912,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
+    if (nodeId != brokerId) {
+      throw new ConfigException(s"You must set `${KafkaConfig.NodeIdProp}` to the same value as `${KafkaConfig.BrokerIdProp}`.")
+    }
     if (requiresZookeeper) {
       if (zkConnect == null) {
         throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")

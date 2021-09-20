@@ -19,11 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 
-public class KeyAndJoinSideSerde<K> extends WrappingNullableSerde<KeyAndJoinSide<K>, K, Void> {
-    public KeyAndJoinSideSerde(final Serde<K> keySerde) {
+public class TimestampedKeyAndJoinSideSerde<K> extends WrappingNullableSerde<TimestampedKeyAndJoinSide<K>, K, Void> {
+
+    public TimestampedKeyAndJoinSideSerde(final Serde<K> keySerde) {
         super(
-            new KeyAndJoinSideSerializer<>(keySerde != null ? keySerde.serializer() : null),
-            new KeyAndJoinSideDeserializer<>(keySerde != null ? keySerde.deserializer() : null)
+            new TimestampedKeyAndJoinSideSerializer<>(keySerde != null ? keySerde.serializer() : null),
+            new TimestampedKeyAndJoinSideDeserializer<>(keySerde != null ? keySerde.deserializer() : null)
         );
     }
 }
