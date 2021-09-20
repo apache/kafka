@@ -351,6 +351,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // add the consumer and any info in its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
+            if (allOwnedPartitions.stream().anyMatch(t -> subscription.ownedPartitions().contains(t))) {
+                log.warn("The previous assignment contains a partition more than once. " +
+                    "This might result in violation of EOS if enabled. \n" +
+                    "\tconsumerID: {} \n" +
+                    "\tpartitions validated so far: {} \n" +
+                    "\tproblem subscription: {}",
+                    consumerId,
+                    allOwnedPartitions,
+                    subscription.ownedPartitions()
+                );
+            }
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
         }
