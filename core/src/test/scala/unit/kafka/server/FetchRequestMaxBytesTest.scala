@@ -25,8 +25,8 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import java.util.{Optional, Properties}
 
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 
 /**

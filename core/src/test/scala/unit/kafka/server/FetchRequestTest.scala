@@ -27,10 +27,10 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSeriali
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
 import java.io.DataInputStream
 import java.util
 import java.util.Optional
-
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 import scala.util.Random

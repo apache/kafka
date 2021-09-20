@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}

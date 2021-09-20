@@ -23,8 +23,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
-import java.util.Properties
 
+import java.util.Properties
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 
 import scala.annotation.nowarn

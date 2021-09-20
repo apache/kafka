@@ -18,7 +18,6 @@ package kafka.server.epoch.util
 
 import java.net.SocketTimeoutException
 import java.util
-
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}

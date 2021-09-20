@@ -183,7 +183,7 @@ class CachedPartition(var topic: String,
         this.eq(that) ||
           (that.canEqual(this) &&
             this.partition.equals(that.partition) &&
-            (if (this.topic == null) this.topic == null && that.topic == null else this.topic.equals(that.topic)) &&
+            (if (this.topic == null) that.topic == null else this.topic.equals(that.topic)) &&
             this.topicId.equals(that.topicId))
       case _ => false
     }

@@ -329,7 +329,6 @@ public class FetchRequest extends AbstractRequest {
                         } else {
                             name = topicNames.get(fetchTopic.topicId());
                         }
-                        // If topic name is resolved, simply add to fetchData map
                         fetchTopic.partitions().forEach(fetchPartition ->
                                 fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
                                         new PartitionData(
