@@ -173,7 +173,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       val partitionsPerFetcher = partitionsToUpdate.groupBy { case (topicPartition, leaderId) =>
         BrokerIdAndFetcherId(leaderId, getFetcherId(topicPartition))
-      }.view.mapValues(_.keySet).toMap
+      }.map { case (brokerAndFetcherId, partitionsToUpdate) =>
+        (brokerAndFetcherId, partitionsToUpdate.keySet)
+      }
 
       for ((brokerIdAndFetcherId, partitions) <- partitionsPerFetcher) {
         fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.maybeUpdateTopicIds(partitions, topicIds))

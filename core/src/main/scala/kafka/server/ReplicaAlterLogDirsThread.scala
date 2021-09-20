@@ -76,8 +76,8 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
-    val topicIds = new mutable.HashMap[String, Uuid](request.data.topics.size, 1)
-    val topicNames = new mutable.HashMap[Uuid, String](request.data.topics.size, 1)
+    val topicIds = new mutable.HashMap[String, Uuid]()
+    val topicNames = new mutable.HashMap[Uuid, String]()
     request.data.topics.asScala.foreach { topic =>
       topicIds.put(topic.topic, topic.topicId)
       topicNames.put(topic.topicId, topic.topic)
