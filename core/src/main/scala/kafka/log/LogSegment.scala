@@ -77,8 +77,9 @@ class LogSegment private[log] (val log: FileRecords,
     timeIndex.resize(size)
   }
 
-  def sanityCheck(timeIndexFileNewlyCreated: Boolean): Unit = {
-    if (lazyOffsetIndex.file.exists) {
+  def sanityCheck(timeIndexFileNewlyCreated: Boolean, isActiveSegment: Boolean): Unit = {
+    // We allow for absence of offset index file only for an empty active segment.
+    if ((isActiveSegment && size == 0) || lazyOffsetIndex.file.exists) {
       // Resize the time index file to 0 if it is newly created.
       if (timeIndexFileNewlyCreated)
         timeIndex.resize(0)

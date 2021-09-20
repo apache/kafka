@@ -310,7 +310,9 @@ object LogLoader extends Logging {
   private def loadSegmentFiles(params: LoadLogParams): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
-    for (file <- params.dir.listFiles.sortBy(_.getName) if file.isFile) {
+    val files = params.dir.listFiles.filter(_.isFile).sortBy(_.getName)
+    val lastLogFileOpt = files.filter(isLogFile).lastOption
+    for (file <- files) {
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
         val offset = offsetFromFile(file)
@@ -330,7 +332,7 @@ object LogLoader extends Logging {
           time = params.time,
           fileAlreadyExists = true)
 
-        try segment.sanityCheck(timeIndexFileNewlyCreated)
+        try segment.sanityCheck(timeIndexFileNewlyCreated, isActiveSegment = file == lastLogFileOpt.get)
         catch {
           case _: NoSuchFileException =>
             error(s"${params.logIdentifier}Could not find offset index file corresponding to log file" +

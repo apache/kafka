@@ -23,7 +23,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord, TimestampType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
@@ -44,6 +44,12 @@ object LogTestUtils {
     val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
+  }
+
+  /* create a ByteBufferMessageSet for the given messages starting from the given offset */
+  def records(offset: Long, records: String*): MemoryRecords = {
+    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
   }
 
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
