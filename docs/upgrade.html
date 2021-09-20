@@ -127,6 +127,48 @@
     </li>
 </ul>
 
+<h4><a id="upgrade_2_8_1" href="#upgrade_2_8_1">Upgrading to 2.8.1 from any version 0.8.x through 2.7.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.7</code>, <code>2.6</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.7</code>, <code>2.6</code>, etc.)</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>2.8</code>.
+    </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.8 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
 <ul>
     <li>
@@ -1543,9 +1585,9 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> The new Java Consumer now supports heartbeating from a background thread. There is a new configuration
          <code>max.poll.interval.ms</code> which controls the maximum time between poll invocations before the consumer
          will proactively leave the group (5 minutes by default). The value of the configuration
-         <code>request.timeout.ms</code> must always be larger than <code>max.poll.interval.ms</code> because this is the maximum
-         time that a JoinGroup request can block on the server while the consumer is rebalancing, so we have changed its default
-         value to just above 5 minutes. Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
+         <code>request.timeout.ms</code> (default to 30 seconds) must always be smaller than <code>max.poll.interval.ms</code>(default to 5 minutes),
+         since that is the maximum time that a JoinGroup request can block on the server while the consumer is rebalance.
+         Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
          10 seconds, and the default value of <code>max.poll.records</code> has been changed to 500.</li>
     <li> When using an Authorizer and a user doesn't have <b>Describe</b> authorization on a topic, the broker will no
          longer return TOPIC_AUTHORIZATION_FAILED errors to requests since this leaks topic names. Instead, the UNKNOWN_TOPIC_OR_PARTITION
