@@ -18,7 +18,6 @@ package kafka.server
 
 import java.net.InetAddress
 import java.util
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 
@@ -160,18 +159,15 @@ class ReplicaManagerConcurrencyTest {
     )
 
     new ReplicaManager(
-      config,
-      metrics,
-      time,
-      None,
-      time.scheduler,
-      logManager,
-      new AtomicBoolean(false),
-      QuotaFactory.instantiate(config, metrics, time, ""),
-      new BrokerTopicStats,
-      MetadataCache.kRaftMetadataCache(config.brokerId),
-      new LogDirFailureChannel(config.logDirs.size),
-      new MockAlterIsrManager(channel)
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = time.scheduler,
+      logManager = logManager,
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterIsrManager = new MockAlterIsrManager(channel)
     ) {
       override def createReplicaFetcherManager(
         metrics: Metrics,
