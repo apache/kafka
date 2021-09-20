@@ -1070,7 +1070,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (willCommitOffsets.isEmpty())
             return;
 
-        Set<String> subscription = subscriptions.subscription();
+        Set<String> validTopics = metadata.fetch().topics();
         Set<TopicPartition> toGiveUpTopicPartitions = new HashSet<>();
 
         Iterator<Map.Entry<TopicPartition, OffsetAndMetadata>> iterator = willCommitOffsets.entrySet().iterator();
@@ -1079,7 +1079,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             Map.Entry<TopicPartition, OffsetAndMetadata> entry = iterator.next();
 
-            if (!subscription.contains(entry.getKey().topic())) {
+            if (!validTopics.contains(entry.getKey().topic())) {
 
                 toGiveUpTopicPartitions.add(entry.getKey());
                 iterator.remove();
