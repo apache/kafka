@@ -401,6 +401,7 @@ public class TopicsImageTest {
             Uuid.fromString("f62ptyETTjet8SL5ZeREiw")));
         assertEquals(expectedUuids, uuids);
         assertThrows(UnsupportedOperationException.class, () -> map.remove("foo"));
+        assertThrows(UnsupportedOperationException.class, () -> map.put("bar", FOO_UUID));
     }
 
     @Test
@@ -417,5 +418,6 @@ public class TopicsImageTest {
         HashSet<String> expectedNames = new HashSet<>(Arrays.asList("foo", "bar"));
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));
+        assertThrows(UnsupportedOperationException.class, () -> map.put(FOO_UUID, "bar"));
     }
 }
