@@ -499,11 +499,12 @@ class BrokerServer(
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
-      if (logManager != null)
-        CoreUtils.swallow(logManager.shutdown(), this)
-      // be sure to shutdown scheduler after log manager
+      // be sure to shutdown scheduler before log manager
       if (kafkaScheduler != null)
         CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+
+      if (logManager != null)
+        CoreUtils.swallow(logManager.shutdown(), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
