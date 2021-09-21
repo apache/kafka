@@ -75,6 +75,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -138,6 +139,7 @@ public final class QuorumController implements Controller {
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
+        private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -208,6 +210,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setAlterConfigPolicy(Optional<AlterConfigPolicy> alterConfigPolicy) {
+            this.alterConfigPolicy = alterConfigPolicy;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -229,7 +236,8 @@ public final class QuorumController implements Controller {
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
-                    sessionTimeoutNs, controllerMetrics, createTopicPolicy);
+                    sessionTimeoutNs, controllerMetrics, createTopicPolicy,
+                    alterConfigPolicy);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -1103,7 +1111,8 @@ public final class QuorumController implements Controller {
                              long snapshotMaxNewRecordBytes,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics,
-                             Optional<CreateTopicPolicy> createTopicPolicy) {
+                             Optional<CreateTopicPolicy> createTopicPolicy,
+                             Optional<AlterConfigPolicy> alterConfigPolicy) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1113,7 +1122,7 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs);
+            snapshotRegistry, configDefs, alterConfigPolicy);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer);
