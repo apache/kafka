@@ -31,7 +31,7 @@ import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
-import kafka.server.MetadataCache;
+import kafka.server.MetadataCache$;
 import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -108,7 +108,7 @@ public class MetadataRequestBenchmark {
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
-    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId);
+    private ZkMetadataCache metadataCache = MetadataCache$.MODULE$.zkMetadataCache(brokerId);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);

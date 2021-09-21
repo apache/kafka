@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
-import kafka.server.Server;
 import kafka.server.Server$;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;

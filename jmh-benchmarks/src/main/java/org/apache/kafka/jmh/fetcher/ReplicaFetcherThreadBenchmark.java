@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.fetcher;
 
-import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
@@ -144,7 +143,7 @@ public class ReplicaFetcherThreadBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setMaxPidExpirationMs(60000).
-            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setInterBrokerProtocolVersion(ApiVersion$.MODULE$.latestVersion()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).

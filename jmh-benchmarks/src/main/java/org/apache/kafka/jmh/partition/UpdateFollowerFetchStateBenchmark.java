@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.IsrChangeListener;
@@ -97,7 +96,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setMaxPidExpirationMs(60000).
-            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setInterBrokerProtocolVersion(ApiVersion$.MODULE$.latestVersion()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).

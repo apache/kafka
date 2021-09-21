@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.jmh.server;
 
-import kafka.api.ApiVersion;
+import kafka.api.ApiVersion$;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -26,6 +26,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
+import kafka.server.MetadataCache$;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.ReplicaManagerBuilder;
@@ -107,11 +108,11 @@ public class CheckpointBench {
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), new MockConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, ApiVersion.latestVersion());
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, ApiVersion$.MODULE$.latestVersion());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
+                MetadataCache$.MODULE$.zkMetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
