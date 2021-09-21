@@ -25,6 +25,7 @@ import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
 import kafka.server.Server;
+import kafka.server.Server$;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -234,7 +235,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Option.apply(threadNamePrefix),
                         JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
                         connectFutureManager.future,
-                        Server.SUPPORTED_FEATURES()
+                        Server$.MODULE$.SUPPORTED_FEATURES()
                     );
                     brokers.put(node.id(), broker);
                     raftManagers.put(node.id(), raftManager);

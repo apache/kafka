@@ -18,6 +18,7 @@
 package kafka.server.builders;
 
 import kafka.api.ApiVersion;
+import kafka.api.ApiVersion$;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
@@ -45,7 +46,7 @@ public class LogManagerBuilder {
     private long flushStartOffsetCheckpointMs = 10000L;
     private long retentionCheckMs = 1000L;
     private int maxPidExpirationMs = 60000;
-    private ApiVersion interBrokerProtocolVersion = ApiVersion.latestVersion();
+    private ApiVersion interBrokerProtocolVersion = ApiVersion$.MODULE$.latestVersion();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
