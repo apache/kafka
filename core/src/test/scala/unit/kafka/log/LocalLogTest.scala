@@ -485,14 +485,20 @@ class LocalLogTest {
   @Test
   def testParseTopicPartitionNameForEmptyName(): Unit = {
     val dir = new File("")
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
   }
 
   @Test
   def testParseTopicPartitionNameForNull(): Unit = {
     val dir: File = null
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir)
   }
 
@@ -501,11 +507,17 @@ class LocalLogTest {
     val topic = "test_topic"
     val partition = "1999"
     val dir = new File(logDir, topic + partition)
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     // also test the "-delete" marker case
     val deleteMarkerDir = new File(logDir, topic + partition + "." + LocalLog.DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(deleteMarkerDir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(deleteMarkerDir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
   }
 
@@ -514,13 +526,19 @@ class LocalLogTest {
     val topic = ""
     val partition = "1999"
     val dir = new File(logDir, topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
 
     // also test the "-delete" marker case
     val deleteMarkerDir = new File(logDir, LocalLog.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
 
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(deleteMarkerDir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(deleteMarkerDir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
   }
 
@@ -529,12 +547,18 @@ class LocalLogTest {
     val topic = "test_topic"
     val partition = ""
     val dir = new File(logDir.getPath + topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
 
     // also test the "-delete" marker case
     val deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + LocalLog.DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(deleteMarkerDir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(deleteMarkerDir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
   }
 
@@ -543,22 +567,34 @@ class LocalLogTest {
     val topic = "test_topic"
     val partition = "1999a"
     val dir = new File(logDir, topicPartitionName(topic, partition))
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
 
     // also test the "-delete" marker case
     val deleteMarkerDir = new File(logDir, topic + partition + "." + LocalLog.DeleteDirSuffix)
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(deleteMarkerDir),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(deleteMarkerDir)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
   }
 
   @Test
   def testParseTopicPartitionNameForExistingInvalidDir(): Unit = {
     val dir1 = new File(logDir.getPath + "/non_kafka_dir")
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir1),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir1)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir1.getCanonicalPath)
     val dir2 = new File(logDir.getPath + "/non_kafka_dir-delete")
-    assertThrows(classOf[KafkaException], () => LocalLog.parseTopicPartitionName(dir2),
+    assertThrows(classOf[KafkaException], () => {
+      LocalLog.parseTopicPartitionName(dir2)
+      ()
+    },
       () => "KafkaException should have been thrown for dir: " + dir2.getCanonicalPath)
   }
 
