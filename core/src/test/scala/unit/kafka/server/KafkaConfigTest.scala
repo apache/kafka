@@ -1289,7 +1289,7 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(3, config.brokerId)
     assertEquals(3, config.nodeId)
-    val originals = config.originals()
+    val originals = config.originals
     assertEquals("3", originals.get(KafkaConfig.BrokerIdProp))
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }
@@ -1303,7 +1303,7 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(3, config.brokerId)
     assertEquals(3, config.nodeId)
-    val originals = config.originals()
+    val originals = config.originals
     assertEquals("3", originals.get(KafkaConfig.BrokerIdProp))
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }

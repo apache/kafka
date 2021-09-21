@@ -423,7 +423,7 @@ class BrokerServer(
       metadataListener.startPublishing(metadataPublisher).get()
 
       // Log static broker configurations.
-      new KafkaConfig(config.originals(), true)
+      new KafkaConfig(config.originals, true)
 
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
