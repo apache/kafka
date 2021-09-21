@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 import java.util
-import java.util.{Objects, Optional}
+import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
 import scala.collection.{mutable, _}
@@ -173,7 +173,8 @@ class CachedPartition(var topic: String,
     mustRespond
   }
 
-  override def hashCode: Int = Objects.hash(new TopicPartition(topic, partition), topicId)
+  override def hashCode: Int = if (topicId != Uuid.ZERO_UUID) (31 * partition) + topicId.hashCode else
+    (31 * partition) + topic.hashCode
 
   def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
@@ -183,8 +184,8 @@ class CachedPartition(var topic: String,
         this.eq(that) ||
           (that.canEqual(this) &&
             this.partition.equals(that.partition) &&
-            (if (this.topic == null) that.topic == null else this.topic.equals(that.topic)) &&
-            this.topicId.equals(that.topicId))
+            (if (this.topicId != Uuid.ZERO_UUID) this.topicId.equals(that.topicId)
+            else this.topic.equals(that.topic)))
       case _ => false
     }
 
@@ -263,28 +264,19 @@ class FetchSession(val id: Int,
     fetchData.forEach { (topicPart, reqData) =>
       val newCachedPart = new CachedPartition(topicPart.topicPartition, topicPart.topicId, reqData)
       val cachedPart = partitionMap.find(newCachedPart)
-      val unresolvedCachedPart = if (!usesTopicIds) null else {
-        val potentialUnresolvedCachedPart = new CachedPartition(null, topicPart.topicPartition.partition, topicPart.topicId)
-        partitionMap.find(potentialUnresolvedCachedPart)
-      }
-      if (cachedPart == null && unresolvedCachedPart == null) {
+      if (cachedPart == null) {
         partitionMap.mustAdd(newCachedPart)
         added.add(topicPart)
-      } else if (unresolvedCachedPart != null) {
-        // Update the topic ID in place
-        unresolvedCachedPart.updateRequestParams(reqData)
-        unresolvedCachedPart.resolveUnknownName(topicPart.topicPartition.topic)
-        updated.add(topicPart)
       } else {
         cachedPart.updateRequestParams(reqData)
+        if (cachedPart.topic == null)
+        // Update the topic name in place
+          cachedPart.resolveUnknownName(topicPart.topicPartition.topic)
         updated.add(topicPart)
       }
     }
     toForget.forEach { p =>
-      // We may have an unresolved partition we want to forget that was just resolved on this request. Check here.
-      if (usesTopicIds && partitionMap.remove(new CachedPartition(null, p.topicPartition.partition, p.topicId))) {
-        removed.add(p)
-      } else if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
+      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
         removed.add(p)
       }
     }
