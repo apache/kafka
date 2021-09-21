@@ -74,7 +74,7 @@ class ControllerServer(
   var socketServer: SocketServer = null
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var createTopicPolicy: Option[CreateTopicPolicy] = None
-  val alterConfigPolicy: Option[AlterConfigPolicy] = None
+  var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
   val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
