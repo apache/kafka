@@ -94,7 +94,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
         uncleanablePartitionsCountGauge.value() == 1
       },
       "There should be 1 uncleanable partitions",
-      cleaner.housekeepingDelayMs + cleaner.housekeepingIntervalMs + 1, 1000)
+      2000L)
 
     val uncleanablePartitions2 = cleaner.cleanerManager.uncleanablePartitions(uncleanableDirectory)
     assertFalse(uncleanablePartitions2.contains(topicPartitions(0)))

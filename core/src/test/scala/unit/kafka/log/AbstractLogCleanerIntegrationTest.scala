@@ -126,8 +126,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       logDirs = Array(logDir),
       logs = logMap,
       logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time,
-      scheduler = time.scheduler)
+      time = time)
   }
 
   private var ctr = 0

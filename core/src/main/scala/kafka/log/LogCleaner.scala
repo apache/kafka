@@ -89,22 +89,16 @@ import scala.util.control.ControlThrowable
  * @param logDirs The directories where offset checkpoints reside
  * @param logs The pool of logs
  * @param time A way to control the passage of time
- * @param scheduler The thread pool scheduler used for background actions
  */
 class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, UnifiedLog],
                  val logDirFailureChannel: LogDirFailureChannel,
-                 time: Time = Time.SYSTEM,
-                 private[log] val scheduler: Scheduler) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
+                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
 {
 
   /* Log cleaner configuration which may be dynamically updated */
   @volatile private var config = initialConfig
-
-  // Visible for testing
-  val housekeepingDelayMs = 300000  // 5 minutes
-  val housekeepingIntervalMs = 300000  // 5 minutes
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
@@ -163,12 +157,6 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaners += cleaner
       cleaner.start()
     }
-
-    scheduler.schedule("log-cleaner-housekeeping",
-      housekeeping _,
-      delay = housekeepingDelayMs,
-      period = housekeepingIntervalMs,
-      TimeUnit.MILLISECONDS)
   }
 
   /**
@@ -290,13 +278,6 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.pauseCleaningForNonCompactedPartitions()
   }
 
-  /**
-    * Perform periodic housekeeping work.
-    */
-  private def housekeeping(): Unit = {
-    cleanerManager.maintainUncleanablePartitions()
-  }
-
   // Only for testing
   private[kafka] def currentConfig: CleanerConfig = config
 
@@ -342,6 +323,8 @@ class LogCleaner(initialConfig: CleanerConfig,
       val cleaned = tryCleanFilthiestLog()
       if (!cleaned)
         pause(config.backOffMs, TimeUnit.MILLISECONDS)
+
+      cleanerManager.maintainUncleanablePartitions()
     }
 
     /**
