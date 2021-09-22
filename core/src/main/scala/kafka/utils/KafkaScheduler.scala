@@ -107,7 +107,10 @@ class KafkaScheduler(val threads: Int,
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
-      ensureRunning()
+      if (!isStarted) {
+        info("Kafka scheduler is not running.")
+        return null
+      }
       val runnable: Runnable = () => {
         try {
           trace("Beginning execution of scheduled task '%s'.".format(name))
@@ -140,10 +143,5 @@ class KafkaScheduler(val threads: Int,
     this synchronized {
       executor != null
     }
-  }
-  
-  private def ensureRunning(): Unit = {
-    if (!isStarted)
-      throw new IllegalStateException("Kafka scheduler is not running.")
   }
 }
