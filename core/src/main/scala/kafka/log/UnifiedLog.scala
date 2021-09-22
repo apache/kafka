@@ -537,11 +537,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
   newGauge(LogMetricNames.Size, () => size, tags)
 
-  val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
+  val producerExpireCheckOption = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+
+  if (producerExpireCheckOption.isEmpty)
+    throw new IllegalStateException("Failed to schedule PeriodicProducerExpirationCheck witch KafkaScheduler.")
+  val producerExpireCheck = producerExpireCheckOption.get
 
   // For compatibility, metrics are defined to be under `Log` class
   override def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {

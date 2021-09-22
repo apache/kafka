@@ -53,7 +53,7 @@ trait Scheduler {
    * @param unit The unit for the preceding times.
    * @return A Future object to manage the task scheduled.
    */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
+  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Option[ScheduledFuture[_]]
 }
 
 /**
@@ -103,13 +103,13 @@ class KafkaScheduler(val threads: Int,
     schedule(name, fun, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): ScheduledFuture[_] = {
+  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): Option[ScheduledFuture[_]] = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
       if (!isStarted) {
-        info("Kafka scheduler is not running at the time '%s' is scheduled.".format(name))
-        return null
+        info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
+        return None
       }
       val runnable: Runnable = () => {
         try {
@@ -122,9 +122,9 @@ class KafkaScheduler(val threads: Int,
         }
       }
       if (period >= 0)
-        executor.scheduleAtFixedRate(runnable, delay, period, unit)
+        Some(executor.scheduleAtFixedRate(runnable, delay, period, unit))
       else
-        executor.schedule(runnable, delay, unit)
+        Some(executor.schedule(runnable, delay, unit))
     }
   }
 
