@@ -1431,18 +1431,6 @@ class ReplicaManager(val config: KafkaConfig,
           if (topicIdUpdateFollowerPartitions.nonEmpty)
             updateTopicIdForFollowers(controllerId, controllerEpoch, topicIdUpdateFollowerPartitions, correlationId, topicIdFromRequest)
 
-          leaderAndIsrRequest.partitionStates.forEach { partitionState =>
-            val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-            /*
-           * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
-           * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
-           * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
-           * we need to map this topic-partition to OfflinePartition instead.
-           */
-            if (localLog(topicPartition).isEmpty)
-              markPartitionOffline(topicPartition)
-          }
-
           // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
@@ -1760,7 +1748,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def updateTopicIdForFollowers(controllerId: Int,
                                         controllerEpoch: Int,
-                                        partitionStates: Set[Partition],
+                                        partitions: Set[Partition],
                                         correlationId: Int,
                                         topicIds: String => Option[Uuid]): Unit = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
@@ -1768,22 +1756,27 @@ class ReplicaManager(val config: KafkaConfig,
     try {
       if (isShuttingDown.get()) {
         if (traceLoggingEnabled) {
-          partitionStates.foreach { partition =>
+          partitions.foreach { partition =>
             stateChangeLogger.trace(s"Skipped the update topic ID step of the become-follower state " +
               s"change with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
               s"partition ${partition.topicPartition} since it is shutting down")
           }
         }
       } else {
-        val partitionsToUpdateFollowerWithLeader = partitionStates.map { partition =>
-          partition.topicPartition -> partition.leaderReplicaIdOpt.getOrElse(-1)
-        }.toMap
+        val partitionsToUpdateFollowerWithLeader = mutable.Map.empty[TopicPartition, Int]
+        partitions.foreach { partition =>
+          partition.leaderReplicaIdOpt.foreach { leader =>
+            if (metadataCache.hasAliveBroker(leader)) {
+              partitionsToUpdateFollowerWithLeader += partition.topicPartition -> leader
+            }
+          }
+        }
         replicaFetcherManager.maybeUpdateTopicIds(partitionsToUpdateFollowerWithLeader, topicIds)
       }
     } catch {
       case e: Throwable =>
         stateChangeLogger.error(s"Error while processing LeaderAndIsr request with correlationId $correlationId " +
-          s"received from controller $controllerId epoch $controllerEpoch", e)
+          s"received from controller $controllerId epoch $controllerEpoch when trying to update topic IDs in the fetchers", e)
         // Re-throw the exception for it to be caught in KafkaApis
         throw e
     }
