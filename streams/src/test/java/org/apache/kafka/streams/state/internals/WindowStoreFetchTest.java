@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -54,12 +56,15 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
 public class WindowStoreFetchTest {
@@ -77,6 +82,14 @@ public class WindowStoreFetchTest {
     private LinkedList<KeyValue<Windowed<String>, Long>> expectedRecords;
     private LinkedList<KeyValue<String, String>> records;
     private Properties streamsConfig;
+    private String low;
+    private String high;
+    private String middle;
+    private String innerLow;
+    private String innerHigh;
+    private String innerLowBetween;
+    private String innerHighBetween;
+    private String storeName;
 
     private TimeWindowedKStream<String, String> windowedStream;
 
@@ -98,7 +111,31 @@ public class WindowStoreFetchTest {
             // expected the count of each key is 2
             final long windowStartTime = i < m ? 0 : WINDOW_SIZE;
             expectedRecords.add(new KeyValue<>(new Windowed<>(key, new TimeWindow(windowStartTime, windowStartTime + WINDOW_SIZE)), 2L));
+            high = key;
+            if (low == null) {
+                low = key;
+            }
+            if (i == m) {
+                middle = key;
+            }
+            if (i == 1) {
+                innerLow = key;
+                final int index = i * 2 - 1;
+                innerLowBetween = "key-" + index;
+            }
+            if (i == DATA_SIZE - 2) {
+                innerHigh = key;
+                final int index = i * 2 + 1;
+                innerHighBetween = "key-" + index;
+            }
         }
+        Assert.assertNotNull(low);
+        Assert.assertNotNull(high);
+        Assert.assertNotNull(middle);
+        Assert.assertNotNull(innerLow);
+        Assert.assertNotNull(innerHigh);
+        Assert.assertNotNull(innerLowBetween);
+        Assert.assertNotNull(innerHighBetween);
     }
 
     @Rule
@@ -161,6 +198,50 @@ public class WindowStoreFetchTest {
 
                 TestUtils.checkEquals(scanIterator, dataIterator);
             }
+
+            try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
+                stateStore.fetch(null, null, 0, Long.MAX_VALUE) :
+                stateStore.backwardFetch(null, null, 0, Long.MAX_VALUE)) {
+
+                final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
+                    expectedRecords.iterator() :
+                    expectedRecords.descendingIterator();
+
+                TestUtils.checkEquals(scanIterator, dataIterator);
+            }
+
+            testRange("range", stateStore, innerLow, innerHigh, forward);
+            testRange("until", stateStore, null, middle, forward);
+            testRange("from", stateStore, middle, null, forward);
+
+            testRange("untilBetween", stateStore, null, innerHighBetween, forward);
+            testRange("fromBetween", stateStore, innerLowBetween, null, forward);
+        }
+    }
+
+    private List<KeyValue<Windowed<String>, Long>> filterList(final KeyValueIterator<Windowed<String>, Long> iterator, final String from, final String to) {
+        final Predicate<KeyValue<Windowed<String>, Long>> pred = new Predicate<KeyValue<Windowed<String>, Long>>() {
+            @Override
+            public boolean test(final KeyValue<Windowed<String>, Long> elem) {
+                if (from != null && elem.key.key().compareTo(from) < 0) {
+                    return false;
+                }
+                if (to != null && elem.key.key().compareTo(to) > 0) {
+                    return false;
+                }
+                return elem != null;
+            }
+        };
+
+        return Utils.toList(iterator, pred);
+    }
+
+    private void testRange(final String name, final WindowStore<String, Long> store, final String from, final String to, final boolean forward) {
+        try (final KeyValueIterator<Windowed<String>, Long> resultIterator = forward ? store.fetch(from, to, 0, Long.MAX_VALUE) : store.backwardFetch(from, to, 0, Long.MAX_VALUE);
+             final KeyValueIterator<Windowed<String>, Long> expectedIterator = forward ? store.fetchAll(0, Long.MAX_VALUE) : store.backwardFetchAll(0, Long.MAX_VALUE)) {
+            final List<KeyValue<Windowed<String>, Long>> result = Utils.toList(resultIterator);
+            final List<KeyValue<Windowed<String>, Long>> expected = filterList(expectedIterator, from, to);
+            assertThat(result, is(expected));
         }
     }
 

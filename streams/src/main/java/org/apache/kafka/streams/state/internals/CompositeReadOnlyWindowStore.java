@@ -115,8 +115,6 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                                   final K keyTo,
                                                   final Instant timeFrom,
                                                   final Instant timeTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
-        Objects.requireNonNull(keyTo, "keyTo can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
@@ -131,8 +129,6 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                                                           final K keyTo,
                                                           final Instant timeFrom,
                                                           final Instant timeTo) throws IllegalArgumentException {
-        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
-        Objects.requireNonNull(keyTo, "keyTo can't be null");
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
