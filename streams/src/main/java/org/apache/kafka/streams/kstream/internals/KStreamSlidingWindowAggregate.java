@@ -103,8 +103,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         @Override
         public void process(final Record<KIn, VIn> record) {
             if (record.key() == null || record.value() == null) {
-                if (context.recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     log.warn(
                         "Skipping record due to null key or value. "
                             + "topic=[{}] partition=[{}] offset=[{}]",
@@ -124,8 +124,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
-                if (context.recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     log.warn(
                         "Skipping record for expired window. " +
                             "topic=[{}] " +
@@ -489,8 +489,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     sendOldValues ? oldAgg : null,
                     newTimestamp);
             } else {
-                if (context.recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     log.warn(
                         "Skipping record for expired window. " +
                             "topic=[{}] " +

@@ -101,8 +101,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
         @Override
         public void process(final Record<KIn, VIn> record) {
             if (record.key() == null) {
-                if (context.recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     log.warn(
                         "Skipping record due to null key. "
                             + "topic=[{}] partition=[{}] offset=[{}]",
@@ -152,8 +152,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                         sendOldValues ? oldAgg : null,
                         newTimestamp);
                 } else {
-                    if (context.recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context.recordMetadata().get();
+                    if (context().recordMetadata().isPresent()) {
+                        final RecordMetadata recordMetadata = context().recordMetadata().get();
                         log.warn(
                             "Skipping record for expired window. " +
                                 "topic=[{}] " +

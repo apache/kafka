@@ -108,8 +108,8 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (record.key() == null) {
-                if (context.recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context.recordMetadata().get();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     LOG.warn(
                         "Skipping record due to null key. "
                             + "topic=[{}] partition=[{}] offset=[{}]",
@@ -149,8 +149,8 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             }
 
             if (mergedWindow.end() < closeTime) {
-                final RecordMetadata recordMetadata = context.recordMetadata().get();
-                if (context.recordMetadata().isPresent()) {
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
                     LOG.warn(
                         "Skipping record for expired window. " +
                             "topic=[{}] " +
