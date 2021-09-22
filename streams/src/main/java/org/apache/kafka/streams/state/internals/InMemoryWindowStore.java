@@ -469,23 +469,20 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
 
         private boolean isKeyWithinRange(final Bytes key) {
-            boolean isKeyInRange = false;
             // split all cases for readability and avoid BooleanExpressionComplexity checkstyle warning
             if (keyFrom == null && keyTo == null) {
                 // fetch all
-                isKeyInRange = true;
-            } else if (keyFrom == null && key.compareTo(getKey(keyTo)) <= 0) {
+                return true;
+            } else if (keyFrom == null) {
                 // start from the beginning
-                isKeyInRange = true;
-            } else if (key.compareTo(getKey(keyFrom)) >= 0 && keyTo == null) {
+                return key.compareTo(getKey(keyTo)) <= 0;
+            } else if (keyTo == null) {
                 // end to the last
-                isKeyInRange = true;
-            } else if (key.compareTo(getKey(keyFrom)) >= 0 && key.compareTo(getKey(keyTo)) <= 0) {
+                return key.compareTo(getKey(keyFrom)) >= 0;
+            } else {
                 // key is within the range
-                isKeyInRange = true;
+                return key.compareTo(getKey(keyFrom)) >= 0 && key.compareTo(getKey(keyTo)) <= 0;
             }
-
-            return isKeyInRange;
         }
 
         public void close() {
