@@ -51,7 +51,7 @@ trait Scheduler {
    * @param delay The amount of time to wait before the first execution
    * @param period The period with which to execute the task. If < 0 the task will execute only once.
    * @param unit The unit for the preceding times.
-   * @return A Future object to manage the task scheduled.
+   * @return An Option of a Future object to manage the task scheduled.
    */
   def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Option[ScheduledFuture[_]]
 }
