@@ -112,7 +112,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     );
                 } else {
                     log.warn(
-                        "Skipping record due to null key. Topic, partition, and offset not known."
+                        "Skipping record due to null key or value. Topic, partition, and offset not known."
                     );
                 }
                 droppedRecordsSensor.record();

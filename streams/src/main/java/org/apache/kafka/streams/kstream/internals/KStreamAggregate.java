@@ -86,7 +86,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
         public void process(final Record<KIn, VIn> record) {
             // If the key or value is null we don't need to proceed
             if (record.key() == null || record.value() == null) {
-                if (context.recordMetadata().isPresent()) {
+                if (context().recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context.recordMetadata().get();
                     LOG.warn(
                         "Skipping record due to null key or value. "
@@ -95,7 +95,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
                     );
                 } else {
                     LOG.warn(
-                        "Skipping record due to null key. Topic, partition, and offset not known."
+                        "Skipping record due to null key or value. Topic, partition, and offset not known."
                     );
                 }
                 droppedRecordsSensor.record();
