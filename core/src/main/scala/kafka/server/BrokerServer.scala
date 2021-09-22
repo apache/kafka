@@ -481,6 +481,18 @@ class BrokerServer(
         CoreUtils.swallow(metadataListener.close(), this)
       }
       metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
+
+      /**
+       * We must shutdown the scheduler early because otherwise, the scheduler could touch other
+       * resources that might have been shutdown and cause exceptions.
+       * For example, if we didn't shutdown the scheduler first, when LogManager was closing
+       * partitions one by one, the scheduler might concurrently delete old segments due to
+       * retention. However, the old segments could have been closed by the LogManager, which would
+       * cause an exception and subsequently mark logdir as offline. As a result, the broker would
+       * not flush the remaining partitions or write the clean shutdown marker. Ultimately, the
+       * broker would have to take hours to recover the log during restart and are subject to
+       * potential data loss.
+       */
       if (kafkaScheduler != null)
         CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
