@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -76,6 +77,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -95,6 +97,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -183,6 +186,11 @@ public class ReplicationControlManager {
     private final ControllerMetrics controllerMetrics;
 
     /**
+     * The policy to use to validate that topic assignments are valid, if one is present.
+     */
+    private final Optional<CreateTopicPolicy> createTopicPolicy;
+
+    /**
      * Maps topic names to topic UUIDs.
      */
     private final TimelineHashMap<String, Uuid> topicsByName;
@@ -208,13 +216,15 @@ public class ReplicationControlManager {
                               int defaultNumPartitions,
                               ConfigurationControlManager configurationControl,
                               ClusterControlManager clusterControl,
-                              ControllerMetrics controllerMetrics) {
+                              ControllerMetrics controllerMetrics,
+                              Optional<CreateTopicPolicy> createTopicPolicy) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.configurationControl = configurationControl;
         this.controllerMetrics = controllerMetrics;
+        this.createTopicPolicy = createTopicPolicy;
         this.clusterControl = clusterControl;
         this.globalPartitionCount = new TimelineInteger(snapshotRegistry);
         this.preferredReplicaImbalanceCount = new TimelineInteger(snapshotRegistry);
@@ -445,6 +455,16 @@ public class ReplicationControlManager {
                     Replicas.toArray(assignment.brokerIds()), Replicas.toArray(isr),
                     Replicas.NONE, Replicas.NONE, isr.get(0), 0, 0));
             }
+            ApiError error = maybeCheckCreateTopicPolicy(() -> {
+                Map<Integer, List<Integer>> assignments = new HashMap<>();
+                newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
+                    Replicas.toList(e.getValue().replicas)));
+                Map<String, String> configs = new HashMap<>();
+                topic.configs().forEach(config -> configs.put(config.name(), config.value()));
+                return new CreateTopicPolicy.RequestMetadata(
+                    topic.name(), null, null, assignments, configs);
+            });
+            if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                 "Replication factor was set to an invalid non-positive value.");
@@ -473,6 +493,13 @@ public class ReplicationControlManager {
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): " + e.getMessage());
             }
+            ApiError error = maybeCheckCreateTopicPolicy(() -> {
+                Map<String, String> configs = new HashMap<>();
+                topic.configs().forEach(config -> configs.put(config.name(), config.value()));
+                return new CreateTopicPolicy.RequestMetadata(
+                    topic.name(), numPartitions, replicationFactor, null, configs);
+            });
+            if (error.isFailure()) return error;
         }
         Uuid topicId = Uuid.randomUuid();
         successes.put(topic.name(), new CreatableTopicResult().
@@ -489,6 +516,17 @@ public class ReplicationControlManager {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
             records.add(info.toRecord(topicId, partitionIndex));
+        }
+        return ApiError.NONE;
+    }
+
+    private ApiError maybeCheckCreateTopicPolicy(Supplier<CreateTopicPolicy.RequestMetadata> supplier) {
+        if (createTopicPolicy.isPresent()) {
+            try {
+                createTopicPolicy.get().validate(supplier.get());
+            } catch (PolicyViolationException e) {
+                return new ApiError(Errors.POLICY_VIOLATION, e.getMessage());
+            }
         }
         return ApiError.NONE;
     }
