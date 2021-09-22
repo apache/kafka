@@ -423,9 +423,9 @@ public class SubscriptionState {
     }
 
     // Visible for testing
-    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+    // This method returns its results in a list provided as it is on hot path and causes considerable pressure on gc otherwise
+    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable, List<TopicPartition> result) {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
-        List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
             if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {

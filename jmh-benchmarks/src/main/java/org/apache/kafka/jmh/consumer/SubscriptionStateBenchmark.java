@@ -36,6 +36,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -85,7 +86,7 @@ public class SubscriptionStateBenchmark {
 
     @Benchmark
     public int testFetchablePartitions() {
-        return subscriptionState.fetchablePartitions(tp -> true).size();
+        return subscriptionState.fetchablePartitions(tp -> true, new ArrayList<>()).size();
     }
 
     @Benchmark

@@ -1145,6 +1145,8 @@ public class Fetcher<K, V> implements Closeable {
         }
     }
 
+    private final List<TopicPartition> fetchablePartitionsResultBuffer = new ArrayList<>();
+
     private List<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> exclude = new HashSet<>();
         if (nextInLineFetch != null && !nextInLineFetch.isConsumed) {
@@ -1153,7 +1155,9 @@ public class Fetcher<K, V> implements Closeable {
         for (CompletedFetch completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
         }
-        return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp));
+        // Need to clear the buffer first otherwise it will contain results from the previous fetch
+        fetchablePartitionsResultBuffer.clear();
+        return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp), fetchablePartitionsResultBuffer);
     }
 
     /**
