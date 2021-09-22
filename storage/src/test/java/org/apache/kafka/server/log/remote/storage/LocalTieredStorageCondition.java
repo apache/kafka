@@ -135,7 +135,8 @@ public final class LocalTieredStorageCondition {
 
         if (next != null) {
             final long end = System.currentTimeMillis();
-            next.waitUntilTrue(Math.max(0, timeout - (end - start)), unit);
+            final long timeElapsed = unit.convert(end - start, TimeUnit.MILLISECONDS);
+            next.waitUntilTrue(Math.max(0, timeout - timeElapsed), unit);
         }
     }
 

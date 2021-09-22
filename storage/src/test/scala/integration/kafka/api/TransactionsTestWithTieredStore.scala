@@ -18,6 +18,7 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
+import kafka.utils.BrokerLocalStorage
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
@@ -26,7 +27,6 @@ import org.apache.kafka.server.log.remote.metadata.storage.{TopicBasedRemoteLogM
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage.{STORAGE_CONFIG_PREFIX, STORAGE_DIR_PROP}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.{REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP}
 import org.apache.kafka.server.log.remote.storage.{LocalTieredStorage, RemoteLogManagerConfig}
-import unit.kafka.utils.BrokerLocalStorage
 
 import java.util.Properties
 import scala.collection.Seq

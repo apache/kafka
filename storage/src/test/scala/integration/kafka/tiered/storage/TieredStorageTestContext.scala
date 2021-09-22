@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit
 import kafka.admin.AdminUtils.assignReplicasToBrokers
 import kafka.admin.BrokerMetadata
 import kafka.server.KafkaServer
+import kafka.utils.BrokerLocalStorage
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG
@@ -38,7 +39,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
-import unit.kafka.utils.BrokerLocalStorage
 
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._

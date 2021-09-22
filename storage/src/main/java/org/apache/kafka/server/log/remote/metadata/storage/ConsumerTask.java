@@ -67,7 +67,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 class ConsumerTask implements Runnable, Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerTask.class);
 
-    private static final long POLL_INTERVAL_MS = 30L;
+    private static final long POLL_INTERVAL_MS = 100L;
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
     private final KafkaConsumer<byte[], byte[]> consumer;
@@ -154,7 +154,7 @@ class ConsumerTask implements Runnable, Closeable {
         try {
             while (!closing) {
                 maybeWaitForPartitionsAssignment();
-                ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofSeconds(POLL_INTERVAL_MS));
+                ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
                 log.debug("Processing {} records received from remote log metadata topic", consumerRecords.count());
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
                     handleRemoteLogMetadata(serde.deserialize(record.value()));
