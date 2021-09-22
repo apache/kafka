@@ -108,7 +108,7 @@ class KafkaScheduler(val threads: Int,
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
       if (!isStarted) {
-        info("Kafka scheduler is not running.")
+        info("Kafka scheduler is not running at the time '%s' is scheduled.".format(name))
         return null
       }
       val runnable: Runnable = () => {
