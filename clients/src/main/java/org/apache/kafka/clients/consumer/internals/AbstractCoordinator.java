@@ -423,7 +423,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                onJoinPrepare(generation.generationId, generation.memberId, pollTimer);
+                onJoinPrepare(generation.generationId, generation.memberId, pollTimer == null ? time.timer(0L) : pollTimer);
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
