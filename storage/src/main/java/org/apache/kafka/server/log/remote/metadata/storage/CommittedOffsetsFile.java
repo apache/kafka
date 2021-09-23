@@ -57,10 +57,13 @@ public class CommittedOffsetsFile {
             if (strings.length != 2) {
                 return Optional.empty();
             }
-            int partition = Integer.parseInt(strings[0]);
-            long offset = Long.parseLong(strings[1]);
 
-            return Optional.of(Utils.mkEntry(partition, offset));
+            try {
+                return Optional.of(Utils.mkEntry(Integer.parseInt(strings[0]), Long.parseLong(strings[1])));
+            } catch (NumberFormatException e) {
+                return Optional.empty();
+            }
+
         }
     }
 

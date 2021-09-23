@@ -173,7 +173,7 @@ public class RemoteLogMetadataSnapshotFile {
             return Optional.of(new Snapshot(version, topicId, metadataPartition, metadataPartitionOffset, result));
         }
     }
-
+    
     /**
      * This class represents the collection of remote log metadata for a specific topic partition.
      */
@@ -230,13 +230,13 @@ public class RemoteLogMetadataSnapshotFile {
             if (this == o) return true;
             if (!(o instanceof Snapshot)) return false;
             Snapshot snapshot = (Snapshot) o;
-            return version == snapshot.version && metadataPartition == snapshot.metadataPartition && metadataPartitionOffset == snapshot.metadataPartitionOffset && Objects
-                    .equals(topicId, snapshot.topicId);
+            return version == snapshot.version && metadataPartition == snapshot.metadataPartition && metadataPartitionOffset == snapshot.metadataPartitionOffset && Objects.equals(
+                    topicId, snapshot.topicId) && Objects.equals(remoteLogSegmentMetadataSnapshots, snapshot.remoteLogSegmentMetadataSnapshots);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(version, topicId, metadataPartition, metadataPartitionOffset);
+            return Objects.hash(version, topicId, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
         }
 
         @Override
@@ -246,6 +246,7 @@ public class RemoteLogMetadataSnapshotFile {
                     ", topicId=" + topicId +
                     ", metadataPartition=" + metadataPartition +
                     ", metadataPartitionOffset=" + metadataPartitionOffset +
+                    ", remoteLogSegmentMetadataSnapshotsSize" + remoteLogSegmentMetadataSnapshots.size() +
                     '}';
         }
     }

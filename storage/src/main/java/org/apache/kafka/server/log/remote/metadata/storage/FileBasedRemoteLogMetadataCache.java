@@ -25,8 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * This is a wrapper around {@link RemoteLogMetadataCache} providing a file based snapshot of
@@ -90,12 +90,23 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
      */
     public void flushToFile(int metadataPartition,
                             Long metadataPartitionOffset) throws IOException {
-        List<RemoteLogSegmentMetadataSnapshot> snapshots =
-                idToSegmentMetadata.values()
-                                   .stream()
-                                   .map(metadata -> RemoteLogSegmentMetadataSnapshot.create(metadata))
-                                   .collect(Collectors.toList());
-        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(topicIdPartition.topicId(), metadataPartition, metadataPartitionOffset,
+
+        List<RemoteLogSegmentMetadataSnapshot> snapshots = new ArrayList<>(idToSegmentMetadata.size());
+        for (RemoteLogLeaderEpochState state : leaderEpochEntries.values()) {
+            // Add unreferenced segments first, as to maintain the order when these segments are again read from
+            // the snapshot to build RemoteLogMetadataCache.
+            for (RemoteLogSegmentId id : state.unreferencedSegmentIds()) {
+                snapshots.add(RemoteLogSegmentMetadataSnapshot.create(idToSegmentMetadata.get(id)));
+            }
+            // Add referenced segments.
+            for (RemoteLogSegmentId id : state.referencedSegmentIds()) {
+                snapshots.add(RemoteLogSegmentMetadataSnapshot.create(idToSegmentMetadata.get(id)));
+            }
+        }
+
+        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(topicIdPartition.topicId(),
+                                                                      metadataPartition,
+                                                                      metadataPartitionOffset,
                                                                       snapshots));
     }
 }

@@ -193,6 +193,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
                 ", startOffset=" + startOffset +
                 ", endOffset=" + endOffset +
                 ", maxTimestampMs=" + maxTimestampMs +
+                ", segmentLeaderEpochs=" + segmentLeaderEpochs +
                 ", segmentSizeInBytes=" + segmentSizeInBytes +
                 ", state=" + state +
                 '}';

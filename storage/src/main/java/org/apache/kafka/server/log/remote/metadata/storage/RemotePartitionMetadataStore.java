@@ -110,7 +110,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     }
 
     @Override
-    public void syncLogMetadataDataFile(TopicIdPartition topicIdPartition,
+    public void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition,
                                         int metadataPartition,
                                         Long metadataPartitionOffset) throws IOException {
         RemotePartitionDeleteMetadata partitionDeleteMetadata = idToPartitionDeleteMetadata.get(topicIdPartition);

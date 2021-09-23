@@ -127,9 +127,7 @@ class ConsumerTask implements Runnable, Closeable {
             log.error("Encountered error while building committed offsets from the file", e);
         }
 
-        final Set<Map.Entry<Integer, Long>> entries = committedOffsets.entrySet();
-
-        if (!entries.isEmpty()) {
+        if (!committedOffsets.isEmpty()) {
             // Assign topic partitions from the earlier committed offsets file.
             Set<Integer> earlierAssignedPartitions = committedOffsets.keySet();
             assignedMetaPartitions = Collections.unmodifiableSet(earlierAssignedPartitions);
@@ -139,7 +137,7 @@ class ConsumerTask implements Runnable, Closeable {
             consumer.assign(metadataTopicPartitions);
 
             // Seek to the committed offsets
-            for (Map.Entry<Integer, Long> entry : entries) {
+            for (Map.Entry<Integer, Long> entry : committedOffsets.entrySet()) {
                 partitionToConsumedOffsets.put(entry.getKey(), entry.getValue());
                 consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
             }
@@ -157,8 +155,7 @@ class ConsumerTask implements Runnable, Closeable {
                 maybeWaitForPartitionsAssignment();
 
                 log.info("Polling consumer to receive remote log metadata topic records");
-                ConsumerRecords<byte[], byte[]> consumerRecords
-                        = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
+                ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
                     handleRemoteLogMetadata(serde.deserialize(record.value()));
                     partitionToConsumedOffsets.put(record.partition(), record.offset());
@@ -182,24 +179,26 @@ class ConsumerTask implements Runnable, Closeable {
         }
 
         try {
-            HashMap<Integer, Long> syncedPartitionToConsumedOffsets = new HashMap<>();
-            for (TopicIdPartition topicIdPartition : assignedTopicPartitions) {
-                int metadataPartition = topicPartitioner.metadataPartition(topicIdPartition);
-                Long offset = partitionToConsumedOffsets.get(metadataPartition);
-                if (offset != null && !offset.equals(committedPartitionToConsumedOffsets.get(metadataPartition))) {
-                    remotePartitionMetadataEventHandler.syncLogMetadataDataFile(topicIdPartition, metadataPartition, offset);
-                    syncedPartitionToConsumedOffsets.put(metadataPartition, offset);
-                } else {
-                    log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and offset:{} ",
-                            topicIdPartition, metadataPartition, offset);
+            // partitionToConsumedOffsets is not getting changed concurrently as this method is called from #run() which updates the same.
+            // Need to take lock on assignPartitionsLock as assignedTopicPartitions might get updated by other threads.
+            synchronized (assignPartitionsLock) {
+                for (TopicIdPartition topicIdPartition : assignedTopicPartitions) {
+                    int metadataPartition = topicPartitioner.metadataPartition(topicIdPartition);
+                    Long offset = partitionToConsumedOffsets.get(metadataPartition);
+                    if (offset != null && !offset.equals(committedPartitionToConsumedOffsets.get(metadataPartition))) {
+                        remotePartitionMetadataEventHandler.syncLogMetadataSnapshot(topicIdPartition, metadataPartition, offset);
+                    } else {
+                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and offset:{} ",
+                                topicIdPartition, metadataPartition, offset);
+                    }
                 }
             }
 
             committedOffsetsFile.writeEntries(partitionToConsumedOffsets);
-            committedPartitionToConsumedOffsets = syncedPartitionToConsumedOffsets;
+            committedPartitionToConsumedOffsets = new HashMap<>(partitionToConsumedOffsets);
             lastSyncedTimeMs = time.milliseconds();
         } catch (IOException e) {
-            log.error("Error encountered while writing committed offsets to a local file", e);
+            throw new KafkaException("Error encountered while writing committed offsets to a local file", e);
         }
     }
 
@@ -324,7 +323,11 @@ class ConsumerTask implements Runnable, Closeable {
                 // if the closing is already set.
                 closing = true;
                 consumer.wakeup();
-                maybeSyncCommittedDataAndOffsets(true);
+                try {
+                    maybeSyncCommittedDataAndOffsets(true);
+                } catch (Exception e) {
+                    log.warn("Error occurred while syncing the committed data to snapshots.", e);
+                }
                 assignPartitionsLock.notifyAll();
             }
         }
