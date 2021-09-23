@@ -2517,7 +2517,7 @@ project(':connect:basic-auth-extension') {
     implementation libs.jaxrsApi
 
     testImplementation libs.bcpkix
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
