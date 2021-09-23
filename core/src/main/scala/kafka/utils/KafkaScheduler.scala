@@ -53,7 +53,7 @@ trait Scheduler {
    * @param unit The unit for the preceding times.
    * @return An Option of a Future object to manage the task scheduled.
    */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Option[ScheduledFuture[_]]
+  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
 }
 
 /**
@@ -103,7 +103,7 @@ class KafkaScheduler(val threads: Int,
     schedule(name, fun, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): Option[ScheduledFuture[_]] = {
+  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): ScheduledFuture[_] = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
@@ -119,12 +119,12 @@ class KafkaScheduler(val threads: Int,
           }
         }
         if (period >= 0)
-          Some(executor.scheduleAtFixedRate(runnable, delay, period, unit))
+          executor.scheduleAtFixedRate(runnable, delay, period, unit)
         else
-          Some(executor.schedule(runnable, delay, unit))
+          executor.schedule(runnable, delay, unit)
       } else {
         info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
-        None
+        new NoOpScheduledFutureTask
       }
     }
   }
@@ -145,4 +145,14 @@ class KafkaScheduler(val threads: Int,
       executor != null
     }
   }
+}
+
+private class NoOpScheduledFutureTask() extends ScheduledFuture[Unit] {
+  override def cancel(mayInterruptIfRunning: Boolean): Boolean = true
+  override def isCancelled: Boolean = true
+  override def isDone: Boolean = true
+  override def get(): Unit = {}
+  override def get(timeout: Long, unit: TimeUnit): Unit = {}
+  override def getDelay(unit: TimeUnit): Long = 0
+  override def compareTo(o: Delayed): Int = 0
 }

@@ -709,8 +709,7 @@ class UnifiedLogTest {
       val logConfig = LogTestUtils.createLogConfig()
       val log = createLog(logDir, logConfig, scheduler = scheduler)
 
-      assertTrue(log.producerExpireCheckOption.nonEmpty)
-      val producerExpireCheck = log.producerExpireCheckOption.get
+      val producerExpireCheck = log.producerExpireCheck
       assertTrue(scheduler.taskRunning(producerExpireCheck), "producerExpireCheck isn't as part of scheduled tasks")
 
       log.delete()

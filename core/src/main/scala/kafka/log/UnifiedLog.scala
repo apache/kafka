@@ -537,7 +537,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   newGauge(LogMetricNames.LogEndOffset, () => logEndOffset, tags)
   newGauge(LogMetricNames.Size, () => size, tags)
 
-  val producerExpireCheckOption = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
+  val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
@@ -657,7 +657,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     lock synchronized {
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
-      producerExpireCheckOption.foreach(_.cancel(true))
+      producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1532,7 +1532,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
-        producerExpireCheckOption.foreach(_.cancel(true))
+        producerExpireCheck.cancel(true)
         leaderEpochCache.foreach(_.clear())
         val deletedSegments = localLog.deleteAllSegments()
         deleteProducerSnapshots(deletedSegments, asyncDelete = false)

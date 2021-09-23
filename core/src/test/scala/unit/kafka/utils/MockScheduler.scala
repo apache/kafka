@@ -73,11 +73,11 @@ class MockScheduler(val time: Time) extends Scheduler {
     } while (currTask.nonEmpty)
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): Option[ScheduledFuture[Unit]] = {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
     val task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
     add(task)
     tick()
-    Some(task)
+    task
   }
 
   def clear(): Unit = {
