@@ -21,6 +21,8 @@ import java.util.concurrent._
 import atomic._
 import org.apache.kafka.common.utils.KafkaThread
 
+import java.util.concurrent.TimeUnit.NANOSECONDS
+
 /**
  * A scheduler for running jobs
  * 
@@ -154,5 +156,10 @@ private class NoOpScheduledFutureTask() extends ScheduledFuture[Unit] {
   override def get(): Unit = {}
   override def get(timeout: Long, unit: TimeUnit): Unit = {}
   override def getDelay(unit: TimeUnit): Long = 0
-  override def compareTo(o: Delayed): Int = 0
+  override def compareTo(o: Delayed): Int = {
+    val diff = getDelay(NANOSECONDS) - o.getDelay(NANOSECONDS)
+    if (diff < 0) -1
+    else if (diff > 0) 1
+    else 0
+  }
 }
