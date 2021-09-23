@@ -59,7 +59,7 @@ class IsrExpirationTest {
   @BeforeEach
   def setUp(): Unit = {
     val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
-    EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    EasyMock.expect(logManager.liveLogDirs).andReturn(Seq.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
     alterIsrManager = TestUtils.createAlterIsrManager()

@@ -60,7 +60,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private val txnRecordsByPartition: Map[Int, mutable.ArrayBuffer[SimpleRecord]] =
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
-  val producerId = 11
+  val producerId = 11L
   private var bumpProducerId = false
 
   @BeforeEach

@@ -111,7 +111,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         val replication = if (!topic.assignments().isEmpty)
           topic.assignments().iterator().next().brokerIds().size()
         else
-          topic.replicationFactor
+          topic.replicationFactor.toInt
 
         if (request.data.validateOnly) {
           assertNotNull(metadataForTopic, s"Topic $topic should be created")

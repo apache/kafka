@@ -60,7 +60,7 @@ class OffsetsForLeaderEpochTest {
     val mockLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val logManager: LogManager = createNiceMock(classOf[LogManager])
     expect(mockLog.endOffsetForEpoch(epochRequested)).andReturn(Some(offsetAndEpoch))
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(Seq.empty[File]).anyTimes()
     replay(mockLog, logManager)
 
     // create a replica manager with 1 partition that has 1 replica
@@ -90,7 +90,7 @@ class OffsetsForLeaderEpochTest {
   @Test
   def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
     val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(Seq.empty[File]).anyTimes()
     replay(logManager)
 
     //create a replica manager with 1 partition that has 0 replica
@@ -122,7 +122,7 @@ class OffsetsForLeaderEpochTest {
   @Test
   def shouldReturnUnknownTopicOrPartitionIfThrown(): Unit = {
     val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(Seq.empty[File]).anyTimes()
     replay(logManager)
 
     //create a replica manager with 0 partition

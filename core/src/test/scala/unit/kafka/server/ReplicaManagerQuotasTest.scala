@@ -241,7 +241,7 @@ class ReplicaManagerQuotasTest {
 
     //Return the same log for each partition as it doesn't matter
     expect(logManager.getLog(anyObject(), anyBoolean())).andReturn(Some(log)).anyTimes()
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    expect(logManager.liveLogDirs).andReturn(Seq.empty[File]).anyTimes()
     replay(logManager)
 
     val alterIsrManager: AlterIsrManager = createMock(classOf[AlterIsrManager])
