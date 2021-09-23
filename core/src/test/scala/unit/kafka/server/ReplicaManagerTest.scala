@@ -3511,7 +3511,7 @@ class ReplicaManagerTest {
   @ValueSource(booleans = Array(true, false))
   def testReplicaAlterLogDirsWithAndWithoutIds(usesTopicIds: Boolean): Unit = {
     val version = if (usesTopicIds) LeaderAndIsrRequestData.HIGHEST_SUPPORTED_VERSION else 4.toShort
-    val topicIdRaw = if (usesTopicIds) topicId else Uuid.ZERO_UUID
+    val topicId = if (usesTopicIds) this.topicId else Uuid.ZERO_UUID
     val topicIdOpt = if (usesTopicIds) Some(topicId) else None
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
@@ -3523,7 +3523,7 @@ class ReplicaManagerTest {
       val tp = new TopicPartition(topic, 0)
       val leaderAndIsr = new LeaderAndIsr(0, 0, aliveBrokersIds.toList, 0)
 
-      val leaderAndIsrRequest1 = leaderAndIsrRequest(topicIdRaw, tp, aliveBrokersIds, leaderAndIsr, version = version)
+      val leaderAndIsrRequest1 = leaderAndIsrRequest(topicId, tp, aliveBrokersIds, leaderAndIsr, version = version)
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       val partition = replicaManager.getPartitionOrException(tp)
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
@@ -3536,18 +3536,18 @@ class ReplicaManagerTest {
         }
       }
 
-      // find the live and different folder
+      // Find the live and different folder.
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).head
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
 
       assertFetcherHasTopicId(replicaManager.replicaAlterLogDirsManager, partition.topicPartition, topicIdOpt)
 
-      // make sure the future log is created
+      // Make sure the future log is created.
       replicaManager.futureLocalLogOrException(topicPartition)
       assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
 
-      // wait for the ReplicaAlterLogDirsThread to complete
+      // Wait for the ReplicaAlterLogDirsThread to complete.
       TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty

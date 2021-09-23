@@ -1398,7 +1398,7 @@ class ReplicaManager(val config: KafkaConfig,
                     stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
                       s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
                       s"id $correlationId epoch $controllerEpoch")
-                    if (partitionState.leader != localBrokerId && metadataCache.hasAliveBroker(partitionState.leader))
+                    if (partitionState.leader != localBrokerId)
                       topicIdUpdateFollowerPartitions.add(partition)
                     Errors.NONE
                   case _ =>

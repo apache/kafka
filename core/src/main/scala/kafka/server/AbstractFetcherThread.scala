@@ -506,7 +506,7 @@ abstract class AbstractFetcherThread(name: String,
         val currentState = partitionStates.stateValue(tp)
         if (currentState != null) {
           val updatedState = currentState.updateTopicId(topicIds(tp.topic))
-          partitionStates.updateAndMoveToEnd(tp, updatedState)
+          partitionStates.update(tp, updatedState)
         }
       }
       partitionMapCond.signalAll()
@@ -869,7 +869,8 @@ case class PartitionFetchState(topicId: Option[Uuid],
   def isDelayed: Boolean = delay.exists(_.getDelay(TimeUnit.MILLISECONDS) > 0)
 
   override def toString: String = {
-    s"FetchState(fetchOffset=$fetchOffset" +
+    s"FetchState(topicId=$topicId" +
+      s", fetchOffset=$fetchOffset" +
       s", currentLeaderEpoch=$currentLeaderEpoch" +
       s", lastFetchedEpoch=$lastFetchedEpoch" +
       s", state=$state" +
