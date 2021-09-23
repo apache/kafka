@@ -107,24 +107,25 @@ class KafkaScheduler(val threads: Int,
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
-      if (!isStarted) {
-        info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
-        return None
-      }
-      val runnable: Runnable = () => {
-        try {
-          trace("Beginning execution of scheduled task '%s'.".format(name))
-          fun()
-        } catch {
-          case t: Throwable => error(s"Uncaught exception in scheduled task '$name'", t)
-        } finally {
-          trace("Completed execution of scheduled task '%s'.".format(name))
+      if (isStarted) {
+        val runnable: Runnable = () => {
+          try {
+            trace("Beginning execution of scheduled task '%s'.".format(name))
+            fun()
+          } catch {
+            case t: Throwable => error(s"Uncaught exception in scheduled task '$name'", t)
+          } finally {
+            trace("Completed execution of scheduled task '%s'.".format(name))
+          }
         }
+        if (period >= 0)
+          Some(executor.scheduleAtFixedRate(runnable, delay, period, unit))
+        else
+          Some(executor.schedule(runnable, delay, unit))
+      } else {
+        info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
+        None
       }
-      if (period >= 0)
-        Some(executor.scheduleAtFixedRate(runnable, delay, period, unit))
-      else
-        Some(executor.schedule(runnable, delay, unit))
     }
   }
 
