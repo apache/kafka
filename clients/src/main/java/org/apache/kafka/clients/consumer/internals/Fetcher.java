@@ -1145,6 +1145,10 @@ public class Fetcher<K, V> implements Closeable {
         }
     }
 
+    // fetchablePartitions below is called multiple times during a poll.
+    // On each invocation it creates a list, which puts pressure on gc.
+    // The buffer below allows to eliminate that allocation as then the
+    // same list would be used multiple times
     private final List<TopicPartition> fetchablePartitionsResultBuffer = new ArrayList<>();
 
     private List<TopicPartition> fetchablePartitions() {
