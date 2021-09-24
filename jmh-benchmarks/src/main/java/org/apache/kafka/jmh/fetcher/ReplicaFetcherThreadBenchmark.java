@@ -179,7 +179,7 @@ public class ReplicaFetcherThreadBenchmark {
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
-            initialFetchStates.put(tp, new InitialFetchState(new BrokerEndPoint(3, "host", 3000), 0, 0));
+            initialFetchStates.put(tp, new InitialFetchState(topicId, new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {
                 @Override
                 public int sizeInBytes() {

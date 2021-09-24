@@ -273,7 +273,6 @@ class ReplicaFetcherThread(name: String,
 
   override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
-    val topicIds = replicaMgr.metadataCache.topicNamesToIds()
 
     val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
     partitionMap.forKeyValue { (topicPartition, fetchState) =>
@@ -285,7 +284,7 @@ class ReplicaFetcherThread(name: String,
             fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
           else
             Optional.empty[Integer]
-          builder.add(topicPartition, topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(
+          builder.add(topicPartition, fetchState.topicId.getOrElse(Uuid.ZERO_UUID), new FetchRequest.PartitionData(
             fetchState.fetchOffset,
             logStartOffset,
             fetchSize,

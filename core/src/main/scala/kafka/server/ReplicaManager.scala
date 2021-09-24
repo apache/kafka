@@ -728,7 +728,8 @@ class ReplicaManager(val config: KafkaConfig,
 
           // throw NotLeaderOrFollowerException if replica does not exist for the given partition
           val partition = getPartitionOrException(topicPartition)
-          partition.localLogOrException
+          val log = partition.localLogOrException
+          val topicId = log.topicId
 
           // If the destinationLDir is different from the current log directory of the replica:
           // - If there is no offline log directory, create the future log in the destinationDir (if it does not exist) and
@@ -740,7 +741,7 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
-            val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
+            val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
@@ -1329,6 +1330,7 @@ class ReplicaManager(val config: KafkaConfig,
           val partitions = new mutable.HashSet[Partition]()
           val partitionsToBeLeader = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
           val partitionsToBeFollower = new mutable.HashMap[Partition, LeaderAndIsrPartitionState]()
+          val topicIdUpdateFollowerPartitions = new mutable.HashSet[Partition]()
 
           // First create the partition if it doesn't exist already
           requestPartitionStates.foreach { partitionState =>
@@ -1396,6 +1398,8 @@ class ReplicaManager(val config: KafkaConfig,
                     stateChangeLogger.info(s"Updating log for $topicPartition to assign topic ID " +
                       s"$topicId from LeaderAndIsr request from controller $controllerId with correlation " +
                       s"id $correlationId epoch $controllerEpoch")
+                    if (partitionState.leader != localBrokerId)
+                      topicIdUpdateFollowerPartitions.add(partition)
                     Errors.NONE
                   case _ =>
                     stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
@@ -1423,6 +1427,9 @@ class ReplicaManager(val config: KafkaConfig,
 
           val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
           updateLeaderAndFollowerMetrics(followerTopicSet)
+
+          if (topicIdUpdateFollowerPartitions.nonEmpty)
+            updateTopicIdForFollowers(controllerId, controllerEpoch, topicIdUpdateFollowerPartitions, correlationId, topicIdFromRequest)
 
           // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
@@ -1521,7 +1528,7 @@ class ReplicaManager(val config: KafkaConfig,
           // replica from source dir to destination dir
           logManager.abortAndPauseCleaning(topicPartition)
 
-          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
+          futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, log.highWatermark))
         }
       }
@@ -1716,7 +1723,7 @@ class ReplicaManager(val config: KafkaConfig,
           val leader = new BrokerEndPoint(leaderNode.id(), leaderNode.host(), leaderNode.port())
           val log = partition.localLogOrException
           val fetchOffset = initialFetchOffset(log)
-          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
+          partition.topicPartition -> InitialFetchState(topicIds(partition.topic), leader, partition.getLeaderEpoch, fetchOffset)
         }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
@@ -1737,6 +1744,42 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
     partitionsToMakeFollower
+  }
+
+  private def updateTopicIdForFollowers(controllerId: Int,
+                                        controllerEpoch: Int,
+                                        partitions: Set[Partition],
+                                        correlationId: Int,
+                                        topicIds: String => Option[Uuid]): Unit = {
+    val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
+
+    try {
+      if (isShuttingDown.get()) {
+        if (traceLoggingEnabled) {
+          partitions.foreach { partition =>
+            stateChangeLogger.trace(s"Skipped the update topic ID step of the become-follower state " +
+              s"change with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +
+              s"partition ${partition.topicPartition} since it is shutting down")
+          }
+        }
+      } else {
+        val partitionsToUpdateFollowerWithLeader = mutable.Map.empty[TopicPartition, Int]
+        partitions.foreach { partition =>
+          partition.leaderReplicaIdOpt.foreach { leader =>
+            if (metadataCache.hasAliveBroker(leader)) {
+              partitionsToUpdateFollowerWithLeader += partition.topicPartition -> leader
+            }
+          }
+        }
+        replicaFetcherManager.maybeUpdateTopicIds(partitionsToUpdateFollowerWithLeader, topicIds)
+      }
+    } catch {
+      case e: Throwable =>
+        stateChangeLogger.error(s"Error while processing LeaderAndIsr request with correlationId $correlationId " +
+          s"received from controller $controllerId epoch $controllerEpoch when trying to update topic IDs in the fetchers", e)
+        // Re-throw the exception for it to be caught in KafkaApis
+        throw e
+    }
   }
 
   /**
@@ -2211,6 +2254,7 @@ class ReplicaManager(val config: KafkaConfig,
         .getOrElse(Node.noNode)
       val log = partition.localLogOrException
       partitionAndOffsets.put(topicPartition, InitialFetchState(
+        log.topicId,
         new BrokerEndPoint(node.id, node.host, node.port),
         partition.getLeaderEpoch,
         initialFetchOffset(log)
