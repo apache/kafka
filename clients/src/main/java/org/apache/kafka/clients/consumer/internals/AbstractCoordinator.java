@@ -471,6 +471,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
 
                 resetJoinGroupFuture();
+                rejoinNeeded = true;
+
+                resetJoinGroupFuture();
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof RebalanceInProgressException ||
                     exception instanceof IllegalGenerationException ||
@@ -479,7 +482,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
-                resetStateAndRejoin();
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
