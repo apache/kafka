@@ -26,6 +26,7 @@ import java.io.StringReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ServiceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -85,6 +86,22 @@ public class FileConfigProviderTest {
         ConfigData configData = configProvider.get(null, Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testServiceLoaderDiscovery() {
+        ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+
+        boolean discovered = false;
+
+        for (ConfigProvider service : serviceLoader)    {
+            System.out.println(service.getClass());
+            if (service instanceof FileConfigProvider) {
+                discovered = true;
+            }
+        }
+
+        assertTrue(discovered);
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {

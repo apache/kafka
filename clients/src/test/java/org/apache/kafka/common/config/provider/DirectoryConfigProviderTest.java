@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.ServiceLoader;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
@@ -144,6 +145,22 @@ public class DirectoryConfigProviderTest {
         ConfigData configData = provider.get(null, Collections.singleton("foo"));
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testServiceLoaderDiscovery() {
+        ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+
+        boolean discovered = false;
+
+        for (ConfigProvider service : serviceLoader)    {
+            System.out.println(service.getClass());
+            if (service instanceof DirectoryConfigProvider) {
+                discovered = true;
+            }
+        }
+
+        assertTrue(discovered);
     }
 }
 

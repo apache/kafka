@@ -26,6 +26,8 @@ import java.util.Set;
 /**
  * A provider of configuration data, which may optionally support subscriptions to configuration changes.
  * Implementations are required to safely support concurrent calls to any of the methods in this interface.
+ * Configuration provider implementations are in Kafka Connect loaded as Service Providers using the {@code ServiceLoader} class.
+ * To support this, implementations of this interface should also contain its service provider configuration file.
  */
 public interface ConfigProvider extends Configurable, Closeable {
 
