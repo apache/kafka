@@ -22,14 +22,14 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
@@ -48,11 +48,11 @@ public class WordCountProcessorTest {
         store.init(context.getStateStoreContext(), store);
 
         // Create and initialize the processor under test
-        final Processor<String, String, String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
+        final Processor<String, String, String, String> processor = new WordCountProcessorDemo.WordCountProcessor();
         processor.init(context);
 
         // send a record to the processor
-        processor.process(new Record<>("key", "alpha beta gamma alpha", 0L));
+        processor.process(new Record<>("key", "alpha beta\tgamma\n\talpha", 0L));
 
         // note that the processor does not forward during process()
         assertTrue(context.forwarded().isEmpty());

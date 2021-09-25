@@ -31,8 +31,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.utils.Utils
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupCommandTest {
 

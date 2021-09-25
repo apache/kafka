@@ -51,7 +51,7 @@ public class WindowKeySchemaTest {
     final private Window window = new TimeWindow(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
     final private WindowKeySchema windowKeySchema = new WindowKeySchema();
-    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
+    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
 
     @Test
@@ -63,14 +63,16 @@ public class WindowKeySchemaTest {
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0}), new TimeWindow(10, 20)), 4), 4),
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0, 0}), new TimeWindow(10, 20)), 5), 5),
             KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[] {0, 0, 0}), new TimeWindow(10, 20)), 6), 6));
-        final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
+        try (final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()))) {
 
-        final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
-        final List<Integer> results = new ArrayList<>();
-        while (hasNextCondition.hasNext(iterator)) {
-            results.add(iterator.next().value);
+            final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+            final List<Integer> results = new ArrayList<>();
+            while (hasNextCondition.hasNext(iterator)) {
+                results.add(iterator.next().value);
+            }
+
+            assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
         }
-        assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
     }
 
     @Test
@@ -126,7 +128,7 @@ public class WindowKeySchemaTest {
         final Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[] {0xC, 0xC, 0x9}), 0x0AffffffffffffffL);
 
         assertThat(
-            "shorter key with max timestamp should be in range",
+            "shorter key with customized timestamp should be in range",
             upper.compareTo(
                 WindowKeySchema.toStoreKeyBinary(
                     new byte[] {0xC, 0xC},
@@ -242,7 +244,7 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void shouldExtractEndTimeFromBinary() {
+    public void shouldExtractSequenceFromBinary() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
         assertEquals(0, WindowKeySchema.extractStoreSequence(serialized.get()));
     }

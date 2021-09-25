@@ -20,11 +20,12 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
@@ -33,66 +34,54 @@ import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Tests for the SSL transport layer.
  * Checks different versions of the protocol usage on the server and client.
  */
-@RunWith(value = Parameterized.class)
 public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     private static final Time TIME = Time.SYSTEM;
 
-    private final List<String> serverProtocols;
-    private final List<String> clientProtocols;
+    public static Stream<Arguments> parameters() {
+        List<Arguments> parameters = new ArrayList<>();
 
-    @Parameterized.Parameters(name = "tlsServerProtocol={0},tlsClientProtocol={1}")
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-
-        values.add(new Object[] {Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.2")});
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.2")));
 
         if (Java.IS_JAVA11_COMPATIBLE) {
-            values.add(new Object[] {Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
-            values.add(new Object[] {Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")});
-            values.add(new Object[] {Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")});
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
         }
-        return values;
-    }
 
-    /**
-     * Be aware that you can turn on debug mode for a javax.net.ssl library with the line {@code System.setProperty("javax.net.debug", "ssl:handshake");}
-     * @param serverProtocols Server protocols.
-     * @param clientProtocols Client protocols.
-     */
-    public SslVersionsTransportLayerTest(List<String> serverProtocols, List<String> clientProtocols) {
-        this.serverProtocols = serverProtocols;
-        this.clientProtocols = clientProtocols;
+        return parameters.stream();
     }
 
     /**
      * Tests that connection success with the default TLS version.
+     * Note that debug mode for javax.net.ssl can be enabled via {@code System.setProperty("javax.net.debug", "ssl:handshake");}
      */
-    @Test
-    public void testTlsDefaults() throws Exception {
+    @ParameterizedTest(name = "tlsServerProtocol = {0}, tlsClientProtocol = {1}")
+    @MethodSource("parameters")
+    public void testTlsDefaults(List<String> serverProtocols, List<String> clientProtocols) throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
         CertStores serverCertStores = new CertStores(true, "server",  "localhost");
         CertStores clientCertStores = new CertStores(false, "client", "localhost");

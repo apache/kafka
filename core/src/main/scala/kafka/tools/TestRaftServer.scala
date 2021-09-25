@@ -17,40 +17,34 @@
 
 package kafka.tools
 
-import java.io.File
-import java.nio.file.Files
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
-import java.util.{Collections, Random}
-
+import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.OptionException
-import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
-import kafka.raft.{KafkaMetadataLog, KafkaNetworkChannel, TimingWheelExpirationService}
+import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
-import kafka.utils.timer.SystemTimer
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.config.ConfigException
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
-import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.protocol.Writable
-import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{TopicPartition, protocol}
-import org.apache.kafka.raft.BatchReader.Batch
-import org.apache.kafka.raft.{BatchReader, FileBasedStateStore, KafkaRaftClient, QuorumState, RaftClient, RaftConfig, RecordSerde}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
+import org.apache.kafka.raft.errors.NotLeaderException
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.jdk.CollectionConverters._
 
 /**
  * This is an experimental server which is intended for testing the performance
- * of the Raft implementation. It uses a hard-coded `__cluster_metadata` topic.
+ * of the Raft implementation. It uses a hard-coded `__raft_performance_test` topic.
  */
 class TestRaftServer(
   val config: KafkaConfig,
@@ -59,66 +53,58 @@ class TestRaftServer(
 ) extends Logging {
   import kafka.tools.TestRaftServer._
 
-  private val partition = new TopicPartition("__cluster_metadata", 0)
+  private val partition = new TopicPartition("__raft_performance_test", 0)
+  // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for __cluster_metadata.
+  private val topicId = new Uuid(0L, 2L)
   private val time = Time.SYSTEM
+  private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
+  private val threadNamePrefix = "test-raft"
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
-  var scheduler: KafkaScheduler = _
-  var metrics: Metrics = _
-  var ioThread: RaftIoThread = _
-  var networkChannel: KafkaNetworkChannel = _
-  var metadataLog: KafkaMetadataLog = _
   var workloadGenerator: RaftWorkloadGenerator = _
+  var raftManager: KafkaRaftManager[Array[Byte]] = _
 
   def startup(): Unit = {
-    val logContext = new LogContext(s"[Raft id=${config.brokerId}] ")
-
-    metrics = new Metrics()
-    scheduler = new KafkaScheduler(threads = 1)
-
-    scheduler.startup()
-
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowDisabledApis = true)
+    val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
     socketServer.startup(startProcessingRequests = false)
 
-    val logDirName = Log.logDirName(partition)
-    val logDir = createLogDirectory(new File(config.logDirs.head), logDirName)
+    val metaProperties = MetaProperties(
+      clusterId = Uuid.ZERO_UUID.toString,
+      nodeId = config.nodeId
+    )
 
-    val raftConfig = new RaftConfig(config.originals)
-    val metadataLog = buildMetadataLog(logDir)
-    val networkChannel = buildNetworkChannel(raftConfig, logContext)
-
-    networkChannel.start()
-
-    val raftClient = buildRaftClient(
-      raftConfig,
-      metadataLog,
-      networkChannel,
-      logContext,
-      logDir
+    raftManager = new KafkaRaftManager[Array[Byte]](
+      metaProperties,
+      config,
+      new ByteArraySerde,
+      partition,
+      topicId,
+      time,
+      metrics,
+      Some(threadNamePrefix),
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
-      raftClient,
+      raftManager,
       time,
       recordsPerSec = 20000,
       recordSize = 256
     )
 
-    raftClient.register(workloadGenerator)
-    raftClient.initialize()
-
     val requestHandler = new TestRaftRequestHandler(
-      raftClient,
+      raftManager,
       socketServer.dataPlaneRequestChannel,
-      time
+      time,
+      apiVersionManager
     )
 
     dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
@@ -131,30 +117,22 @@ class TestRaftServer(
       SocketServer.DataPlaneThreadPrefix
     )
 
-    socketServer.startProcessingRequests(Map.empty)
-    ioThread = new RaftIoThread(raftClient)
-    ioThread.start()
     workloadGenerator.start()
+    raftManager.startup()
+    socketServer.startProcessingRequests(Map.empty)
   }
 
   def shutdown(): Unit = {
+    if (raftManager != null)
+      CoreUtils.swallow(raftManager.shutdown(), this)
     if (workloadGenerator != null)
       CoreUtils.swallow(workloadGenerator.shutdown(), this)
-    if (ioThread != null)
-      CoreUtils.swallow(ioThread.shutdown(), this)
     if (dataPlaneRequestHandlerPool != null)
       CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
     if (socketServer != null)
       CoreUtils.swallow(socketServer.shutdown(), this)
-    if (networkChannel != null)
-      CoreUtils.swallow(networkChannel.close(), this)
-    if (scheduler != null)
-      CoreUtils.swallow(scheduler.shutdown(), this)
     if (metrics != null)
       CoreUtils.swallow(metrics.close(), this)
-    if (metadataLog != null)
-      CoreUtils.swallow(metadataLog.close(), this)
-
     shutdownLatch.countDown()
   }
 
@@ -162,131 +140,8 @@ class TestRaftServer(
     shutdownLatch.await()
   }
 
-  private def buildNetworkChannel(raftConfig: RaftConfig,
-                                  logContext: LogContext): KafkaNetworkChannel = {
-    val netClient = buildNetworkClient(raftConfig, logContext)
-    new KafkaNetworkChannel(time, netClient, raftConfig.requestTimeoutMs)
-  }
-
-  private def buildMetadataLog(logDir: File): KafkaMetadataLog = {
-    if (config.logDirs.size != 1) {
-      throw new ConfigException("There must be exactly one configured log dir")
-    }
-
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
-    LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
-
-    val log = Log(
-      dir = logDir,
-      config = defaultLogConfig,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = scheduler,
-      brokerTopicStats = new BrokerTopicStats,
-      time = time,
-      maxProducerIdExpirationMs = config.transactionalIdExpirationMs,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(5)
-    )
-    new KafkaMetadataLog(log, partition)
-  }
-
-  private def createLogDirectory(logDir: File, logDirName: String): File = {
-    val logDirPath = logDir.getAbsolutePath
-    val dir = new File(logDirPath, logDirName)
-    Files.createDirectories(dir.toPath)
-    dir
-  }
-
-  private def buildRaftClient(raftConfig: RaftConfig,
-                              metadataLog: KafkaMetadataLog,
-                              networkChannel: KafkaNetworkChannel,
-                              logContext: LogContext,
-                              logDir: File): KafkaRaftClient[Array[Byte]] = {
-    val quorumState = new QuorumState(
-      config.brokerId,
-      raftConfig.quorumVoterIds,
-      raftConfig.electionTimeoutMs,
-      raftConfig.fetchTimeoutMs,
-      new FileBasedStateStore(new File(logDir, "quorum-state")),
-      time,
-      logContext,
-      new Random()
-    )
-
-    val expirationTimer = new SystemTimer("raft-expiration-executor")
-    val expirationService = new TimingWheelExpirationService(expirationTimer)
-    val serde = new ByteArraySerde
-
-    new KafkaRaftClient(
-      raftConfig,
-      serde,
-      networkChannel,
-      metadataLog,
-      quorumState,
-      time,
-      expirationService,
-      logContext
-    )
-  }
-
-  private def buildNetworkClient(raftConfig: RaftConfig,
-                                 logContext: LogContext): NetworkClient = {
-    val channelBuilder = ChannelBuilders.clientChannelBuilder(
-      config.interBrokerSecurityProtocol,
-      JaasContext.Type.SERVER,
-      config,
-      config.interBrokerListenerName,
-      config.saslMechanismInterBrokerProtocol,
-      time,
-      config.saslInterBrokerHandshakeRequestEnable,
-      logContext
-    )
-
-    val metricGroupPrefix = "raft-channel"
-    val collectPerConnectionMetrics = false
-
-    val selector = new Selector(
-      NetworkReceive.UNLIMITED,
-      config.connectionsMaxIdleMs,
-      metrics,
-      time,
-      metricGroupPrefix,
-      Map.empty[String, String].asJava,
-      collectPerConnectionMetrics,
-      channelBuilder,
-      logContext
-    )
-
-    val clientId = s"broker-${config.brokerId}-raft-client"
-    val maxInflightRequestsPerConnection = 1
-    val reconnectBackoffMs = 50
-    val reconnectBackoffMsMs = 500
-    val discoverBrokerVersions = false
-
-    new NetworkClient(
-      selector,
-      new ManualMetadataUpdater(),
-      clientId,
-      maxInflightRequestsPerConnection,
-      reconnectBackoffMs,
-      reconnectBackoffMsMs,
-      Selectable.USE_DEFAULT_BUFFER_SIZE,
-      config.socketReceiveBufferBytes,
-      raftConfig.requestTimeoutMs,
-      config.connectionSetupTimeoutMs,
-      config.connectionSetupTimeoutMaxMs,
-      ClientDnsLookup.USE_ALL_DNS_IPS,
-      time,
-      discoverBrokerVersions,
-      new ApiVersions,
-      logContext
-    )
-  }
-
   class RaftWorkloadGenerator(
-    client: KafkaRaftClient[Array[Byte]],
+    raftManager: RaftManager[Array[Byte]],
     time: Time,
     recordsPerSec: Int,
     recordSize: Int
@@ -297,6 +152,7 @@ class TestRaftServer(
     case class HandleClaim(epoch: Int) extends RaftEvent
     case object HandleResign extends RaftEvent
     case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
+    case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
     case object Shutdown extends RaftEvent
 
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
@@ -308,16 +164,22 @@ class TestRaftServer(
 
     private var claimedEpoch: Option[Int] = None
 
-    override def handleClaim(epoch: Int): Unit = {
-      eventQueue.offer(HandleClaim(epoch))
-    }
+    raftManager.register(this)
 
-    override def handleResign(): Unit = {
-      eventQueue.offer(HandleResign)
+    override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
+      if (newLeaderAndEpoch.isLeader(config.nodeId)) {
+        eventQueue.offer(HandleClaim(newLeaderAndEpoch.epoch))
+      } else if (claimedEpoch.isDefined) {
+        eventQueue.offer(HandleResign)
+      }
     }
 
     override def handleCommit(reader: BatchReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleCommit(reader))
+    }
+
+    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
+      eventQueue.offer(HandleSnapshot(reader))
     }
 
     override def initiateShutdown(): Boolean = {
@@ -331,12 +193,13 @@ class TestRaftServer(
       currentTimeMs: Long
     ): Unit = {
       recordCount.incrementAndGet()
-
-      val offset = client.scheduleAppend(leaderEpoch, Collections.singletonList(payload))
-      if (offset == null) {
-        time.sleep(10)
-      } else {
+      try {
+        val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
         pendingAppends.offer(PendingAppend(offset, currentTimeMs))
+      } catch {
+        case e: NotLeaderException =>
+          logger.debug(s"Append failed because this node is no longer leader in epoch $leaderEpoch", e)
+          time.sleep(10)
       }
     }
 
@@ -373,7 +236,13 @@ class TestRaftServer(
             reader.close()
           }
 
-        case _ =>
+        case HandleSnapshot(reader) =>
+          // Ignore snapshots; only interested in records appended by this leader
+          reader.close()
+
+        case Shutdown => // Ignore shutdown command
+
+        case null => // Ignore null when timeout expires.
       }
     }
 
@@ -408,36 +277,6 @@ class TestRaftServer(
 
   }
 
-  class RaftIoThread(
-    client: KafkaRaftClient[Array[Byte]]
-  ) extends ShutdownableThread(
-    name = "raft-io-thread",
-    isInterruptible = false
-  ) {
-    override def doWork(): Unit = {
-      client.poll()
-    }
-
-    override def initiateShutdown(): Boolean = {
-      if (super.initiateShutdown()) {
-        client.shutdown(5000).whenComplete { (_, exception) =>
-          if (exception != null) {
-            error("Graceful shutdown of RaftClient failed", exception)
-          } else {
-            info("Completed graceful shutdown of RaftClient")
-          }
-        }
-        true
-      } else {
-        false
-      }
-    }
-
-    override def isRunning: Boolean = {
-      client.isRunning
-    }
-  }
-
 }
 
 object TestRaftServer extends Logging {
@@ -451,12 +290,12 @@ object TestRaftServer extends Logging {
     }
   }
 
-  private class ByteArraySerde extends RecordSerde[Array[Byte]] {
-    override def recordSize(data: Array[Byte], context: Any): Int = {
+  class ByteArraySerde extends RecordSerde[Array[Byte]] {
+    override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
     }
 
-    override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
+    override def write(data: Array[Byte], serializationCache: ObjectSerializationCache, out: Writable): Unit = {
       out.writeByteArray(data)
     }
 
@@ -603,7 +442,15 @@ object TestRaftServer extends Logging {
         "Standalone raft server for performance testing")
 
       val configFile = opts.options.valueOf(opts.configOpt)
+      if (configFile == null) {
+        throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
+      }
       val serverProps = Utils.loadProps(configFile)
+
+      // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
+      // actually used by the test server, so we fill in `process.roles` with an arbitrary value.
+      serverProps.put(KafkaConfig.ProcessRolesProp, "controller")
+
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)

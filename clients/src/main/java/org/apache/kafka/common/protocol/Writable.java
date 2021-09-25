@@ -48,4 +48,10 @@ public interface Writable {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());
     }
+
+    default void writeUnsignedShort(int i) {
+        // The setter functions in the generated code prevent us from setting
+        // ints outside the valid range of a short.
+        writeShort((short) i);
+    }
 }

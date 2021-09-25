@@ -15,19 +15,15 @@
   * limitations under the License.
   */
 
-package unit.kafka.controller
+package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{Before, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 
 class ControllerContextTest {
@@ -38,7 +34,7 @@ class ControllerContextTest {
   val tp2 = new TopicPartition("A", 1)
   val tp3 = new TopicPartition("B", 0)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     context = new ControllerContext
 

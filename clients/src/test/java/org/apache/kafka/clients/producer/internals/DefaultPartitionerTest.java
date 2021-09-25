@@ -20,12 +20,12 @@ import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DefaultPartitionerTest {
     private final static byte[] KEY_BYTES = "key".getBytes();
@@ -46,6 +46,6 @@ public class DefaultPartitionerTest {
         final Cluster cluster = new Cluster("clusterId", asList(NODES), PARTITIONS,
             Collections.<String>emptySet(), Collections.<String>emptySet());
         int partition = partitioner.partition("test",  null, KEY_BYTES, null, null, cluster);
-        assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, KEY_BYTES, null, null, cluster));
+        assertEquals(partition, partitioner.partition("test", null, KEY_BYTES, null, null, cluster), "Same key should yield same partition");
     }
 }

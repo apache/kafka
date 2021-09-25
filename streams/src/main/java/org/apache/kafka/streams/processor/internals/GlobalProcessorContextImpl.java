@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -33,16 +34,19 @@ import java.time.Duration;
 
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
-public class GlobalProcessorContextImpl extends AbstractProcessorContext {
+public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object, Object> {
 
     private final GlobalStateManager stateManager;
+    private final Time time;
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final GlobalStateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
-                                      final ThreadCache cache) {
+                                      final ThreadCache cache,
+                                      final Time time) {
         super(new TaskId(-1, -1), config, metrics, cache);
         stateManager = stateMgr;
+        this.time = time;
     }
 
     @Override
@@ -76,7 +80,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <KIn, VIn> void forward(final KIn key, final VIn value) {
         forward(new Record<>(key, value, timestamp(), headers()));
@@ -92,36 +95,19 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         }
     }
 
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
-    }
-
     @Override
     public void commit() {
         //no-op
     }
 
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
+    public long currentSystemTimeMs() {
+        return time.milliseconds();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("There is no concept of stream-time for a global processor.");
     }
 
     /**

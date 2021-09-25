@@ -19,11 +19,13 @@ package kafka.server
 import kafka.utils.{Logging, ReplicationUtils, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.Errors
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+
+import kafka.api.LeaderAndIsr
+import org.apache.kafka.common.errors.InvalidUpdateVersionException
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
 
 /**
@@ -55,36 +57,34 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
       period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
-  override def clearPending(topicPartition: TopicPartition): Unit = {
-    // Since we always immediately process ZK updates and never actually enqueue anything, there is nothing to
-    // clear here so this is a no-op. Even if there are changes that have not been propagated, the write to ZK
-    // has already happened, so we may as well send the notification to the controller.
-  }
+  override def submit(
+    topicPartition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    controllerEpoch: Int
+  ): CompletableFuture[LeaderAndIsr]= {
+    debug(s"Writing new ISR ${leaderAndIsr.isr} to ZooKeeper with version " +
+      s"${leaderAndIsr.zkVersion} for partition $topicPartition")
 
-  override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    debug(s"Writing new ISR ${alterIsrItem.leaderAndIsr.isr} to ZooKeeper with version " +
-      s"${alterIsrItem.leaderAndIsr.zkVersion} for partition ${alterIsrItem.topicPartition}")
+    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition,
+      leaderAndIsr, controllerEpoch)
 
-    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, alterIsrItem.topicPartition,
-      alterIsrItem.leaderAndIsr, alterIsrItem.controllerEpoch)
-
+    val future = new CompletableFuture[LeaderAndIsr]()
     if (updateSucceeded) {
       // Track which partitions need to be propagated to the controller
       isrChangeSet synchronized {
-        isrChangeSet += alterIsrItem.topicPartition
+        isrChangeSet += topicPartition
         lastIsrChangeMs.set(time.milliseconds())
       }
 
       // We rely on Partition#isrState being properly set to the pending ISR at this point since we are synchronously
       // applying the callback
-      alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion)))
+      future.complete(leaderAndIsr.withZkVersion(newVersion))
     } else {
-      alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
+      future.completeExceptionally(new InvalidUpdateVersionException(
+        s"ISR update $leaderAndIsr for partition $topicPartition with controller epoch $controllerEpoch " +
+          "failed with an invalid version error"))
     }
-
-    // Return true since we unconditionally accept the AlterIsrItem. The result of the operation is indicated by the
-    // callback, not the return value of this method
-    true
+    future
   }
 
   /**

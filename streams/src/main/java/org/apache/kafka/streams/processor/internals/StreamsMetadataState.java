@@ -27,7 +27,8 @@ import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -46,16 +47,16 @@ import java.util.Set;
  */
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = HostInfo.unavailable();
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private List<StreamsMetadata> allMetadata = Collections.emptyList();
     private Cluster clusterMetadata;
     private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
-    public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
-        this.builder = builder;
-        this.globalStores = builder.globalStateStores().keySet();
+    public StreamsMetadataState(final TopologyMetadata topologyMetadata, final HostInfo thisHost) {
+        this.topologyMetadata = topologyMetadata;
+        this.globalStores = this.topologyMetadata.globalStateStores().keySet();
         this.thisHost = thisHost;
     }
 
@@ -92,7 +93,7 @@ public class StreamsMetadataState {
     public Collection<StreamsMetadata> getAllMetadata() {
         return Collections.unmodifiableList(allMetadata);
     }
-    
+
     /**
      * Find all of the {@link StreamsMetadata}s for a given storeName
      *
@@ -110,8 +111,8 @@ public class StreamsMetadataState {
             return allMetadata;
         }
 
-        final Collection<String> sourceTopics = builder.sourceTopicsForStore(storeName);
-        if (sourceTopics == null) {
+        final Collection<String> sourceTopics = topologyMetadata.sourceTopicsForStore(storeName);
+        if (sourceTopics.isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -122,54 +123,6 @@ public class StreamsMetadataState {
             }
         }
         return results;
-    }
-
-    /**
-     * Find the {@link StreamsMetadata}s for a given storeName and key. This method will use the
-     * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
-     * please use {@link StreamsMetadataState#getMetadataWithKey(String, Object, StreamPartitioner)}
-     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
-     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
-     *
-     *
-     * @param storeName     Name of the store
-     * @param key           Key to use
-     * @param keySerializer Serializer for the key
-     * @param <K>           key type
-     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
-     * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, Serializer)} instead.
-     */
-    @Deprecated
-    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
-                                                               final K key,
-                                                               final Serializer<K> keySerializer) {
-        Objects.requireNonNull(keySerializer, "keySerializer can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Objects.requireNonNull(key, "key can't be null");
-
-        if (!isInitialized()) {
-            return StreamsMetadata.NOT_AVAILABLE;
-        }
-
-        if (globalStores.contains(storeName)) {
-            // global stores are on every node. if we don't have the host info
-            // for this host then just pick the first metadata
-            if (thisHost.equals(UNKNOWN_HOST)) {
-                return allMetadata.get(0);
-            }
-            return localMetadata.get();
-        }
-
-        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
-        if (sourceTopicsInfo == null) {
-            return null;
-        }
-
-        return getStreamsMetadataForKey(storeName,
-                                        key,
-                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
-                                        sourceTopicsInfo);
     }
 
     /**
@@ -238,48 +191,6 @@ public class StreamsMetadataState {
     }
 
     /**
-     * Find the {@link StreamsMetadata}s for a given storeName and key.
-     *
-     * Note: the key may not exist in the {@link StateStore},
-     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
-     *
-     * @param storeName   Name of the store
-     * @param key         Key to use
-     * @param partitioner partitioner to use to find correct partition for key
-     * @param <K>         key type
-     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
-     * if streams is (re-)initializing, or {@code null} if no matching metadata could be found.
-     * @deprecated Use {@link #getKeyQueryMetadataForKey(String, Object, StreamPartitioner)} instead.
-     */
-    @Deprecated
-    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
-                                                               final K key,
-                                                               final StreamPartitioner<? super K, ?> partitioner) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Objects.requireNonNull(key, "key can't be null");
-        Objects.requireNonNull(partitioner, "partitioner can't be null");
-
-        if (!isInitialized()) {
-            return StreamsMetadata.NOT_AVAILABLE;
-        }
-
-        if (globalStores.contains(storeName)) {
-            // global stores are on every node. if we don't have the host info
-            // for this host then just pick the first metadata
-            if (thisHost.equals(UNKNOWN_HOST)) {
-                return allMetadata.get(0);
-            }
-            return localMetadata.get();
-        }
-
-        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
-        if (sourceTopicsInfo == null) {
-            return null;
-        }
-        return getStreamsMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
-    }
-
-    /**
      * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
      * metadata
      *
@@ -319,17 +230,18 @@ public class StreamsMetadataState {
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
-            localMetadata.set(new StreamsMetadata(thisHost,
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet(),
-                                                  Collections.emptySet()
+            localMetadata.set(new StreamsMetadataImpl(
+                thisHost,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet()
             ));
             return;
         }
 
         final List<StreamsMetadata> rebuiltMetadata = new ArrayList<>();
-        final Map<String, List<String>> storeToSourceTopics = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> storeToSourceTopics = topologyMetadata.stateStoreNameToSourceTopics();
         Stream.concat(activePartitionHostMap.keySet().stream(), standbyPartitionHostMap.keySet().stream())
             .distinct()
             .forEach(hostInfo -> {
@@ -348,11 +260,12 @@ public class StreamsMetadataState {
                     standbyStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionsOnHost));
                 }
 
-                final StreamsMetadata metadata = new StreamsMetadata(hostInfo,
-                                                                     activeStoresOnHost,
-                                                                     activePartitionsOnHost,
-                                                                     standbyStoresOnHost,
-                                                                     standbyPartitionsOnHost);
+                final StreamsMetadata metadata = new StreamsMetadataImpl(
+                    hostInfo,
+                    activeStoresOnHost,
+                    activePartitionsOnHost,
+                    standbyStoresOnHost,
+                    standbyPartitionsOnHost);
                 rebuiltMetadata.add(metadata);
                 if (hostInfo.equals(thisHost)) {
                     localMetadata.set(metadata);
@@ -395,32 +308,8 @@ public class StreamsMetadataState {
         return new KeyQueryMetadata(activeHost, standbyHosts, partition);
     }
 
-    @Deprecated
-    private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
-                                                         final K key,
-                                                         final StreamPartitioner<? super K, ?> partitioner,
-                                                         final SourceTopicsInfo sourceTopicsInfo) {
-
-        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
-        final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
-            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-        }
-
-        for (final StreamsMetadata streamsMetadata : allMetadata) {
-            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
-            topicPartitions.retainAll(matchingPartitions);
-            if (stateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
-                return streamsMetadata;
-            }
-        }
-        return null;
-    }
-
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
-        final List<String> sourceTopics = new ArrayList<>(builder.sourceTopicsForStore(storeName));
+        final List<String> sourceTopics = new ArrayList<>(topologyMetadata.sourceTopicsForStore(storeName));
         if (sourceTopics.isEmpty()) {
             return null;
         }
@@ -433,7 +322,7 @@ public class StreamsMetadataState {
     }
 
     public String getStoreForChangelogTopic(final String topicName) {
-        return builder.getChangelogTopicToStore().get(topicName);
+        return topologyMetadata.getStoreForChangelogTopic(topicName);
     }
 
     private class SourceTopicsInfo {

@@ -26,6 +26,17 @@ public interface EpochState extends Closeable {
     }
 
     /**
+     * Decide whether to grant a vote to a candidate, it is the responsibility of the caller to invoke
+     * {@link QuorumState##transitionToVoted(int, int)} if vote is granted.
+     *
+     * @param candidateId The ID of the voter who attempt to become leader
+     * @param isLogUpToDate Whether the candidate’s log is at least as up-to-date as receiver’s log, it
+     *                      is the responsibility of the caller to compare the log in advance
+     * @return true If grant vote.
+     */
+    boolean canGrantVote(int candidateId, boolean isLogUpToDate);
+
+    /**
      * Get the current election state, which is guaranteed to be immutable.
      */
     ElectionState election();

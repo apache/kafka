@@ -20,6 +20,7 @@ package kafka.utils
 import java.util
 import java.util.Locale
 
+import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.{Level, LogManager, Logger}
 
 import scala.collection.mutable
@@ -71,7 +72,7 @@ object Log4jController {
     */
   def logLevel(loggerName: String, logLevel: String): Boolean = {
     val log = existingLogger(loggerName)
-    if (!loggerName.trim.isEmpty && !logLevel.trim.isEmpty && log != null) {
+    if (!Utils.isBlank(loggerName) && !Utils.isBlank(logLevel) && log != null) {
       log.setLevel(Level.toLevel(logLevel.toUpperCase(Locale.ROOT)))
       true
     }
@@ -80,7 +81,7 @@ object Log4jController {
 
   def unsetLogLevel(loggerName: String): Boolean = {
     val log = existingLogger(loggerName)
-    if (!loggerName.trim.isEmpty && log != null) {
+    if (!Utils.isBlank(loggerName) && log != null) {
       log.setLevel(null)
       true
     }

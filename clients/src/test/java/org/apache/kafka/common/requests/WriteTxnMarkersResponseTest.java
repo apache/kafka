@@ -18,14 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class WriteTxnMarkersResponseTest {
 
@@ -40,7 +40,7 @@ public class WriteTxnMarkersResponseTest {
 
     private static Map<Long, Map<TopicPartition, Errors>> errorMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         errorMap = new HashMap<>();
         errorMap.put(producerIdOne, Collections.singletonMap(tp1, pidOneError));

@@ -102,7 +102,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                        final ConsumedInternal<K, V> consumed) {
-        final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
 
         addGraphNode(root, streamPatternSourceNode);
@@ -203,11 +203,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String sourceName,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
-                                                       final String processorName,
                                                        final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        // explicitly disable logging for global stores
+        storeBuilder.withLoggingDisabled();
+        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
 
         final GraphNode globalStoreNode = new GlobalStoreNode<>(
             storeBuilder,
@@ -219,24 +221,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         );
 
         addGraphNode(root, globalStoreNode);
-    }
-
-    public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String topic,
-                                                       final ConsumedInternal<KIn, VIn> consumed,
-                                                       final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
-        // explicitly disable logging for global stores
-        storeBuilder.withLoggingDisabled();
-        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
-        addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            consumed,
-            processorName,
-            stateUpdateSupplier
-        );
     }
 
     void addGraphNode(final GraphNode parent,
@@ -330,16 +314,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
-                if (currentSourceNode.topicPattern() != null) {
-                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
-                        patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
+                if (currentSourceNode.topicPattern().isPresent()) {
+                    final Pattern topicPattern = currentSourceNode.topicPattern().get();
+                    if (!patternsToSourceNodes.containsKey(topicPattern)) {
+                        patternsToSourceNodes.put(topicPattern, currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(topicPattern);
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }
                 } else {
-                    for (final String topic : currentSourceNode.topicNames()) {
+                    for (final String topic : currentSourceNode.topicNames().get()) {
                         if (!topicsToSourceNodes.containsKey(topic)) {
                             topicsToSourceNodes.put(topic, currentSourceNode);
                         } else {

@@ -21,10 +21,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -43,40 +40,25 @@ import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.SecurityStor
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
 import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import java.security.Security;
 import java.util.Properties;
 
-@RunWith(value = Parameterized.class)
-public class SslFactoryTest {
-
+public abstract class SslFactoryTest {
     private final String tlsProtocol;
-
-    @Parameterized.Parameters(name = "tlsProtocol={0}")
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        values.add(new Object[] {"TLSv1.2"});
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            values.add(new Object[] {"TLSv1.3"});
-        }
-        return values;
-    }
 
     public SslFactoryTest(String tlsProtocol) {
         this.tlsProtocol = tlsProtocol;
@@ -108,7 +90,7 @@ public class SslFactoryTest {
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        assertNotNull("SslEngineFactory not created", sslFactory.sslEngineFactory());
+        assertNotNull(sslFactory.sslEngineFactory(), "SslEngineFactory not created");
         Security.removeProvider(testProviderCreator.getProvider().getName());
     }
 
@@ -203,13 +185,12 @@ public class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
-        assertNotNull("SslEngineFactory not created", sslEngineFactory);
+        assertNotNull(sslEngineFactory, "SslEngineFactory not created");
 
         // Verify that SslEngineFactory is not recreated on reconfigure() if config and
         // file are not changed
         sslFactory.reconfigure(sslConfig);
-        assertSame("SslEngineFactory recreated unnecessarily",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory recreated unnecessarily");
 
         // Verify that the SslEngineFactory is recreated on reconfigure() if config is changed
         trustStoreFile = File.createTempFile("truststore", ".jks");
@@ -217,39 +198,34 @@ public class SslFactoryTest {
                 .createNewTrustStore(trustStoreFile)
                 .build();
         sslFactory.reconfigure(sslConfig);
-        assertNotSame("SslEngineFactory not recreated",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated on reconfigure() if config is not changed, but truststore file was modified
         trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
         sslFactory.reconfigure(sslConfig);
-        assertNotSame("SslEngineFactory not recreated",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated on reconfigure() if config is not changed, but keystore file was modified
         File keyStoreFile = new File((String) sslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
         keyStoreFile.setLastModified(System.currentTimeMillis() + 10000);
         sslFactory.reconfigure(sslConfig);
-        assertNotSame("SslEngineFactory not recreated",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that builder is recreated after validation on reconfigure() if config is not changed, but keystore file was modified
         keyStoreFile.setLastModified(System.currentTimeMillis() + 15000);
         sslFactory.validateReconfiguration(sslConfig);
         sslFactory.reconfigure(sslConfig);
-        assertNotSame("SslEngineFactory not recreated",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         // Verify that the builder is not recreated if modification time cannot be determined
         keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
         Files.delete(keyStoreFile.toPath());
         sslFactory.reconfigure(sslConfig);
-        assertSame("SslEngineFactory recreated unnecessarily",
-                sslEngineFactory, sslFactory.sslEngineFactory());
+        assertSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory recreated unnecessarily");
     }
 
     @Test
@@ -264,9 +240,9 @@ public class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext();
-        assertNotNull("SSL context not created", sslContext);
-        assertSame("SSL context recreated unnecessarily", sslContext,
-                ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext());
+        assertNotNull(sslContext, "SSL context not created");
+        assertSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
+                "SSL context recreated unnecessarily");
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
@@ -292,9 +268,9 @@ public class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext();
-        assertNotNull("SSL context not created", sslContext);
-        assertSame("SSL context recreated unnecessarily", sslContext,
-                ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext());
+        assertNotNull(sslContext, "SSL context not created");
+        assertSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
+                "SSL context recreated unnecessarily");
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         File newTrustStoreFile = File.createTempFile("truststore", ".jks");
@@ -305,8 +281,8 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
         sslFactory.reconfigure(sslConfig);
-        assertNotSame("SSL context not recreated", sslContext,
-                ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext());
+        assertNotSame(sslContext, ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext(),
+                "SSL context not recreated");
 
         sslConfig = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(newTrustStoreFile)
@@ -331,32 +307,32 @@ public class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig.values());
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
-        assertNotNull("SslEngineFactory not created", sslEngineFactory);
+        assertNotNull(sslEngineFactory, "SslEngineFactory not created");
 
         props.put("some.config", "some.value");
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
-        assertSame("SslEngineFactory recreated unnecessarily", sslEngineFactory, sslFactory.sslEngineFactory());
+        assertSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory recreated unnecessarily");
 
         props.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
                 new Password(((Password) props.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)).value() + " "));
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
-        assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         props.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
                 new Password(((Password) props.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)).value() + " "));
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
-        assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
 
         props.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
                 new Password(((Password) props.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)).value() + " "));
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
-        assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
+        assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
         sslEngineFactory = sslFactory.sslEngineFactory();
     }
 
@@ -368,7 +344,7 @@ public class SslFactoryTest {
                 .build();
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        assertNotNull("SslEngineFactory not created", sslFactory.sslEngineFactory());
+        assertNotNull(sslFactory.sslEngineFactory(), "SslEngineFactory not created");
     }
 
     @Test
@@ -398,15 +374,15 @@ public class SslFactoryTest {
 
     @Test
     public void testKeystoreVerifiableUsingTruststore() throws Exception {
-        verifyKeystoreVerifiableUsingTruststore(false);
+        verifyKeystoreVerifiableUsingTruststore(false, tlsProtocol);
     }
 
     @Test
     public void testPemKeystoreVerifiableUsingTruststore() throws Exception {
-        verifyKeystoreVerifiableUsingTruststore(true);
+        verifyKeystoreVerifiableUsingTruststore(true, tlsProtocol);
     }
 
-    private void verifyKeystoreVerifiableUsingTruststore(boolean usePem) throws Exception {
+    private void verifyKeystoreVerifiableUsingTruststore(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile1 = usePem ? null : File.createTempFile("truststore1", ".jks");
         Map<String, Object> sslConfig1 = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile1)
@@ -434,15 +410,15 @@ public class SslFactoryTest {
 
     @Test
     public void testCertificateEntriesValidation() throws Exception {
-        verifyCertificateEntriesValidation(false);
+        verifyCertificateEntriesValidation(false, tlsProtocol);
     }
 
     @Test
     public void testPemCertificateEntriesValidation() throws Exception {
-        verifyCertificateEntriesValidation(true);
+        verifyCertificateEntriesValidation(true, tlsProtocol);
     }
 
-    private void verifyCertificateEntriesValidation(boolean usePem) throws Exception {
+    private void verifyCertificateEntriesValidation(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile = usePem ? null : File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile)
@@ -479,8 +455,8 @@ public class SslFactoryTest {
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(clientSslConfig);
-        assertTrue("SslEngineFactory must be of expected type",
-                sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory);
+        assertTrue(sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory,
+            "SslEngineFactory must be of expected type");
     }
 
     @Test
@@ -512,8 +488,8 @@ public class SslFactoryTest {
         serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        assertTrue("SslEngineFactory must be of expected type",
-                sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory);
+        assertTrue(sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory,
+            "SslEngineFactory must be of expected type");
     }
 
     /**

@@ -91,7 +91,7 @@ object ZkSecurityMigrator extends Logging {
       throw new IllegalArgumentException("Incorrect configuration")
     }
 
-    val zkAcl: Boolean = opts.options.valueOf(opts.zkAclOpt) match {
+    val zkAcl = opts.options.valueOf(opts.zkAclOpt) match {
       case "secure" =>
         info("zookeeper.acl option is secure")
         true
@@ -105,7 +105,7 @@ object ZkSecurityMigrator extends Logging {
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = Some(zkClientConfig))
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ZkSecurityMigrator")
     val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run(enablePathCheck)

@@ -27,7 +27,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -42,13 +41,15 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
@@ -58,6 +59,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @Category({IntegrationTest.class})
 public class StoreUpgradeIntegrationTest {
     private static final String STORE_NAME = "store";
@@ -65,8 +67,17 @@ public class StoreUpgradeIntegrationTest {
 
     private KafkaStreams kafkaStreams;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -86,7 +97,7 @@ public class StoreUpgradeIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return streamsConfiguration;
     }
@@ -518,8 +529,8 @@ public class StoreUpgradeIntegrationTest {
 
 
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props()),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props()),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             false);
     }
 
@@ -554,17 +565,17 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedWindowedProcessor::new, STORE_NAME);
 
-        final Properties props = props();
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             true);
     }
 
-    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final KafkaStreams kafkaStreamsOld,
-                                                                           final KafkaStreams kafkaStreamsNew,
+    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final StreamsBuilder streamsBuilderForOldStore,
+                                                                           final StreamsBuilder streamsBuilderForNewStore,
                                                                            final boolean persistentStore) throws Exception {
-        kafkaStreams = kafkaStreamsOld;
+        final Properties props = props();
+        kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
@@ -608,7 +619,7 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-        kafkaStreams = kafkaStreamsNew;
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
         verifyWindowedCountWithTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L, lastUpdateKeyOne);
@@ -942,7 +953,8 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    private static class KeyValueProcessor implements Processor<Integer, Integer> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class KeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private KeyValueStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
@@ -969,7 +981,8 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class TimestampedKeyValueProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedKeyValueStore<Integer, Long> store;
 
@@ -1002,7 +1015,8 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class WindowedProcessor implements Processor<Integer, Integer> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class WindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private WindowStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
@@ -1029,7 +1043,8 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private static class TimestampedWindowedProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
         private ProcessorContext context;
         private TimestampedWindowStore<Integer, Long> store;
 

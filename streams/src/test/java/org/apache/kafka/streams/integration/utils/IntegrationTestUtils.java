@@ -49,6 +49,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
+import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -150,6 +151,17 @@ public class IntegrationTestUtils {
             if (node.getAbsolutePath().startsWith(tmpDir)) {
                 Utils.delete(new File(node.getAbsolutePath()));
             }
+        }
+    }
+
+    /**
+     * Removes local state stores. Useful to reset state in-between integration test runs.
+     *
+     * @param streamsConfigurations Streams configuration settings
+     */
+    public static void purgeLocalStreamsState(final Collection<Properties> streamsConfigurations) throws IOException {
+        for (final Properties streamsConfig : streamsConfigurations) {
+            purgeLocalStreamsState(streamsConfig);
         }
     }
 
@@ -728,7 +740,8 @@ public class IntegrationTestUtils {
                 return finalAccumData.equals(finalExpected);
 
             };
-            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
+            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " +
+                topic + " (got " + accumData + ")";
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -979,9 +992,15 @@ public class IntegrationTestUtils {
 
     private static StateListener getStateListener(final KafkaStreams streams) {
         try {
-            final Field field = streams.getClass().getDeclaredField("stateListener");
-            field.setAccessible(true);
-            return (StateListener) field.get(streams);
+            if (streams instanceof KafkaStreamsNamedTopologyWrapper) {
+                final Field field = streams.getClass().getSuperclass().getDeclaredField("stateListener");
+                field.setAccessible(true);
+                return (StateListener) field.get(streams);
+            } else {
+                final Field field = streams.getClass().getDeclaredField("stateListener");
+                field.setAccessible(true);
+                return (StateListener) field.get(streams);
+            }
         } catch (final IllegalAccessException | NoSuchFieldException e) {
             throw new RuntimeException("Failed to get StateListener through reflection", e);
         }
@@ -1338,15 +1357,6 @@ public class IntegrationTestUtils {
         public void onRestoreEnd(final TopicPartition topicPartition,
                                  final String storeName,
                                  final long totalRestored) {
-        }
-
-        public boolean allStartOffsetsAtZero() {
-            for (final AtomicLong startOffset : changelogToStartOffset.values()) {
-                if (startOffset.get() != 0L) {
-                    return false;
-                }
-            }
-            return true;
         }
 
         public long totalNumRestored() {

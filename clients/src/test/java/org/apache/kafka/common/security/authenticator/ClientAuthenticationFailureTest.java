@@ -38,9 +38,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -49,7 +49,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Future;
 
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientAuthenticationFailureTest {
     private static MockTime time = new MockTime(50);
@@ -60,7 +60,7 @@ public class ClientAuthenticationFailureTest {
     private final String topic = "test";
     private TestJaasConfig testJaasConfig;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         LoginManager.closeAll();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
@@ -77,7 +77,7 @@ public class ClientAuthenticationFailureTest {
         server = createEchoServer(securityProtocol);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         if (server != null)
             server.close();
@@ -116,7 +116,7 @@ public class ClientAuthenticationFailureTest {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         try (Admin client = Admin.create(props)) {
-            KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).all();
+            KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).allTopicNames();
             TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
         }
     }

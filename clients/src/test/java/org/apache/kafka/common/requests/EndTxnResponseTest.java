@@ -19,12 +19,12 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EndTxnResponseTest {
 
@@ -38,7 +38,7 @@ public class EndTxnResponseTest {
 
         Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
 
-        for (short version = 0; version <= ApiKeys.END_TXN.latestVersion(); version++) {
+        for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnResponse response = new EndTxnResponse(data);
             assertEquals(expectedErrorCounts, response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());

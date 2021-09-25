@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -92,7 +94,7 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, new RecordHeaders()));
         assertThat(context.topic(), nullValue());
     }
 
@@ -156,41 +158,46 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
-        context.setRecordContext(null);
-        try {
-            context.headers();
-        } catch (final IllegalStateException e) {
-            // pass
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
     public void appConfigsShouldReturnParsedValues() {
         assertThat(
             context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG),
-            equalTo(RocksDBConfigSetter.class));
+            equalTo(RocksDBConfigSetter.class)
+        );
     }
 
     @Test
     public void appConfigsShouldReturnUnrecognizedValues() {
         assertThat(
             context.appConfigs().get("user.supplied.config"),
-            equalTo("user-supplied-value"));
+            equalTo("user-supplied-value")
+        );
+    }
+    @Test
+    public void shouldThrowErrorIfSerdeDefaultNotSet() {
+        final Properties config = getStreamsConfig();
+        config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+        config.put("user.supplied.config", "user-supplied-value");
+        final TestProcessorContext pc = new TestProcessorContext(metrics, config);
+        assertThrows(ConfigException.class, pc::keySerde);
+        assertThrows(ConfigException.class, pc::valueSerde);
     }
 
-
-    private static class TestProcessorContext extends AbstractProcessorContext {
+    private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
         static {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+            config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+            config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
             config.put("user.supplied.config", "user-supplied-value");
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+        }
+
+        TestProcessorContext(final MockStreamsMetrics metrics, final Properties config) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
@@ -201,14 +208,6 @@ public class AbstractProcessorContextTest {
 
         @Override
         public <S extends StateStore> S getStateStore(final String name) {
-            return null;
-        }
-
-        @Override
-        @Deprecated
-        public Cancellable schedule(final long interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
             return null;
         }
 
@@ -232,15 +231,12 @@ public class AbstractProcessorContextTest {
         public <K, V> void forward(final K key, final V value, final To to) {}
 
         @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final int childIndex) {}
-
-        @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final String childName) {}
-
-        @Override
         public void commit() {}
+
+        @Override
+        public long currentStreamTimeMs() {
+            throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
+        }
 
         @Override
         public void logChange(final String storeName,
@@ -263,7 +259,7 @@ public class AbstractProcessorContextTest {
 
         @Override
         public String changelogFor(final String storeName) {
-            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
+            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().topologyName());
         }
     }
 }

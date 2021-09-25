@@ -27,13 +27,14 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.collection.mutable.Buffer
@@ -57,7 +58,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val topicConfig = new Properties()
@@ -73,7 +74,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       createReadUncommittedConsumer("non-transactional-group")
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
@@ -226,6 +227,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertEquals(3L, second.offset)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testSendOffsetsWithGroupId() = {
     sendOffset((producer, groupId, consumer) =>
@@ -301,8 +303,8 @@ class TransactionsTest extends KafkaServerTestHarness {
       TestUtils.assertCommittedAndGetValue(record).toInt
     }
     val valueSet = valueSeq.toSet
-    assertEquals(s"Expected $numSeedMessages values in $topic2.", numSeedMessages, valueSeq.size)
-    assertEquals(s"Expected ${valueSeq.size} unique messages in $topic2.", valueSeq.size, valueSet.size)
+    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
+    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
   }
 
   @Test
@@ -324,15 +326,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.commitTransaction()
-      fail("Should not be able to commit transactions from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.commitTransaction())
 
     producer2.commitTransaction()  // ok
 
@@ -362,16 +356,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0) -> new OffsetAndMetadata(110L)).asJava,
-        "foobarGroup")
-      fail("Should not be able to send offsets from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
+      -> new OffsetAndMetadata(110L)).asJava, new ConsumerGroupMetadata("foobarGroup")))
 
     producer2.commitTransaction()  // ok
 
@@ -395,7 +381,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer.beginTransaction()
     val offsetAndMetadata = new OffsetAndMetadata(110L, Optional.of(15), "some metadata")
-    producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, groupId)
+    producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, new ConsumerGroupMetadata(groupId))
     producer.commitTransaction()  // ok
 
     // The call to commit the transaction may return before all markers are visible, so we initialize a second
@@ -414,7 +400,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testSendOffsetsToTransactionTimeout(): Unit = {
     testTimeout(true, producer => producer.sendOffsetsToTransaction(
-      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, "test-group"))
+      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
   }
 
   @Test

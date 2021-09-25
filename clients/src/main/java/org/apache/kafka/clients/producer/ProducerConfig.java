@@ -81,7 +81,12 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "<p>"
                                                  + "A small batch size will make batching less common and may reduce throughput (a batch size of zero will disable "
                                                  + "batching entirely). A very large batch size may use memory a bit more wastefully as we will always allocate a "
-                                                 + "buffer of the specified batch size in anticipation of additional records.";
+                                                 + "buffer of the specified batch size in anticipation of additional records."
+                                                 + "<p>"
+                                                 + "Note: This setting gives the upper bound of the batch size to be sent. If we have fewer than this many bytes accumulated "
+                                                 + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
+                                                 + "This <code>linger.ms</code> setting defaults to 0, which means we'll immediately send out a record even the accumulated "
+                                                 + "batch size is under this <code>batch.size</code> setting.";
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
@@ -106,7 +111,7 @@ public class ProducerConfig extends AbstractConfig {
     private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. "
                                                 + "Normally this occurs only under load when records arrive faster than they can be sent out. However in some circumstances the client may want to "
                                                 + "reduce the number of requests even under moderate load. This setting accomplishes this by adding a small amount "
-                                                + "of artificial delay&mdash;that is, rather than immediately sending out a record the producer will wait for up to "
+                                                + "of artificial delay&mdash;that is, rather than immediately sending out a record, the producer will wait for up to "
                                                 + "the given delay to allow other records to be sent so that the sends can be batched together. This can be thought "
                                                 + "of as analogous to Nagle's algorithm in TCP. This setting gives the upper bound on the delay for batching: once "
                                                 + "we get <code>" + BATCH_SIZE_CONFIG + "</code> worth of records for a partition it will be sent immediately regardless of this "
@@ -200,8 +205,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>max.in.flight.requests.per.connection</code> */
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
-                                                                            + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
-                                                                            + " message re-ordering due to retries (i.e., if retries are enabled).";
+                                                                            + " Note that if this config is set to be greater than 1 and <code>enable.idempotence</code> is set to false, there is a risk of"
+                                                                            + " message re-ordering after a failed send due to retries (i.e., if retries are enabled).";
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -234,7 +239,25 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>partitioner.class</code> */
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
-    private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code> interface.";
+    private static final String PARTITIONER_CLASS_DOC = "A class to use to determine which partition to be send to when produce the records. Available options are:" +
+        "<ul>" +
+            "<li><code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>: The default partitioner. " +
+        "This strategy will try sticking to a partition until the batch is full, or <code>linger.ms</code> is up. It works with the strategy:" +
+                "<ul>" +
+                    "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key</li>" +
+                    "<li>If no partition or key is present, choose the sticky partition that changes when the batch is full, or <code>linger.ms</code> is up.</li>" +
+                "</ul>" +
+            "</li>" +
+            "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: This partitioning strategy is that " +
+        "each record in a series of consecutive records will be sent to a different partition(no matter if the 'key' is provided or not), " +
+        "until we run out of partitions and start over again. Note: There's a known issue that will cause uneven distribution when new batch is created. " +
+        "Please check KAFKA-9965 for more detail." +
+            "</li>" +
+            "<li><code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code>: This partitioning strategy will " +
+        "try sticking to a partition(no matter if the 'key' is provided or not) until the batch is full, or <code>linger.ms</code> is up." +
+            "</li>" +
+        "</ul>" +
+        "<p>Implementing the <code>org.apache.kafka.clients.producer.Partitioner</code> interface allows you to plug in a custom partitioner.";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -246,10 +269,10 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
-                                                        + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
-                                                        + "a <code>ConfigException</code> will be thrown.";
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5 "
+                                                        + "(with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
+                                                        + ACKS_CONFIG + "</code> must be 'all'. If these values are not explicitly set by the user, suitable values will be chosen. If incompatible "
+                                                        + "values are set, a <code>ConfigException</code> will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
@@ -269,21 +292,6 @@ public class ProducerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
-    /**
-     * <code>internal.auto.downgrade.txn.commit</code>
-     * Whether or not the producer should automatically downgrade the transactional commit request when the new group metadata
-     * feature is not supported by the broker.
-     * <p>
-     * The purpose of this flag is to make Kafka Streams being capable of working with old brokers when applying this new API.
-     * Non Kafka Streams users who are building their own EOS applications should be careful playing around
-     * with config as there is a risk of violating EOS semantics when turning on this flag.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String AUTO_DOWNGRADE_TXN_COMMIT = "internal.auto.downgrade.txn.commit";
-
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
@@ -291,8 +299,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
                                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                                        in(ClientDnsLookup.DEFAULT.toString(),
-                                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                                        in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
@@ -300,9 +307,9 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
-                                        "1",
+                                        "all",
                                         in("all", "-1", "0", "1"),
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
@@ -412,7 +419,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,
                                         Type.BOOLEAN,
-                                        false,
+                                        true,
                                         Importance.LOW,
                                         ENABLE_IDEMPOTENCE_DOC)
                                 .define(TRANSACTION_TIMEOUT_CONFIG,
@@ -425,16 +432,11 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC)
-                                .defineInternal(AUTO_DOWNGRADE_TXN_COMMIT,
-                                        Type.BOOLEAN,
-                                        false,
-                                        Importance.LOW);
+                                        TRANSACTIONAL_ID_DOC);
     }
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideEnableIdempotence(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
@@ -492,15 +494,6 @@ public class ProducerConfig extends AbstractConfig {
         }
     }
 
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
-                                                            Serializer<?> keySerializer, Serializer<?> valueSerializer) {
-        return appendSerializerToConfig(configs, keySerializer, valueSerializer);
-    }
-
     static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
@@ -510,22 +503,6 @@ public class ProducerConfig extends AbstractConfig {
         if (valueSerializer != null)
             newConfigs.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
         return newConfigs;
-    }
-
-    /**
-     * @deprecated Since 2.7.0. This will be removed in a future major release.
-     */
-    @Deprecated
-    public static Properties addSerializerToConfig(Properties properties,
-                                                   Serializer<?> keySerializer,
-                                                   Serializer<?> valueSerializer) {
-        Properties newProperties = new Properties();
-        newProperties.putAll(properties);
-        if (keySerializer != null)
-            newProperties.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName());
-        if (valueSerializer != null)
-            newProperties.put(VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName());
-        return newProperties;
     }
 
     public ProducerConfig(Properties props) {

@@ -19,23 +19,20 @@ package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(120)
 public class ApiMessageTypeTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testFromApiKey() {
@@ -61,16 +58,16 @@ public class ApiMessageTypeTest {
         Set<String> requestNames = new HashSet<>();
         Set<String> responseNames = new HashSet<>();
         for (ApiMessageType type : ApiMessageType.values()) {
-            assertFalse("found two ApiMessageType objects with id " + type.apiKey(),
-                ids.contains(type.apiKey()));
+            assertFalse(ids.contains(type.apiKey()),
+                "found two ApiMessageType objects with id " + type.apiKey());
             ids.add(type.apiKey());
             String requestName = type.newRequest().getClass().getSimpleName();
-            assertFalse("found two ApiMessageType objects with requestName " + requestName,
-                requestNames.contains(requestName));
+            assertFalse(requestNames.contains(requestName),
+                "found two ApiMessageType objects with requestName " + requestName);
             requestNames.add(requestName);
             String responseName = type.newResponse().getClass().getSimpleName();
-            assertFalse("found two ApiMessageType objects with responseName " + responseName,
-                responseNames.contains(responseName));
+            assertFalse(responseNames.contains(responseName),
+                "found two ApiMessageType objects with responseName " + responseName);
             responseNames.add(responseName);
         }
         assertEquals(ApiMessageType.values().length, ids.size());
@@ -106,7 +103,7 @@ public class ApiMessageTypeTest {
     @Test
     public void testAllVersionsHaveSchemas() {
         for (ApiMessageType type : ApiMessageType.values()) {
-            Assertions.assertEquals(0, type.lowestSupportedVersion());
+            assertEquals(0, type.lowestSupportedVersion());
 
             assertEquals(type.requestSchemas().length, type.responseSchemas().length);
             for (Schema schema : type.requestSchemas())

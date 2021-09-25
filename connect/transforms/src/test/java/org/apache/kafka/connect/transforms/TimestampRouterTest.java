@@ -17,24 +17,24 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimestampRouterTest {
     private final TimestampRouter<SourceRecord> xform = new TimestampRouter<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
 
     @Test
     public void defaultConfiguration() {
-        xform.configure(Collections.<String, Object>emptyMap()); // defaults
+        xform.configure(Collections.emptyMap()); // defaults
         final SourceRecord record = new SourceRecord(
                 null, null,
                 "test", 0,

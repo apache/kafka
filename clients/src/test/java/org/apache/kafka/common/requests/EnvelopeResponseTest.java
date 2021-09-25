@@ -32,7 +32,7 @@ class EnvelopeResponseTest {
 
     @Test
     public void testToSend() {
-        for (short version = ApiKeys.ENVELOPE.oldestVersion(); version <= ApiKeys.ENVELOPE.latestVersion(); version++) {
+        for (short version : ApiKeys.ENVELOPE.allVersions()) {
             ByteBuffer responseData = ByteBuffer.wrap("foobar".getBytes());
             EnvelopeResponse response = new EnvelopeResponse(responseData, Errors.NONE);
             short headerVersion = ApiKeys.ENVELOPE.responseHeaderVersion(version);

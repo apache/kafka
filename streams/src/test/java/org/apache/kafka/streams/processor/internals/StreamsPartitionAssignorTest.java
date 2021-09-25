@@ -56,6 +56,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -136,6 +137,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
+@SuppressWarnings("deprecation")
 public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -189,6 +191,7 @@ public class StreamsPartitionAssignorTest {
     private TaskManager taskManager;
     private Admin adminClient;
     private InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private TopologyMetadata topologyMetadata;
     private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
@@ -229,6 +232,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
         return overwriteInternalTopicManagerWithMock(false);
     }
 
@@ -239,11 +243,11 @@ public class StreamsPartitionAssignorTest {
     private void createMockTaskManager(final Set<TaskId> activeTasks,
                                        final Set<TaskId> standbyTasks) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andStubReturn(builder);
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(taskManager.getTaskOffsetSums()).andStubReturn(getTaskOffsetSums(activeTasks, standbyTasks));
         expect(taskManager.processId()).andStubReturn(UUID_1);
         builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        topologyMetadata.buildAndRewriteTopology();
     }
 
     // If mockCreateInternalTopics is true the internal topic manager will report that it had to create all internal
@@ -271,6 +275,7 @@ public class StreamsPartitionAssignorTest {
     public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> taskAssignor) {
         this.taskAssignor = taskAssignor;
         adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
     }
 
     @Test
@@ -652,41 +657,6 @@ public class StreamsPartitionAssignorTest {
         assertEquals(expectedInfo11TaskIds, info11.activeTasks());
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testAssignWithPartialTopology() {
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
-        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-        builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor2", new MockApiProcessorSupplier<>(), "source2");
-        builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor2");
-        final List<String> topics = asList("topic1", "topic2");
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-        createDefaultMockTaskManager();
-        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3))
-        );
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class));
-
-        // will throw exception if it fails
-        subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode()
-                          ));
-        final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check assignment info
-        final AssignmentInfo info10 = checkAssignment(mkSet("topic1"), assignments.get("consumer10"));
-        final Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks());
-
-        assertEquals(3, allActiveTasks.size());
-        assertEquals(allTasks, new HashSet<>(allActiveTasks));
-    }
-
     @Test
     public void testAssignEmptyMetadata() {
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -846,7 +816,7 @@ public class StreamsPartitionAssignorTest {
         assertEquals(new HashSet<>(tasks), allTasks);
 
         // check tasks for state topics
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
         assertEquals(mkSet(TASK_0_0, TASK_0_1, TASK_0_2), tasksForState("store1", tasks, topicGroups));
         assertEquals(mkSet(TASK_1_0, TASK_1_1, TASK_1_2), tasksForState("store2", tasks, topicGroups));
@@ -855,16 +825,16 @@ public class StreamsPartitionAssignorTest {
 
     private static Set<TaskId> tasksForState(final String storeName,
                                              final List<TaskId> tasks,
-                                             final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups) {
-        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName);
+                                             final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups) {
+        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName, null);
 
         final Set<TaskId> ids = new HashSet<>();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+        for (final Map.Entry<Subtopology, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             final Set<String> stateChangelogTopics = entry.getValue().stateChangelogTopics.keySet();
 
             if (stateChangelogTopics.contains(changelogTopic)) {
                 for (final TaskId id : tasks) {
-                    if (id.topicGroupId == entry.getKey()) {
+                    if (id.subtopology() == entry.getKey().nodeGroupId) {
                         ids.add(id);
                     }
                 }
@@ -1144,6 +1114,7 @@ public class StreamsPartitionAssignorTest {
 
         final String client = "client1";
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             asList(APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
@@ -1227,18 +1198,20 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldThrowTimeoutExceptionWhenCreatingChangelogTopicsTimesOut() {
+        final StreamsConfig config = new StreamsConfig(configProps());
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.table("topic1", Materialized.as("store"));
 
         final String client = "client1";
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder, config);
 
         createDefaultMockTaskManager();
         EasyMock.replay(taskManager);
         partitionAssignor.configure(configProps());
         final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
             time,
-            new StreamsConfig(configProps()),
+            config,
             mockClientSupplier.restoreConsumer,
             false
         ) {
@@ -1470,19 +1443,20 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
+        final Map<String, Object> props = configProps();
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, USER_END_POINT);
+
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         streamsBuilder.stream("topic1").groupByKey().count();
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(props));
 
         createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog"),
             singletonList(3))
         );
-
-        final Map<String, Object> props = new HashMap<>();
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, USER_END_POINT);
 
         configurePartitionAssignorWith(props);
 
@@ -1950,8 +1924,10 @@ public class StreamsPartitionAssignorTest {
         streamsBuilder.table("topic1", Materialized.as("store"));
 
         final Properties props = new Properties();
+        props.putAll(configProps());
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build(props));
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(props));
 
         subscriptions.put("consumer10",
             new Subscription(
@@ -2026,6 +2002,8 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowTaskAssignmentExceptionWhenUnableToResolvePartitionCount() {
         builder = new CorruptedInternalTopologyBuilder();
+        topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
+
         final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
 
         final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>());
@@ -2059,13 +2037,13 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
-        private Map<Integer, TopicsInfo> corruptedTopicGroups;
+        private Map<Subtopology, TopicsInfo> corruptedTopicGroups;
 
         @Override
-        public synchronized Map<Integer, TopicsInfo> topicGroups() {
+        public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
             if (corruptedTopicGroups == null) {
                 corruptedTopicGroups = new HashMap<>();
-                for (final Map.Entry<Integer, TopicsInfo> topicGroupEntry : super.topicGroups().entrySet()) {
+                for (final Map.Entry<Subtopology, TopicsInfo> topicGroupEntry : super.topicGroups().entrySet()) {
                     final TopicsInfo originalInfo = topicGroupEntry.getValue();
                     corruptedTopicGroups.put(
                         topicGroupEntry.getKey(),
@@ -2143,7 +2121,7 @@ public class StreamsPartitionAssignorTest {
             final Set<TopicPartition> partitions = entry.getValue();
             for (final TopicPartition partition : partitions) {
                 // since default grouper, taskid.partition == partition.partition()
-                assertEquals(id.partition, partition.partition());
+                assertEquals(id.partition(), partition.partition());
 
                 standbyTopics.add(partition.topic());
             }

@@ -16,6 +16,7 @@
 {
   "apiKey": 52,
   "type": "request",
+  "listeners": ["controller"],
   "name": "VoteRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
@@ -32,7 +33,7 @@
           "about": "The partition index." },
         { "name": "CandidateEpoch", "type": "int32", "versions": "0+",
           "about": "The bumped epoch of the candidate sending the request"},
-        { "name": "CandidateId", "type": "int32", "versions": "0+",
+        { "name": "CandidateId", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The ID of the voter sending the request"},
         { "name": "LastOffsetEpoch", "type": "int32", "versions": "0+",
           "about": "The epoch of the last record written to the metadata log"},

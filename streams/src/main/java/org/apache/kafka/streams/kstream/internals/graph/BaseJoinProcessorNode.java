@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 
 /**
  * Utility base class containing the common fields between
@@ -28,13 +28,13 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
     private final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters;
     private final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters;
     private final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters;
-    private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner;
     private final String thisJoinSideNodeName;
     private final String otherJoinSideNodeName;
 
 
     BaseJoinProcessorNode(final String nodeName,
-                          final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                          final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
                           final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
                           final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters,
                           final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
@@ -61,10 +61,6 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
 
     ProcessorParameters<K, VR, ?, ?> mergeProcessorParameters() {
         return joinMergeProcessorParameters;
-    }
-
-    ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner() {
-        return valueJoiner;
     }
 
     String thisJoinSideNodeName() {

@@ -16,6 +16,7 @@
 {
   "apiKey": 23,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "OffsetForLeaderEpochRequest",
   // Version 1 is the same as version 0.
   //
@@ -29,7 +30,7 @@
   "validVersions": "0-4",
   "flexibleVersions": "4+",
   "fields": [
-    { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true,
+    { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true, "entityType": "brokerId",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
     { "name": "Topics", "type": "[]OffsetForLeaderTopic", "versions": "0+",
       "about": "Each topic to get offsets for.", "fields": [

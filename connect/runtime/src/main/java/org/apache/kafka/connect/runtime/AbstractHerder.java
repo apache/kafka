@@ -59,8 +59,10 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -99,7 +101,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -209,6 +211,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
     }
 
+    public void onRestart(String connector) {
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RESTARTING,
+                workerId, generation()));
+    }
+
+    public void onRestart(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.RESTARTING, workerId, generation()));
+    }
+
     @Override
     public void pauseConnector(String connector) {
         if (!configBackingStore.contains(connector))
@@ -229,9 +240,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     /*
-     * Retrieves config map by connector name
+     * Retrieves raw config map by connector name.
      */
-    protected abstract Map<String, String> config(String connName);
+    protected abstract Map<String, String> rawConfig(String connName);
 
     @Override
     public void connectorConfig(String connName, Callback<Map<String, String>> callback) {
@@ -265,6 +276,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         );
     }
 
+    protected Map<ConnectorTaskId, Map<String, String>> buildTasksConfig(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return Collections.emptyMap();
+
+        Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
+        for (ConnectorTaskId cti : configState.tasks(connector)) {
+            configs.put(cti, configState.taskConfig(cti));
+        }
+
+        return configs;
+    }
+
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
@@ -284,7 +309,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        Map<String, String> conf = config(connName);
+        Map<String, String> conf = rawConfig(connName);
         return new ConnectorStateInfo(connName, connectorState, taskStates,
             conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -340,6 +365,54 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 callback.onCompletion(t, null);
             }
         });
+    }
+
+    /**
+     * Build the {@link RestartPlan} that describes what should and should not be restarted given the restart request
+     * and the current status of the connector and task instances.
+     *
+     * @param request the restart request; may not be null
+     * @return the restart plan, or empty if this worker has no status for the connector named in the request and therefore the
+     *         connector cannot be restarted
+     */
+    public Optional<RestartPlan> buildRestartPlan(RestartRequest request) {
+        String connectorName = request.connectorName();
+        ConnectorStatus connectorStatus = statusBackingStore.get(connectorName);
+        if (connectorStatus == null) {
+            return Optional.empty();
+        }
+
+        // If requested, mark the connector as restarting
+        AbstractStatus.State connectorState = request.shouldRestartConnector(connectorStatus) ? AbstractStatus.State.RESTARTING : connectorStatus.state();
+        ConnectorStateInfo.ConnectorState connectorInfoState = new ConnectorStateInfo.ConnectorState(
+                connectorState.toString(),
+                connectorStatus.workerId(),
+                connectorStatus.trace()
+        );
+
+        // Collect the task states, If requested, mark the task as restarting
+        List<ConnectorStateInfo.TaskState> taskStates = statusBackingStore.getAll(connectorName)
+                .stream()
+                .map(taskStatus -> {
+                    AbstractStatus.State taskState = request.shouldRestartTask(taskStatus) ? AbstractStatus.State.RESTARTING : taskStatus.state();
+                    return new ConnectorStateInfo.TaskState(
+                            taskStatus.id().task(),
+                            taskState.toString(),
+                            taskStatus.workerId(),
+                            taskStatus.trace()
+                    );
+                })
+                .collect(Collectors.toList());
+        // Construct the response from the various states
+        Map<String, String> conf = rawConfig(connectorName);
+        ConnectorStateInfo stateInfo = new ConnectorStateInfo(
+                connectorName,
+                connectorInfoState,
+                taskStates,
+                conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+        );
+        return Optional.of(new RestartPlan(request, stateInfo));
+
     }
 
     ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
@@ -577,13 +650,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Connector getConnector(String connType) {
-        if (tempConnectors.containsKey(connType)) {
-            return tempConnectors.get(connType);
-        } else {
-            Connector connector = plugins().newConnector(connType);
-            tempConnectors.put(connType, connector);
-            return connector;
-        }
+        return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
     }
 
     /*
@@ -632,7 +699,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString("UTF-8");
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             return null;
         }

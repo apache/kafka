@@ -93,6 +93,10 @@ public class Struct {
         return getUuid(field.name);
     }
 
+    public Integer get(Field.Uint16 field) {
+        return getInt(field.name);
+    }
+
     public Short get(Field.Int16 field) {
         return getShort(field.name);
     }
@@ -246,6 +250,14 @@ public class Struct {
         return (Short) get(name);
     }
 
+    public Integer getUnsignedShort(BoundField field) {
+        return (Integer) get(field);
+    }
+
+    public Integer getUnsignedShort(String name) {
+        return (Integer) get(name);
+    }
+
     public Integer getInt(BoundField field) {
         return (Integer) get(field);
     }
@@ -384,6 +396,14 @@ public class Struct {
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Uint16 def, int value) {
+        if (value < 0 || value > 65535) {
+            throw new RuntimeException("Invalid value for unsigned short for " +
+                    def.name + ": " + value);
+        }
         return set(def.name, value);
     }
 

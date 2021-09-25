@@ -87,6 +87,13 @@ public interface Herder {
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
 
     /**
+     * Get the configuration for all tasks.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
+
+    /**
      * Set the configuration for a connector. This supports creation and updating.
      * @param connName name of the connector
      * @param config the connectors configuration, or null if deleting the connector
@@ -216,6 +223,13 @@ public interface Herder {
      * @return The id of the request
      */
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
+
+    /**
+     * Restart the connector and optionally its tasks.
+     * @param request the details of the restart request
+     * @param cb      callback to invoke upon completion with the connector state info
+     */
+    void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
 
     /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all

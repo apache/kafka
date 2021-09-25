@@ -19,11 +19,13 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
+import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
@@ -33,29 +35,19 @@ import static org.junit.Assert.fail;
 public class TimeWindowsTest {
 
     private static final long ANY_SIZE = 123L;
+    private static final long ANY_GRACE = 1024L;
 
     @Test
     public void shouldSetWindowSize() {
         assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).sizeMs);
+        assertEquals(ANY_SIZE, TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE)).sizeMs);
+        assertEquals(ANY_SIZE, TimeWindows.ofSizeAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_GRACE)).sizeMs);
     }
 
     @Test
     public void shouldSetWindowAdvance() {
         final long anyAdvance = 4;
         assertEquals(anyAdvance, TimeWindows.of(ofMillis(ANY_SIZE)).advanceBy(ofMillis(anyAdvance)).advanceMs);
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test
-    public void shouldSetWindowRetentionTime() {
-        assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).until(ANY_SIZE).maintainMs());
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test
-    public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
-        final long windowSize = 2 * TimeWindows.of(ofMillis(1)).maintainMs();
-        assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
     }
 
     @Test
@@ -90,25 +82,12 @@ public class TimeWindowsTest {
         }
     }
 
-    @Deprecated
     @Test
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.of(ofMillis(ANY_SIZE));
         try {
             windowSpec.advanceBy(ofMillis(ANY_SIZE + 1));
             fail("should not accept advance greater than window size");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
-    }
-
-    @Deprecated
-    @Test
-    public void retentionTimeMustNoBeSmallerThanWindowSize() {
-        final TimeWindows windowSpec = TimeWindows.of(ofMillis(ANY_SIZE));
-        try {
-            windowSpec.until(ANY_SIZE - 1);
-            fail("should not accept retention time smaller than window size");
         } catch (final IllegalArgumentException e) {
             // expected
         }
@@ -124,6 +103,14 @@ public class TimeWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
+    }
+
+    @Test
+    public void oldAPIShouldSetDefaultGracePeriod() {
+        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
+        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 3L, TimeWindows.of(ofMillis(3L)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
+        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test
@@ -167,10 +154,27 @@ public class TimeWindowsTest {
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4)),
             TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4))
         );
+
+        verifyEquality(TimeWindows.ofSizeWithNoGrace(ofMillis(3)), TimeWindows.ofSizeWithNoGrace(ofMillis(3)));
+
+        verifyEquality(TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33)),
+                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33))
+        );
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+
+        verifyInEquality(
+                TimeWindows.ofSizeWithNoGrace(ofMillis(9)),
+                TimeWindows.ofSizeWithNoGrace(ofMillis(3))
+        );
+
+        verifyInEquality(
+                TimeWindows.ofSizeAndGrace(ofMillis(9), ofMillis(9)),
+                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(9))
+        );
+
         verifyInEquality(TimeWindows.of(ofMillis(9)), TimeWindows.of(ofMillis(3)));
 
         verifyInEquality(TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)), TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)));

@@ -19,9 +19,8 @@ package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
 import java.util.Properties
-
 import kafka.api.ApiVersion
-import kafka.log.Log
+import kafka.log.{UnifiedLog, LogLoader}
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.tools.DumpLogSegments
@@ -33,8 +32,8 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
@@ -59,12 +58,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     TestUtils.shutdownServers(brokers)
@@ -153,7 +152,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     broker100.shutdown()
 
     //Delete the clean shutdown file to simulate crash
-    new File(broker100.config.logDirs.head, Log.CleanShutdownFile).delete()
+    new File(broker100.config.logDirs.head, LogLoader.CleanShutdownFile).delete()
 
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, broker100, 0)
@@ -176,7 +175,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Wait for replication to resync
     waitForLogsToMatch(broker100, broker101)
 
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = KAFKA_0_11_0_IV1
@@ -200,7 +199,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
+    new File(brokers(0).config.logDirs(0), LogLoader.CleanShutdownFile).delete()
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)
@@ -242,12 +241,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     val records = TestUtils.pollUntilAtLeastNumRecords(consumer, 100)
     var prevOffset = -1L
     records.foreach { r =>
-      assertTrue(s"Offset $prevOffset came before ${r.offset} ", r.offset > prevOffset)
+      assertTrue(r.offset > prevOffset, s"Offset $prevOffset came before ${r.offset} ")
       prevOffset = r.offset
     }
 
     //Are the files identical?
-    assertEquals("Log files should match Broker0 vs Broker 1", getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length)
+    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   /**
@@ -371,8 +370,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
-    assertTrue(s"Logs on Broker 100 and Broker 101 should match",
-               crcSeq(brokers(0)) == crcSeq(brokers(1)))
+    assertTrue(crcSeq(brokers(0)) == crcSeq(brokers(1)),
+               s"Logs on Broker 100 and Broker 101 should match")
   }
 
   private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
@@ -419,12 +418,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
-    val log: Log = getLog(broker, partition)
+    val log: UnifiedLog = getLog(broker, partition)
     log.flush()
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): Log = {
+  private def getLog(broker: KafkaServer, partition: Int): UnifiedLog = {
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
@@ -444,7 +443,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def awaitISR(tp: TopicPartition): Unit = {
     TestUtils.waitUntilTrue(() => {
-      leader.replicaManager.nonOfflinePartition(tp).get.inSyncReplicaIds.size == 2
+      leader.replicaManager.onlinePartition(tp).get.inSyncReplicaIds.size == 2
     }, "Timed out waiting for replicas to join ISR")
   }
 
@@ -466,8 +465,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
-    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.version)
-    config.setProperty(KafkaConfig.LogMessageFormatVersionProp, apiVersion.version)
+    TestUtils.setIbpAndMessageFormatVersions(config, apiVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }

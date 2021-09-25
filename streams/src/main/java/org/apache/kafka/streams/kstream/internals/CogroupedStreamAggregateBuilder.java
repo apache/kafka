@@ -38,7 +38,6 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
@@ -48,7 +47,6 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
-    @SuppressWarnings("unchecked")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
@@ -237,7 +235,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             "-cogroup-merge",
             builder,
             CogroupedKStreamImpl.MERGE_NAME);
-        final KTableProcessorSupplier<K, VOut, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
+        final KTableNewProcessorSupplier<K, VOut, K, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
         final ProcessorParameters<K, VOut, ?, ?> processorParameters = new ProcessorParameters(passThrough, mergeProcessorName);
         final ProcessorGraphNode<K, VOut> mergeNode =
             new ProcessorGraphNode<>(mergeProcessorName, processorParameters);
@@ -255,10 +253,11 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             builder);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
                                                                  final boolean stateCreated,
                                                                  final StoreBuilder<?> storeBuilder,
-                                                                 final ProcessorSupplier<K, ?> kStreamAggregate) {
+                                                                 final org.apache.kafka.streams.processor.ProcessorSupplier<K, ?> kStreamAggregate) {
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
         if (!stateCreated) {
             statefulProcessorNode =

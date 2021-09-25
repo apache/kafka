@@ -20,19 +20,19 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ReplaceFieldTest {
     private ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
@@ -74,6 +74,7 @@ public class ReplaceFieldTest {
         assertEquals(schema, transformedRecord.valueSchema());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void schemaless() {
         final Map<String, String> props = new HashMap<>();
@@ -91,7 +92,7 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));
@@ -144,7 +145,7 @@ public class ReplaceFieldTest {
         assertNull(transformedRecord.valueSchema());
     }
 
-
+    @SuppressWarnings("unchecked")
     @Test
     public void testExcludeBackwardsCompatibility() {
         final Map<String, String> props = new HashMap<>();
@@ -162,7 +163,7 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));

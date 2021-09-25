@@ -16,6 +16,7 @@
   */
 package kafka.server.epoch
 
+import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.Implicits._
@@ -35,8 +36,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Map
@@ -54,7 +55,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val tp = t1p0
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
@@ -227,7 +228,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
+    val node = from.metadataCache.getAliveBrokerNode(to.config.brokerId,
+      from.config.interBrokerListenerName).get
+    val endPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
     new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 

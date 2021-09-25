@@ -22,24 +22,28 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
-import kafka.server.AdminManager;
-import kafka.server.BrokerFeatures;
+import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
-import kafka.server.FinalizedFeatureCache;
-import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
+import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
+import kafka.server.SimpleApiVersionManager;
+import kafka.server.ZkAdminManager;
+import kafka.server.ZkSupport;
+import kafka.server.builders.KafkaApisBuilder;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -53,7 +57,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -75,6 +79,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -96,14 +101,14 @@ public class MetadataRequestBenchmark {
     private RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
     private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
-    private AdminManager adminManager = Mockito.mock(AdminManager.class);
+    private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
-    private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
+    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
-    private MetadataCache metadataCache = new MetadataCache(brokerId);
+    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -169,28 +174,28 @@ public class MetadataRequestBenchmark {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
-        return new KafkaApis(requestChannel,
-            replicaManager,
-            adminManager,
-            groupCoordinator,
-            transactionCoordinator,
-            kafkaController,
-            forwardingManager,
-            kafkaZkClient,
-            brokerId,
-            new KafkaConfig(kafkaProps),
-            metadataCache,
-            metrics,
-            Option.empty(),
-            quotaManagers,
-            fetchManager,
-            brokerTopicStats,
-            "clusterId",
-            new SystemTime(),
-            null,
-            brokerFeatures,
-            new FinalizedFeatureCache(brokerFeatures));
+        KafkaConfig config = new KafkaConfig(kafkaProps);
+        return new KafkaApisBuilder().
+            setRequestChannel(requestChannel).
+            setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache)).
+            setReplicaManager(replicaManager).
+            setGroupCoordinator(groupCoordinator).
+            setTxnCoordinator(transactionCoordinator).
+            setAutoTopicCreationManager(autoTopicCreationManager).
+            setBrokerId(brokerId).
+            setConfig(config).
+            setConfigRepository(new MockConfigRepository()).
+            setMetadataCache(metadataCache).
+            setMetrics(metrics).
+            setAuthorizer(Optional.empty()).
+            setQuotas(quotaManagers).
+            setFetchManager(fetchManager).
+            setBrokerTopicStats(brokerTopicStats).
+            setClusterId("clusterId").
+            setTime(Time.SYSTEM).
+            setTokenManager(null).
+            setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER)).
+            build();
     }
 
     @TearDown(Level.Trial)

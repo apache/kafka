@@ -19,16 +19,13 @@ package kafka.metrics
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-
 import kafka.utils.{Logging, MockTime}
 import org.apache.kafka.test.TestUtils
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{Rule, Test}
-import org.junit.rules.Timeout
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{Test, Timeout}
 
+@Timeout(120)
 class LinuxIoMetricsCollectorTest extends Logging {
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
 
   class TestDirectory() {
     val baseDir = TestUtils.tempDirectory()

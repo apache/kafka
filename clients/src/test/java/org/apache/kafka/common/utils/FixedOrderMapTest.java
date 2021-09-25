@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.hamcrest.CoreMatchers;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FixedOrderMapTest {
+
     @Test
     public void shouldMaintainOrderWhenAdding() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
@@ -36,10 +36,10 @@ public class FixedOrderMapTest {
         map.put("c", 2);
         map.put("b", 3);
         final Iterator<Map.Entry<String, Integer>> iterator = map.entrySet().iterator();
-        assertThat(iterator.next(), is(mkEntry("a", 0)));
-        assertThat(iterator.next(), is(mkEntry("b", 3)));
-        assertThat(iterator.next(), is(mkEntry("c", 2)));
-        assertThat(iterator.hasNext(), is(false));
+        assertEquals(mkEntry("a", 0), iterator.next());
+        assertEquals(mkEntry("b", 3), iterator.next());
+        assertEquals(mkEntry("c", 2), iterator.next());
+        assertFalse(iterator.hasNext());
     }
 
     @SuppressWarnings("deprecation")
@@ -47,13 +47,8 @@ public class FixedOrderMapTest {
     public void shouldForbidRemove() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
         map.put("a", 0);
-        try {
-            map.remove("a");
-            fail("expected exception");
-        } catch (final RuntimeException e) {
-            assertThat(e, CoreMatchers.instanceOf(UnsupportedOperationException.class));
-        }
-        assertThat(map.get("a"), is(0));
+        assertThrows(UnsupportedOperationException.class, () -> map.remove("a"));
+        assertEquals(0, map.get("a"));
     }
 
     @SuppressWarnings("deprecation")
@@ -61,12 +56,7 @@ public class FixedOrderMapTest {
     public void shouldForbidConditionalRemove() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
         map.put("a", 0);
-        try {
-            map.remove("a", 0);
-            fail("expected exception");
-        } catch (final RuntimeException e) {
-            assertThat(e, CoreMatchers.instanceOf(UnsupportedOperationException.class));
-        }
-        assertThat(map.get("a"), is(0));
+        assertThrows(UnsupportedOperationException.class, () -> map.remove("a", 0));
+        assertEquals(0, map.get("a"));
     }
 }

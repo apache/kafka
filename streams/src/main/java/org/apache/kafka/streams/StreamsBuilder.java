@@ -67,12 +67,22 @@ import java.util.regex.Pattern;
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
-    private final Topology topology = new Topology();
+    protected final Topology topology;
 
     /** The topology's internal builder. */
-    final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
+    protected final InternalTopologyBuilder internalTopologyBuilder;
 
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    protected final InternalStreamsBuilder internalStreamsBuilder;
+
+    public StreamsBuilder() {
+        topology = getNewTopology();
+        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    }
+
+    protected Topology getNewTopology() {
+        return new Topology();
+    }
 
     /**
      * Create a {@link KStream} from the specified topic.
@@ -226,7 +236,7 @@ public class StreamsBuilder {
      * K key = "some-key";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param topic              the topic name; cannot be {@code null}
@@ -477,7 +487,8 @@ public class StreamsBuilder {
     /**
      * Adds a state store to the underlying {@link Topology}.
      * <p>
-     * It is required to connect state stores to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
+     * It is required to connect state stores to {@link org.apache.kafka.streams.processor.api.Processor Processors},
+     * {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
@@ -487,29 +498,6 @@ public class StreamsBuilder {
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
         internalStreamsBuilder.addStateStore(builder);
-        return this;
-    }
-
-    /**
-     * @deprecated Use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
-     */
-    @Deprecated
-    public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                              final String topic,
-                                                              final String sourceName,
-                                                              final Consumed<K, V> consumed,
-                                                              final String processorName,
-                                                              final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
-        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        Objects.requireNonNull(consumed, "consumed can't be null");
-        internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
-            sourceName,
-            topic,
-            new ConsumedInternal<>(consumed),
-            processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
-        );
         return this;
     }
 
@@ -528,7 +516,8 @@ public class StreamsBuilder {
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
+     * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.api.Processor Processors},
+     * {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      * <p>
      * The supplier should always generate a new instance each time {@link  ProcessorSupplier#get()} gets called. Creating

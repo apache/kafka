@@ -299,6 +299,7 @@ public final class FieldSpec {
             }
         } else if ((type instanceof FieldType.Int8FieldType) ||
             (type instanceof FieldType.Int16FieldType) ||
+            (type instanceof FieldType.Uint16FieldType) ||
             (type instanceof FieldType.Int32FieldType) ||
             (type instanceof FieldType.Int64FieldType)) {
             int base = 10;
@@ -330,6 +331,22 @@ public final class FieldSpec {
                             name + ": " + defaultString, e);
                     }
                     return "(short) " + fieldDefault;
+                }
+            } else if (type instanceof FieldType.Uint16FieldType) {
+                if (defaultString.isEmpty()) {
+                    return "0";
+                } else {
+                    try {
+                        int value = Integer.valueOf(defaultString, base);
+                        if (value < 0 || value > 65535) {
+                            throw new RuntimeException("Invalid default for uint16 field " +
+                                    name + ": out of range.");
+                        }
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("Invalid default for uint16 field " +
+                            name + ": " + defaultString, e);
+                    }
+                    return fieldDefault;
                 }
             } else if (type instanceof FieldType.Int32FieldType) {
                 if (defaultString.isEmpty()) {
@@ -457,6 +474,8 @@ public final class FieldSpec {
             return "byte";
         } else if (type instanceof FieldType.Int16FieldType) {
             return "short";
+        } else if (type instanceof FieldType.Uint16FieldType) {
+            return "int";
         } else if (type instanceof FieldType.Int32FieldType) {
             return "int";
         } else if (type instanceof FieldType.Int64FieldType) {
@@ -570,7 +589,7 @@ public final class FieldSpec {
                         fieldPrefix, camelCaseName(), fieldPrefix, camelCaseName());
                 }
             }
-        } else if (type().isString() || type().isStruct()) {
+        } else if (type().isString() || type().isStruct() || type() instanceof FieldType.UUIDFieldType) {
             if (fieldDefault.equals("null")) {
                 buffer.printf("if (%s%s != null) {%n", fieldPrefix, camelCaseName());
             } else if (nullableVersions.empty()) {

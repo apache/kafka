@@ -19,12 +19,12 @@ package kafka.server
 
 import java.io.{BufferedReader, BufferedWriter, File, FileOutputStream, IOException, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileAlreadyExistsException, Files, Paths}
+import java.nio.file.{Files, Paths}
 import java.util.regex.Pattern
 
 import kafka.utils.Logging
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.utils.Utils
 
 
@@ -90,31 +90,48 @@ class PartitionMetadataFile(val file: File,
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
   private val logDir = file.getParentFile.getParent
+  @volatile private var dirtyTopicIdOpt : Option[Uuid] = None
 
+  /**
+   * Records the topic ID that will be flushed to disk.
+   */
+  def record(topicId: Uuid): Unit = {
+    // Topic IDs should not differ, but we defensively check here to fail earlier in the case that the IDs somehow differ.
+    dirtyTopicIdOpt.foreach { dirtyTopicId =>
+      if (dirtyTopicId != topicId)
+        throw new InconsistentTopicIdException(s"Tried to record topic ID $topicId to file " +
+          s"but had already recorded $dirtyTopicId")
+    }
+    dirtyTopicIdOpt = Some(topicId)
+  }
 
-  try Files.createFile(file.toPath) // create the file if it doesn't exist
-  catch { case _: FileAlreadyExistsException => }
+  def maybeFlush(): Unit = {
+    // We check dirtyTopicId first to avoid having to take the lock unnecessarily in the frequently called log append path
+    dirtyTopicIdOpt.foreach { _ =>
+      // We synchronize on the actual write to disk
+      lock synchronized {
+        dirtyTopicIdOpt.foreach { topicId =>
+          try {
+            // write to temp file and then swap with the existing file
+            val fileOutputStream = new FileOutputStream(tempPath.toFile)
+            val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
+            try {
+              writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion, topicId)))
+              writer.flush()
+              fileOutputStream.getFD().sync()
+            } finally {
+              writer.close()
+            }
 
-  def write(topicId: Uuid): Unit = {
-    lock synchronized {
-      try {
-        // write to temp file and then swap with the existing file
-        val fileOutputStream = new FileOutputStream(tempPath.toFile)
-        val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
-        try {
-          writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion,topicId)))
-          writer.flush()
-          fileOutputStream.getFD().sync()
-        } finally {
-          writer.close()
+            Utils.atomicMoveWithFallback(tempPath, path)
+          } catch {
+            case e: IOException =>
+              val msg = s"Error while writing to partition metadata file ${file.getAbsolutePath}"
+              logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+              throw new KafkaStorageException(msg, e)
+          }
+          dirtyTopicIdOpt = None
         }
-
-        Utils.atomicMoveWithFallback(tempPath, path)
-      } catch {
-        case e: IOException =>
-          val msg = s"Error while writing to partition metadata file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
-          throw new KafkaStorageException(msg, e)
       }
     }
   }
@@ -138,7 +155,13 @@ class PartitionMetadataFile(val file: File,
     }
   }
 
-  def isEmpty(): Boolean = {
-    file.length() == 0
+  def exists(): Boolean = {
+    file.exists()
   }
+
+  def delete(): Unit = {
+    Files.delete(file.toPath)
+  }
+
+  override def toString: String = s"PartitionMetadataFile(path=$path)"
 }

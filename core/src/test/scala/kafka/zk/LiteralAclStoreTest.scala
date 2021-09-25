@@ -22,8 +22,8 @@ import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class LiteralAclStoreTest {
   private val literalResource = new ResourcePattern(TOPIC, "some-topic", LITERAL)

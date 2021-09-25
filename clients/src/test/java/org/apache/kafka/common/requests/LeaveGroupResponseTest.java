@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -32,9 +32,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaveGroupResponseTest {
 
@@ -47,7 +47,7 @@ public class LeaveGroupResponseTest {
 
     private List<MemberResponse> memberResponses;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         memberResponses = Arrays.asList(new MemberResponse()
                                             .setMemberId(memberIdOne)
@@ -67,7 +67,7 @@ public class LeaveGroupResponseTest {
         expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
         expectedErrorCounts.put(Errors.FENCED_INSTANCE_ID, 1);
 
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(memberResponses,
                                                                            Errors.NONE,
                                                                            throttleTimeMs,
@@ -95,7 +95,7 @@ public class LeaveGroupResponseTest {
     @Test
     public void testShouldThrottle() {
         LeaveGroupResponse response = new LeaveGroupResponse(new LeaveGroupResponseData());
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             if (version >= 2) {
                 assertTrue(response.shouldClientThrottle(version));
             } else {
@@ -109,7 +109,7 @@ public class LeaveGroupResponseTest {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(throttleTimeMs);
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
                 MessageUtil.toByteBuffer(responseData, version), version);
             LeaveGroupResponse secondaryResponse = LeaveGroupResponse.parse(
@@ -129,7 +129,7 @@ public class LeaveGroupResponseTest {
             .setErrorCode(Errors.NOT_COORDINATOR.code())
             .setThrottleTimeMs(throttleTimeMs);
 
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
             LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
@@ -146,7 +146,7 @@ public class LeaveGroupResponseTest {
 
     @Test
     public void testEqualityWithMemberResponses() {
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             List<MemberResponse> localResponses = version > 2 ? memberResponses : memberResponses.subList(0, 1);
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(localResponses,
                                                                         Errors.NONE,

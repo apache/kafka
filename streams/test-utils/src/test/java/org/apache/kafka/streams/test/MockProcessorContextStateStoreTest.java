@@ -31,36 +31,30 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@RunWith(value = Parameterized.class)
 public class MockProcessorContextStateStoreTest {
-    private final StoreBuilder<StateStore> builder;
-    private final boolean timestamped;
-    private final boolean caching;
-    private final boolean logging;
 
-    @Parameterized.Parameters(name = "builder = {0}, timestamped = {1}, caching = {2}, logging = {3}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> parameters() {
         final List<Boolean> booleans = asList(true, false);
 
-        final List<Object[]> values = new ArrayList<>();
+        final List<Arguments> values = new ArrayList<>();
 
         for (final Boolean timestamped : booleans) {
             for (final Boolean caching : booleans) {
@@ -88,7 +82,7 @@ public class MockProcessorContextStateStoreTest {
                             builder.withLoggingDisabled();
                         }
 
-                        values.add(new Object[] {builder, timestamped, caching, logging});
+                        values.add(Arguments.of(builder, timestamped, caching, logging));
                     }
                 }
             }
@@ -121,7 +115,7 @@ public class MockProcessorContextStateStoreTest {
                             builder.withLoggingDisabled();
                         }
 
-                        values.add(new Object[] {builder, timestamped, caching, logging});
+                        values.add(Arguments.of(builder, timestamped, caching, logging));
                     }
                 }
             }
@@ -148,27 +142,20 @@ public class MockProcessorContextStateStoreTest {
                         builder.withLoggingDisabled();
                     }
 
-                    values.add(new Object[] {builder, false, caching, logging});
+                    values.add(Arguments.of(builder, false, caching, logging));
                 }
             }
         }
 
-        return values;
+        return values.stream();
     }
 
-    public MockProcessorContextStateStoreTest(final StoreBuilder<StateStore> builder,
-                                              final boolean timestamped,
-                                              final boolean caching,
-                                              final boolean logging) {
-
-        this.builder = builder;
-        this.timestamped = timestamped;
-        this.caching = caching;
-        this.logging = logging;
-    }
-
-    @Test
-    public void shouldEitherInitOrThrow() {
+    @ParameterizedTest(name = "builder = {0}, timestamped = {1}, caching = {2}, logging = {3}")
+    @MethodSource(value = "parameters")
+    public void shouldEitherInitOrThrow(final StoreBuilder<StateStore> builder,
+                                        final boolean timestamped,
+                                        final boolean caching,
+                                        final boolean logging) {
         final File stateDir = TestUtils.tempDirectory();
         try {
             final MockProcessorContext<Void, Void> context = new MockProcessorContext<>(

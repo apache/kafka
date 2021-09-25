@@ -57,6 +57,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
@@ -75,6 +76,7 @@ import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -100,7 +102,6 @@ public class StreamsMetricsImplTest {
     private final static String METRIC_NAME1 = "test-metric1";
     private final static String METRIC_NAME2 = "test-metric2";
     private final static String THREAD_ID_TAG = "thread-id";
-    private final static String THREAD_ID_TAG_0100_TO_24 = "client-id";
     private final static String TASK_ID_TAG = "task-id";
     private final static String SCOPE_NAME = "test-scope";
     private final static String STORE_ID_TAG = "-state-id";
@@ -769,7 +770,6 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testLatencyMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -777,19 +777,18 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addLatencyRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
 
-        // 2 meters and 4 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
-        final int otherMetricsCount = 4;
-        assertEquals(defaultMetrics + meterMetricsCount * 2 + otherMetricsCount, streamsMetrics.metrics().size());
+        final int otherMetricsCount = 2; // Latency-max and Latency-avg
+        // 2 meters and 2 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
+        assertEquals(defaultMetrics + meterMetricsCount + otherMetricsCount, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testThroughputMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -797,11 +796,11 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
 
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
         // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
-        assertEquals(defaultMetrics + meterMetricsCount * 2, streamsMetrics.metrics().size());
+        assertEquals(defaultMetrics + meterMetricsCount, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
@@ -845,17 +844,8 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldAddLatencyRateTotalSensorWithBuiltInMetricsVersionLatest() {
-        shouldAddLatencyRateTotalSensor(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldAddLatencyRateTotalSensorWithBuiltInMetricsVersion0100To24() {
-        shouldAddLatencyRateTotalSensor(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldAddLatencyRateTotalSensor(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, builtInMetricsVersion, time);
+    public void shouldAddLatencyRateTotalSensor() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         shouldAddCustomSensor(
             streamsMetrics.addLatencyRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
             streamsMetrics,
@@ -869,17 +859,8 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldAddRateTotalSensorWithBuiltInMetricsVersionLatest() {
-        shouldAddRateTotalSensor(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldAddRateTotalSensorWithBuiltInMetricsVersion0100To24() {
-        shouldAddRateTotalSensor(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldAddRateTotalSensor(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, builtInMetricsVersion, time);
+    public void shouldAddRateTotalSensor() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         shouldAddCustomSensor(
             streamsMetrics.addRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
             streamsMetrics,
@@ -1010,54 +991,34 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldGetStoreLevelTagMapForBuiltInMetricsLatestVersion() {
-        shouldGetStoreLevelTagMap(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldGetStoreLevelTagMapForBuiltInMetricsVersion0100To24() {
-        shouldGetStoreLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldGetStoreLevelTagMap(final String builtInMetricsVersion) {
+    public void shouldGetStoreLevelTagMap() {
         final String taskName = "test-task";
         final String storeType = "remote-window";
         final String storeName = "window-keeper";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID1, builtInMetricsVersion, time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
 
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
         assertThat(tagMap.size(), equalTo(3));
-        final boolean isMetricsLatest = builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST);
         assertThat(
-            tagMap.get(isMetricsLatest ? StreamsMetricsImpl.THREAD_ID_TAG : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24),
+            tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
             equalTo(Thread.currentThread().getName()));
         assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
         assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
     }
 
     @Test
-    public void shouldGetCacheLevelTagMapForBuiltInMetricsLatestVersion() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To24() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldGetCacheLevelTagMap(final String builtInMetricsVersion) {
+    public void shouldGetCacheLevelTagMap() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, THREAD_ID1, builtInMetricsVersion, time);
+            new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
         final String taskName = "taskName";
         final String storeName = "storeName";
 
         final Map<String, String> tagMap = streamsMetrics.cacheLevelTagMap(THREAD_ID1, taskName, storeName);
 
         assertThat(tagMap.size(), equalTo(3));
-        final boolean isMetricsLatest = builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST);
         assertThat(
-            tagMap.get(isMetricsLatest ? StreamsMetricsImpl.THREAD_ID_TAG : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24),
+            tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG),
             equalTo(THREAD_ID1)
         );
         assertThat(tagMap.get(TASK_ID_TAG), equalTo(taskName));
@@ -1065,24 +1026,14 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldGetThreadLevelTagMapForBuiltInMetricsLatestVersion() {
-        shouldGetThreadLevelTagMap(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldGetThreadLevelTagMapForBuiltInMetricsVersion0100To24() {
-        shouldGetThreadLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldGetThreadLevelTagMap(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID1, builtInMetricsVersion, time);
+    public void shouldGetThreadLevelTagMap() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
 
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(THREAD_ID1);
 
         assertThat(tagMap.size(), equalTo(1));
         assertThat(
-            tagMap.get(builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? THREAD_ID_TAG
-                : THREAD_ID_TAG_0100_TO_24),
+            tagMap.get(THREAD_ID_TAG),
             equalTo(THREAD_ID1)
         );
     }
@@ -1201,14 +1152,6 @@ public class StreamsMetricsImplTest {
         );
     }
 
-    @Test
-    public void shouldReturnMetricsVersionFrom100To23() {
-        assertThat(
-            new StreamsMetricsImpl(metrics, THREAD_ID1, StreamsConfig.METRICS_0100_TO_24, time).version(),
-            equalTo(Version.FROM_0100_TO_24)
-        );
-    }
-
     private void verifyMetric(final String name,
                               final String description,
                               final double valueToRecord1,
@@ -1267,5 +1210,93 @@ public class StreamsMetricsImplTest {
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
         verify(sensor);
+    }
+
+    @Test
+    public void shouldAddThreadLevelMutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+
+        streamsMetrics.addThreadLevelMutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            (c, t) -> measuredValue
+        );
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+    }
+
+    @Test
+    public void shouldCleanupThreadLevelMutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+        streamsMetrics.addThreadLevelMutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            (c, t) -> measuredValue
+        );
+
+        streamsMetrics.removeAllThreadLevelMetrics("t1");
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), nullValue());
+    }
+
+    @Test
+    public void shouldAddThreadLevelImmutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+
+        streamsMetrics.addThreadLevelImmutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            measuredValue
+        );
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+    }
+
+    @Test
+    public void shouldCleanupThreadLevelImmutableMetric() {
+        final int measuredValue = 123;
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, THREAD_ID1, VERSION, time);
+        streamsMetrics.addThreadLevelImmutableMetric(
+            "foobar",
+            "test metric",
+            "t1",
+            measuredValue
+        );
+
+        streamsMetrics.removeAllThreadLevelMetrics("t1");
+
+        final MetricName name = metrics.metricName(
+            "foobar",
+            THREAD_LEVEL_GROUP,
+            Collections.singletonMap("thread-id", "t1")
+        );
+        assertThat(metrics.metric(name), nullValue());
     }
 }

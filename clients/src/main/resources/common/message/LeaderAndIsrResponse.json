@@ -36,7 +36,8 @@
       "about": "Each partition in v0 to v4 message."},
     { "name":  "Topics", "type": "[]LeaderAndIsrTopicError", "versions": "5+",
       "about": "Each topic", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "5+", "about": "The unique topic ID" },
+      { "name": "TopicId", "type": "uuid", "versions": "5+", "mapKey": true,
+        "about": "The unique topic ID" },
       { "name": "PartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "5+",
         "about": "Each partition."}
       ]}

@@ -30,7 +30,7 @@
     { "name": "myString", "type": "string", "taggedVersions": "1+", "tag": 4 },
     { "name": "myBytes", "type": "bytes",
         "nullableVersions": "1+", "taggedVersions": "1+", "tag": 5 },
-    { "name": "taggedUuid", "type": "uuid", "default": "212d54944a8b4fdf94b388b470beb367",
+    { "name": "taggedUuid", "type": "uuid", "default": "H3KKO4NTRPaCWtEmm3vW7A",
         "taggedVersions": "1+", "tag": 6 },
     { "name": "taggedLong", "type": "int64", "default": "0xcafcacafcacafca",
         "taggedVersions": "1+", "tag": 7 },
@@ -51,7 +51,8 @@
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
     ]},
     { "name":  "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
-    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"}
+    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name":  "myUint16", "type": "uint16", "versions": "1+", "default":  "33000" }
   ],
   "commonStructs": [
     { "name": "TestCommonStruct", "versions": "0+", "fields": [

@@ -20,12 +20,12 @@ import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
 
-public class DefaultRecordsSend extends RecordsSend<Records> {
-    public DefaultRecordsSend(Records records) {
+public class DefaultRecordsSend<T extends TransferableRecords> extends RecordsSend<T> {
+    public DefaultRecordsSend(T records) {
         this(records, records.sizeInBytes());
     }
 
-    public DefaultRecordsSend(Records records, int maxBytesToWrite) {
+    public DefaultRecordsSend(T records, int maxBytesToWrite) {
         super(records, maxBytesToWrite);
     }
 

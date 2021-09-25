@@ -23,8 +23,8 @@ import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
 import org.apache.kafka.test.MockMetricsReporter
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 object KafkaMetricReporterClusterIdTest {
@@ -76,10 +76,10 @@ object KafkaMetricReporterClusterIdTest {
 }
 
 class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
-  var server: KafkaServerStartable = null
+  var server: KafkaServer = null
   var config: KafkaConfig = null
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
@@ -88,7 +88,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
-    server = KafkaServerStartable.fromProps(props, threadNamePrefix = Option(this.getClass.getName))
+    server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
@@ -109,7 +109,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)

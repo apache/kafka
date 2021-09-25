@@ -91,7 +91,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 convertedRecords = buildOverflowBatch(remaining);
             }
 
-            convertedRecordsWriter = new DefaultRecordsSend(convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
+            convertedRecordsWriter = new DefaultRecordsSend<>(convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
         }
         return convertedRecordsWriter.writeTo(channel);
     }

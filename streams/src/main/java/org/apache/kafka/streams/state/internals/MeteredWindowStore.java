@@ -22,10 +22,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -35,6 +39,8 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
+
+import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -46,17 +52,16 @@ public class MeteredWindowStore<K, V>
     private final long windowSizeMs;
     private final String metricsScope;
     private final Time time;
-    final Serde<K> keySerde;
-    final Serde<V> valueSerde;
-    StateSerdes<K, V> serdes;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private StateSerdes<K, V> serdes;
     private StreamsMetricsImpl streamsMetrics;
     private Sensor putSensor;
     private Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
     private InternalProcessorContext context;
-    private final String threadId;
-    private String taskId;
+    private TaskId taskId;
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
@@ -66,7 +71,6 @@ public class MeteredWindowStore<K, V>
                        final Serde<V> valueSerde) {
         super(inner);
         this.windowSizeMs = windowSizeMs;
-        threadId = Thread.currentThread().getName();
         this.metricsScope = metricsScope;
         this.time = time;
         this.keySerde = keySerde;
@@ -78,13 +82,13 @@ public class MeteredWindowStore<K, V>
     public void init(final ProcessorContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskId().toString();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
@@ -94,26 +98,26 @@ public class MeteredWindowStore<K, V>
     public void init(final StateStoreContext context,
                      final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        taskId = context.taskId();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
-        taskId = context.taskId().toString();
 
         registerMetrics();
         final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
-    protected Serde<V> prepareValueSerde(final Serde<V> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
-        return WrappingNullableUtils.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+    protected Serde<V> prepareValueSerde(final Serde<V> valueSerde, final SerdeGetter getter) {
+        return WrappingNullableUtils.prepareValueSerde(valueSerde, getter);
     }
 
     private void registerMetrics() {
-        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
+        putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
 
     @Deprecated
@@ -123,9 +127,9 @@ public class MeteredWindowStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde()));
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     private void initStoreSerde(final StateStoreContext context) {
@@ -134,9 +138,9 @@ public class MeteredWindowStore<K, V>
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
-            prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde()));
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
 
     @SuppressWarnings("unchecked")
@@ -146,28 +150,38 @@ public class MeteredWindowStore<K, V>
         final WindowStore<Bytes, byte[]> wrapped = wrapped();
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
-                (key, newValue, oldValue, timestamp) -> listener.apply(
-                    WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
-                    newValue != null ? serdes.valueFrom(newValue) : null,
-                    oldValue != null ? serdes.valueFrom(oldValue) : null,
-                    timestamp
-                ),
+                new CacheFlushListener<byte[], byte[]>() {
+                    @Override
+                    public void apply(final byte[] key, final byte[] newValue, final byte[] oldValue, final long timestamp) {
+                        listener.apply(
+                            WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
+                            newValue != null ? serdes.valueFrom(newValue) : null,
+                            oldValue != null ? serdes.valueFrom(oldValue) : null,
+                            timestamp
+                        );
+                    }
+
+                    @Override
+                    public void apply(final Record<byte[], Change<byte[]>> record) {
+                        listener.apply(
+                            record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
+                                  .withValue(new Change<>(
+                                      record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
+                                      record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                                  ))
+                        );
+                    }
+                },
                 sendOldValues);
         }
         return false;
-    }
-
-    @Deprecated
-    @Override
-    public void put(final K key,
-                    final V value) {
-        put(key, value, context != null ? context.timestamp() : 0L);
     }
 
     @Override
     public void put(final K key,
                     final V value,
                     final long windowStartTimestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(
                 () -> wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp),
@@ -184,6 +198,7 @@ public class MeteredWindowStore<K, V>
     @Override
     public V fetch(final K key,
                    final long timestamp) {
+        Objects.requireNonNull(key, "key cannot be null");
         return maybeMeasureLatency(
             () -> {
                 final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
@@ -197,11 +212,11 @@ public class MeteredWindowStore<K, V>
         );
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
                                         final long timeTo) {
+        Objects.requireNonNull(key, "key cannot be null");
         return new MeteredWindowStoreIterator<>(
             wrapped().fetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
@@ -215,6 +230,7 @@ public class MeteredWindowStore<K, V>
     public WindowStoreIterator<V> backwardFetch(final K key,
                                                 final long timeFrom,
                                                 final long timeTo) {
+        Objects.requireNonNull(key, "key cannot be null");
         return new MeteredWindowStoreIterator<>(
             wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
@@ -224,14 +240,17 @@ public class MeteredWindowStore<K, V>
         );
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
                                                   final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
+            wrapped().fetch(
+                keyFrom == null ? null : keyBytes(keyFrom),
+                keyTo == null ? null : keyBytes(keyTo),
+                timeFrom,
+                timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,
@@ -244,14 +263,17 @@ public class MeteredWindowStore<K, V>
                                                           final long timeFrom,
                                                           final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
+            wrapped().backwardFetch(
+                keyFrom == null ? null : keyBytes(keyFrom),
+                keyTo == null ? null : keyBytes(keyTo),
+                timeFrom,
+                timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,
             time);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                      final long timeTo) {
@@ -294,7 +316,7 @@ public class MeteredWindowStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
     }
 

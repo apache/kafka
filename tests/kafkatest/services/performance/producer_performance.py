@@ -22,7 +22,7 @@ from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDAN
 from kafkatest.services.monitor.http import HttpMetricsCollector
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, V_0_9_0_0
+from kafkatest.version import DEV_BRANCH
 
 
 class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
@@ -55,7 +55,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         self.security_config = kafka.security_config.client_config()
 
         security_protocol = self.security_config.security_protocol
-        assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
+        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
             "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
 
         self.args = {

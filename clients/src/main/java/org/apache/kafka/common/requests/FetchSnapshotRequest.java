@@ -16,20 +16,20 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.function.UnaryOperator;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
+
 final public class FetchSnapshotRequest extends AbstractRequest {
-    public final FetchSnapshotRequestData data;
+    private final FetchSnapshotRequestData data;
 
     public FetchSnapshotRequest(FetchSnapshotRequestData data, short version) {
         super(ApiKeys.FETCH_SNAPSHOT, version);
@@ -46,7 +46,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     }
 
     @Override
-    public ApiMessage data() {
+    public FetchSnapshotRequestData data() {
         return data;
     }
 
@@ -60,6 +60,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
      * @return the created fetch snapshot request data
      */
     public static FetchSnapshotRequestData singleton(
+        String clusterId,
         TopicPartition topicPartition,
         UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
     ) {
@@ -68,6 +69,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
         );
 
         return new FetchSnapshotRequestData()
+            .setClusterId(clusterId)
             .setTopics(
                 Collections.singletonList(
                     new FetchSnapshotRequestData.TopicSnapshot()

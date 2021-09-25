@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -104,6 +105,18 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+
+        final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+        final Bytes to = Bytes.increment(from);
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true)
+        );
+    }
+
+    @Override
     public synchronized byte[] delete(final Bytes key) {
         final byte[] oldValue = map.remove(key);
         size -= oldValue == null ? 0 : 1;
@@ -116,33 +129,39 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
         return range(from, to, false);
     }
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
-        if (from.compareTo(to) > 0) {
+        if (from == null && to == null) {
+            return getKeyValueIterator(map.keySet(), forward);
+        } else if (from == null) {
+            return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
+        } else if (to == null) {
+            return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);
+        } else if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
+        } else {
+            return getKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward);
         }
+    }
 
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward));
+    private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final Set<Bytes> rangeSet, final boolean forward) {
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(rangeSet, forward));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet(), true));
+        return range(null, null);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(map.keySet(), false));

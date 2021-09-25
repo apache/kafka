@@ -43,13 +43,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsConfig config;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
@@ -64,7 +65,12 @@ class ActiveTaskCreator {
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final StreamThread.ProcessingMode processingMode;
 
-    ActiveTaskCreator(final InternalTopologyBuilder builder,
+    // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
+    // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
+    // we receive a new assignment and they are revoked from the thread.
+    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
+
+    ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
@@ -75,7 +81,7 @@ class ActiveTaskCreator {
                       final String threadId,
                       final UUID processId,
                       final Logger log) {
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
@@ -92,7 +98,7 @@ class ActiveTaskCreator {
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
             taskProducers = new HashMap<>();
-        } else { // non-eos and eos-beta
+        } else { // non-eos and eos-v2
             log.info("Creating thread producer client");
 
             final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
@@ -104,7 +110,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 null,
                 processId,
-                logContext);
+                logContext,
+                time);
             taskProducers = Collections.emptyMap();
         }
     }
@@ -115,7 +122,7 @@ class ActiveTaskCreator {
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
         if (processingMode != EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Producer per thread is used.");
+            throw new IllegalStateException("Expected EXACTLY_ONCE to be enabled, but the processing mode was " + processingMode);
         }
 
         final StreamsProducer taskProducer = taskProducers.get(taskId);
@@ -126,22 +133,39 @@ class ActiveTaskCreator {
     }
 
     StreamsProducer threadProducer() {
-        if (processingMode != EXACTLY_ONCE_BETA) {
-            throw new IllegalStateException("Exactly-once beta is not enabled.");
+        if (processingMode != EXACTLY_ONCE_V2) {
+            throw new IllegalStateException("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was " + processingMode);
         }
         return threadProducer;
     }
 
+    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
+        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
+    }
+
+    Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
+    }
+
+    // TODO: change return type to `StreamTask`
     Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> newUnknownTasks = new HashMap<>();
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = builder.buildSubtopology(taskId.topicGroupId);
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
+            if (topology == null) {
+                // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+                newUnknownTasks.put(taskId, partitions);
+                continue;
+            }
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
@@ -173,9 +197,15 @@ class ActiveTaskCreator {
                     context
                 )
             );
+            unknownTasksToBeCreated.remove(taskId);
+        }
+        if (!newUnknownTasks.isEmpty()) {
+            log.info("Delaying creation of tasks not yet known by this instance: {}", newUnknownTasks.keySet());
+            unknownTasksToBeCreated.putAll(newUnknownTasks);
         }
         return createdTasks;
     }
+
 
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
                                            final Set<TopicPartition> inputPartitions,
@@ -192,7 +222,7 @@ class ActiveTaskCreator {
             inputPartitions,
             consumer,
             logContext,
-            builder.buildSubtopology(standbyTask.id.topicGroupId),
+            topologyMetadata.buildSubtopology(standbyTask.id),
             stateManager,
             context
         );
@@ -214,7 +244,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 taskId,
                 null,
-                logContext);
+                logContext,
+                time);
             taskProducers.put(taskId, streamsProducer);
         } else {
             streamsProducer = threadProducer;
@@ -240,7 +271,8 @@ class ActiveTaskCreator {
             time,
             stateManager,
             recordCollector,
-            context
+            context,
+            logContext
         );
 
         log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
@@ -296,4 +328,12 @@ class ActiveTaskCreator {
         return new LogContext(logPrefix);
     }
 
+    public double totalProducerBlockedTime() {
+        if (threadProducer != null) {
+            return threadProducer.totalBlockedTime();
+        }
+        return taskProducers.values().stream()
+            .mapToDouble(StreamsProducer::totalBlockedTime)
+            .sum();
+    }
 }

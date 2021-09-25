@@ -26,9 +26,9 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,7 +52,7 @@ public class WordCountDemoTest {
     private TestInputTopic<String, String> inputTopic;
     private TestOutputTopic<String, Long> outputTopic;
 
-    @Before
+    @BeforeEach
     public void setup() throws IOException {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
@@ -62,7 +62,7 @@ public class WordCountDemoTest {
         outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         try {
             testDriver.close();
@@ -93,8 +93,8 @@ public class WordCountDemoTest {
     @Test
     public void testCountListOfWords() {
         final List<String> inputValues = Arrays.asList(
-                "Apache Kafka Streams Example",
-                "Using Kafka Streams Test Utils",
+                "Apache   Kafka Streams   Example",
+                "Using  \t\t Kafka   Streams\tTest Utils",
                 "Reading and Writing Kafka Topic"
         );
         final Map<String, Long> expectedWordCounts = new HashMap<>();

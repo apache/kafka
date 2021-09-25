@@ -94,10 +94,11 @@ public class Rate implements MeasurableStat {
         return totalElapsedTimeMs;
     }
 
-    /**
-     * @deprecated since 2.4 Use {@link WindowedSum} instead.
-     */
-    @Deprecated
-    public static class SampledTotal extends WindowedSum {
+    @Override
+    public String toString() {
+        return "Rate(" +
+            "unit=" + unit +
+            ", stat=" + stat +
+            ')';
     }
 }

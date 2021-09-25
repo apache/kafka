@@ -24,11 +24,12 @@ import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Java
-import org.junit.Before
+import org.junit.jupiter.api.BeforeEach
 
 object SslEndToEndAuthorizationTest {
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     private val Pattern = "O=A (.*?),CN=(.*?)".r
 
     // Use full DN as client principal to test special characters in principal
@@ -68,7 +69,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   private val clientCn = """\#A client with special chars in CN : (\, \+ \" \\ \< \> \; ')"""
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, s"O=A client,CN=$clientCn")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp()

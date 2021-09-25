@@ -16,37 +16,37 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for reading snapshots as a sequence of records.
  */
-public interface RawSnapshotReader extends Closeable, Iterable<RecordBatch> {
+public interface RawSnapshotReader {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId();
+    OffsetAndEpoch snapshotId();
 
     /**
      * Returns the number of bytes for the snapshot.
-     *
-     * @throws IOException for any IO error while reading the size
      */
-    public long sizeInBytes() throws IOException;
+    long sizeInBytes();
 
     /**
-     * Reads bytes from position into the given buffer.
+     * Creates a slize of unaligned records from the position up to a size.
      *
-     * It is not guarantee that the given buffer will be filled.
-     *
-     * @param buffer byte buffer to put the read files
-     * @param position the starting position in the snapshot to read
-     * @return the number of bytes read
-     * @throws IOException for any IO error while reading the snapshot
+     * @param position the starting position of the slice in the snapshot
+     * @param size the maximum size of the slice
+     * @return an unaligned slice of records in the snapshot
      */
-    public int read(ByteBuffer buffer, long position) throws IOException;
+    UnalignedRecords slice(long position, int size);
+
+    /**
+     * Returns all of the records backing this snapshot reader.
+     *
+     * @return all of the records for this snapshot
+     */
+    Records records();
 }
