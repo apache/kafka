@@ -530,7 +530,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
       // Remove entries with empty partition set.
       val logDirsToRemove = uncleanablePartitions.filter {
-        case (logDir, partitions) => partitions.isEmpty
+        case (_, partitions) => partitions.isEmpty
       }.map { _._1}.toList
       logDirsToRemove.foreach { uncleanablePartitions.remove(_) }
     }
