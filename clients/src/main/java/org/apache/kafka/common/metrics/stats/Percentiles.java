@@ -57,7 +57,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
         if (bucketing == BucketSizing.CONSTANT) {
             this.binScheme = new ConstantBinScheme(buckets, min, max);
         } else if (bucketing == BucketSizing.LINEAR) {
-            if (min != 0.0d)
+            if (Double.compare(min, 0.0d) != 0)
                 throw new IllegalArgumentException("Linear bucket sizing requires min to be 0.0.");
             this.binScheme = new LinearBinScheme(buckets, max);
         } else {
@@ -83,7 +83,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
         float count = 0.0f;
         for (Sample sample : this.samples)
             count += sample.eventCount;
-        if (count == 0.0f)
+        if (Float.compare(count, 0.0f) == 0)
             return Double.NaN;
         float sum = 0.0f;
         float quant = (float) quantile;
