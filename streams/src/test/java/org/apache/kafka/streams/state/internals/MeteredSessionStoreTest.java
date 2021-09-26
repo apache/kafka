@@ -54,11 +54,9 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -480,7 +478,7 @@ public class MeteredSessionStoreTest {
         expect(persistentSessionStore.wrapped().persistent())
             .andReturn(true);
         expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
+            .andReturn(systemTime - 20);
         expect(persistentSessionStore.wrapped().fetchSession(Bytes.wrap("a".getBytes()), systemTime - RETENTION_PERIOD, systemTime - 10))
             .andReturn("value".getBytes());
         replay(context);
@@ -497,7 +495,7 @@ public class MeteredSessionStoreTest {
         expect(persistentSessionStore.wrapped().persistent())
             .andReturn(true);
         expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
+            .andReturn(systemTime - 20);
         expect(persistentSessionStore.wrapped().fetchSession(Bytes.wrap("a".getBytes()), systemTime - RETENTION_PERIOD, systemTime - 10))
             .andReturn(null);
         replay(context);
@@ -506,222 +504,6 @@ public class MeteredSessionStoreTest {
         persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
         final String fetched = persistentSessionStore.fetchSession("a", systemTime - RETENTION_PERIOD, systemTime - 10);
         assertNull(fetched);
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForKeyFetch() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 50, systemTime - 40)));
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.fetch(Bytes.wrap("a".getBytes()), 0, Long.MAX_VALUE))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.fetch("a");
-
-        assertThat(iterator.next().value, equalTo(VALUE));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForKeyBackwardFetch() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 50, systemTime - 40)));
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), 0, Long.MAX_VALUE))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.backwardFetch("a");
-
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("a", new SessionWindow(systemTime - 50, systemTime - 40)), VALUE)));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForRangeKeyFetch() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 50, systemTime - 40)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("b".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session3 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("c".getBytes()),
-            new SessionWindow(systemTime - 20, systemTime - 10)));
-
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES),
-            KeyValue.pair(session3, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("c".getBytes()), 0, Long.MAX_VALUE))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.fetch("a", "c");
-
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("a", new SessionWindow(systemTime - 50, systemTime - 40)), VALUE)));
-        assertTrue(iterator.hasNext());
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("c", new SessionWindow(systemTime - 20, systemTime - 10)), VALUE)));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForRangeKeyBackwardFetch() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 50, systemTime - 40)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("b".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session3 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("c".getBytes()),
-            new SessionWindow(systemTime - 20, systemTime - 10)));
-
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES),
-            KeyValue.pair(session3, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), Bytes.wrap("c".getBytes()), 0, Long.MAX_VALUE))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.backwardFetch("a", "c");
-
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("a", new SessionWindow(systemTime - 50, systemTime - 40)), VALUE)));
-        assertTrue(iterator.hasNext());
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("c", new SessionWindow(systemTime - 20, systemTime - 10)), VALUE)));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForFindSessions() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 7 * RETENTION_PERIOD, systemTime - 6 * RETENTION_PERIOD)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session3 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 20, systemTime - 10)));
-
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES),
-            KeyValue.pair(session3, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.fetch(Bytes.wrap("a".getBytes()), systemTime - 10 * RETENTION_PERIOD, systemTime))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.findSessions("a", systemTime - 10 * RETENTION_PERIOD, systemTime);
-
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("a", new SessionWindow(systemTime - 20, systemTime - 10)), VALUE)));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-    }
-
-    @Test
-    public void shouldReturnOnlyNonExpiredSessionWindowsForRangeKeyFindSessions() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentSessionStore.wrapped().persistent())
-            .andReturn(true);
-        expect(((PersistentSessionStore<Bytes, byte[]>) persistentSessionStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-
-        final Bytes session1 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session2 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("b".getBytes()),
-            new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)));
-        final Bytes session3 = SessionKeySchema.toBinary(new Windowed<>(
-            Bytes.wrap("c".getBytes()),
-            new SessionWindow(systemTime - 20, systemTime - 10)));
-
-
-        final Set<KeyValue<Bytes, byte[]>> sessions = mkSet(
-            KeyValue.pair(session1, VALUE_BYTES),
-            KeyValue.pair(session2, VALUE_BYTES),
-            KeyValue.pair(session3, VALUE_BYTES)
-        );
-        expect(innerSegmentedStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("c".getBytes()), systemTime - 10 * RETENTION_PERIOD, systemTime))
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(sessions.iterator()));
-        replay(context);
-        replay(persistentSessionStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentSessionStore.init((StateStoreContext) context, persistentSessionStore);
-        final KeyValueIterator<Windowed<String>, String> iterator = persistentSessionStore.findSessions("a", "c", systemTime - 10 * RETENTION_PERIOD, systemTime);
-
-        assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>("c", new SessionWindow(systemTime - 20, systemTime - 10)), VALUE)));
-        assertFalse(iterator.hasNext());
-        iterator.close();
     }
 
     @Test
