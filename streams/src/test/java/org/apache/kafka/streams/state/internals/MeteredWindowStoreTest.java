@@ -33,17 +33,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -51,11 +48,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
@@ -374,273 +368,18 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreFetchWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().fetch(Bytes.wrap("a".getBytes()),
-            systemTime - 3 * RETENTION_PERIOD,
-            systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final WindowStoreIterator<String> expiredKeyValueIterator = persistentWindowStore.fetch("a", systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreBackwardFetchWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().backwardFetch(Bytes.wrap("a".getBytes()),
-            systemTime - 3 * RETENTION_PERIOD,
-            systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final WindowStoreIterator<String> expiredKeyValueIterator = persistentWindowStore.backwardFetch("a", systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreFetchByKeysAndTimeWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().fetch(Bytes.wrap("a".getBytes()),
-            Bytes.wrap("b".getBytes()),
-            systemTime - 3 * RETENTION_PERIOD,
-            systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.fetch("a", "b", systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreBackwardFetchByKeysAndTimeWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().backwardFetch(Bytes.wrap("a".getBytes()),
-            Bytes.wrap("b".getBytes()),
-            systemTime - 3 * RETENTION_PERIOD,
-            systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.backwardFetch("a", "b", systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreFetchAllWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().fetchAll(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.fetchAll(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentInnerStoreBackwardFetchAllWhenTimeToIsExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().backwardFetchAll(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD))
-            .andReturn(null);
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.backwardFetchAll(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD);
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
-    public void shouldReturnEmptyIteratorForPersistentStoreWhenInnerStoreReturnsEmptyIteratorForwardAll() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-        expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
-            .andReturn(systemTime);
-        expect(persistentWindowStore.wrapped().all())
-            .andReturn(KeyValueIterators.emptyIterator());
-        replay(persistentWindowStore.wrapped());
-        replay(innerSegmentedStoreMock);
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.all();
-        assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    @Test
     public void shouldPassThroughInnerStoreIteratorOutputForPersistentStoreWhenObservedStreamTimeIsInvalidForwardAll() {
         expect(persistentWindowStore.persistent())
             .andReturn(true);
         expect(((PersistentWindowStore<Bytes, byte[]>) persistentWindowStore.wrapped()).getObservedStreamTime())
             .andReturn(ConsumerRecord.NO_TIMESTAMP);
-        expect(persistentWindowStore.wrapped().all())
+        expect(persistentWindowStore.wrapped().fetchAll(0, Long.MAX_VALUE))
             .andReturn(KeyValueIterators.emptyIterator());
         replay(persistentWindowStore.wrapped());
         replay(innerSegmentedStoreMock);
         persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
         final KeyValueIterator<Windowed<String>, String> expiredKeyValueIterator = persistentWindowStore.all();
         assertFalse(expiredKeyValueIterator.hasNext());
-    }
-
-    private static class MeteredWindowedStoreTestIterator implements KeyValueIterator<Bytes, byte[]> {
-
-        private final Iterator<KeyValue<Bytes, byte[]>> windows;
-
-        public MeteredWindowedStoreTestIterator(final Iterator<KeyValue<Bytes, byte[]>> windows) {
-            this.windows = windows;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return windows.hasNext();
-        }
-
-        @Override
-        public KeyValue<Bytes, byte[]> next() {
-            return windows.next();
-        }
-
-        @Override
-        public void close() {
-            // do nothing
-        }
-
-        @Override
-        public Bytes peekNextKey() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return windows.next().key;
-        }
-    }
-
-    @Test
-    public void shouldFilterRecordsWithExpiredWindowEndTimeForPersistentStoreForwardAll() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        final String value = "val";
-
-        final List<KeyValue<Bytes, byte[]>> records = new ArrayList<>();
-
-        final Bytes record1 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-            Bytes.wrap("a".getBytes()),
-            new TimeWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)), 0);
-        final Bytes record2 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("b".getBytes()),
-                new TimeWindow(systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)), 0);
-        final Bytes record3 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("c".getBytes()),
-                new TimeWindow(systemTime - 50, systemTime - 40)), 0);
-        final Bytes record4 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("d".getBytes()),
-                new TimeWindow(systemTime - 39, systemTime - 29)), 0);
-
-        records.add(KeyValue.pair(record1, value.getBytes()));
-        records.add(KeyValue.pair(record2, value.getBytes()));
-        records.add(KeyValue.pair(record3, value.getBytes()));
-        records.add(KeyValue.pair(record4, value.getBytes()));
-
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-
-        expect(innerSegmentedStoreMock.getObservedStreamTime())
-            .andReturn(systemTime);
-
-        expect(innerSegmentedStoreMock.all())
-            .andReturn(new MeteredPersistentWindowedStoreTestIterator(records.iterator()));
-
-        replay(innerPersistentWindowStoreMock);
-        replay(innerSegmentedStoreMock);
-
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> all = persistentWindowStore.all();
-        final List<KeyValue<Windowed<String>, String>> expected = new ArrayList<>();
-        expected.add(KeyValue.pair(new Windowed<>("c", new TimeWindow(systemTime - 50, systemTime - 40)), value));
-        expected.add(KeyValue.pair(new Windowed<>("d", new TimeWindow(systemTime - 39, systemTime - 29)), value));
-        int index = 0;
-        while (all.hasNext()) {
-            assertEquals(expected.get(index), all.next());
-            index++;
-        }
-        assertEquals(index, 2);
-    }
-
-    @Test
-    public void shouldFilterRecordsWithExpiredWindowEndTimeForPersistentStoreBackwardAll() {
-        final long systemTime = Time.SYSTEM.milliseconds();
-        final String value = "val";
-
-        final List<KeyValue<Bytes, byte[]>> records = new ArrayList<>();
-
-        final Bytes record1 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("a".getBytes()),
-                new TimeWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)), 0);
-        final Bytes record2 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("b".getBytes()),
-                new TimeWindow(systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)), 0);
-        final Bytes record3 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("c".getBytes()),
-                new TimeWindow(systemTime - 50, systemTime - 40)), 0);
-        final Bytes record4 = WindowKeySchema.toStoreKeyBinary(new Windowed<>(
-                Bytes.wrap("d".getBytes()),
-                new TimeWindow(systemTime - 39, systemTime - 29)), 0);
-
-        records.add(KeyValue.pair(record1, value.getBytes()));
-        records.add(KeyValue.pair(record2, value.getBytes()));
-        records.add(KeyValue.pair(record3, value.getBytes()));
-        records.add(KeyValue.pair(record4, value.getBytes()));
-
-
-        expect(persistentWindowStore.persistent())
-            .andReturn(true);
-
-        expect(innerSegmentedStoreMock.getObservedStreamTime())
-            .andReturn(systemTime);
-
-        expect(innerSegmentedStoreMock.backwardAll())
-            .andReturn(new MeteredWindowedStoreTestIterator(records.iterator()));
-
-        replay(innerPersistentWindowStoreMock);
-        replay(innerSegmentedStoreMock);
-
-        persistentWindowStore.init((StateStoreContext) context, persistentWindowStore);
-        final KeyValueIterator<Windowed<String>, String> all = persistentWindowStore.backwardAll();
-        final List<KeyValue<Windowed<String>, String>> expected = new ArrayList<>();
-        expected.add(KeyValue.pair(new Windowed<>("c", new TimeWindow(systemTime - 50, systemTime - 40)), value));
-        expected.add(KeyValue.pair(new Windowed<>("d", new TimeWindow(systemTime - 39, systemTime - 29)), value));
-        int index = 0;
-        while (all.hasNext()) {
-            assertEquals(expected.get(index), all.next());
-            index++;
-        }
-        assertEquals(index, 2);
     }
 
     @Test
