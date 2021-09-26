@@ -317,6 +317,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
         boolean shutdownRequested = false;
+        boolean assignementErrorFound = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
@@ -351,8 +352,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // add the consumer and any info in its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
+            final int prevSize = allOwnedPartitions.size();
             allOwnedPartitions.addAll(subscription.ownedPartitions());
+            if (allOwnedPartitions.size() < prevSize + subscription.ownedPartitions().size()) {
+                assignementErrorFound = true;
+            }
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
+        }
+
+        if (assignementErrorFound) {
+            log.warn("The previous assignment contains a partition more than once. " +
+                "\t Mapping: {}", subscriptions);
         }
 
         try {
