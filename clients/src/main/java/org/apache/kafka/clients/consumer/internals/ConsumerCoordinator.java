@@ -33,15 +33,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.UnstableOffsetCommitException;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -674,7 +666,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected void onJoinPrepare(int generation, String memberId, final Timer pollTimer) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         // commit offsets prior to rebalance if auto-commit enabled
-        //The timer whose commitOffset timed out is no longer time.timer(rebalanceConfig.rebalanceTimeoutMs), and is changed to the timer passed by the customer
         maybeAutoCommitOffsetsSync(pollTimer);
 
         // the generation / member-id can possibly be reset by the heartbeat thread
@@ -1018,6 +1009,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
+            if(future.exception() instanceof UnknownTopicOrPartitionException)
+                cleanUpConsumedOffsets(offsets);
+
             timer.sleep(rebalanceConfig.retryBackoffMs);
         } while (timer.notExpired());
 
@@ -1057,8 +1051,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
 
-            cleanUpConsumedOffsets(allConsumedOffsets);
-
             try {
                 log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
                 if (!commitOffsetsSync(allConsumedOffsets, timer))
@@ -1074,23 +1066,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> willCommitOffsets) {
+    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
 
-        if (willCommitOffsets.isEmpty())
+        if (partitionOffsetsToBeCommitted.isEmpty())
             return;
 
         Set<String> validTopics = metadata.fetch().topics();
         Set<TopicPartition> toGiveUpTopicPartitions = new HashSet<>();
 
-        Iterator<Map.Entry<TopicPartition, OffsetAndMetadata>> iterator = willCommitOffsets.entrySet().iterator();
+        Iterator<TopicPartition> iterator = partitionOffsetsToBeCommitted.keySet().iterator();
 
         while (iterator.hasNext()) {
 
-            Map.Entry<TopicPartition, OffsetAndMetadata> entry = iterator.next();
+            TopicPartition topicPartition = iterator.next();
 
-            if (!validTopics.contains(entry.getKey().topic())) {
+            if (!validTopics.contains(topicPartition.topic())) {
 
-                toGiveUpTopicPartitions.add(entry.getKey());
+                toGiveUpTopicPartitions.add(topicPartition);
                 iterator.remove();
             }
 
