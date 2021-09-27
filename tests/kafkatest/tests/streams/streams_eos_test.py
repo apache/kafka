@@ -170,5 +170,5 @@ class StreamsEosTest(KafkaTest):
 
     def wait_for(self, monitor, processor, output):
         monitor.wait_until(output,
-                           timeout_sec=300,
+                           timeout_sec=480,
                            err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))

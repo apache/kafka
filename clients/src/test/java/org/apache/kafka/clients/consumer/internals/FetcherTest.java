@@ -2859,6 +2859,21 @@ public class FetcherTest {
     }
 
     @Test
+    public void testListOffsetsWithZeroTimeout() {
+        buildFetcher();
+
+        Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
+        offsetsToSearch.put(tp0, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        offsetsToSearch.put(tp1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+
+        Map<TopicPartition, Long> offsetsToExpect = new HashMap<>();
+        offsetsToExpect.put(tp0, null);
+        offsetsToExpect.put(tp1, null);
+
+        assertEquals(offsetsToExpect, fetcher.offsetsForTimes(offsetsToSearch, time.timer(0)));
+    }
+
+    @Test
     public void testBatchedListOffsetsMetadataErrors() {
         buildFetcher();
 
@@ -2883,7 +2898,7 @@ public class FetcherTest {
         offsetsToSearch.put(tp0, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         offsetsToSearch.put(tp1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        assertThrows(TimeoutException.class, () -> fetcher.offsetsForTimes(offsetsToSearch, time.timer(0)));
+        assertThrows(TimeoutException.class, () -> fetcher.offsetsForTimes(offsetsToSearch, time.timer(1)));
     }
 
     @Test
@@ -3132,10 +3147,10 @@ public class FetcherTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter() {
+        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
             @Override
-            protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                return BatchRetention.DELETE_EMPTY;
+            protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
+                return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
             }
 
             @Override

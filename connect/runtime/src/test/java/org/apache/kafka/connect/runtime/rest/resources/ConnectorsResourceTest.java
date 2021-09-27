@@ -803,7 +803,8 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
+        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
+        assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
 
         PowerMock.verifyAll();
     }
@@ -874,7 +875,9 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null);
+        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null);
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+        PowerMock.verifyAll();
 
         PowerMock.verifyAll();
     }
@@ -892,7 +895,9 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
+        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+        PowerMock.verifyAll();
 
         PowerMock.verifyAll();
     }

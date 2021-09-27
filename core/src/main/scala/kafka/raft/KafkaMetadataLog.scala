@@ -16,8 +16,7 @@
  */
 package kafka.raft
 
-import kafka.api.ApiVersion
-import kafka.log.{AppendOrigin, Defaults, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.log.{AppendOrigin, Defaults, UnifiedLog, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
@@ -37,7 +36,7 @@ import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
-  val log: Log,
+  val log: UnifiedLog,
   time: Time,
   scheduler: Scheduler,
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
@@ -554,11 +553,9 @@ object KafkaMetadataLog {
   ): KafkaMetadataLog = {
     val props = new Properties()
     props.put(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
-    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
     props.put(LogConfig.SegmentBytesProp, Int.box(config.logSegmentBytes))
     props.put(LogConfig.SegmentMsProp, Long.box(config.logSegmentMillis))
     props.put(LogConfig.FileDeleteDelayMsProp, Int.box(Defaults.FileDeleteDelayMs))
-
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
 
@@ -566,7 +563,7 @@ object KafkaMetadataLog {
       throw new InvalidConfigurationException(s"Cannot set $MetadataLogSegmentBytesProp below ${config.logSegmentMinBytes}")
     }
 
-    val log = Log(
+    val log = UnifiedLog(
       dir = dataDir,
       config = defaultLogConfig,
       logStartOffset = 0L,
@@ -605,7 +602,7 @@ object KafkaMetadataLog {
   }
 
   private def recoverSnapshots(
-    log: Log
+    log: UnifiedLog
   ): mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]] = {
     val snapshots = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
     // Scan the log directory; deleting partial snapshots and older snapshot, only remembering immutable snapshots start

@@ -127,8 +127,8 @@ class LocalLog(@volatile private var _dir: File,
   private[log] def updateConfig(newConfig: LogConfig): Unit = {
     val oldConfig = config
     config = newConfig
-    val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
-    val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+    val oldRecordVersion = oldConfig.recordVersion
+    val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion.precedes(oldRecordVersion))
       warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
   }

@@ -191,6 +191,8 @@ public class MetricsIntegrationTest {
     private static final String TASK_CREATED_TOTAL = "task-created-total";
     private static final String TASK_CLOSED_RATE = "task-closed-rate";
     private static final String TASK_CLOSED_TOTAL = "task-closed-total";
+    private static final String BLOCKED_TIME_TOTAL = "blocked-time-ns-total";
+    private static final String THREAD_START_TIME = "thread-start-time";
     private static final String ACTIVE_PROCESS_RATIO = "active-process-ratio";
     private static final String ACTIVE_BUFFER_COUNT = "active-buffer-count";
     private static final String SKIPPED_RECORDS_RATE = "skipped-records-rate";
@@ -503,6 +505,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, NUM_THREADS);
         checkMetricByName(listMetricThread, TASK_CLOSED_RATE, NUM_THREADS);
         checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, BLOCKED_TIME_TOTAL, NUM_THREADS);
+        checkMetricByName(listMetricThread, THREAD_START_TIME, NUM_THREADS);
     }
 
     private void checkTaskLevelMetrics() {

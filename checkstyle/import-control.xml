@@ -225,6 +225,7 @@
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.policy"/>
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
@@ -297,6 +298,9 @@
 
     <subpackage name="log">
       <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="kafka.api" />
+      <allow pkg="kafka.utils" />
+      <allow pkg="org.apache.kafka.clients" />
       <allow pkg="org.apache.kafka.server.common" />
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.test" />

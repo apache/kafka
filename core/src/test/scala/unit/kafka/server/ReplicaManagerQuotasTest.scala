@@ -18,10 +18,9 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
-import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
-import kafka.log.{Log, LogManager, LogOffsetSnapshot}
+import kafka.log.{UnifiedLog, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
@@ -208,7 +207,7 @@ class ReplicaManagerQuotasTest {
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.highWatermark).andReturn(5).anyTimes()
@@ -249,9 +248,16 @@ class ReplicaManagerQuotasTest {
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler, logManager,
-      new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId),
+      logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
+      alterIsrManager = alterIsrManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

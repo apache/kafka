@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.partition;
 
+import kafka.api.ApiVersion;
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.IsrChangeListener;
@@ -30,6 +31,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.LogOffsetMetadata;
 import kafka.server.MetadataCache;
+import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
@@ -50,9 +52,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
-import scala.collection.JavaConverters;
-import scala.compat.java8.OptionConverters;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -62,6 +61,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import scala.Option;
+import scala.compat.java8.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -84,23 +85,25 @@ public class UpdateFollowerFetchStateBenchmark {
     public void setUp() {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
-        List<File> logDirs = Collections.singletonList(logDir);
-        logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new MockConfigRepository(),
-                logConfig,
-                new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
-                1,
-                1000L,
-                10000L,
-                10000L,
-                1000L,
-                60000,
-                scheduler,
-                brokerTopicStats,
-                logDirFailureChannel,
-                Time.SYSTEM,
-                true);
+        logManager = new LogManagerBuilder().
+            setLogDirs(Collections.singletonList(logDir)).
+            setInitialOfflineDirs(Collections.emptyList()).
+            setConfigRepository(new MockConfigRepository()).
+            setInitialDefaultConfig(logConfig).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setRecoveryThreadsPerDataDir(1).
+            setFlushCheckMs(1000L).
+            setFlushRecoveryOffsetCheckpointMs(10000L).
+            setFlushStartOffsetCheckpointMs(10000L).
+            setRetentionCheckMs(1000L).
+            setMaxPidExpirationMs(60000).
+            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setScheduler(scheduler).
+            setBrokerTopicStats(brokerTopicStats).
+            setLogDirFailureChannel(logDirFailureChannel).
+            setTime(Time.SYSTEM).
+            setKeepPartitionMetadataFile(true).
+            build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
@@ -156,7 +159,6 @@ public class UpdateFollowerFetchStateBenchmark {
         logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
         logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.MessageFormatVersionProp(), Defaults.MessageFormatVersion());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }

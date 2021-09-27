@@ -82,7 +82,10 @@ public class BufferPool {
                                                    "The fraction of time an appender waits for space allocation.");
         MetricName totalMetricName = metrics.metricName("bufferpool-wait-time-total",
                                                    metricGrpName,
-                                                   "The total time an appender waits for space allocation.");
+                                                   "*Deprecated* The total time an appender waits for space allocation.");
+        MetricName totalNsMetricName = metrics.metricName("bufferpool-wait-time-ns-total",
+                                                    metricGrpName,
+                                                    "The total time in nanoseconds an appender waits for space allocation.");
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
         MetricName bufferExhaustedRateMetricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
@@ -90,6 +93,7 @@ public class BufferPool {
         bufferExhaustedRecordSensor.add(new Meter(bufferExhaustedRateMetricName, bufferExhaustedTotalMetricName));
 
         this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
+        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalNsMetricName));
         this.closed = false;
     }
 

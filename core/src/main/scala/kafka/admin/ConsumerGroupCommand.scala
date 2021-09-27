@@ -465,7 +465,7 @@ object ConsumerGroupCommand extends Logging {
         topicWithoutPartitions.asJava,
         withTimeoutMs(new DescribeTopicsOptions))
 
-      val unknownPartitions = describeTopicsResult.values().asScala.flatMap { case (topic, future) =>
+      val unknownPartitions = describeTopicsResult.topicNameValues().asScala.flatMap { case (topic, future) =>
         Try(future.get()) match {
           case Success(description) => description.partitions().asScala.map { partition =>
             new TopicPartition(topic, partition.partition())
@@ -726,7 +726,7 @@ object ConsumerGroupCommand extends Logging {
         val descriptionMap = adminClient.describeTopics(
           topics.asJava,
           withTimeoutMs(new DescribeTopicsOptions)
-        ).all().get.asScala
+        ).allTopicNames().get.asScala
         descriptionMap.flatMap { case (topic, description) =>
           description.partitions().asScala.map { tpInfo =>
             new TopicPartition(topic, tpInfo.partition)
