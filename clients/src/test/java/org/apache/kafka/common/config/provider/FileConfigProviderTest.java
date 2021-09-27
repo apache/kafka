@@ -92,8 +92,7 @@ public class FileConfigProviderTest {
     @Test
     public void testServiceLoaderDiscovery() {
         ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
-        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(sl -> sl instanceof FileConfigProvider));
-
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof FileConfigProvider));
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {

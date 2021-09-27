@@ -151,7 +151,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testServiceLoaderDiscovery() {
         ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
-        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(sl -> sl instanceof DirectoryConfigProvider));
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof DirectoryConfigProvider));
     }
 }
 
