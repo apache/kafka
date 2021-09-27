@@ -323,6 +323,8 @@ class LogCleaner(initialConfig: CleanerConfig,
       val cleaned = tryCleanFilthiestLog()
       if (!cleaned)
         pause(config.backOffMs, TimeUnit.MILLISECONDS)
+
+      cleanerManager.maintainUncleanablePartitions()
     }
 
     /**
