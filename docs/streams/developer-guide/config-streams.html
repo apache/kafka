@@ -143,12 +143,6 @@ settings.put(... , ...);</code></pre>
           <blockquote>
             <div><p>(Required) The Kafka bootstrap servers. This is the same <a class="reference external" href="http://kafka.apache.org/documentation.html#producerconfigs">setting</a> that is used by the underlying producer and consumer clients to connect to the Kafka cluster.
               Example: <code class="docutils literal"><span class="pre">&quot;kafka-broker1:9092,kafka-broker2:9092&quot;</span></code>.</p>
-              <dl class="docutils">
-                <dt>Tip:</dt>
-                <dd>Kafka Streams applications can only communicate with a single Kafka cluster specified by this config value.
-                  Future versions of Kafka Streams will support connecting to different Kafka clusters for reading input
-                  streams and writing output streams.</dd>
-              </dl>
             </div></blockquote>
         </div>
       </div>
