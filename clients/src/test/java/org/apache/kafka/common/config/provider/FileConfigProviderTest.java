@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -91,17 +92,8 @@ public class FileConfigProviderTest {
     @Test
     public void testServiceLoaderDiscovery() {
         ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(sl -> sl instanceof FileConfigProvider));
 
-        boolean discovered = false;
-
-        for (ConfigProvider service : serviceLoader)    {
-            System.out.println(service.getClass());
-            if (service instanceof FileConfigProvider) {
-                discovered = true;
-            }
-        }
-
-        assertTrue(discovered);
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {

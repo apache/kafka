@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.toSet;
@@ -150,17 +151,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testServiceLoaderDiscovery() {
         ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
-
-        boolean discovered = false;
-
-        for (ConfigProvider service : serviceLoader)    {
-            System.out.println(service.getClass());
-            if (service instanceof DirectoryConfigProvider) {
-                discovered = true;
-            }
-        }
-
-        assertTrue(discovered);
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(sl -> sl instanceof DirectoryConfigProvider));
     }
 }
 
