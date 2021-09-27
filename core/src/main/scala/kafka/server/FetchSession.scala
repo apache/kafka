@@ -261,6 +261,11 @@ class FetchSession(val id: Int,
     val added = new TL
     val updated = new TL
     val removed = new TL
+    toForget.forEach { p =>
+      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
+        removed.add(p)
+      }
+    }
     fetchData.forEach { (topicPart, reqData) =>
       val newCachedPart = new CachedPartition(topicPart.topicPartition, topicPart.topicId, reqData)
       val cachedPart = partitionMap.find(newCachedPart)
@@ -273,11 +278,6 @@ class FetchSession(val id: Int,
         // Update the topic name in place
           cachedPart.resolveUnknownName(topicPart.topicPartition.topic)
         updated.add(topicPart)
-      }
-    }
-    toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
-        removed.add(p)
       }
     }
     (added, updated, removed)
@@ -818,6 +818,7 @@ class FetchManager(private val time: Time,
               debug(s"Session error for ${reqMetadata.sessionId}: expected  " +
                 s"${if (session.usesTopicIds) "to use topic IDs" else "to not use topic IDs"}" +
                 s", but request version $reqVersion means that we can not.")
+              cache.remove(session)
               new SessionErrorContext(Errors.FETCH_SESSION_TOPIC_ID_ERROR, reqMetadata)
             } else {
               val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata, reqVersion >= 13)

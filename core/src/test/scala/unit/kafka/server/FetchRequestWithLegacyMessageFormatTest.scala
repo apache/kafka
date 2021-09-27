@@ -58,7 +58,7 @@ class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
     val fetchVersion: Short = 2
     val fetchRequest = FetchRequest.Builder.forConsumer(fetchVersion, Int.MaxValue, 0,
-      createPartitionMap(maxPartitionBytes, Seq(topicPartition)), topicIds).build(fetchVersion)
+      createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(fetchVersion)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val partitionData = fetchResponse.responseData(topicNames, fetchVersion).get(new TopicIdPartition(Uuid.ZERO_UUID, topicPartition))
     assertEquals(Errors.NONE.code, partitionData.errorCode)

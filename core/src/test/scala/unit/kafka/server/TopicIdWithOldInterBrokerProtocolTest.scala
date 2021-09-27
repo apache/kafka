@@ -74,7 +74,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
     val leadersMap = createTopic(topic1, replicaAssignment)
-    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, ApiKeys.FETCH.latestVersion())
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
     val responseData = resp.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion())
@@ -88,20 +88,21 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
     val tp0 = new TopicPartition("topic1", 0)
-    val tidp0 = new TopicIdPartition(Uuid.ZERO_UUID, tp0)
     val maxResponseBytes = 800
     val maxPartitionBytes = 190
     val topicIds = Map("topic1" -> Uuid.randomUuid())
     val topicNames = topicIds.map(_.swap)
+    val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
+    val tidp0Result = new TopicIdPartition(Uuid.ZERO_UUID, tp0)
 
     val leadersMap = createTopic(topic1, replicaAssignment)
-    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0), Map.empty, topicIds, 12)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, 12)
     val resp = sendFetchRequest(leadersMap(0), req)
 
     assertEquals(Errors.NONE, resp.error())
 
     val responseData = resp.responseData(topicNames.asJava, 12)
-    assertEquals(Errors.NONE.code, responseData.get(tidp0).errorCode);
+    assertEquals(Errors.NONE.code, responseData.get(tidp0Result).errorCode);
   }
 
   @Test
@@ -144,19 +145,18 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
   }
 
-  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicIdPartition],
                                  offsetMap: Map[TopicPartition, Long],
-                                 topicIds: Map[String, Uuid],
                                  version: Short): FetchRequest = {
-    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap), topicIds.asJava)
+    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
   }
 
-  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                 offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
-    val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicIdPartition],
+                                 offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData] = {
+    val partitionMap = new LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp.topicPartition, 0), 0L, maxPartitionBytes,
         Optional.empty()))
     }
     partitionMap

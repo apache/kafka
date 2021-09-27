@@ -22,7 +22,7 @@ import java.util.Collections
 
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.Session
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -79,7 +79,7 @@ class BaseClientQuotaManagerTest {
 
   protected def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
                          channelThrottlingCallback: ThrottleCallback): Unit = {
-    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData], Collections.emptyMap()))
+    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicIdPartition, PartitionData]))
     quotaManager.throttle(request, channelThrottlingCallback, throttleTimeMs)
   }
 }

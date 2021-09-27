@@ -65,7 +65,7 @@ public class FetchSessionBenchmark {
     @Param(value = {"false", "true"})
     private boolean presize;
 
-    private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetches;
+    private LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> fetches;
     private FetchSessionHandler handler;
     private Map<String, Uuid> topicIds;
 
@@ -81,13 +81,13 @@ public class FetchSessionBenchmark {
 
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionCount; i++) {
-            TopicPartition tp = new TopicPartition("foo", i);
+            TopicIdPartition tp = new TopicIdPartition(topicIds.get("foo"), new TopicPartition("foo", i));
             FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
                     Optional.empty());
             fetches.put(tp, partitionData);
-            builder.add(tp, topicIds.get(tp.topic()), partitionData);
-            respMap.put(new TopicIdPartition(topicIds.get(tp.topic()), tp), new FetchResponseData.PartitionData()
-                            .setPartitionIndex(tp.partition())
+            builder.add(tp, partitionData);
+            respMap.put(tp, new FetchResponseData.PartitionData()
+                            .setPartitionIndex(tp.topicPartition().partition())
                             .setLastStableOffset(0)
                             .setLogStartOffset(0));
         }
@@ -96,7 +96,7 @@ public class FetchSessionBenchmark {
         handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
-        for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
+        for (TopicIdPartition topicPartition: new ArrayList<>(fetches.keySet())) {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
@@ -116,9 +116,10 @@ public class FetchSessionBenchmark {
         else
             builder = handler.newBuilder();
 
-        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
-            builder.add(topicPartition, topicIds.get(topicPartition.topic()), entry.getValue());
+        // Should we keep lookup to mimic how adding really works?
+        for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
+            TopicIdPartition topicPartition = entry.getKey();
+            builder.add(topicPartition, entry.getValue());
         }
 
         builder.build();

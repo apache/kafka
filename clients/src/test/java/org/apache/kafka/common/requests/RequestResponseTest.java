@@ -259,10 +259,10 @@ public class RequestResponseTest {
         checkErrorResponse(createControlledShutdownRequest(0), unknownServerException, true);
         checkRequest(createFetchRequest(4), true);
         checkResponse(createFetchResponse(true), 4, true);
-        List<TopicPartition> toForgetTopics = new ArrayList<>();
-        toForgetTopics.add(new TopicPartition("foo", 0));
-        toForgetTopics.add(new TopicPartition("foo", 2));
-        toForgetTopics.add(new TopicPartition("bar", 0));
+        List<TopicIdPartition> toForgetTopics = new ArrayList<>();
+        toForgetTopics.add(new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0)));
+        toForgetTopics.add(new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 2)));
+        toForgetTopics.add(new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("bar", 0)));
         checkRequest(createFetchRequest(7, new FetchMetadata(123, 456), toForgetTopics), true);
         checkResponse(createFetchResponse(123), 7, true);
         checkResponse(createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123), 7, true);
@@ -836,11 +836,8 @@ public class RequestResponseTest {
     @Test
     public void fetchResponseVersionTest() {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-        Map<Uuid, String> topicNames = new HashMap<>();
-        Map<String, Uuid> topicIds = new HashMap<>();
         Uuid id = Uuid.randomUuid();
-        topicNames.put(id, "test");
-        topicIds.put("test", id);
+        Map<Uuid, String> topicNames = Collections.singletonMap(id, "test");
 
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
@@ -880,10 +877,8 @@ public class RequestResponseTest {
     public void testFetchResponseV4() {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Map<String, Uuid> topicIds = new HashMap<>();
         topicNames.put(Uuid.randomUuid(), "bar");
         topicNames.put(Uuid.randomUuid(), "foo");
-        topicNames.forEach((id, name) -> topicIds.put(name, id));
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
 
         List<FetchResponseData.AbortedTransaction> abortedTransactions = asList(
@@ -1025,11 +1020,10 @@ public class RequestResponseTest {
 
     @Test
     public void testFetchRequestCompat() {
-        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
-        fetchData.put(new TopicPartition("test", 0), new FetchRequest.PartitionData(100, 2, 100, Optional.of(42)));
-        Map<String, Uuid> topicIds = Collections.singletonMap("test1", Uuid.randomUuid());
+        Map<TopicIdPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
+        fetchData.put(new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("test", 0)), new FetchRequest.PartitionData(100, 2, 100, Optional.of(42)));
         FetchRequest req = FetchRequest.Builder
-                .forConsumer((short) 2, 100, 100, fetchData, topicIds)
+                .forConsumer((short) 2, 100, 100, fetchData)
                 .metadata(new FetchMetadata(10, 20))
                 .isolationLevel(IsolationLevel.READ_COMMITTED)
                 .build((short) 2);
@@ -1297,42 +1291,33 @@ public class RequestResponseTest {
             return FindCoordinatorResponse.prepareResponse(Errors.NONE, "group", node);
     }
 
-    private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
-                1000000, Optional.empty()));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
-                1000000, Optional.empty()));
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put("test1", Uuid.randomUuid());
-        topicIds.put("test2", Uuid.randomUuid());
-        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).
+    private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicIdPartition> toForget) {
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test1", 0)),
+                new FetchRequest.PartitionData(100, -1L, 1000000, Optional.empty()));
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test2", 0)),
+                new FetchRequest.PartitionData(200, -1L, 1000000, Optional.empty()));
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData).
             metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
-                1000000, Optional.empty()));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
-                1000000, Optional.empty()));
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put("test1", Uuid.randomUuid());
-        topicIds.put("test2", Uuid.randomUuid());
-        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test1", 0)),
+                new FetchRequest.PartitionData(100, -1L, 1000000, Optional.empty()));
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test2", 0)),
+                new FetchRequest.PartitionData(200, -1L, 1000000, Optional.empty()));
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData).
             isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version) {
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
-                1000000, Optional.empty()));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
-                1000000, Optional.empty()));
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put("test1", Uuid.randomUuid());
-        topicIds.put("test2", Uuid.randomUuid());
-        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).setMaxBytes(1000).build((short) version);
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test1", 0)),
+                new FetchRequest.PartitionData(100, -1L, 1000000, Optional.empty()));
+        fetchData.put(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("test2", 0)),
+                new FetchRequest.PartitionData(200, -1L, 1000000, Optional.empty()));
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData).setMaxBytes(1000).build((short) version);
     }
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {

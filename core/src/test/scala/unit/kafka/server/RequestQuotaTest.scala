@@ -225,9 +225,10 @@ class RequestQuotaTest extends BaseRequestTest {
             .setTimeoutMs(5000))
 
         case ApiKeys.FETCH =>
-          val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-          partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
-          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap, getTopicIds().asJava)
+          val partitionMap = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
+          val tidp = new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), tp)
+          partitionMap.put(tidp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
+          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
           new MetadataRequest.Builder(List(topic).asJava, true)

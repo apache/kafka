@@ -732,7 +732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val knownPartitionDatas = partitionDatas.filter { case (tp, _) => tp.topicPartition.topic != null }
       val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, knownPartitionDatas)(_._1.topicPartition.topic)
       partitionDatas.foreach { case (topicIdPartition, data) =>
-        if (topicIdPartition.topicPartition.topic == null )
+        if (topicIdPartition.topicPartition.topic == null)
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.UNKNOWN_TOPIC_ID)
         else if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition.topicPartition.partition, Errors.TOPIC_AUTHORIZATION_FAILED)

@@ -263,7 +263,7 @@ public class Fetcher<K, V> implements Closeable {
                 maxVersion = ApiKeys.FETCH.latestVersion();
             }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.topicIds())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
@@ -300,12 +300,12 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
 
-                            Map<TopicIdPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Map<TopicIdPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
                             for (Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
-                                TopicPartition partition = entry.getKey().topicPartition();
+                                TopicIdPartition partition = entry.getKey();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                 if (requestData == null) {
                                     String message;
@@ -331,7 +331,7 @@ public class Fetcher<K, V> implements Closeable {
                                     Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
-                                    completedFetches.add(new CompletedFetch(partition, partitionData,
+                                    completedFetches.add(new CompletedFetch(partition.topicPartition(), partitionData,
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
                             }
@@ -1240,7 +1240,7 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
-                builder.add(partition, topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(position.offset,
+                builder.add(new TopicIdPartition(topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), partition), new FetchRequest.PartitionData(position.offset,
                     FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 

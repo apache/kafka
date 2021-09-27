@@ -109,10 +109,9 @@ public class FetchResponse extends AbstractResponse {
                         } else {
                             name = topicNames.get(topicResponse.topicId());
                         }
-                        if (name != null) {
-                            topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicIdPartition(topicResponse.topicId(), new TopicPartition(name, partition.partitionIndex())), partition));
-                        }
+                        topicResponse.partitions().forEach(partition ->
+                                responseData.put(new TopicIdPartition(topicResponse.topicId(), new TopicPartition(name, partition.partitionIndex())), partition));
+
                     });
                 }
             }
