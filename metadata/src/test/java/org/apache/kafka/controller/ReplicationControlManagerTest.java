@@ -430,6 +430,41 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 3));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreatableTopicResult topicResult = result.response().topics().find("foo");
+        assertEquals((short) 0, topicResult.errorCode());
+    }
+
+    @Test
+    public void testInvalidCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 4));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
+                "replication factor of 4 cannot be reached because only 3 broker(s) " +
+                "are registered."));
+        assertEquals(expectedResponse, result.response());
+    }
+
+    @Test
     public void testCreateTopicsWithPolicy() throws Exception {
         MockCreateTopicPolicy createTopicPolicy = new MockCreateTopicPolicy(asList(
             new CreateTopicPolicy.RequestMetadata("foo", 2, (short) 2,

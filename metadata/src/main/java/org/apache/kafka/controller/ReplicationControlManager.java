@@ -416,8 +416,13 @@ public class ReplicationControlManager {
                 append("SUCCESS");
             resultsPrefix = ", ";
         }
-        log.info("createTopics result(s): {}", resultsBuilder.toString());
-        return ControllerResult.atomicOf(records, data);
+        if (request.validateOnly()) {
+            log.info("Validate-only CreateTopics result(s): {}", resultsBuilder.toString());
+            return ControllerResult.atomicOf(Collections.emptyList(), data);
+        } else {
+            log.info("CreateTopics result(s): {}", resultsBuilder.toString());
+            return ControllerResult.atomicOf(records, data);
+        }
     }
 
     private ApiError createTopic(CreatableTopic topic,
