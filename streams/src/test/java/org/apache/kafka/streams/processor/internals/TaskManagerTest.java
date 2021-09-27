@@ -735,7 +735,6 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
@@ -3005,6 +3004,9 @@ public class TaskManagerTest {
     public void shouldNotFailForTimeoutExceptionOnConsumerCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+
+        task00.setCommittableOffsetsAndMetadata(taskId00Partitions.stream().collect(Collectors.toMap(p -> p, p -> new OffsetAndMetadata(0))));
+        task01.setCommittableOffsetsAndMetadata(taskId00Partitions.stream().collect(Collectors.toMap(p -> p, p -> new OffsetAndMetadata(0))));
 
         consumer.commitSync(anyObject(Map.class));
         expectLastCall().andThrow(new TimeoutException("KABOOM!"));
