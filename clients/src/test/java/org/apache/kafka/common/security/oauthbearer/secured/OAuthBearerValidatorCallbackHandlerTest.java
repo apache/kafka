@@ -95,7 +95,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(options);
         CloseableVerificationKeyResolver verificationKeyResolver = (jws, nestingContext) ->
                 builder.jwk().getRsaPublicKey();
-        AccessTokenValidator accessTokenValidator = OAuthBearerValidatorCallbackHandler.configureAccessTokenValidator(conf, verificationKeyResolver);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf, verificationKeyResolver);
         handler.configure(verificationKeyResolver, accessTokenValidator);
         return handler;
     }

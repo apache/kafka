@@ -17,20 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.ACCESS_TOKEN_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.ACCESS_TOKEN_FILE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.TOKEN_ENDPOINT_URI_CONFIG;
-
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Stream;
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -61,68 +51,13 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private boolean isConfigured = false;
 
-    /**
-     * Create an {@link AccessTokenRetriever} from the given
-     * {@link LoginCallbackHandlerConfiguration}.
-     *
-     * <b>Note</b>: the returned <code>AccessTokenRetriever</code> is not initialized here and
-     * must be done by the caller.
-     *
-     * Primarily exposed here for unit testing.
-     *
-     * @param conf Configuration for {@link javax.security.auth.callback.CallbackHandler}
-     *
-     * @return Non-<code>null</code> <code>AccessTokenRetriever</code>
-     */
-
-    public static AccessTokenRetriever configureAccessTokenRetriever(LoginCallbackHandlerConfiguration conf) {
-        String accessToken = conf.getAccessToken();
-        String accessTokenFile = conf.getAccessTokenFile();
-        String clientId = conf.getClientId();
-
-        long count = Stream.of(accessToken, accessTokenFile, clientId)
-            .filter(Objects::nonNull)
-            .count();
-
-        if (count != 1) {
-            throw new ConfigException(String.format("The OAuth login configuration must include only one of %s, %s, or %s options", ACCESS_TOKEN_CONFIG, ACCESS_TOKEN_FILE_CONFIG, CLIENT_ID_CONFIG));
-        } else if (accessToken != null) {
-            accessToken = ConfigurationUtils.validateString(ACCESS_TOKEN_CONFIG, accessToken);
-            return new StaticAccessTokenRetriever(accessToken);
-        } else if (accessTokenFile != null) {
-            accessTokenFile = ConfigurationUtils.validateString(ACCESS_TOKEN_FILE_CONFIG, accessTokenFile);
-            return new FileTokenRetriever(Paths.get(accessTokenFile));
-        } else {
-            clientId = ConfigurationUtils.validateString(CLIENT_ID_CONFIG, clientId);
-            String clientSecret = ConfigurationUtils.validateString(CLIENT_SECRET_CONFIG, conf.getClientSecret());
-            String tokenEndpointUri = ConfigurationUtils.validateString(TOKEN_ENDPOINT_URI_CONFIG, conf.getTokenEndpointUri());
-
-            SSLSocketFactory sslSocketFactory = ConfigurationUtils.createSSLSocketFactory(conf.originals(), TOKEN_ENDPOINT_URI_CONFIG);
-
-            return new HttpAccessTokenRetriever(clientId,
-                clientSecret,
-                conf.getScope(),
-                sslSocketFactory,
-                tokenEndpointUri,
-                conf.getLoginAttempts(),
-                conf.getLoginRetryWaitMs(),
-                conf.getLoginRetryMaxWaitMs(),
-                conf.getLoginConnectTimeoutMs(),
-                conf.getLoginReadTimeoutMs());
-        }
-    }
-
-    public static AccessTokenValidator configureAccessTokenValidator(LoginCallbackHandlerConfiguration conf) {
-        return new LoginAccessTokenValidator(conf.getScopeClaimName(), conf.getSubClaimName());
-    }
-
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = ConfigurationUtils.getModuleOptions(saslMechanism, jaasConfigEntries);
 
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(moduleOptions);
-        AccessTokenRetriever accessTokenRetriever = configureAccessTokenRetriever(conf);
-        AccessTokenValidator accessTokenValidator = configureAccessTokenValidator(conf);
+        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(conf);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
 
         configure(accessTokenRetriever, accessTokenValidator);
     }

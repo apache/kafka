@@ -122,7 +122,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(Collections.emptyMap());
         AccessTokenRetriever accessTokenRetriever = new StaticAccessTokenRetriever("foo");
-        AccessTokenValidator accessTokenValidator = OAuthBearerLoginCallbackHandler.configureAccessTokenValidator(conf);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
         handler.configure(accessTokenRetriever, accessTokenValidator);
 
         try {
@@ -166,7 +166,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
 
         assertThrowsWithMessage(ConfigException.class,
-            () -> OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf),
+            () -> AccessTokenRetrieverFactory.create(conf),
             "must include only one of");
     }
 
@@ -175,7 +175,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         String expected = "test1";
         Map<String, Object> options = Collections.singletonMap(ACCESS_TOKEN_CONFIG, expected);
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
-        AccessTokenRetriever accessTokenRetriever = OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf);
+        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(conf);
         assertEquals(expected, accessTokenRetriever.retrieve());
     }
 
@@ -188,7 +188,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
         Map<String, Object> options = Collections.singletonMap(ACCESS_TOKEN_FILE_CONFIG, accessTokenFile.getAbsolutePath());
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
-        AccessTokenRetriever accessTokenRetriever = OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf);
+        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(conf);
         accessTokenRetriever.init();
         assertEquals(expected, accessTokenRetriever.retrieve());
     }
@@ -231,7 +231,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
             }
         };
 
-        AccessTokenValidator accessTokenValidator = OAuthBearerLoginCallbackHandler.configureAccessTokenValidator(conf);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
 
         assertThrowsWithMessage(KafkaException.class, () -> handler.configure(accessTokenRetriever, accessTokenValidator), "encountered an error when initializing");
     }
@@ -251,7 +251,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
             }
         };
 
-        AccessTokenValidator accessTokenValidator = OAuthBearerLoginCallbackHandler.configureAccessTokenValidator(conf);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
         handler.configure(accessTokenRetriever, accessTokenValidator);
 
         // Basically asserting this doesn't throw an exception :(
@@ -290,7 +290,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever) {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(Collections.emptyMap());
-        AccessTokenValidator accessTokenValidator = OAuthBearerLoginCallbackHandler.configureAccessTokenValidator(conf);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
         handler.configure(accessTokenRetriever, accessTokenValidator);
         return handler;
     }

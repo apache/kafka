@@ -24,12 +24,13 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetrieverFactory;
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration;
-import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration;
+import org.apache.kafka.common.security.oauthbearer.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.Exit;
 
 public class OAuthCompatibilityTest {
@@ -75,8 +76,8 @@ public class OAuthCompatibilityTest {
 
             {
                 LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
-                AccessTokenRetriever atr = OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf);
-                AccessTokenValidator atv = OAuthBearerLoginCallbackHandler.configureAccessTokenValidator(conf);
+                AccessTokenRetriever atr = AccessTokenRetrieverFactory.create(conf);
+                AccessTokenValidator atv = AccessTokenValidatorFactory.create(conf);
                 System.out.println("PASSED 1/5: client configuration");
 
                 accessToken = atr.retrieve();
@@ -89,8 +90,8 @@ public class OAuthCompatibilityTest {
             {
                 ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(options);
 
-                try (CloseableVerificationKeyResolver vkr = OAuthBearerValidatorCallbackHandler.configureVerificationKeyResolver(conf)) {
-                    AccessTokenValidator atv = OAuthBearerValidatorCallbackHandler.configureAccessTokenValidator(conf, vkr);
+                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(conf)) {
+                    AccessTokenValidator atv = AccessTokenValidatorFactory.create(conf, vkr);
                     System.out.println("PASSED 4/5: broker configuration");
 
                     atv.validate(accessToken);
