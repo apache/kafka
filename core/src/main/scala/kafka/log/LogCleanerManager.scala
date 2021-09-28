@@ -103,11 +103,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val lastClean = allCleanerCheckpoints
             val now = Time.SYSTEM.milliseconds
             partitions.iterator.map { tp =>
-              val log = logs.get(tp)
-              val lastCleanOffset = lastClean.get(tp)
-              val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
-              val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
-              uncleanableBytes
+              Option(logs.get(tp)).map {
+                log =>
+                  val lastCleanOffset = lastClean.get(tp)
+                  val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
+                  val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
+                  uncleanableBytes
+              }.getOrElse(0L)
             }.sum
           case None => 0
         }
@@ -510,6 +512,27 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   private def isUncleanablePartition(log: UnifiedLog, topicPartition: TopicPartition): Boolean = {
     inLock(lock) {
       uncleanablePartitions.get(log.parentDir).exists(partitions => partitions.contains(topicPartition))
+    }
+  }
+
+  def maintainUncleanablePartitions(): Unit = {
+    // Remove deleted partitions from uncleanablePartitions
+    inLock(lock) {
+      // Note: we don't use retain or filterInPlace method in this function because retain is deprecated in
+      // scala 2.13 while filterInPlace is not available in scala 2.12.
+
+      // Remove deleted partitions
+      uncleanablePartitions.values.foreach {
+        partitions =>
+          val partitionsToRemove = partitions.filterNot(logs.contains(_)).toList
+          partitionsToRemove.foreach { partitions.remove(_) }
+      }
+
+      // Remove entries with empty partition set.
+      val logDirsToRemove = uncleanablePartitions.filter {
+        case (_, partitions) => partitions.isEmpty
+      }.map { _._1}.toList
+      logDirsToRemove.foreach { uncleanablePartitions.remove(_) }
     }
   }
 }

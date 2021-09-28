@@ -477,6 +477,7 @@ public class StoreQueryIntegrationTest {
         //Add thread
         final Optional<String> streamThread = kafkaStreams1.addStreamThread();
         assertThat(streamThread.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
         produceValueRange(key, 0, batch1NumMessages);
         produceValueRange(key2, 0, batch1NumMessages);
@@ -485,6 +486,7 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the batches were processed in a timely manner
         assertThat(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -503,9 +505,9 @@ public class StoreQueryIntegrationTest {
 
         final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
         assertThat(removedThreadName.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
-        until(() -> kafkaStreams1.state().equals(KafkaStreams.State.RUNNING));
-
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
