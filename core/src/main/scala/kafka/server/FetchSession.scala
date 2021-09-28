@@ -818,7 +818,6 @@ class FetchManager(private val time: Time,
               debug(s"Session error for ${reqMetadata.sessionId}: expected  " +
                 s"${if (session.usesTopicIds) "to use topic IDs" else "to not use topic IDs"}" +
                 s", but request version $reqVersion means that we can not.")
-              cache.remove(session)
               new SessionErrorContext(Errors.FETCH_SESSION_TOPIC_ID_ERROR, reqMetadata)
             } else {
               val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata, reqVersion >= 13)

@@ -3503,7 +3503,7 @@ object KafkaApis {
       topicResponse.partitions().forEach(partition =>
         responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex())), partition)))
     FetchResponse.sizeOf(versionId, responseData.entrySet
-      .iterator.asScala.filter(element => quota.isThrottled(element.getKey.topicPartition)).asJava)
+      .iterator.asScala.filter(element => element.getKey.topicPartition.topic != null && quota.isThrottled(element.getKey.topicPartition)).asJava)
   }
 
   // visible for testing

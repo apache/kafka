@@ -43,6 +43,12 @@ public class FetchMetadata {
     public static final int FINAL_EPOCH = -1;
 
     /**
+     * An invalid epoch. When used in a fetch requests, indicates the client wants
+     * to close any existing session, and upgrade/downgrade to/from topic IDs.
+     */
+    public static final int UPGRADE_EPOCH = -2;
+
+    /**
      * The FetchMetadata that is used when initializing a new FetchSessionHandler.
      */
     public static final FetchMetadata INITIAL = new FetchMetadata(INVALID_SESSION_ID, INITIAL_EPOCH);
@@ -118,6 +124,13 @@ public class FetchMetadata {
      */
     public FetchMetadata nextCloseExisting() {
         return new FetchMetadata(sessionId, INITIAL_EPOCH);
+    }
+
+    /**
+     * Return the metadata for the next upgrade response.
+     */
+    public FetchMetadata nextCloseExistingAndUpgrade() {
+        return new FetchMetadata(sessionId, UPGRADE_EPOCH);
     }
 
     /**

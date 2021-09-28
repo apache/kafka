@@ -425,28 +425,11 @@ public class FetchSessionHandlerTest {
             builder2.add(new TopicIdPartition(topicId, new TopicPartition("foo", partition)),
                     new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
             FetchSessionHandler.FetchRequestData data2 = builder2.build();
-            // Should have the same session ID and next epoch, but we can now use topic IDs.
-            // The receiving broker will close the session if we were previously not using topic IDs.
+            // Should have the same session ID, but a new epoch, and we can now use topic IDs.
+            // The receiving broker will close the session and open a new one.
             assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
-            assertEquals(1, data2.metadata().epoch(), "Did not have correct epoch when " + testType);
-            // We will take one request to remove the old non-topic ID partitions from the session.
-            assertFalse(data2.canUseTopicIds());
-
-            FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123,
-                    respMap(new RespEntry("foo", partition, Uuid.ZERO_UUID, 10, 20)));
-            handler.handleResponse(resp2, (short) 12);
-
-            // Build one more request -- now that the old non topic ID using partitions are out of the session, we should use topic IDs.
-            FetchSessionHandler.Builder builder3 = handler.newBuilder();
-            builder3.add(new TopicIdPartition(topicId, new TopicPartition("foo", partition)),
-                    new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
-            FetchSessionHandler.FetchRequestData data3 = builder3.build();
-            // Should have the same session ID and next epoch, but we can now use topic IDs.
-            // The receiving broker will close the session if we were previously not using topic IDs.
-            assertEquals(123, data3.metadata().sessionId(), "Did not use same session when " + testType);
-            assertEquals(2, data3.metadata().epoch(), "Did not have correct epoch when " + testType);
-            // We will take one request to remove the old non-topic ID partitions from the session.
-            assertTrue(data3.canUseTopicIds());
+            assertEquals(0, data2.metadata().epoch(), "Did not have correct epoch when " + testType);
+            assertTrue(data2.canUseTopicIds());
         });
     }
 
@@ -477,10 +460,10 @@ public class FetchSessionHandlerTest {
             builder2.add(new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", partition)),
                     new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
             FetchSessionHandler.FetchRequestData data2 = builder2.build();
-            // Should have the same session ID and next epoch, but can no longer use topic IDs.
-            // The receiving broker will close the session if we were previously using topic IDs.
+            // Should have the same session ID, but new epoch and can no longer use topic IDs.
+            // The receiving broker will close the session and open a new one.
             assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
-            assertEquals(1, data2.metadata().epoch(), "Did not have correct epoch when " + testType);
+            assertEquals(0, data2.metadata().epoch(), "Did not have correct epoch when " + testType);
             assertFalse(data2.canUseTopicIds());
         });
     }
@@ -510,8 +493,7 @@ public class FetchSessionHandlerTest {
         // Remove the topic from the session
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
-        // Should have the same session ID and next epoch, but can no longer use topic IDs.
-        // The receiving broker will close the session if we were previously using topic IDs.
+        // Should have the same session ID, next epoch, and same ID usage.
         assertEquals(123, data2.metadata().sessionId(), "Did not use same session when useTopicIds was " + useTopicIds);
         assertEquals(1, data2.metadata().epoch(), "Did not have correct epoch when useTopicIds was " + useTopicIds);
         assertEquals(useTopicIds, data2.canUseTopicIds());
