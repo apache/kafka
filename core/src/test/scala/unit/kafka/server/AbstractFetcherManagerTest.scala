@@ -20,7 +20,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -51,7 +51,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
+    val topicId = Some(Uuid.randomUuid())
     val initialFetchState = InitialFetchState(
+      topicId = topicId,
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
@@ -60,7 +62,7 @@ class AbstractFetcherManagerTest {
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
         .andReturn(Set(tp))
     EasyMock.expect(fetcher.fetchState(tp))
-      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+      .andReturn(Some(PartitionFetchState(topicId, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
     EasyMock.expect(fetcher.removePartitions(Set(tp))).andReturn(Map.empty)
     EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
@@ -110,7 +112,9 @@ class AbstractFetcherManagerTest {
     val fetchOffset = 10L
     val leaderEpoch = 15
     val tp = new TopicPartition("topic", 0)
+    val topicId = Some(Uuid.randomUuid())
     val initialFetchState = InitialFetchState(
+      topicId = topicId,
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
       initOffset = fetchOffset)
@@ -131,6 +135,89 @@ class AbstractFetcherManagerTest {
     EasyMock.replay(fetcher)
 
     assertEquals(0, fetcherManager.deadThreadCount)
+    EasyMock.verify(fetcher)
+  }
+
+  @Test
+  def testMaybeUpdateTopicIds(): Unit = {
+    val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+        fetcher
+      }
+    }
+
+    val fetchOffset = 10L
+    val leaderEpoch = 15
+    val tp1 = new TopicPartition("topic1", 0)
+    val tp2 = new TopicPartition("topic2", 0)
+    val unknownTp = new TopicPartition("topic2", 1)
+    val topicId1 = Some(Uuid.randomUuid())
+    val topicId2 = Some(Uuid.randomUuid())
+
+    // Start out with no topic ID.
+    val initialFetchState1 = InitialFetchState(
+      topicId = None,
+      leader = new BrokerEndPoint(0, "localhost", 9092),
+      currentLeaderEpoch = leaderEpoch,
+      initOffset = fetchOffset)
+
+    // Include a partition on a different leader
+    val initialFetchState2 = InitialFetchState(
+      topicId = None,
+      leader = new BrokerEndPoint(1, "localhost", 9092),
+      currentLeaderEpoch = leaderEpoch,
+      initOffset = fetchOffset)
+
+    // Simulate calls to different fetchers due to different leaders
+    EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.start())
+
+    EasyMock.expect(fetcher.addPartitions(Map(tp1 -> initialFetchState1)))
+      .andReturn(Set(tp1))
+    EasyMock.expect(fetcher.addPartitions(Map(tp2 -> initialFetchState2)))
+      .andReturn(Set(tp2))
+
+    EasyMock.expect(fetcher.fetchState(tp1))
+      .andReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+    EasyMock.expect(fetcher.fetchState(tp2))
+      .andReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+
+    val topicIds = Map(tp1.topic -> topicId1, tp2.topic -> topicId2)
+    EasyMock.expect(fetcher.maybeUpdateTopicIds(Set(tp1), topicIds))
+    EasyMock.expect(fetcher.maybeUpdateTopicIds(Set(tp2), topicIds))
+
+    EasyMock.expect(fetcher.fetchState(tp1))
+      .andReturn(Some(PartitionFetchState(topicId1, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+    EasyMock.expect(fetcher.fetchState(tp2))
+      .andReturn(Some(PartitionFetchState(topicId2, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+
+    // When targeting a fetcher that doesn't exist, we will not see fetcher.maybeUpdateTopicIds called.
+    // We will see it for a topic partition that does not exist.
+    EasyMock.expect(fetcher.maybeUpdateTopicIds(Set(unknownTp), topicIds))
+    EasyMock.expect(fetcher.fetchState(unknownTp))
+      .andReturn(None)
+    EasyMock.replay(fetcher)
+
+    def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
+      assertTrue(fetchState.isDefined)
+      assertEquals(expectedTopicId, fetchState.get.topicId)
+    }
+
+    fetcherManager.addFetcherForPartitions(Map(tp1 -> initialFetchState1, tp2 -> initialFetchState2))
+    verifyFetchState(fetcher.fetchState(tp1), None)
+    verifyFetchState(fetcher.fetchState(tp2), None)
+
+    val partitionsToUpdate = Map(tp1 -> initialFetchState1.leader.id, tp2 -> initialFetchState2.leader.id)
+    fetcherManager.maybeUpdateTopicIds(partitionsToUpdate, topicIds)
+    verifyFetchState(fetcher.fetchState(tp1), topicId1)
+    verifyFetchState(fetcher.fetchState(tp2), topicId2)
+
+    // Try an invalid fetcher and an invalid topic partition
+    val invalidPartitionsToUpdate = Map(tp1 -> 2, unknownTp -> initialFetchState1.leader.id)
+    fetcherManager.maybeUpdateTopicIds(invalidPartitionsToUpdate, topicIds)
+    assertTrue(fetcher.fetchState(unknownTp).isEmpty)
+
     EasyMock.verify(fetcher)
   }
 }

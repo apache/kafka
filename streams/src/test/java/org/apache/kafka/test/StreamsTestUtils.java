@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -46,6 +47,7 @@ import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertFalse;
 
 public final class StreamsTestUtils {
     private StreamsTestUtils() {}
@@ -168,6 +170,24 @@ public final class StreamsTestUtils {
             assertThat(actualKv.key, equalTo(expectedKv.key));
             assertThat(actualKv.value, equalTo(expectedKv.value));
         }
+    }
+
+    public static void verifyAllWindowedKeyValues(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator,
+                                                  final List<Windowed<Bytes>> expectedKeys,
+                                                  final List<String> expectedValues) {
+        if (expectedKeys.size() != expectedValues.size()) {
+            throw new IllegalArgumentException("expectedKeys and expectedValues should have the same size. " +
+                "expectedKeys size: " + expectedKeys.size() + ", expectedValues size: " + expectedValues.size());
+        }
+
+        for (int i = 0; i < expectedKeys.size(); i++) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                expectedKeys.get(i),
+                expectedValues.get(i)
+            );
+        }
+        assertFalse(iterator.hasNext());
     }
 
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
