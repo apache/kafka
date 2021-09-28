@@ -253,8 +253,8 @@ object ConsumerPerformance extends LazyLogging {
     val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
       .withOptionalArg()
       .describedAs("milliseconds")
-      .ofType(classOf[Long])
-      .defaultsTo(10000)
+      .ofType(classOf[java.lang.Long])
+      .defaultsTo(10000L)
 
     try
       options = parser.parse(args: _*)

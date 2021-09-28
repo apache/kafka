@@ -238,14 +238,14 @@ object ReassignPartitionsCommand extends Logging {
       executeAssignment(adminClient,
         opts.options.has(opts.additionalOpt),
         Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
-        opts.options.valueOf(opts.interBrokerThrottleOpt),
-        opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
-        opts.options.valueOf(opts.timeoutOpt))
+        opts.options.valueOf(opts.interBrokerThrottleOpt).longValue(),
+        opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt).longValue(),
+        opts.options.valueOf(opts.timeoutOpt).longValue())
     } else if (opts.options.has(opts.cancelOpt)) {
       cancelAssignment(adminClient,
         Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
         opts.options.has(opts.preserveThrottlesOpt),
-        opts.options.valueOf(opts.timeoutOpt))
+        opts.options.valueOf(opts.timeoutOpt).longValue())
     } else if (opts.options.has(opts.listOpt)) {
       listReassignments(adminClient)
     } else {
@@ -1473,25 +1473,25 @@ object ReassignPartitionsCommand extends Logging {
                       .ofType(classOf[String])
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
     val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
-      "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-      "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
-      .withRequiredArg()
-      .describedAs("throttle")
-      .ofType(classOf[Long])
-      .defaultsTo(-1)
+                      "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+                      "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+                      .withRequiredArg()
+                      .describedAs("throttle")
+                      .ofType(classOf[java.lang.Long])
+                      .defaultsTo(-1L)
     val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle",
-      "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
-        "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-        "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
-      .withRequiredArg()
-      .describedAs("replicaAlterLogDirsThrottle")
-      .ofType(classOf[Long])
-      .defaultsTo(-1)
+          "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
+                      "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+                      "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+                      .withRequiredArg()
+                      .describedAs("replicaAlterLogDirsThrottle")
+                      .ofType(classOf[java.lang.Long])
+                      .defaultsTo(-1L)
     val timeoutOpt = parser.accepts("timeout", "The maximum time in ms to wait for log directory replica assignment to begin.")
                       .withRequiredArg()
                       .describedAs("timeout")
-                      .ofType(classOf[Long])
-                      .defaultsTo(10000)
+                      .ofType(classOf[java.lang.Long])
+                      .defaultsTo(10000L)
     val additionalOpt = parser.accepts("additional", "Execute this reassignment in addition to any " +
       "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.")
     val preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.")

@@ -423,13 +423,13 @@ object TestRaftServer extends Logging {
       "The number of records per second the leader will write to the metadata topic")
       .withRequiredArg
       .describedAs("records/sec")
-      .ofType(classOf[Int])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(5000)
 
     val recordSizeOpt = parser.accepts("record-size", "The size of each record")
       .withRequiredArg
       .describedAs("size in bytes")
-      .ofType(classOf[Int])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(256)
 
     options = parser.parse(args : _*)

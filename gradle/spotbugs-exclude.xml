@@ -90,7 +90,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
             <Bug pattern="IC_INIT_CIRCULARITY"/>
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
+            <!-- This happens in Scala 3 when concatenating an Array and a String -->
+            <Bug pattern="DMI_INVOKING_TOSTRING_ON_ARRAY"/>
         </Or>
+    </Match>
+
+    <!-- false positive in Scala 3. Syntactic fields are created in some cases with the suffix `$lz1` and do not conform with starting with lower case -->
+    <Match>
+        <Field name="~.*\$lzy1"/>
+        <Bug pattern="NM_FIELD_NAMING_CONVENTION"/>
     </Match>
 
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
@@ -287,6 +295,63 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Package name="kafka.log"/>
         <Source name="LogCleanerManager.scala"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.server"/>
+        <Source name="AbstractFetcherThread.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.log"/>
+        <Source name="LogLoader.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.tools"/>
+        <Source name="ConsoleConsumer.scala"/>
+        <Bug pattern="DB_DUPLICATE_BRANCHES"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.coordinator.transaction"/>
+        <Source name="ProducerIdManager.scala"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.network"/>
+        <Source name="Acceptor.scala"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.utils"/>
+        <Source name="KafkaScheduler.scala"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.network"/>
+        <Source name="SocketServer.scala"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- This warning only appears during Scala 3 -->
+        <Package name="kafka.network"/>
+        <Source name="ConnectionQuotas.scala"/>
+        <Bug pattern="VO_VOLATILE_INCREMENT"/>
     </Match>
 
     <Match>
