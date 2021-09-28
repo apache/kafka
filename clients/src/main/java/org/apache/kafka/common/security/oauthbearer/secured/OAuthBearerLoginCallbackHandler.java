@@ -91,7 +91,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             return new StaticAccessTokenRetriever(accessToken);
         } else if (accessTokenFile != null) {
             accessTokenFile = ConfigurationUtils.validateString(ACCESS_TOKEN_FILE_CONFIG, accessTokenFile);
-            return new RefreshingFileAccessTokenRetriever(Paths.get(accessTokenFile));
+            return new FileTokenRetriever(Paths.get(accessTokenFile));
         } else {
             clientId = ConfigurationUtils.validateString(CLIENT_ID_CONFIG, clientId);
             String clientSecret = ConfigurationUtils.validateString(CLIENT_SECRET_CONFIG, conf.getClientSecret());

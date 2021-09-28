@@ -22,34 +22,30 @@ import java.nio.file.Path;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * <code>RefreshingFileAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
- * watch a configured file for changes
- * ({@link LoginCallbackHandlerConfiguration#ACCESS_TOKEN_FILE_CONFIG}) and automatically
- * reload the contents, interpreting them as a JWT access key in the serialized form.
+ * <code>FileTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents,
+ * interpreting them as a JWT access key in the serialized form.
  *
  * @see AccessTokenRetriever
- * @see LoginCallbackHandlerConfiguration#ACCESS_TOKEN_FILE_CONFIG
  */
 
-public class RefreshingFileAccessTokenRetriever extends DelegatedFileUpdate<String> implements AccessTokenRetriever {
+public class FileTokenRetriever implements AccessTokenRetriever {
 
-    public RefreshingFileAccessTokenRetriever(Path accessTokenFile) {
-        super(accessTokenFile);
+    private final Path accessTokenFile;
+
+    private String accessToken;
+
+    public FileTokenRetriever(Path accessTokenFile) {
+        this.accessTokenFile = accessTokenFile;
+    }
+
+    @Override
+    public void init() throws IOException {
+        this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
     }
 
     @Override
     public String retrieve() throws IOException {
-        String localDelegate = retrieveDelegate();
-
-        if (localDelegate == null)
-            throw new IOException("Access token delegate is null");
-
-        return localDelegate;
-    }
-
-    @Override
-    protected String createDelegate() throws IOException {
-        return Utils.readFileAsString(path.toFile().getPath());
+        return accessToken;
     }
 
 }

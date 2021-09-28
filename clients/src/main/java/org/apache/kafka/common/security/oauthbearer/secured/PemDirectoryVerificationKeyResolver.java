@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.common.utils.Utils;
 import org.jose4j.jwk.EllipticCurveJsonWebKey;
-import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.RsaJsonWebKey;
 import org.jose4j.jws.JsonWebSignature;
@@ -40,27 +39,29 @@ import org.jose4j.keys.resolvers.JwksVerificationKeyResolver;
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.jose4j.lang.JoseException;
 import org.jose4j.lang.UnresolvableKeyException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * <code>PemVerificationKeyResolver</code> is a
- * {@link VerificationKeyResolver} implementation that will periodically refresh the
- * JWKS from the given file system directory.
+ * <code>PemVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation
+ * that will load the PEM files from the given file system directory.
  *
- * This class is a wrapper around the <code>RefreshingHttpsJwks</code> to expose the
- * {@link #init()} and {@link #close()} lifecycle methods.
- *
- * @see ValidatorCallbackHandlerConfiguration#JWKS_FILE_CONFIG
+ * @see ValidatorCallbackHandlerConfiguration#PEM_DIRECTORY_CONFIG
  * @see VerificationKeyResolver
- * @see RefreshingHttpsJwks
- * @see HttpsJwks
  */
 
-public class PemVerificationKeyResolver extends DelegatedFileUpdate<VerificationKeyResolver> implements CloseableVerificationKeyResolver {
+public class PemDirectoryVerificationKeyResolver implements CloseableVerificationKeyResolver {
+
+    private static final Logger log = LoggerFactory.getLogger(PemDirectoryVerificationKeyResolver.class);
 
     private static final String PEM_SUFFIX = ".pem";
 
-    public PemVerificationKeyResolver(Path path) {
-        super(path);
+    private final Path path;
+
+    private VerificationKeyResolver delegate;
+
+    public PemDirectoryVerificationKeyResolver(Path path) {
+        this.path = path;
     }
 
     public static String toKid(File f) {
@@ -68,19 +69,11 @@ public class PemVerificationKeyResolver extends DelegatedFileUpdate<Verification
     }
 
     @Override
-    public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        VerificationKeyResolver localDelegate = retrieveDelegate();
-
-        if (localDelegate == null)
-            throw new UnresolvableKeyException("VerificationKeyResolver delegate is null");
-
-        return localDelegate.resolveKey(jws, nestingContext);
-    }
-
-    protected VerificationKeyResolver createDelegate() throws IOException {
+    public void init() throws IOException {
         log.debug("Starting creation of new VerificationKeyResolver from *{} files in {}", PEM_SUFFIX, path);
-        File[] files = path.toFile().listFiles((dir, name) -> name.endsWith(PEM_SUFFIX));
         List<JsonWebKey> jsonWebKeys = new ArrayList<>();
+
+        File[] files = path.toFile().listFiles((dir, name) -> name.endsWith(PEM_SUFFIX));
 
         if (files != null) {
             RsaKeyUtil rsaKeyUtil = new RsaKeyUtil();
@@ -114,7 +107,15 @@ public class PemVerificationKeyResolver extends DelegatedFileUpdate<Verification
         if (jsonWebKeys.isEmpty())
             log.warn("No PEM files found in {}", path);
 
-        return new JwksVerificationKeyResolver(jsonWebKeys);
+        delegate = new JwksVerificationKeyResolver(jsonWebKeys);
+    }
+
+    @Override
+    public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
+        if (delegate == null)
+            throw new UnresolvableKeyException("VerificationKeyResolver delegate is null; please call init() first");
+
+        return delegate.resolveKey(jws, nestingContext);
     }
 
 }

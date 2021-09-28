@@ -62,6 +62,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
         "(in JWT serialized form) issued by the OAuth/OIDC identity provider to use for " +
         "authorization for this client." +
         " "  + ACCESS_TOKEN_RETRIEVER_NOTE;
+    private static final ConfigDef.Validator ACCESS_TOKEN_FILE_VALIDATOR = new FileConfigDefValidator();
 
     private static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
         "client ID to uniquely identify the service account to use for authentication for " +
@@ -147,6 +148,7 @@ public class LoginCallbackHandlerConfiguration extends AbstractConfig {
         .define(ACCESS_TOKEN_FILE_CONFIG,
             Type.STRING,
             null,
+            ACCESS_TOKEN_FILE_VALIDATOR,
             Importance.HIGH,
             ACCESS_TOKEN_FILE_DOC)
         .define(CLIENT_ID_CONFIG,

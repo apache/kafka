@@ -197,8 +197,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidDirectory() {
         // Should fail because the parent path doesn't exist.
         Map<String, Object> options = Collections.singletonMap(ACCESS_TOKEN_FILE_CONFIG, "/tmp/this-directory-does-not-exist/foo.json");
-        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
-        assertThrowsWithMessage(IllegalArgumentException.class, () -> OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf), "must be a directory");
+        assertThrowsWithMessage(ConfigException.class, () -> new LoginCallbackHandlerConfiguration(options), "that doesn't exist");
     }
 
     @Test
@@ -208,14 +207,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
 
         Map<String, Object> options = Collections.singletonMap(ACCESS_TOKEN_FILE_CONFIG, accessTokenFile.getAbsolutePath());
-        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(options);
-
-        // This should configure OK...
-        AccessTokenRetriever accessTokenRetriever = OAuthBearerLoginCallbackHandler.configureAccessTokenRetriever(conf);
-
-        // ...but it shouldn't init OK
-        assertThrowsWithMessage(IOException.class, accessTokenRetriever::init, "Unable to read file");
-
+        assertThrowsWithMessage(ConfigException.class, () -> new LoginCallbackHandlerConfiguration(options), "that doesn't exist");
     }
 
     @Test

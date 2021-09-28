@@ -23,8 +23,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.jose4j.jwa.AlgorithmConstraints.ConstraintType;
-import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.NumericDate;

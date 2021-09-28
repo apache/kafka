@@ -40,13 +40,15 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
     public static final String JWKS_ENDPOINT_REFRESH_INTERVAL_MS_CONFIG = "jwksEndpointRefreshIntervalMs";
     public static final String JWKS_ENDPOINT_URI_CONFIG = "jwksEndpointUri";
     public static final String JWKS_FILE_CONFIG = "jwksFile";
+    public static final String PEM_DIRECTORY_CONFIG = "pemDirectory";
     public static final String SCOPE_CLAIM_NAME_CONFIG = "scopeClaimName";
     public static final String SUB_CLAIM_NAME_CONFIG = "subClaimName";
 
-    private static final String JWKS_NOTE =
-        "Note: only one of " + JWKS_ENDPOINT_URI_CONFIG + " or " + JWKS_FILE_CONFIG + " should " +
-        "be configured as they are mutually exclusive. An error will be generated at broker " +
-        "start if both are provided.";
+    private static final String VERIFICATION_KEY_RESOLVER_NOTE =
+        "Note: only one of " +
+        JWKS_ENDPOINT_URI_CONFIG + ", " + JWKS_FILE_CONFIG + ", or " + PEM_DIRECTORY_CONFIG + " " +
+        "should be configured as they are mutually exclusive. An error will be " +
+        "generated at more than one are provided.";
 
     private static final int CLOCK_SKEW_DEFAULT = 30;
     private static final String CLOCK_SKEW_DOC = "The (optional) value in " +
@@ -75,7 +77,7 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     private static final String JWKS_ENDPOINT_URI_DOC = "The OAuth/OIDC provider URI from " +
         "which the provider's JWKS (JSON Web Key Set) can be retrieved." +
-        " "  + JWKS_NOTE + " " +
+        " "  + VERIFICATION_KEY_RESOLVER_NOTE + " " +
         "In this mode, the JWKS data will be retrieved from the " +
         "OAuth/OIDC provider via the configured URI on broker startup. All then-current " +
         "keys will be cached on the broker for incoming requests. If an authentication " +
@@ -86,25 +88,32 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
         "JWT requests that include them are received.";
     private static final ConfigDef.Validator JWKS_ENDPOINT_URI_VALIDATOR = new UriConfigDefValidator();
 
-    private static final String JWKS_FILE_DOC = "The directory name that contains one or more " +
+    private static final String JWKS_FILE_DOC = "The file name that contains a " +
+        "<a href=\"https://datatracker.ietf.org/doc/html/rfc7517#section-5\">JWKS (JSON Web Key Set)</a> " +
+        "which are copies of the OAuth/OIDC provider's JWKS. " +
+        "" +
+        " "  + VERIFICATION_KEY_RESOLVER_NOTE + " " +
+        "In this mode, the broker will load the JWKS file from a configured location " +
+        "on startup. In the event that the JWT includes a \"kid\" header claim " +
+        "value that isn't in the JWKS file, the broker will reject the JWT and " +
+        "authentication will fail.";
+    private static final ConfigDef.Validator JWKS_FILE_VALIDATOR = new FileConfigDefValidator();
+
+    private static final String PEM_DIRECTORY_DOC = "The directory name that contains one or more " +
         "<a href=\"https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail\">public key files</a> " +
-        "which are copies of the OAuth/OIDC provider's JWKS (JSON Web Key Set). " +
-        "The directory is watched for file system events for the creation, deletion, and " +
-        "modification of files. When this occurs, the JWKS is rebuilt. " +
+        "which are copies of the OAuth/OIDC provider's public keys. " +
         "" +
         "Note: the file names in the directory must end in the .pem suffix and the non-suffix " +
         "portion of the file name is used as the OAuth/OIDC key ID (\"kid\") to distinguish " +
         "between multiple key files in the directory. For example, a file named " +
-        "\"cafe0123.pem\" in the directory will be interpreted as holding the key " +
-        "for the key ID \"cafe0123\"." +
-        " "  + JWKS_NOTE + " " +
-        "In this mode, the broker will load the JWKS file from a configured location " +
-        "on startup and will watch the file for updates which allows for dynamic " +
-        "configuration updates. The means by which the JWKS file is updated is left to the " +
-        "broker administrator. In the event that the JWT includes a \"kid\" header claim " +
-        "value that isn't in the file is encountered, the broker will reject the JWT and " +
+        "\"cafe0123.pem\" in the directory will be interpreted as holding the public key " +
+        "for the ID \"cafe0123\"." +
+        " "  + VERIFICATION_KEY_RESOLVER_NOTE + " " +
+        "In this mode, the broker will load the PEM files from the configured directory " +
+        "on startup. In the event that the JWT includes a \"kid\" header claim " +
+        "value that isn't in the PEM files, the broker will reject the JWT and " +
         "authentication will fail.";
-    private static final ConfigDef.Validator JWKS_FILE_VALIDATOR = new FileConfigDefValidator();
+    private static final ConfigDef.Validator PEM_DIRECTORY_VALIDATOR = new DirectoryConfigDefValidator();
 
     private static final String SCOPE_CLAIM_NAME_DEFAULT = "scope";
     private static final String SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope is often " +
@@ -153,6 +162,12 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
             JWKS_FILE_VALIDATOR,
             Importance.MEDIUM,
             JWKS_FILE_DOC)
+        .define(PEM_DIRECTORY_CONFIG,
+            Type.STRING,
+            null,
+            PEM_DIRECTORY_VALIDATOR,
+            Importance.MEDIUM,
+            PEM_DIRECTORY_DOC)
         .define(SCOPE_CLAIM_NAME_CONFIG,
             Type.STRING,
             SCOPE_CLAIM_NAME_DEFAULT,
@@ -193,6 +208,10 @@ public class ValidatorCallbackHandlerConfiguration extends AbstractConfig {
 
     public String getJwksFile() {
         return getString(JWKS_FILE_CONFIG);
+    }
+
+    public String getPemDirectory() {
+        return getString(PEM_DIRECTORY_CONFIG);
     }
 
     public String getScopeClaimName() {

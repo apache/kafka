@@ -30,7 +30,6 @@ public abstract class ConfigDefValidatorTest extends OAuthBearerTest {
 
     @BeforeEach
     public void setup() {
-        super.setup();
         validator = createValidator();
     }
 

@@ -31,7 +31,7 @@ import java.io.IOException;
  * access token.
  *
  * @see HttpAccessTokenRetriever
- * @see RefreshingFileAccessTokenRetriever
+ * @see FileTokenRetriever
  * @see StaticAccessTokenRetriever
  */
 

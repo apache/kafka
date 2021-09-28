@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_ENDPOINT_URI_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_FILE_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.PEM_DIRECTORY_CONFIG;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -70,17 +71,18 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     public static CloseableVerificationKeyResolver configureVerificationKeyResolver(ValidatorCallbackHandlerConfiguration conf) {
         String jwksFile = conf.getJwksFile();
         String jwksEndpointUri = conf.getJwksEndpointUri();
+        String pemDirectory = conf.getPemDirectory();
 
-        long count = Stream.of(jwksFile, jwksEndpointUri)
+        long count = Stream.of(jwksFile, jwksEndpointUri, pemDirectory)
             .filter(Objects::nonNull)
             .count();
 
         if (count != 1) {
-            throw new ConfigException(String.format("The OAuth validator configuration must include only one of %s or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG));
+            throw new ConfigException(String.format("The OAuth validator configuration must include only one of %s, %s, or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG, PEM_DIRECTORY_CONFIG));
         } else if (jwksFile != null) {
             jwksFile = ConfigurationUtils.validateString(JWKS_FILE_CONFIG, jwksFile);
-            return new PemVerificationKeyResolver(Paths.get(jwksFile));
-        } else {
+            return new JwksFileVerificationKeyResolver(Paths.get(jwksFile));
+        } else if (jwksEndpointUri != null) {
             jwksEndpointUri = ConfigurationUtils.validateString(JWKS_ENDPOINT_URI_CONFIG, jwksEndpointUri);
             long refreshIntervalMs = conf.getJwksEndpointRefreshIntervalMs();
             RefreshingHttpsJwks httpsJkws = new RefreshingHttpsJwks(jwksEndpointUri, refreshIntervalMs);
@@ -93,6 +95,9 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             }
 
             return new RefreshingHttpsJwksVerificationKeyResolver(httpsJkws);
+        } else {
+            pemDirectory = ConfigurationUtils.validateString(PEM_DIRECTORY_CONFIG, pemDirectory);
+            return new PemDirectoryVerificationKeyResolver(Paths.get(pemDirectory));
         }
     }
 

@@ -42,8 +42,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.function.Executable;
@@ -56,16 +54,6 @@ public abstract class OAuthBearerTest {
     protected final Logger log = LoggerFactory.getLogger(getClass());
 
     protected ObjectMapper mapper = new ObjectMapper();
-
-    @BeforeEach
-    public void setup() {
-        FileWatchService.useHighSensitivity();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        FileWatchService.resetSensitivity();
-    }
 
     protected void assertThrowsWithMessage(Class<? extends Exception> clazz,
         Executable executable,
@@ -188,8 +176,6 @@ public abstract class OAuthBearerTest {
         try (FileWriter writer = new FileWriter(file)) {
             writer.write(contents);
         }
-
-        Utils.sleep(FileWatchService.MIN_WATCH_INTERVAL.toMillis());
 
         return file;
     }

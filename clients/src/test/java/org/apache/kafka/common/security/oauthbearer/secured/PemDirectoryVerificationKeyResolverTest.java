@@ -37,11 +37,10 @@ import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.keys.EllipticCurves;
 import org.jose4j.keys.RsaKeyUtil;
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.jose4j.lang.UnresolvableKeyException;
 import org.junit.jupiter.api.Test;
 
-public class PemVerificationKeyResolverTest extends OAuthBearerTest {
+public class PemDirectoryVerificationKeyResolverTest extends OAuthBearerTest {
 
     @Test
     public void testEcdsa() throws Exception {
@@ -113,7 +112,7 @@ public class PemVerificationKeyResolverTest extends OAuthBearerTest {
 
         if (pemEncoded != null) {
             File pemFile = createTempFile(tmpPemDir, "key-", ".pem", pemEncoded);
-            kid = PemVerificationKeyResolver.toKid(pemFile);
+            kid = PemDirectoryVerificationKeyResolver.toKid(pemFile);
         }
 
         if (kid != null) {
@@ -131,29 +130,30 @@ public class PemVerificationKeyResolverTest extends OAuthBearerTest {
 
         jws.setPayload("{}");
 
-        PemVerificationKeyResolver factory = new PemVerificationKeyResolver(tmpPemDir.toPath());
-        VerificationKeyResolver vkr = factory.createDelegate();
-        Key key = vkr.resolveKey(jws, Collections.emptyList());
-        assertNotNull(key);
+        try (CloseableVerificationKeyResolver vkr = new PemDirectoryVerificationKeyResolver(tmpPemDir.toPath())) {
+            vkr.init();
+            Key key = vkr.resolveKey(jws, Collections.emptyList());
+            assertNotNull(key);
 
-        JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
+            JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
-        JwtConsumer jwtConsumer = jwtConsumerBuilder
-            .setJwsAlgorithmConstraints(ConstraintType.PERMIT, alg)
-            .setVerificationKeyResolver(vkr)
-            .build();
+            JwtConsumer jwtConsumer = jwtConsumerBuilder
+                .setJwsAlgorithmConstraints(ConstraintType.PERMIT, alg)
+                .setVerificationKeyResolver(vkr)
+                .build();
 
-        jwtConsumer.process(jws.getCompactSerialization());
+            jwtConsumer.process(jws.getCompactSerialization());
+        }
     }
 
     private void testResolution(String pemEncoded, String alg, JsonWebKey jwk) throws Exception {
         File tmpPemDir = createTempPemDir();
+        File pemFile = createTempFile(tmpPemDir, "key-", ".pem", pemEncoded);
 
-        try (PemVerificationKeyResolver vkr = new PemVerificationKeyResolver(tmpPemDir.getAbsoluteFile().toPath())) {
+        try (PemDirectoryVerificationKeyResolver vkr = new PemDirectoryVerificationKeyResolver(tmpPemDir.getAbsoluteFile().toPath())) {
             vkr.init();
 
-            File pemFile = createTempFile(tmpPemDir, "key-", ".pem", pemEncoded);
-            String kid = PemVerificationKeyResolver.toKid(pemFile);
+            String kid = PemDirectoryVerificationKeyResolver.toKid(pemFile);
 
             jwk.setKeyId(kid);
             jwk.setAlgorithm(alg);
