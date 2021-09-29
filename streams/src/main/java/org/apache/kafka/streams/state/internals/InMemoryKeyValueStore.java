@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -38,12 +39,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     private final String name;
+    private final boolean copyOnRange;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
     public InMemoryKeyValueStore(final String name) {
+        this(name, true);
+    }
+
+    public InMemoryKeyValueStore(final String name, final boolean copyOnRange) {
         this.name = name;
+        this.copyOnRange = copyOnRange;
     }
 
     @Override
@@ -109,11 +117,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = Bytes.increment(from);
+        final Set<Bytes> rangeSet = map.subMap(from, true, to, false).keySet();
+        final Iterator<Bytes> rangeIter = copyOnRange ? new TreeSet<>(rangeSet).iterator() : rangeSet.iterator();
+        final InMemoryKeyValueIterator iter = new InMemoryKeyValueIterator(rangeIter);
 
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true)
-        );
+        return new DelegatingPeekingKeyValueIterator<>(name, iter);
     }
 
     @Override
@@ -135,11 +143,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
         if (from == null && to == null) {
-            return getKeyValueIterator(map.keySet(), forward);
+            return getKeyValueIterator(map, forward);
         } else if (from == null) {
-            return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
+            return getKeyValueIterator(map.headMap(to, true), forward);
         } else if (to == null) {
-            return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);
+            return getKeyValueIterator(map.tailMap(from, true), forward);
         } else if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
@@ -147,12 +155,14 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                     "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         } else {
-            return getKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward);
+            return getKeyValueIterator(map.subMap(from, true, to, true), forward);
         }
     }
 
-    private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final Set<Bytes> rangeSet, final boolean forward) {
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(rangeSet, forward));
+    private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final NavigableMap<Bytes, byte[]> rangeMap, final boolean forward) {
+        final NavigableSet<Bytes> rangeSet = copyOnRange ? new TreeSet<>(rangeMap.navigableKeySet()) : rangeMap.navigableKeySet();
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(forward ?
+                rangeSet.iterator() : rangeSet.descendingIterator()));
     }
 
     @Override
@@ -162,9 +172,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet(), false));
+        final NavigableSet<Bytes> allSet = copyOnRange ? new TreeSet<>(map.keySet()) : map.navigableKeySet();
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(allSet.descendingIterator()));
     }
 
     @Override
@@ -187,12 +196,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
-            if (forward) {
-                this.iter = new TreeSet<>(keySet).iterator();
-            } else {
-                this.iter = new TreeSet<>(keySet).descendingIterator();
-            }
+        private InMemoryKeyValueIterator(final Iterator<Bytes> iter) {
+            this.iter = iter;
         }
 
         @Override
