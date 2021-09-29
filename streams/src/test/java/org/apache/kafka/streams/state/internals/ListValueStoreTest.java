@@ -43,11 +43,13 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class ListValueStoreTest {
@@ -136,8 +138,9 @@ public class ListValueStoreTest {
         listStore.put(4, "four");
 
         // Delete some records
-        listStore.put(1, null);
-        listStore.put(3, null);
+        listStore.putIfAbsent(1, null);
+        listStore.putIfAbsent(3, null);
+        listStore.putIfAbsent(5, null);
 
         // Only non-deleted records should appear in the all() iterator
         final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
@@ -177,27 +180,47 @@ public class ListValueStoreTest {
     }
 
     @Test
-    public void shouldAllowDeleteWhileIterateRecords() {
-        listStore.put(0, "zero1");
-        listStore.put(0, "zero2");
-        listStore.put(1, "one");
+    public void shouldAllowDeleteWhileIterateRecords2() {
+        final Random rand = new Random();
+        int count = 0;
+        for (int i = 0; i < 10000; i++) {
+            listStore.put(i, "zero" + i);
+            count++;
 
-        final KeyValue<Integer, String> zero1 = KeyValue.pair(0, "zero1");
-        final KeyValue<Integer, String> zero2 = KeyValue.pair(0, "zero2");
-        final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
+            while (rand.nextBoolean()) {
+                listStore.put(i, "zero" + i);
+                count++;
+            }
+        }
+
+        final int size = toList(listStore.all()).size();
+        assertEquals(count, size);
 
         final KeyValueIterator<Integer, String> it = listStore.all();
-        assertEquals(zero1, it.next());
 
-        listStore.put(0, null);
+        int prev = -1;
+        int deleted = 0;
+        int dupCount = 0;
+        while (it.hasNext()) {
+            final KeyValue<Integer, String> entry = it.next();
 
-        // zero2 should still be returned from the iterator after the delete call
-        assertEquals(zero2, it.next());
+            if (prev != -1 && prev != entry.key) {
+                if (rand.nextBoolean()) {
+                    listStore.put(prev, null);
+                    deleted += dupCount;
+                }
+
+                dupCount = 0;
+            }
+
+            dupCount++;
+            prev = entry.key;
+        }
 
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertEquals(Collections.singletonList(one), toList(listStore.all()));
+        assertEquals(size - deleted, toList(listStore.all()).size());
     }
 
     @Test
