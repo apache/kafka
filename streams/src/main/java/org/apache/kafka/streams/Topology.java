@@ -54,10 +54,14 @@ import java.util.regex.Pattern;
  */
 public class Topology {
 
-    protected final InternalTopologyBuilder internalTopologyBuilder = newInternalTopologyBuilder();
+    protected final InternalTopologyBuilder internalTopologyBuilder;
 
-    protected InternalTopologyBuilder newInternalTopologyBuilder() {
-        return new InternalTopologyBuilder();
+    public Topology() {
+        this(new InternalTopologyBuilder());
+    }
+
+    protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {
+        this.internalTopologyBuilder = internalTopologyBuilder;
     }
 
     /**

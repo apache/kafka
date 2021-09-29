@@ -50,67 +50,25 @@ import java.util.stream.Collectors;
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     /**
-     * A Kafka Streams application with a single initial NamedTopology
-     */
-    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props) {
-        this(Collections.singleton(topology), new StreamsConfig(props), new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * A Kafka Streams application with a single initial NamedTopology
-     */
-    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
-        this(Collections.singleton(topology), new StreamsConfig(props), clientSupplier);
-    }
-
-    /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
      */
     public KafkaStreamsNamedTopologyWrapper(final Properties props) {
-        this(Collections.emptyList(), new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
-    /**
-     * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
-     */
     public KafkaStreamsNamedTopologyWrapper(final Properties props, final KafkaClientSupplier clientSupplier) {
-        this(Collections.emptyList(), new StreamsConfig(props), clientSupplier);
+        this(new StreamsConfig(props), clientSupplier);
     }
 
-    /**
-     * A Kafka Streams application with a multiple initial NamedTopologies
-     *
-     * @throws IllegalArgumentException if any of the named topologies have the same name
-     * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics or pattern
-     */
-    public KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final Properties props) {
-        this(topologies, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    private KafkaStreamsNamedTopologyWrapper(final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
+        super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier);
     }
 
-    /**
-     * A Kafka Streams application with a multiple initial NamedTopologies
-     *
-     * @throws IllegalArgumentException if any of the named topologies have the same name
-     * @throws TopologyException        if multiple NamedTopologies subscribe to the same input topics or pattern
-     */
-    public KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final Properties props, final KafkaClientSupplier clientSupplier) {
-        this(topologies, new StreamsConfig(props), clientSupplier);
-    }
-
-    private KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
-        super(
-            new TopologyMetadata(
-                topologies.stream().collect(Collectors.toMap(
-                    NamedTopology::name,
-                    NamedTopology::internalTopologyBuilder,
-                    (v1, v2) -> {
-                        throw new IllegalArgumentException("Topology names must be unique");
-                    },
-                    () -> new ConcurrentSkipListMap<>())),
-                config),
-            config,
-            clientSupplier
-        );
+    public void start(final NamedTopology... initialTopologies) {
+        for (final NamedTopology topology : initialTopologies) {
+            addNamedTopology(topology);
+        }
+        super.start();
     }
 
     /**

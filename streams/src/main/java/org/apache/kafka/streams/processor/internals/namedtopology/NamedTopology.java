@@ -16,28 +16,22 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.List;
-import java.util.Properties;
 
 public class NamedTopology extends Topology {
-    private final String name;
 
-    private final TopologyConfig topologyOverrides;
-
-    NamedTopology(final String topologyName, final StreamsConfig applicationConfigs, final Properties topologyOverrides) {
-        name = topologyName;
-        this.topologyOverrides = new TopologyConfig(topologyName, applicationConfigs, topologyOverrides);
+    public NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {
+        super(internalTopologyBuilder);
     }
 
     /**
      * @return the name of this topology
      */
     public String name() {
-        return name;
+        return internalTopologyBuilder.topologyName();
     }
 
     /**
@@ -52,11 +46,6 @@ public class NamedTopology extends Topology {
     }
 
     TopologyConfig topologyConfigs() {
-        return topologyOverrides;
-    }
-
-    @Override
-    protected InternalTopologyBuilder newInternalTopologyBuilder() {
-        return new InternalTopologyBuilder(this, topologyOverrides);
+        return internalTopologyBuilder.topologyConfigs();
     }
 }

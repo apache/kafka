@@ -68,13 +68,11 @@ public class InternalTopologyBuilder {
 
     public InternalTopologyBuilder() {
         this.topologyName = null;
-        this.namedTopology = null;
     }
 
-    public InternalTopologyBuilder(final NamedTopology namedTopology, final TopologyConfig topologyOverrides) {
-        this.topologyName = namedTopology.name();
-        this.namedTopology = namedTopology;
-        this.topologyConfigs = topologyOverrides;
+    public InternalTopologyBuilder(final TopologyConfig topologyConfigs) {
+        this.topologyConfigs = topologyConfigs;
+        this.topologyName = topologyConfigs.topologyName;
     }
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
@@ -146,15 +144,15 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    // The name of the topology this builder belongs to, or null if none
+    // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
-    private final NamedTopology namedTopology;
+    // TODO KAFKA-13336: we can remove this referance once we make the Topology/NamedTopology class into an interface and implement it
+    private NamedTopology namedTopology;
 
     // TODO KAFKA-13283: we still need to save the topology overrides here since we don't get the app configs until we
     //  get passed in to the KafkaStreams, once we enforce all configs be passed in when constructing the topology then
     //  we can make topologyConfigs final and drop the other
     private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
-    private Properties topologyOverrides = null;
 
     private boolean hasPersistentStores = false;
 
@@ -365,16 +363,14 @@ public class InternalTopologyBuilder {
 
     public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
         Objects.requireNonNull(applicationConfig, "config can't be null");
-        topologyConfigs = new TopologyConfig(
-            topologyName,
-            applicationConfig,
-            topologyOverrides == null ?
-                new Properties() :
-                topologyOverrides
-        );
+        topologyConfigs = new TopologyConfig(applicationConfig);
     }
 
-    public synchronized final TopologyConfig topologyConfig() {
+    public synchronized  final void setNamedTopology(final NamedTopology namedTopology) {
+        this.namedTopology = namedTopology;
+    }
+
+    public synchronized final TopologyConfig topologyConfigs() {
         return topologyConfigs;
     }
 
@@ -389,8 +385,8 @@ public class InternalTopologyBuilder {
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
-        // set application id
         setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        setStreamsConfig(config);
 
         // maybe strip out caching layers
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) == 0L) {
@@ -407,9 +403,6 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder<?> storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
-
-        // set streams config
-        setStreamsConfig(config);
 
         return this;
     }

@@ -45,8 +45,7 @@ import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
  * {@link org.apache.kafka.streams.KafkaStreams} or {@link KafkaStreamsNamedTopologyWrapper} constructors will
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
- * topology via the {@link org.apache.kafka.streams.StreamsBuilder#build(Properties)} or
- * {@link NamedTopologyBuilder#buildNamedTopology(Properties)} methods.
+ * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder()} method.
  */
 public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
@@ -86,11 +85,15 @@ public class TopologyConfig extends AbstractConfig {
     public final StreamsConfig applicationConfigs;
     public final Properties topologyOverrides;
 
-    final long maxTaskIdleMs;
-    final long taskTimeoutMs;
-    final int maxBufferedSize;
-    final Supplier<TimestampExtractor> timestampExtractorSupplier;
-    final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+    public final long maxTaskIdleMs;
+    public final long taskTimeoutMs;
+    public final int maxBufferedSize;
+    public final Supplier<TimestampExtractor> timestampExtractorSupplier;
+    public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+
+    public TopologyConfig(final StreamsConfig globalAppConfigs) {
+        this(null, globalAppConfigs, new Properties());
+    }
 
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
@@ -103,7 +106,7 @@ public class TopologyConfig extends AbstractConfig {
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
             maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
+            log.info("Topology {} is overridding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
         } else {
             maxTaskIdleMs = globalAppConfigs.getLong(MAX_TASK_IDLE_MS_CONFIG);
         }
@@ -135,6 +138,10 @@ public class TopologyConfig extends AbstractConfig {
         } else {
             deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
         }
+    }
+
+    public boolean isNamedTopology() {
+        return topologyName != null;
     }
 
     /**

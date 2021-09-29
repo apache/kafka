@@ -368,7 +368,7 @@ public class TopologyTestDriver implements Closeable {
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfig().getTaskConfig());
+        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
