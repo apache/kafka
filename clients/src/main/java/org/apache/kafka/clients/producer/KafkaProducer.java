@@ -705,7 +705,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
 
-        if (offsets.isEmpty()) {
+        if (!offsets.isEmpty()) {
             long start = time.nanoseconds();
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
