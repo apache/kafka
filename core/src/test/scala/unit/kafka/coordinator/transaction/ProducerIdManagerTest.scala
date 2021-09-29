@@ -37,14 +37,17 @@ class ProducerIdManagerTest {
   val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
   // Mutable test implementation that lets us easily set the idStart and error
-  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE)
+  class MockProducerIdManager(val brokerId: Int, val idStart: Long, val idLen: Int)
     extends RPCProducerIdManager(brokerId, () => 1, brokerToController, 100) {
+
+    var startId = idStart
+    var error: Errors = Errors.NONE
 
     override private[transaction] def sendRequest(): Unit = {
       if (error == Errors.NONE) {
         handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-          new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
-        idStart += idLen
+          new AllocateProducerIdsResponseData().setProducerIdStart(startId).setProducerIdLen(idLen)))
+        startId += idLen
       } else {
         handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
           new AllocateProducerIdsResponseData().setErrorCode(error.code)))
