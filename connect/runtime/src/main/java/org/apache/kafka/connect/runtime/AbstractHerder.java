@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
@@ -41,9 +42,14 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -69,6 +75,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
+
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
  * must invoke the lifecycle hooks appropriately.
@@ -91,6 +99,8 @@ import java.util.stream.Collectors;
  *    we have proper producer groups with fenced groups, there is not much else we can do.
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
 
     private final String workerId;
     protected final Worker worker;
@@ -344,10 +354,71 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
-                                                                    Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(ConfigDef configDef, Map<String, String> config) {
+        return SinkConnectorConfig.validate(configDef.validateAll(config), config);
+    }
+
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(ConfigDef configDef, Map<String, String> config) {
         return configDef.validateAll(config);
+    }
+
+    private ConfigInfos validateHeaderConverterConfig(Map<String, String> connectorConfig, ConfigValue headerConverterConfigValue) {
+        String headerConverterClass = connectorConfig.get(HEADER_CONVERTER_CLASS_CONFIG);
+
+        if (headerConverterClass == null
+            || headerConverterConfigValue == null
+            || !headerConverterConfigValue.errorMessages().isEmpty()
+        ) {
+            // Either no custom header converter was specified, or one was specified but there's a problem with it.
+            // No need to proceed any further.
+            return null;
+        }
+
+        HeaderConverter headerConverter;
+        try {
+            headerConverter = Utils.newInstance(headerConverterClass, HeaderConverter.class);
+        } catch (ClassNotFoundException | RuntimeException e) {
+            log.error("Failed to instantiate header converter class {}; this should have been caught by prior validation logic", headerConverterClass, e);
+            headerConverterConfigValue.addErrorMessage("Failed to load class " + headerConverterClass + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            return null;
+        }
+
+        ConfigDef configDef;
+        try {
+            configDef = headerConverter.config();
+        } catch (RuntimeException e) {
+            log.error("Failed to load ConfigDef from header converter of type {}", headerConverterClass, e);
+            headerConverterConfigValue.addErrorMessage("Failed to load ConfigDef from header converter" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            return null;
+        }
+        if (configDef == null) {
+            log.warn("{}.configDef() has returned a null ConfigDef; no further preflight config validation for this converter will be performed", headerConverterClass);
+            // Older versions of Connect didn't do any header converter validation.
+            // Even though header converters are technically required to return a non-null ConfigDef object from HeaderConverter::config,
+            // we permit this case in order to avoid breaking existing header converters that, despite not adhering to this requirement,
+            // can be used successfully with a connector.
+            return null;
+        }
+
+        final String headerConverterPrefix = HEADER_CONVERTER_CLASS_CONFIG + ".";
+        Map<String, String> headerConverterConfig = connectorConfig.entrySet().stream()
+            .filter(e -> e.getKey().startsWith(headerConverterPrefix))
+            .collect(Collectors.toMap(
+                e -> e.getKey().substring(headerConverterPrefix.length()),
+                Map.Entry::getValue
+            ));
+        headerConverterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
+
+        List<ConfigValue> configValues;
+        try {
+            configValues = configDef.validate(headerConverterConfig);
+        } catch (RuntimeException e) {
+            log.error("Failed to perform custom config validation for header converter of type {}", headerConverterClass, e);
+            headerConverterConfigValue.addErrorMessage("Failed to perform custom config validation for header converter" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            return null;
+        }
+
+        return prefixedConfigInfos(configDef.configKeys(), configValues, headerConverterPrefix);
     }
 
     @Override
@@ -426,22 +497,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Connector connector = getConnector(connType);
         org.apache.kafka.connect.health.ConnectorType connectorType;
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
+        ConfigDef enrichedConfigDef;
+        Map<String, ConfigValue> validatedConnectorConfig;
         try {
-            ConfigDef baseConfigDef;
             if (connector instanceof SourceConnector) {
-                baseConfigDef = SourceConnectorConfig.configDef();
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSourceConnectorConfig(enrichedConfigDef, connectorProps);
             } else {
-                baseConfigDef = SinkConnectorConfig.configDef();
-                SinkConnectorConfig.validate(connectorProps);
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
+                enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
+                validatedConnectorConfig = validateSinkConnectorConfig(enrichedConfigDef, connectorProps);
             }
-            ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
-            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
-                    connector,
-                    enrichedConfigDef,
-                    connectorProps
-            );
             List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
             Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
@@ -468,7 +535,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configKeys.putAll(configDef.configKeys());
             allGroups.addAll(configDef.groups());
             configValues.addAll(config.configValues());
-            ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
+
+            // do custom header converter-specific validation
+            ConfigInfos headerConverterConfigInfos = validateHeaderConverterConfig(connectorProps, validatedConnectorConfig.get(HEADER_CONVERTER_CLASS_CONFIG));
+
+            ConfigInfos configInfos = generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
 
             AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps, doLog);
             String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
@@ -508,7 +579,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 }
 
             }
-            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
+            return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos, headerConverterConfigInfos);
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
@@ -536,10 +607,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                                       org.apache.kafka.connect.health.ConnectorType connectorType,
                                                       ConnectorClientConfigRequest.ClientType clientType,
                                                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        int errorCount = 0;
-        List<ConfigInfo> configInfoList = new LinkedList<>();
-        Map<String, ConfigKey> configKeys = configDef.configKeys();
-        Set<String> groups = new LinkedHashSet<>();
         Map<String, Object> clientConfigs = new HashMap<>();
         for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
             String configName = rawClientConfig.getKey();
@@ -550,30 +617,42 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 : rawConfigValue;
             clientConfigs.put(configName, parsedConfigValue);
         }
+
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);
         List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
-        if (configValues != null) {
-            for (ConfigValue validatedConfigValue : configValues) {
-                ConfigKey configKey = configKeys.get(validatedConfigValue.name());
-                ConfigKeyInfo configKeyInfo = null;
-                if (configKey != null) {
-                    if (configKey.group != null) {
-                        groups.add(configKey.group);
-                    }
-                    configKeyInfo = convertConfigKey(configKey, prefix);
-                }
 
-                ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
-                                                          validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
-                if (configValue.errorMessages().size() > 0) {
-                    errorCount++;
-                }
-                ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
-                configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
-            }
+        return prefixedConfigInfos(configDef.configKeys(), configValues, prefix);
+    }
+
+    private static ConfigInfos prefixedConfigInfos(Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, String prefix) {
+        int errorCount = 0;
+        Set<String> groups = new LinkedHashSet<>();
+        List<ConfigInfo> configInfos = new ArrayList<>();
+
+        if (configValues == null) {
+            return new ConfigInfos("", errorCount, new ArrayList<>(groups), configInfos);
         }
-        return new ConfigInfos(connectorClass.toString(), errorCount, new ArrayList<>(groups), configInfoList);
+
+        for (ConfigValue validatedConfigValue : configValues) {
+            ConfigKey configKey = configKeys.get(validatedConfigValue.name());
+            ConfigKeyInfo configKeyInfo = null;
+            if (configKey != null) {
+                if (configKey.group != null) {
+                    groups.add(configKey.group);
+                }
+                configKeyInfo = convertConfigKey(configKey, prefix);
+            }
+
+            ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
+                validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
+            if (configValue.errorMessages().size() > 0) {
+                errorCount++;
+            }
+            ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
+            configInfos.add(new ConfigInfo(configKeyInfo, configValueInfo));
+        }
+        return new ConfigInfos("", errorCount, new ArrayList<>(groups), configInfos);
     }
 
     // public for testing

@@ -114,8 +114,8 @@ public class MonitorableSourceConnector extends TestSourceConnector {
             taskId = props.get("task.id");
             connectorName = props.get("connector.name");
             topicName = props.getOrDefault(TOPIC_CONFIG, "sequential-topic");
-            throughput = Long.valueOf(props.getOrDefault("throughput", "-1"));
-            batchSize = Integer.valueOf(props.getOrDefault("messages.per.poll", "1"));
+            throughput = Long.parseLong(props.getOrDefault("throughput", "-1"));
+            batchSize = Integer.parseInt(props.getOrDefault("messages.per.poll", "1"));
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             Map<String, Object> offset = Optional.ofNullable(
                     context.offsetStorageReader().offset(Collections.singletonMap("task.id", taskId)))

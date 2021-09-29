@@ -133,7 +133,7 @@ public class ConnectorClientPolicyIntegrationTest {
             connect.configureConnector(CONNECTOR_NAME, props);
             fail("Shouldn't be able to create connector");
         } catch (ConnectRestException e) {
-            assertEquals(e.statusCode(), 400);
+            assertEquals(400, e.statusCode());
         } finally {
             connect.stop();
         }

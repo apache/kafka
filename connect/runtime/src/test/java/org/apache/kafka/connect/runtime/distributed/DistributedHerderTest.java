@@ -802,7 +802,7 @@ public class DistributedHerderTest {
         // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
         // the consumer group id we would use for this sink
         Map<String, ConfigValue> validatedConfigs =
-            herder.validateBasicConnectorConfig(connectorMock, ConnectorConfig.configDef(), config);
+            herder.validateSinkConnectorConfig(ConnectorConfig.configDef(), config);
 
         ConfigValue nameConfig = validatedConfigs.get(ConnectorConfig.NAME_CONFIG);
         assertNotNull(nameConfig.errorMessages());

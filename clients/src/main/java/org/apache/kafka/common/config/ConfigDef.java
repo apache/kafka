@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.config;
 
+import java.lang.reflect.Modifier;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -35,6 +38,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -1116,8 +1120,76 @@ public class ConfigDef {
             }
         }
 
+        @Override
         public String toString() {
             return "non-empty string without ISO control characters";
+        }
+    }
+
+    public static class InstantiableClassValidator implements Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // The value will be null if the class couldn't be found; no point in performing follow-up validation
+                return;
+            }
+
+            Class<?> cls = (Class<?>) value;
+            try {
+                cls.getDeclaredConstructor().newInstance();
+            } catch (NoSuchMethodException e) {
+                throw new ConfigException(name, cls.getName(), "Could not find a public no-argument constructor for class" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                throw new ConfigException(name, cls.getName(), "Could not instantiate class" + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "A class with a public, no-argument constructor";
+        }
+    }
+
+    public static class ConcreteSubClassValidator implements Validator {
+        private final Class<?> expectedSuperClass;
+
+        private ConcreteSubClassValidator(Class<?> expectedSuperClass) {
+            this.expectedSuperClass = expectedSuperClass;
+        }
+
+        public static ConcreteSubClassValidator forSuperClass(Class<?> expectedSuperClass) {
+            return new ConcreteSubClassValidator(expectedSuperClass);
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // The value will be null if the class couldn't be found; no point in performing follow-up validation
+                return;
+            }
+
+            Class<?> cls = (Class<?>) value;
+            if (!expectedSuperClass.isAssignableFrom(cls)) {
+                throw new ConfigException(name, String.valueOf(cls), "Not a " + expectedSuperClass.getSimpleName());
+            }
+
+            if (Modifier.isAbstract(cls.getModifiers())) {
+                String childClassNames = Stream.of(cls.getClasses())
+                    .filter(cls::isAssignableFrom)
+                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                    .filter(c -> Modifier.isPublic(c.getModifiers()))
+                    .map(Class::getName)
+                    .collect(Collectors.joining(", "));
+                String message = Utils.isBlank(childClassNames) ?
+                    "Class is abstract and cannot be created." :
+                    "Class is abstract and cannot be created. Did you mean " + childClassNames + "?";
+                throw new ConfigException(name, cls.getName(), message);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "A concrete subclass of " + expectedSuperClass.getName();
         }
     }
 
