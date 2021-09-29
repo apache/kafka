@@ -332,7 +332,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.remove(a);
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
-            cachingStore.findSessions(keyA, 0, 0)) {
+                 cachingStore.findSessions(keyA, 0, 0)) {
             assertFalse(rangeIter.hasNext());
 
             assertNull(cachingStore.fetchSession(keyA, 0, 0));
