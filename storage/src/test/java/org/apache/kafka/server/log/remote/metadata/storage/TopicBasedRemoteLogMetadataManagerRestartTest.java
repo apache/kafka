@@ -123,7 +123,6 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
                                                                                         time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get();
 
-
         // Stop TopicBasedRemoteLogMetadataManager only.
         stopTopicBasedRemoteLogMetadataManagerHarness();
 

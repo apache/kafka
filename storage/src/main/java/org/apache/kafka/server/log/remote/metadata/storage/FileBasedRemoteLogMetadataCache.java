@@ -75,8 +75,8 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     }
 
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentMetadataSnapshot snapshot) {
-        return new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, snapshot.segmentId()), snapshot.startOffset(), snapshot.endOffset(),
-                                            snapshot.maxTimestampMs(), snapshot.brokerId(), snapshot.eventTimestampMs(),
+        return new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, snapshot.segmentId()), snapshot.startOffset(),
+                                            snapshot.endOffset(), snapshot.maxTimestampMs(), snapshot.brokerId(), snapshot.eventTimestampMs(),
                                             snapshot.segmentSizeInBytes(), snapshot.state(), snapshot.segmentLeaderEpochs());
     }
 
@@ -90,7 +90,6 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
      */
     public void flushToFile(int metadataPartition,
                             Long metadataPartitionOffset) throws IOException {
-
         List<RemoteLogSegmentMetadataSnapshot> snapshots = new ArrayList<>(idToSegmentMetadata.size());
         for (RemoteLogLeaderEpochState state : leaderEpochEntries.values()) {
             // Add unreferenced segments first, as to maintain the order when these segments are again read from
@@ -98,15 +97,13 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
             for (RemoteLogSegmentId id : state.unreferencedSegmentIds()) {
                 snapshots.add(RemoteLogSegmentMetadataSnapshot.create(idToSegmentMetadata.get(id)));
             }
+            
             // Add referenced segments.
             for (RemoteLogSegmentId id : state.referencedSegmentIds()) {
                 snapshots.add(RemoteLogSegmentMetadataSnapshot.create(idToSegmentMetadata.get(id)));
             }
         }
 
-        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(topicIdPartition.topicId(),
-                                                                      metadataPartition,
-                                                                      metadataPartitionOffset,
-                                                                      snapshots));
+        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(metadataPartition, metadataPartitionOffset, snapshots));
     }
 }

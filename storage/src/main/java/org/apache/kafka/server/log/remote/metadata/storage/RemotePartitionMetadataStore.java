@@ -69,7 +69,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         if (remoteLogMetadataCache != null) {
             remoteLogMetadataCache.addCopyInProgressSegment(remoteLogSegmentMetadata);
         } else {
-            log.warn("No partition metadata found for : " + topicIdPartition);
+            throw new IllegalStateException("No partition metadata found for : " + topicIdPartition);
         }
     }
 
@@ -90,7 +90,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
                 log.warn("Error occurred while updating the remote log segment.", e);
             }
         } else {
-            log.warn("No partition metadata found for : " + topicIdPartition);
+            throw new IllegalStateException("No partition metadata found for : " + topicIdPartition);
         }
     }
 
@@ -123,6 +123,11 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
                 remoteLogMetadataCache.flushToFile(metadataPartition, metadataPartitionOffset);
             }
         }
+    }
+
+    @Override
+    public void clearTopicPartition(TopicIdPartition topicIdPartition) {
+        idToRemoteLogMetadataCache.remove(topicIdPartition);
     }
 
     public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)

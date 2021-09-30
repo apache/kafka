@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.slf4j.Logger;
@@ -25,13 +24,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -49,9 +48,13 @@ public class RemoteLogMetadataSnapshotFile {
 
     public static final String COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME = "remote_log_snapshot";
 
-    // header: <version:short><topicId:2 longs><metadata-partition:int><metadata-partition-offset:long>
-    // size: 2 + (8+8) + 4 + 8 = 30
-    private static final int HEADER_SIZE = 30;
+    // File format:
+    // <header>[<entry>...]
+    // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
+    // entry: <entry-length><entry-bytes>
+
+    // header size: 2 (version) + 4 (partition num) + 8 (offset) = 14
+    private static final int HEADER_SIZE = 14;
 
     private final File metadataStoreFile;
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
@@ -81,20 +84,20 @@ public class RemoteLogMetadataSnapshotFile {
      * @throws IOException if there4 is any error in writing the given snapshot to the file.
      */
     public synchronized void write(Snapshot snapshot) throws IOException {
-        File newMetadataSnapshotFile = new File(metadataStoreFile.getAbsolutePath() + ".tmp");
-        try (WritableByteChannel fileChannel = Channels.newChannel(new FileOutputStream(newMetadataSnapshotFile))) {
+        Path newMetadataSnapshotFilePath = new File(metadataStoreFile.getAbsolutePath() + ".tmp").toPath();
+        try (FileChannel fileChannel = FileChannel.open(newMetadataSnapshotFilePath,
+                                                        StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
 
+            // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
             ByteBuffer headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
 
             // Write version
             headerBuffer.putShort(snapshot.version());
 
-            // Write topic-id
-            headerBuffer.putLong(snapshot.topicId().getMostSignificantBits());
-            headerBuffer.putLong(snapshot.topicId().getLeastSignificantBits());
-
             // Write metadata partition and metadata partition offset
             headerBuffer.putInt(snapshot.metadataPartition());
+
+            // Write metadata partition offset
             headerBuffer.putLong(snapshot.metadataPartitionOffset());
             headerBuffer.flip();
 
@@ -105,25 +108,28 @@ public class RemoteLogMetadataSnapshotFile {
             ByteBuffer lenBuffer = ByteBuffer.allocate(4);
             for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : snapshot.remoteLogSegmentMetadataSnapshots()) {
                 final byte[] serializedBytes = serde.serialize(metadataSnapshot);
-                // Write length
+                // entry format: <entry-length><entry-bytes>
+
+                // Write entry length
                 lenBuffer.putInt(serializedBytes.length);
                 lenBuffer.flip();
                 fileChannel.write(lenBuffer);
                 lenBuffer.rewind();
 
-                // Write data
+                // Write entry bytes
                 fileChannel.write(ByteBuffer.wrap(serializedBytes));
             }
+
+            fileChannel.force(true);
         }
 
-        Utils.atomicMoveWithFallback(newMetadataSnapshotFile.toPath(), metadataStoreFile.toPath());
+        Utils.atomicMoveWithFallback(newMetadataSnapshotFilePath, metadataStoreFile.toPath());
     }
 
     /**
      * @return the Snapshot if it exists.
      * @throws IOException if there is any error in reading the stored snapshot.
      */
-    @SuppressWarnings("unchecked")
     public synchronized Optional<Snapshot> read() throws IOException {
 
         // Checking for empty files.
@@ -133,12 +139,12 @@ public class RemoteLogMetadataSnapshotFile {
 
         try (ReadableByteChannel channel = Channels.newChannel(new FileInputStream(metadataStoreFile))) {
 
+            // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
             // Read header
             ByteBuffer headerBuffer = ByteBuffer.allocate(HEADER_SIZE);
             channel.read(headerBuffer);
             headerBuffer.rewind();
             short version = headerBuffer.getShort();
-            Uuid topicId = new Uuid(headerBuffer.getLong(), headerBuffer.getLong());
             int metadataPartition = headerBuffer.getInt();
             long metadataPartitionOffset = headerBuffer.getLong();
 
@@ -151,6 +157,8 @@ public class RemoteLogMetadataSnapshotFile {
                 if (lenBufferReadCt != lenBuffer.capacity()) {
                     throw new IOException("Invalid amount of data read for the length of an entry, file may have been corrupted.");
                 }
+
+                // entry format: <entry-length><entry-bytes>
 
                 // Read the length of each entry
                 final int len = lenBuffer.getInt();
@@ -170,7 +178,7 @@ public class RemoteLogMetadataSnapshotFile {
                 result.add(remoteLogSegmentMetadata);
             }
 
-            return Optional.of(new Snapshot(version, topicId, metadataPartition, metadataPartitionOffset, result));
+            return Optional.of(new Snapshot(version, metadataPartition, metadataPartitionOffset, result));
         }
     }
     
@@ -181,25 +189,21 @@ public class RemoteLogMetadataSnapshotFile {
         private static final short CURRENT_VERSION = 0;
 
         private final short version;
-        private final Uuid topicId;
         private final int metadataPartition;
         private final long metadataPartitionOffset;
         private final Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots;
 
-        public Snapshot(Uuid topicId,
-                        int metadataPartition,
+        public Snapshot(int metadataPartition,
                         long metadataPartitionOffset,
                         Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots) {
-            this(CURRENT_VERSION, topicId, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
+            this(CURRENT_VERSION, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
         }
 
         public Snapshot(short version,
-                        Uuid topicId,
                         int metadataPartition,
                         long metadataPartitionOffset,
                         Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots) {
             this.version = version;
-            this.topicId = topicId;
             this.metadataPartition = metadataPartition;
             this.metadataPartitionOffset = metadataPartitionOffset;
             this.remoteLogSegmentMetadataSnapshots = remoteLogSegmentMetadataSnapshots;
@@ -207,10 +211,6 @@ public class RemoteLogMetadataSnapshotFile {
 
         public short version() {
             return version;
-        }
-
-        public Uuid topicId() {
-            return topicId;
         }
 
         public int metadataPartition() {
@@ -230,20 +230,20 @@ public class RemoteLogMetadataSnapshotFile {
             if (this == o) return true;
             if (!(o instanceof Snapshot)) return false;
             Snapshot snapshot = (Snapshot) o;
-            return version == snapshot.version && metadataPartition == snapshot.metadataPartition && metadataPartitionOffset == snapshot.metadataPartitionOffset && Objects.equals(
-                    topicId, snapshot.topicId) && Objects.equals(remoteLogSegmentMetadataSnapshots, snapshot.remoteLogSegmentMetadataSnapshots);
+            return version == snapshot.version && metadataPartition == snapshot.metadataPartition
+                    && metadataPartitionOffset == snapshot.metadataPartitionOffset
+                    && Objects.equals(remoteLogSegmentMetadataSnapshots, snapshot.remoteLogSegmentMetadataSnapshots);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(version, topicId, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
+            return Objects.hash(version, metadataPartition, metadataPartitionOffset, remoteLogSegmentMetadataSnapshots);
         }
 
         @Override
         public String toString() {
             return "Snapshot{" +
                     "version=" + version +
-                    ", topicId=" + topicId +
                     ", metadataPartition=" + metadataPartition +
                     ", metadataPartitionOffset=" + metadataPartitionOffset +
                     ", remoteLogSegmentMetadataSnapshotsSize" + remoteLogSegmentMetadataSnapshots.size() +

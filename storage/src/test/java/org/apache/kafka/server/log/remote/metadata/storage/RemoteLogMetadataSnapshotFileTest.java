@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.test.TestUtils;
@@ -47,7 +45,7 @@ public class RemoteLogMetadataSnapshotFileTest {
         File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
-        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(Uuid.randomUuid(), 0, 0L, Collections.emptyList()));
+        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(0, 0L, Collections.emptyList()));
 
         // There should be an empty snapshot as the written snapshot did not have any remote log segment metadata.
         Assertions.assertTrue(snapshotFile.read().isPresent());
@@ -56,7 +54,6 @@ public class RemoteLogMetadataSnapshotFileTest {
 
     @Test
     public void testWriteReadCommittedLogMetadataFile() throws Exception {
-        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
         RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
 
@@ -71,7 +68,7 @@ public class RemoteLogMetadataSnapshotFileTest {
             startOffset = endOffset + 1;
         }
 
-        RemoteLogMetadataSnapshotFile.Snapshot snapshot = new RemoteLogMetadataSnapshotFile.Snapshot(topicIdPartition.topicId(), 0, 120,
+        RemoteLogMetadataSnapshotFile.Snapshot snapshot = new RemoteLogMetadataSnapshotFile.Snapshot(0, 120,
                                                                                                      remoteLogSegmentMetadatas);
         snapshotFile.write(snapshot);
 

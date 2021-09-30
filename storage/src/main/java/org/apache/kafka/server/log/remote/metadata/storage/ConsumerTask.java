@@ -87,10 +87,16 @@ class ConsumerTask implements Runnable, Closeable {
     // User topic partitions that this broker is a leader/follower for.
     private Set<TopicIdPartition> assignedTopicPartitions = Collections.emptySet();
 
-    // Map of remote log metadata topic partition to consumed offsets.
+    // Map of remote log metadata topic partition to consumed offsets. Received consumer records
+    // may or may not have been processed based on the assigned topic partitions.
     private final Map<Integer, Long> partitionToConsumedOffsets = new ConcurrentHashMap<>();
 
-    private Map<Integer, Long> committedPartitionToConsumedOffsets = Collections.emptyMap();
+    // Map of remote log metadata topic partition to processed offsets. Received consumer record is
+    // processed as the remote log metadata record's topic partition exists in assigned topic partitions.
+    private final Map<Integer, Long> partitionToProcessedOffsets = new ConcurrentHashMap<>();
+
+    // Map of remote log metadata topic partition to processed offsets that were synced in committedOffsetsFile.
+    private Map<Integer, Long> lastSyncedPartitionToConsumedOffsets = Collections.emptyMap();
 
     private final long committedOffsetSyncIntervalMs;
     private CommittedOffsetsFile committedOffsetsFile;
@@ -139,10 +145,11 @@ class ConsumerTask implements Runnable, Closeable {
             // Seek to the committed offsets
             for (Map.Entry<Integer, Long> entry : committedOffsets.entrySet()) {
                 partitionToConsumedOffsets.put(entry.getKey(), entry.getValue());
+                partitionToProcessedOffsets.put(entry.getKey(), entry.getValue());
                 consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
             }
 
-            committedPartitionToConsumedOffsets = committedOffsets;
+            lastSyncedPartitionToConsumedOffsets = Collections.unmodifiableMap(committedOffsets);
         }
     }
 
@@ -157,8 +164,7 @@ class ConsumerTask implements Runnable, Closeable {
                 log.info("Polling consumer to receive remote log metadata topic records");
                 ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
                 for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
-                    handleRemoteLogMetadata(serde.deserialize(record.value()));
-                    partitionToConsumedOffsets.put(record.partition(), record.offset());
+                    processConsumerRecord(record);
                 }
 
                 maybeSyncCommittedDataAndOffsets(false);
@@ -166,36 +172,57 @@ class ConsumerTask implements Runnable, Closeable {
         } catch (Exception e) {
             log.error("Error occurred in consumer task, close:[{}]", closing, e);
         } finally {
+            maybeSyncCommittedDataAndOffsets(true);
             closeConsumer();
             log.info("Exiting from consumer task thread");
         }
     }
 
+    private void processConsumerRecord(ConsumerRecord<byte[], byte[]> record) {
+        // Taking assignPartitionsLock here as updateAssignmentsForPartitions changes assignedTopicPartitions
+        // and also calls remotePartitionMetadataEventHandler.clearTopicPartition(removedPartition) for the removed
+        // partitions.
+        RemoteLogMetadata remoteLogMetadata = serde.deserialize(record.value());
+        synchronized (assignPartitionsLock) {
+            if (assignedTopicPartitions.contains(remoteLogMetadata.topicIdPartition())) {
+                remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
+                partitionToProcessedOffsets.put(record.partition(), record.offset());
+            } else {
+                log.debug("This event {} is skipped as the topic partition is not assigned for this instance.", remoteLogMetadata);
+            }
+            partitionToConsumedOffsets.put(record.partition(), record.offset());
+        }
+    }
+
     private void maybeSyncCommittedDataAndOffsets(boolean forceSync) {
-        boolean noOffsetUpdates = committedPartitionToConsumedOffsets.equals(partitionToConsumedOffsets);
-        if (noOffsetUpdates || !forceSync && time.milliseconds() - lastSyncedTimeMs < committedOffsetSyncIntervalMs) {
-            log.debug("Skip syncing committed offsets, noOffsetUpdates: {}, forceSync: {}", noOffsetUpdates, forceSync);
+        // Return immediately if there is no consumption from last time.
+        boolean noConsumedOffsetUpdates = partitionToConsumedOffsets.equals(lastSyncedPartitionToConsumedOffsets);
+        if (noConsumedOffsetUpdates || !forceSync && time.milliseconds() - lastSyncedTimeMs < committedOffsetSyncIntervalMs) {
+            log.debug("Skip syncing committed offsets, noConsumedOffsetUpdates: {}, forceSync: {}", noConsumedOffsetUpdates, forceSync);
             return;
         }
 
         try {
-            // partitionToConsumedOffsets is not getting changed concurrently as this method is called from #run() which updates the same.
-            // Need to take lock on assignPartitionsLock as assignedTopicPartitions might get updated by other threads.
+            // Need to take lock on assignPartitionsLock as assignedTopicPartitions might
+            // get updated by other threads.
             synchronized (assignPartitionsLock) {
                 for (TopicIdPartition topicIdPartition : assignedTopicPartitions) {
                     int metadataPartition = topicPartitioner.metadataPartition(topicIdPartition);
-                    Long offset = partitionToConsumedOffsets.get(metadataPartition);
-                    if (offset != null && !offset.equals(committedPartitionToConsumedOffsets.get(metadataPartition))) {
+                    Long offset = partitionToProcessedOffsets.get(metadataPartition);
+                    if (offset != null) {
                         remotePartitionMetadataEventHandler.syncLogMetadataSnapshot(topicIdPartition, metadataPartition, offset);
                     } else {
-                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and offset:{} ",
-                                topicIdPartition, metadataPartition, offset);
+                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and no offset",
+                                topicIdPartition, metadataPartition);
                     }
                 }
+
+                // Write partitionToConsumedOffsets into committed offsets file as we do not want to process them again
+                // in case of restarts.
+                committedOffsetsFile.writeEntries(partitionToConsumedOffsets);
+                lastSyncedPartitionToConsumedOffsets = new HashMap<>(partitionToConsumedOffsets);
             }
 
-            committedOffsetsFile.writeEntries(partitionToConsumedOffsets);
-            committedPartitionToConsumedOffsets = new HashMap<>(partitionToConsumedOffsets);
             lastSyncedTimeMs = time.milliseconds();
         } catch (IOException e) {
             throw new KafkaException("Error encountered while writing committed offsets to a local file", e);
@@ -240,20 +267,16 @@ class ConsumerTask implements Runnable, Closeable {
 
             if (assignPartitions) {
                 assignedMetaPartitionsSnapshot = new HashSet<>(assignedMetaPartitions);
+                // Removing unassigned meta partitions from partitionToConsumedOffsets and partitionToCommittedOffsets
+                partitionToConsumedOffsets.entrySet().removeIf(entry -> !assignedMetaPartitions.contains(entry.getKey()));
+                partitionToProcessedOffsets.entrySet().removeIf(entry -> !assignedMetaPartitions.contains(entry.getKey()));
+
                 assignPartitions = false;
             }
         }
 
         if (!assignedMetaPartitionsSnapshot.isEmpty()) {
             executeReassignment(assignedMetaPartitionsSnapshot);
-        }
-    }
-
-    private void handleRemoteLogMetadata(RemoteLogMetadata remoteLogMetadata) {
-        if (assignedTopicPartitions.contains(remoteLogMetadata.topicIdPartition())) {
-            remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
-        } else {
-            log.debug("This event {} is skipped as the topic partition is not assigned for this instance.", remoteLogMetadata);
         }
     }
 
@@ -293,12 +316,19 @@ class ConsumerTask implements Runnable, Closeable {
             for (TopicIdPartition tp : updatedReassignedPartitions) {
                 updatedAssignedMetaPartitions.add(topicPartitioner.metadataPartition(tp));
             }
+
+            // Clear removed topic partitions from inmemory cache.
+            for (TopicIdPartition removedPartition : removedPartitions) {
+                remotePartitionMetadataEventHandler.clearTopicPartition(removedPartition);
+            }
+
             assignedTopicPartitions = Collections.unmodifiableSet(updatedReassignedPartitions);
             log.debug("Assigned topic partitions: {}", assignedTopicPartitions);
 
             if (!updatedAssignedMetaPartitions.equals(assignedMetaPartitions)) {
                 assignedMetaPartitions = Collections.unmodifiableSet(updatedAssignedMetaPartitions);
                 log.debug("Assigned metadata topic partitions: {}", assignedMetaPartitions);
+
                 assignPartitions = true;
                 assignPartitionsLock.notifyAll();
             } else {
@@ -323,11 +353,6 @@ class ConsumerTask implements Runnable, Closeable {
                 // if the closing is already set.
                 closing = true;
                 consumer.wakeup();
-                try {
-                    maybeSyncCommittedDataAndOffsets(true);
-                } catch (Exception e) {
-                    log.warn("Error occurred while syncing the committed data to snapshots.", e);
-                }
                 assignPartitionsLock.notifyAll();
             }
         }
