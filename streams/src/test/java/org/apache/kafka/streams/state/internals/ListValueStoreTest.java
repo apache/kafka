@@ -19,12 +19,14 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -101,7 +103,24 @@ public class ListValueStoreTest {
                                           final Serde<V> valueSerde) {
         return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
-                : Stores.inMemoryKeyValueStore("in-memory list store"),
+                //: Stores.inMemoryKeyValueStore("in-memory list store"),
+                : new KeyValueBytesStoreSupplier() {
+                @Override
+                public String name() {
+                    return "rocksDB list store";
+                }
+
+                @Override
+                public KeyValueStore<Bytes, byte[]> get() {
+                    // do not copy of range since it would not be used for IQ
+                    return new InMemoryKeyValueStore("rocksDB list store", false);
+                }
+
+                @Override
+                public String metricsScope() {
+                    return "in-memory";
+                }
+            },
             keySerde,
             valueSerde,
             Time.SYSTEM)

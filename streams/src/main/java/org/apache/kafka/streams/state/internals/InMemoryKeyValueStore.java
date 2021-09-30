@@ -32,6 +32,7 @@ import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
@@ -39,7 +40,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final boolean copyOnRange;
-    private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+    private final NavigableMap<Bytes, byte[]> map;
 
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
@@ -51,6 +52,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public InMemoryKeyValueStore(final String name, final boolean copyOnRange) {
         this.name = name;
         this.copyOnRange = copyOnRange;
+        this.map = copyOnRange ? new TreeMap<>() : new ConcurrentSkipListMap<>();
     }
 
     @Override
