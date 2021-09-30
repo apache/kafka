@@ -109,7 +109,6 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         );
 
         final List<KeyValue<String, String>> table2 = asList(
-            new KeyValue<>("ID123", "bbb"),
             new KeyValue<>("ID123", "BBB")
         );
 
@@ -155,10 +154,6 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
         final Set<KeyValue<String, String>> expectedOne = new HashSet<>();
-        expectedOne.add(new KeyValue<>("ID123-1", "value1=ID123-A1,value2=bbb"));
-        expectedOne.add(new KeyValue<>("ID123-2", "value1=ID123-A2,value2=bbb"));
-        expectedOne.add(new KeyValue<>("ID123-3", "value1=ID123-A3,value2=bbb"));
-        expectedOne.add(new KeyValue<>("ID123-4", "value1=ID123-A4,value2=bbb"));
         expectedOne.add(new KeyValue<>("ID123-1", "value1=ID123-A1,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-2", "value1=ID123-A2,value2=BBB"));
         expectedOne.add(new KeyValue<>("ID123-3", "value1=ID123-A3,value2=BBB"));
