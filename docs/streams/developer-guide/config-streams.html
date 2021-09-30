@@ -745,7 +745,10 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
 
               <dl class="docutils">
                 <dt>Recommendation:</dt>
-                  <dd>While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with min.in.sync.replicas=2). This recommendation applies to all topics (i.e. __transaction_state, __consumer_offsets, Kafka Streams internal topics, and user topics).</dd>
+                <dd>While it is technically possible to use EOS with any replication factor, using a replication factor lower
+                  than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with
+                  <code>min.in.sync.replicas=2</code>). This recommendation applies to all topics (i.e. <code>__transaction_state</code>,
+                  <code>__consumer_offsets</code>, Kafka Streams internal topics, and user topics).</dd>
               </dl>
 	          </div></blockquote>
         </div>
