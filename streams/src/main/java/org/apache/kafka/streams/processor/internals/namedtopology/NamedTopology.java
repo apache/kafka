@@ -23,7 +23,7 @@ import java.util.List;
 
 public class NamedTopology extends Topology {
 
-    public NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {
+    NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {
         super(internalTopologyBuilder);
     }
 
