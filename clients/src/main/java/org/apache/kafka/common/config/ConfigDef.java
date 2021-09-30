@@ -20,7 +20,6 @@ import java.lang.reflect.Modifier;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
