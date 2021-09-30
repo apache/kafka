@@ -301,7 +301,7 @@ public class Sender implements Runnable {
                 transactionManager.maybeResolveSequences();
 
                 // do not continue sending if the transaction manager is in a failed state
-                if (transactionManager.hasFatalError()) {
+                if (transactionManager.hasError()) {
                     RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
