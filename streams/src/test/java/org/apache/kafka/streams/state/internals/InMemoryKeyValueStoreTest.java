@@ -31,33 +31,52 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
+import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+@RunWith(Parameterized.class)
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private KeyValueStore<Bytes, byte[]> byteStore;
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class);
 
+    @SuppressWarnings("unchecked")
+    @Override
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
+                new InMemoryKeyValueBytesStoreSupplier("my-store", copyOnRange),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
+
+        final KeyValueStore<K, V> store = storeBuilder.build();
+        store.init(context, store);
+        return store;
+    }
+
     @Before
     public void createStringKeyValueStore() {
         super.before();
-        final StateStoreContext byteStoreContext = byteStoreDriver.context();
         final StoreBuilder<KeyValueStore<Bytes, byte[]>> storeBuilder = Stores.keyValueStoreBuilder(
             Stores.inMemoryKeyValueStore("in-memory-byte-store"),
             new Serdes.BytesSerde(),
             new Serdes.ByteArraySerde());
         byteStore = storeBuilder.build();
-        byteStore.init(byteStoreContext, byteStore);
+        byteStore.init(byteStoreDriver.context(), byteStore);
     }
 
     @After
@@ -67,17 +86,20 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStoreDriver.clear();
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
-            Stores.inMemoryKeyValueStore("my-store"),
-            (Serde<K>) context.keySerde(),
-            (Serde<V>) context.valueSerde());
+    @Parameterized.Parameters(name = "copy-on-range = {0}")
+    public static Collection<Object[]> data() {
+        final List<Object[]> values = new ArrayList<>();
+        for (final boolean copyOnRange : Arrays.asList(true, false)) {
+            values.add(new Object[]{copyOnRange});
+        }
+        return values;
+    }
 
-        final KeyValueStore<K, V> store = storeBuilder.build();
-        store.init(context, store);
-        return store;
+    @Parameterized.Parameter
+    public boolean copyOnRange;
+
+    public InMemoryKeyValueStoreTest(final boolean copyOnRange) {
+        this.copyOnRange = copyOnRange;
     }
 
     @SuppressWarnings("unchecked")
@@ -100,6 +122,28 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertThat(store.get(0), nullValue());
     }
 
+    @Test
+    public void shouldAllowDeleteWhileIterateRecords() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final KeyValue<Integer, String> zero = KeyValue.pair(0, "zero");
+        final KeyValue<Integer, String> one = KeyValue.pair(1, "one");
+        final KeyValue<Integer, String> two = KeyValue.pair(2, "two");
+
+        final KeyValueIterator<Integer, String> it = store.all();
+        assertEquals(zero, it.next());
+        assertEquals(one, it.next());
+
+        store.delete(1);
+
+
+        it.close();
+
+        // A new all() iterator after a previous all() iterator was closed should not return deleted records.
+        assertEquals(Arrays.asList(zero, two), toList(store.all()));
+    }
 
     @Test
     public void shouldReturnKeysWithGivenPrefix() {

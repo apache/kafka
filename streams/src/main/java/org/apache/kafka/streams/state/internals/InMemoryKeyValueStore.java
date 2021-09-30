@@ -45,6 +45,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
+    // for tests-only
     public InMemoryKeyValueStore(final String name) {
         this(name, true);
     }
@@ -52,6 +53,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public InMemoryKeyValueStore(final String name, final boolean copyOnRange) {
         this.name = name;
         this.copyOnRange = copyOnRange;
+        // if we do not need to copy on range, then we should use concurrent skiplist map
+        // to avoid concurrent modificiation exception
         this.map = copyOnRange ? new TreeMap<>() : new ConcurrentSkipListMap<>();
     }
 

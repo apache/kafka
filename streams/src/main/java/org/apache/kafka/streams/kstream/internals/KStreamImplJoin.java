@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -30,9 +29,8 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -316,23 +314,8 @@ class KStreamImplJoin {
             new ListValueStoreBuilder<>(
                 persistent ?
                     Stores.persistentKeyValueStore(storeName) :
-                    new KeyValueBytesStoreSupplier() {
-                    @Override
-                    public String name() {
-                        return storeName;
-                    }
-
-                    @Override
-                    public KeyValueStore<Bytes, byte[]> get() {
-                        // do not copy of range since it would not be used for IQ
-                        return new InMemoryKeyValueStore(storeName, false);
-                    }
-
-                    @Override
-                    public String metricsScope() {
-                        return "in-memory";
-                    }
-                },
+                    // do not copy on range since it would not be used for IQ
+                    new InMemoryKeyValueBytesStoreSupplier(storeName, false),
                 timestampedKeyAndJoinSideSerde,
                 leftOrRightValueSerde,
                 Time.SYSTEM

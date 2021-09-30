@@ -19,14 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -43,7 +41,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -51,7 +48,6 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class ListValueStoreTest {
@@ -103,24 +99,7 @@ public class ListValueStoreTest {
                                           final Serde<V> valueSerde) {
         return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
-                //: Stores.inMemoryKeyValueStore("in-memory list store"),
-                : new KeyValueBytesStoreSupplier() {
-                @Override
-                public String name() {
-                    return "rocksDB list store";
-                }
-
-                @Override
-                public KeyValueStore<Bytes, byte[]> get() {
-                    // do not copy of range since it would not be used for IQ
-                    return new InMemoryKeyValueStore("rocksDB list store", false);
-                }
-
-                @Override
-                public String metricsScope() {
-                    return "in-memory";
-                }
-            },
+                    : new InMemoryKeyValueBytesStoreSupplier("in-memory list store", false),
             keySerde,
             valueSerde,
             Time.SYSTEM)
@@ -156,7 +135,7 @@ public class ListValueStoreTest {
         listStore.put(3, "three");
         listStore.put(4, "four");
 
-        // Delete some records
+        // Delete some records; using putIfAbsent since the caller would use this method as well
         listStore.putIfAbsent(1, null);
         listStore.putIfAbsent(3, null);
         listStore.putIfAbsent(5, null);
