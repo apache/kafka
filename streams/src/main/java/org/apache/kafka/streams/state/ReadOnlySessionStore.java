@@ -314,7 +314,6 @@ public interface ReadOnlySessionStore<K, AGG> {
      * A null value indicates that the range ends with the last element in the store.
      * @return backward KeyValueIterator containing all sessions for the provided key, from newest
      * to oldest session.
-     * @throws NullPointerException If null is used for any of the keys.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom, final K keyTo) {
         throw new UnsupportedOperationException(

@@ -212,7 +212,7 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.put(kv.key, kv.value);
         }
 
-        // add some that should only be fetched in unlimited fetch
+        // add some that should only be fetched in infinite fetch
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
 
@@ -224,27 +224,27 @@ public abstract class AbstractSessionBytesStoreTest {
             assertEquals(expected, toList(values));
         }
 
-        // unlimited keyFrom fetch case
-        expected.add(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+        // infinite keyFrom fetch case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch(null, "bb")) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(expected, toList(values));
         }
 
         // remove the one added for unlimited start fetch case
-        expected.remove(expected.size() - 1);
-        // unlimited keyTo fetch case
+        expected.remove(0);
+        // infinite keyTo fetch case
         expected.add(KeyValue.pair(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", null)) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(expected, toList(values));
         }
 
         // fetch all case
-        expected.add(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch(null, null)) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(expected, toList(values));
         }
     }
 
@@ -261,7 +261,7 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.put(kv.key, kv.value);
         }
 
-        // add some that should only be fetched in unlimited fetch
+        // add some that should only be fetched in infinite fetch
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
 
@@ -273,27 +273,27 @@ public abstract class AbstractSessionBytesStoreTest {
             assertEquals(toList(expected.descendingIterator()), toList(values));
         }
 
-        // unlimited keyFrom fetch case
-        expected.add(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+        // infinite keyFrom fetch case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch(null, "bb")) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(toList(expected.descendingIterator()), toList(values));
         }
 
         // remove the one added for unlimited start fetch case
-        expected.remove(expected.size() - 1);
-        // unlimited keyTo fetch case
+        expected.remove(0);
+        // infinite keyTo fetch case
         expected.add(KeyValue.pair(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch("aa", null)) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(toList(expected.descendingIterator()), toList(values));
         }
 
         // fetch all case
-        expected.add(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch(null, null)) {
-            assertEquals(new HashSet<>(expected), toSet(values));
+            assertEquals(toList(expected.descendingIterator()), toList(values));
         }
     }
 
