@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,9 +42,9 @@ public class RoundRobinPartitionerTest {
         // Intentionally make the partition list not in partition order to test the edge
         // cases.
         List<PartitionInfo> partitions = asList(
-                new PartitionInfo("test", 1, null, NODES, NODES),
-                new PartitionInfo("test", 2, NODES[1], NODES, NODES),
-                new PartitionInfo("test", 0, NODES[0], NODES, NODES));
+            new PartitionInfo("test", 1, null, NODES, NODES),
+            new PartitionInfo("test", 2, NODES[1], NODES, NODES),
+            new PartitionInfo("test", 0, NODES[0], NODES, NODES));
         // When there are some unavailable partitions, we want to make sure that (1) we
         // always pick an available partition,
         // and (2) the available partitions are selected in a round robin way.
@@ -69,10 +70,10 @@ public class RoundRobinPartitionerTest {
         final String topicB = "topicB";
 
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
-                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
+            new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+            new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -94,17 +95,17 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
     }
-    
+
     @Test
     public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
-                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
+            new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+            new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -124,5 +125,25 @@ public class RoundRobinPartitionerTest {
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
-    }    
+    }
+
+    @Test
+    public void testRoundRobinWithAbortForNewBatch() throws Exception {
+        final String topicA = "topicA";
+        final String topicB = "topicB";
+
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0]), Collections.emptyList(),
+            Collections.<String>emptySet(), Collections.<String>emptySet());
+
+        Partitioner partitioner = new RoundRobinPartitioner();
+
+        //abort for new batch - previous partition should be returned on subsequent call
+        //simulate three threads producing to two topics, with race condition in producer
+        partitioner.onNewBatch(topicA, testCluster, 7);
+        partitioner.onNewBatch(topicA, testCluster, 8);
+        partitioner.onNewBatch(topicB, testCluster, 1);
+        assertEquals(7, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(8, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(1, partitioner.partition(topicB, null, null, null, null, testCluster));
+    }
 }
