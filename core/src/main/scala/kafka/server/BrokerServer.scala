@@ -257,10 +257,20 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
-      this._replicaManager = new ReplicaManager(config, metrics, time, None,
-        kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-        brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
-        threadNamePrefix)
+      this._replicaManager = new ReplicaManager(
+        config = config,
+        metrics = metrics,
+        time = time,
+        scheduler = kafkaScheduler,
+        logManager = logManager,
+        quotaManagers = quotaManagers,
+        metadataCache = metadataCache,
+        logDirFailureChannel = logDirFailureChannel,
+        alterIsrManager = alterIsrManager,
+        brokerTopicStats = brokerTopicStats,
+        isShuttingDown = isShuttingDown,
+        zkClient = None,
+        threadNamePrefix = threadNamePrefix)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -368,10 +378,26 @@ class BrokerServer(
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
-      dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
-        replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
-        config.nodeId, config, metadataCache, metadataCache, metrics, authorizer, quotaManagers,
-        fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
+      dataPlaneRequestProcessor = new KafkaApis(
+        requestChannel = socketServer.dataPlaneRequestChannel,
+        metadataSupport = raftSupport,
+        replicaManager = replicaManager,
+        groupCoordinator = groupCoordinator,
+        txnCoordinator = transactionCoordinator,
+        autoTopicCreationManager = autoTopicCreationManager,
+        brokerId = config.nodeId,
+        config = config,
+        configRepository = metadataCache,
+        metadataCache = metadataCache,
+        metrics = metrics,
+        authorizer = authorizer,
+        quotas = quotaManagers,
+        fetchManager = fetchManager,
+        brokerTopicStats = brokerTopicStats,
+        clusterId = clusterId,
+        time = time,
+        tokenManager = tokenManager,
+        apiVersionManager = apiVersionManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -456,6 +482,19 @@ class BrokerServer(
       }
       metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
 
+      /**
+       * We must shutdown the scheduler early because otherwise, the scheduler could touch other
+       * resources that might have been shutdown and cause exceptions.
+       * For example, if we didn't shutdown the scheduler first, when LogManager was closing
+       * partitions one by one, the scheduler might concurrently delete old segments due to
+       * retention. However, the old segments could have been closed by the LogManager, which would
+       * cause an IOException and subsequently mark logdir as offline. As a result, the broker would
+       * not flush the remaining partitions or write the clean shutdown marker. Ultimately, the
+       * broker would have to take hours to recover the log during restart.
+       */
+      if (kafkaScheduler != null)
+        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)
@@ -475,9 +514,6 @@ class BrokerServer(
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
-      // be sure to shutdown scheduler after log manager
-      if (kafkaScheduler != null)
-        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)

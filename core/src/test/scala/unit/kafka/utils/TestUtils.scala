@@ -25,7 +25,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 
 import com.yammer.metrics.core.Meter
@@ -50,7 +50,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
-import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
@@ -1120,19 +1120,26 @@ object TestUtils extends Logging {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
     val inFlight: AtomicBoolean = new AtomicBoolean(false)
 
-    override def submit(alterIsrItem: AlterIsrItem): Boolean = {
+
+    override def submit(
+      topicPartition: TopicPartition,
+      leaderAndIsr: LeaderAndIsr,
+      controllerEpoch: Int
+    ): CompletableFuture[LeaderAndIsr]= {
+      val future = new CompletableFuture[LeaderAndIsr]()
       if (inFlight.compareAndSet(false, true)) {
-        isrUpdates += alterIsrItem
-        true
+        isrUpdates += AlterIsrItem(topicPartition, leaderAndIsr, future, controllerEpoch)
       } else {
-        false
+        future.completeExceptionally(new OperationNotAttemptedException(
+          s"Failed to enqueue AlterIsr request for $topicPartition since there is already an inflight request"))
       }
+      future
     }
 
     def completeIsrUpdate(newZkVersion: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
         val item = isrUpdates.dequeue()
-        item.callback.apply(Right(item.leaderAndIsr.withZkVersion(newZkVersion)))
+        item.future.complete(item.leaderAndIsr.withZkVersion(newZkVersion))
       } else {
         fail("Expected an in-flight ISR update, but there was none")
       }
@@ -1141,7 +1148,7 @@ object TestUtils extends Logging {
     def failIsrUpdate(error: Errors): Unit = {
       if (inFlight.compareAndSet(true, false)) {
         val item = isrUpdates.dequeue()
-        item.callback.apply(Left(error))
+        item.future.completeExceptionally(error.exception)
       } else {
         fail("Expected an in-flight ISR update, but there was none")
       }

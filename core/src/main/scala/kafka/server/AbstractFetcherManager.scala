@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Map, Set, mutable}
@@ -67,7 +67,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         if (id.fetcherId >= newSize)
           thread.shutdown()
         val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>
-          val initialFetchState = InitialFetchState(thread.sourceBroker,
+          val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.sourceBroker,
             currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
             initOffset = currentFetchState.fetchOffset)
           topicPartition -> initialFetchState
@@ -163,6 +163,26 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
   }
 
+  /**
+   * If the fetcher and partition state exist, update all to include the topic ID
+   *
+   * @param partitionsToUpdate a mapping of partitions to be updated to their leader IDs
+   * @param topicIds           the mappings from topic name to ID or None if it does not exist
+   */
+  def maybeUpdateTopicIds(partitionsToUpdate: Map[TopicPartition, Int], topicIds: String => Option[Uuid]): Unit = {
+    lock synchronized {
+      val partitionsPerFetcher = partitionsToUpdate.groupBy { case (topicPartition, leaderId) =>
+        BrokerIdAndFetcherId(leaderId, getFetcherId(topicPartition))
+      }.map { case (brokerAndFetcherId, partitionsToUpdate) =>
+        (brokerAndFetcherId, partitionsToUpdate.keySet)
+      }
+
+      for ((brokerIdAndFetcherId, partitions) <- partitionsPerFetcher) {
+        fetcherThreadMap.get(brokerIdAndFetcherId).foreach(_.maybeUpdateTopicIds(partitions, topicIds))
+      }
+    }
+  }
+
   def removeFetcherForPartitions(partitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
     val fetchStates = mutable.Map.empty[TopicPartition, PartitionFetchState]
     lock synchronized {
@@ -235,6 +255,6 @@ class FailedPartitions {
 
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
+case class InitialFetchState(topicId: Option[Uuid], leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
 
 case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)
