@@ -832,7 +832,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             source.materialize();
             return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-            return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
+            return ((KStreamAggProcessorSupplier<?, S, K, V>) processorSupplier).view();
         } else if (processorSupplier instanceof KTableNewProcessorSupplier) {
             return ((KTableNewProcessorSupplier<?, ?, K, V>) processorSupplier).view();
         } else {

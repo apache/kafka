@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
@@ -60,7 +61,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
+            final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
                 new KStreamAggregate<>(storeBuilder.name(), initializer, kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
@@ -94,8 +95,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?>  parentProcessor =
-                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
+            final KStreamAggProcessorSupplier<K, ?, K, ?>  parentProcessor =
+                (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
                     windows,
                     storeBuilder.name(),
                     initializer,
@@ -132,8 +133,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
-                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(
+            final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
+                (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(
                     sessionWindows,
                     storeBuilder.name(),
                     initializer,
@@ -170,8 +171,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
-                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(
+            final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
+                (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(
                     slidingWindows,
                     storeBuilder.name(),
                     initializer,
@@ -253,11 +254,10 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             builder);
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
                                                                  final boolean stateCreated,
                                                                  final StoreBuilder<?> storeBuilder,
-                                                                 final org.apache.kafka.streams.processor.ProcessorSupplier<K, ?> kStreamAggregate) {
+                                                                 final ProcessorSupplier<K, ?, K, ?> kStreamAggregate) {
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
         if (!stateCreated) {
             statefulProcessorNode =

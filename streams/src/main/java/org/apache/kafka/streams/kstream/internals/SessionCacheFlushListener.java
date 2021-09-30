@@ -17,8 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -30,8 +29,7 @@ class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Window
     @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    @SuppressWarnings("unchecked")
-    SessionCacheFlushListener(final ProcessorContext context) {
+    SessionCacheFlushListener(final ProcessorContext<Windowed<KOut>, Change<VOut>> context) {
         this.context = (InternalProcessorContext<Windowed<KOut>, Change<VOut>>) context;
         myNode = this.context.currentNode();
     }
@@ -44,7 +42,7 @@ class SessionCacheFlushListener<KOut, VOut> implements CacheFlushListener<Window
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(key.window().end()));
+            context.forward(new Record<>(key, new Change<>(newValue, oldValue), key.window().end()));
         } finally {
             context.setCurrentNode(prev);
         }
