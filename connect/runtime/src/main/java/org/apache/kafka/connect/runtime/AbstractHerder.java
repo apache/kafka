@@ -392,7 +392,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         }
         if (configDef == null) {
-            log.warn("{}.configDef() has returned a null ConfigDef; no further preflight config validation for this converter will be performed", headerConverterClass);
+            log.warn("{}.config() has returned a null ConfigDef; no further preflight config validation for this converter will be performed", headerConverterClass);
             // Older versions of Connect didn't do any header converter validation.
             // Even though header converters are technically required to return a non-null ConfigDef object from HeaderConverter::config,
             // we permit this case in order to avoid breaking existing header converters that, despite not adhering to this requirement,
