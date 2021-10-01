@@ -163,7 +163,8 @@ public class TopologyMetadata {
     }
 
     public TaskConfig getTaskConfigFor(final TaskId taskId) {
-        return lookupBuilderForTask(taskId).topologyConfigs().getTaskConfig();
+        final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
+        return builder.topologyConfigs().getTaskConfig();
     }
 
     public void buildAndRewriteTopology() {
