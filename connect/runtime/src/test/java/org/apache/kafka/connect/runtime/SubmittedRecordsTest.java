@@ -27,11 +27,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class SubmittedRecordsTest {
 
     private static final Map<String, Object> PARTITION1 = Collections.singletonMap("subreddit", "apachekafka");
-    private static final Map<String, Object> PARTITION2 = Collections.singletonMap("subreddit", "pcj");
+    private static final Map<String, Object> PARTITION2 = Collections.singletonMap("subreddit", "adifferentvalue");
     private static final Map<String, Object> PARTITION3 = Collections.singletonMap("subreddit", "asdfqweoicus");
 
     private AtomicInteger offset;
@@ -49,6 +50,7 @@ public class SubmittedRecordsTest {
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
+        assertEmptyRecords();
     }
 
     @Test
@@ -70,9 +72,14 @@ public class SubmittedRecordsTest {
         // Record has been submitted but not yet acked; cannot commit offsets for it yet
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
 
+        assertNoEmptyDeques();
+
         submittedRecord.ack();
         // Record has been acked; can commit offsets for it
         assertEquals(Collections.singletonMap(PARTITION1, offset), submittedRecords.committableOffsets());
+
+        // Everything has been ack'd and consumed; make sure that it's been cleaned up to avoid memory leaks
+        assertEmptyRecords();
 
         // Old offsets should be wiped
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
@@ -93,16 +100,24 @@ public class SubmittedRecordsTest {
         // No records ack'd yet; can't commit any offsets
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
 
+        assertNoEmptyDeques();
+
         partition1Record2.ack();
         // One record has been ack'd, but a record that comes before it and corresponds to the same source partition hasn't been
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
+
+        assertNoEmptyDeques();
 
         partition2Record1.ack();
         // We can commit the first offset for the second partition
         assertEquals(Collections.singletonMap(PARTITION2, partition2Offset1), submittedRecords.committableOffsets());
 
+        assertNoEmptyDeques();
+
         // No new offsets to commit
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
+
+        assertNoEmptyDeques();
 
         partition1Record1.ack();
         partition2Record2.ack();
@@ -112,12 +127,15 @@ public class SubmittedRecordsTest {
         expectedOffsets.put(PARTITION2, partition2Offset2);
         assertEquals(expectedOffsets, submittedRecords.committableOffsets());
 
+        // Everything has been ack'd and consumed; make sure that it's been cleaned up to avoid memory leaks
+        assertEmptyRecords();
+
         // No new offsets to commit
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
     }
 
     @Test
-    public void testRemove() {
+    public void testRemoveLastSubmittedRecord() {
         SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
         submittedRecords.remove(submittedRecord);
 
@@ -130,10 +148,63 @@ public class SubmittedRecordsTest {
     }
 
     @Test
+    public void testRemoveNotLastSubmittedRecord() {
+        Map<String, Object> partition1Offset = newOffset();
+        Map<String, Object> partition2Offset = newOffset();
+
+        SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
+        SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
+
+        assertNoEmptyDeques();
+
+        submittedRecords.remove(recordToRemove);
+
+        assertNoEmptyDeques();
+        // The only record for this partition has been removed; we shouldn't be tracking a deque for it anymore
+        assertRemovedDeques(PARTITION1);
+
+        // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
+        assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
+
+        assertNoEmptyDeques();
+
+        recordToRemove.ack();
+        // Even though the record has somehow been acknowledged, it should not be counted when collecting committable offsets
+        assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
+
+        assertNoEmptyDeques();
+
+        lastSubmittedRecord.ack();
+        // Now that the last-submitted record has been ack'd, we should be able to commit its offset
+        assertEquals(Collections.singletonMap(PARTITION2, partition2Offset), submittedRecords.committableOffsets());
+
+        // Everything has been ack'd and consumed; make sure that it's been cleaned up to avoid memory leaks
+        assertEmptyRecords();
+    }
+
+    @Test
     public void testNullPartitionAndOffset() {
         SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
         submittedRecord.ack();
         assertEquals(Collections.singletonMap(null, null), submittedRecords.committableOffsets());
+        assertNoEmptyDeques();
+    }
+
+    private void assertEmptyRecords() {
+        assertEquals("Internal records map should be completely empty", Collections.emptyMap(), submittedRecords.records);
+    }
+
+    @SafeVarargs
+    private final void assertRemovedDeques(Map<String, ?>... partitions) {
+        for (Map<String, ?> partition : partitions) {
+            assertFalse("Deque for partition " + partition + " should have been cleaned up from internal records map", submittedRecords.records.containsKey(partition));
+        }
+    }
+
+    private void assertNoEmptyDeques() {
+        submittedRecords.records.forEach((partition, deque) ->
+            assertFalse("Empty deque for partition " + partition + " should have been cleaned up from internal records map", deque.isEmpty())
+        );
     }
 
     private Map<String, Object> newOffset() {

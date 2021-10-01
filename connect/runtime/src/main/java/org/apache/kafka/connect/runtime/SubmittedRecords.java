@@ -17,6 +17,9 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Deque;
 import java.util.HashMap;
@@ -25,12 +28,20 @@ import java.util.Map;
 
 /**
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
- * source offsets.
+ * source offsets. Records are tracked in the order in which they are submitted, which should match the order they were
+ * returned from {@link SourceTask#poll()}. The latest-eligible offsets for each source partition can be retrieved via
+ * {@link #committableOffsets()}, the latest-eligible offsets for each source partition can be retrieved, where every
+ * record up to and including the record for each returned offset has been either
+ * {@link SubmittedRecord#ack() acknowledged} or {@link #remove(SubmittedRecord) removed}.
  * Note that this class is not thread-safe, though a {@link SubmittedRecord} can be
  * {@link SubmittedRecord#ack() acknowledged} from a different thread.
  */
 class SubmittedRecords {
-    private final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
+
+    private static final Logger log = LoggerFactory.getLogger(SubmittedRecords.class);
+
+    // Visible for testing
+    final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
 
     public SubmittedRecords() {
         this.records = new HashMap<>();
@@ -66,8 +77,15 @@ class SubmittedRecords {
      * @param record the {@link #submit previously-submitted} record to stop tracking; may not be null
      */
     public void remove(SubmittedRecord record) {
-        records.get(record.partition())
-                .removeLastOccurrence(record);
+        Deque<SubmittedRecord> deque = records.get(record.partition());
+        if (deque == null) {
+            log.warn("Attempted to remove record for partition {}, but no records with that partition are present", record.partition());
+            return;
+        }
+        deque.removeLastOccurrence(record);
+        if (deque.isEmpty()) {
+            records.remove(record.partition());
+        }
     }
 
     /**

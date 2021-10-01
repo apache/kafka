@@ -95,7 +95,7 @@ class WorkerSourceTask extends WorkerTask {
     private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
-    private volatile Map<Map<String, Object>, Map<String, Object>> offsets;
+    private volatile Map<Map<String, Object>, Map<String, Object>> committableOffsets;
     private final SubmittedRecords submittedRecords;
     private final CountDownLatch stopRequestedLatch;
 
@@ -141,7 +141,7 @@ class WorkerSourceTask extends WorkerTask {
         this.closeExecutor = closeExecutor;
 
         this.toSend = null;
-        this.offsets = new HashMap<>();
+        this.committableOffsets = new HashMap<>();
         this.submittedRecords = new SubmittedRecords();
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
@@ -288,8 +288,11 @@ class WorkerSourceTask extends WorkerTask {
 
     private void updateCommittableOffsets() {
         Map<Map<String, Object>, Map<String, Object>> newOffsets = submittedRecords.committableOffsets();
+        if (newOffsets.isEmpty())
+            return;
+
         synchronized (this) {
-            offsets.putAll(newOffsets);
+            committableOffsets.putAll(newOffsets);
         }
     }
 
@@ -470,8 +473,8 @@ class WorkerSourceTask extends WorkerTask {
 
         Map<Map<String, Object>, Map<String, Object>> offsetsToCommit;
         synchronized (this) {
-            offsetsToCommit = this.offsets;
-            this.offsets = new HashMap<>();
+            offsetsToCommit = this.committableOffsets;
+            this.committableOffsets = new HashMap<>();
         }
 
         offsetsToCommit.forEach(offsetWriter::offset);
