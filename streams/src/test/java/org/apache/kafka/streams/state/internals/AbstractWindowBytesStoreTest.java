@@ -436,6 +436,30 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 3L),
                 ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5)))
         );
+        assertEquals(
+            asList(zero, one, two),
+            toList(windowStore.fetch(
+                null,
+                2,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 2L)))
+        );
+        assertEquals(
+            asList(two, three, four, five),
+            toList(windowStore.fetch(
+                2,
+                null,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5L)))
+        );
+        assertEquals(
+            asList(zero, one, two, three, four, five),
+            toList(windowStore.fetch(
+                null,
+                null,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5L)))
+        );
     }
 
     @Test
@@ -505,6 +529,30 @@ public abstract class AbstractWindowBytesStoreTest {
                 3,
                 ofEpochMilli(defaultStartTime + 3L),
                 ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5)))
+        );
+        assertEquals(
+            asList(two, one, zero),
+            toList(windowStore.backwardFetch(
+                null,
+                2,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 2L)))
+        );
+        assertEquals(
+            asList(five, four, three, two),
+            toList(windowStore.backwardFetch(
+                2,
+                null,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5L)))
+        );
+        assertEquals(
+            asList(five, four, three, two, one, zero),
+            toList(windowStore.backwardFetch(
+                null,
+                null,
+                ofEpochMilli(defaultStartTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(defaultStartTime + WINDOW_SIZE + 5L)))
         );
     }
 
@@ -858,16 +906,6 @@ public abstract class AbstractWindowBytesStoreTest {
     @Test
     public void shouldThrowNullPointerExceptionOnGetNullKey() {
         assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, 2, ofEpochMilli(1L), ofEpochMilli(2L)));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        assertThrows(NullPointerException.class, () -> windowStore.fetch(1, null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test

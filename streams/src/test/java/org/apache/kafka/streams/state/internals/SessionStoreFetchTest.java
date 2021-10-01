@@ -20,7 +20,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -31,16 +30,14 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.TimeWindowedKStream;
-import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -56,19 +53,16 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
-public class WindowStoreFetchTest {
-    private enum StoreType { InMemory, RocksDB, Timed };
+public class SessionStoreFetchTest {
+    private enum StoreType { InMemory, RocksDB };
     private static final String STORE_NAME = "store";
     private static final int DATA_SIZE = 5;
     private static final long WINDOW_SIZE = 500L;
@@ -82,18 +76,8 @@ public class WindowStoreFetchTest {
     private LinkedList<KeyValue<Windowed<String>, Long>> expectedRecords;
     private LinkedList<KeyValue<String, String>> records;
     private Properties streamsConfig;
-    private String low;
-    private String high;
-    private String middle;
-    private String innerLow;
-    private String innerHigh;
-    private String innerLowBetween;
-    private String innerHighBetween;
-    private String storeName;
 
-    private TimeWindowedKStream<String, String> windowedStream;
-
-    public WindowStoreFetchTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
+    public SessionStoreFetchTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
         this.storeType = storeType;
         this.enableLogging = enableLogging;
         this.enableCaching = enableCaching;
@@ -103,39 +87,19 @@ public class WindowStoreFetchTest {
         this.expectedRecords = new LinkedList<>();
         final int m = DATA_SIZE / 2;
         for (int i = 0; i < DATA_SIZE; i++) {
-            final String key = "key-" + i * 2;
-            final String value = "val-" + i * 2;
+            final String keyStr = i < m ? "a" : "b";
+            final String key = "key-" + keyStr;
+            final String key2 = "key-" + keyStr + keyStr;
+            final String value = "val-" + i;
             final KeyValue<String, String> r = new KeyValue<>(key, value);
+            final KeyValue<String, String> r2 = new KeyValue<>(key2, value);
             records.add(r);
-            records.add(r);
-            // expected the count of each key is 2
-            final long windowStartTime = i < m ? 0 : WINDOW_SIZE;
-            expectedRecords.add(new KeyValue<>(new Windowed<>(key, new TimeWindow(windowStartTime, windowStartTime + WINDOW_SIZE)), 2L));
-            high = key;
-            if (low == null) {
-                low = key;
-            }
-            if (i == m) {
-                middle = key;
-            }
-            if (i == 1) {
-                innerLow = key;
-                final int index = i * 2 - 1;
-                innerLowBetween = "key-" + index;
-            }
-            if (i == DATA_SIZE - 2) {
-                innerHigh = key;
-                final int index = i * 2 + 1;
-                innerHighBetween = "key-" + index;
-            }
+            records.add(r2);
         }
-        Assert.assertNotNull(low);
-        Assert.assertNotNull(high);
-        Assert.assertNotNull(middle);
-        Assert.assertNotNull(innerLow);
-        Assert.assertNotNull(innerHigh);
-        Assert.assertNotNull(innerLowBetween);
-        Assert.assertNotNull(innerHighBetween);
+        expectedRecords.add(new KeyValue<>(new Windowed<>("key-a", new SessionWindow(0, 500)), 4L));
+        expectedRecords.add(new KeyValue<>(new Windowed<>("key-aa", new SessionWindow(0, 500)), 4L));
+        expectedRecords.add(new KeyValue<>(new Windowed<>("key-b", new SessionWindow(1500, 2000)), 6L));
+        expectedRecords.add(new KeyValue<>(new Windowed<>("key-bb", new SessionWindow(1500, 2000)), 6L));
     }
 
     @Rule
@@ -143,7 +107,7 @@ public class WindowStoreFetchTest {
 
     @Parameterized.Parameters(name = "storeType={0}, enableLogging={1}, enableCaching={2}, forward={3}")
     public static Collection<Object[]> data() {
-        final List<StoreType> types = Arrays.asList(StoreType.InMemory, StoreType.RocksDB, StoreType.Timed);
+        final List<StoreType> types = Arrays.asList(StoreType.InMemory, StoreType.RocksDB);
         final List<Boolean> logging = Arrays.asList(true, false);
         final List<Boolean> caching = Arrays.asList(true, false);
         final List<Boolean> forward = Arrays.asList(true, false);
@@ -159,14 +123,14 @@ public class WindowStoreFetchTest {
 
     @Test
     public void testStoreConfig() {
-        final Materialized<String, Long, WindowStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, STORE_NAME, enableLogging, enableCaching);
+        final Materialized<String, Long, SessionStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, STORE_NAME, enableLogging, enableCaching);
         //Create topology: table from input topic
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> stream = builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()));
         stream.
             groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(WINDOW_SIZE)))
             .count(stateStoreConfig)
             .toStream()
             .to("output");
@@ -177,20 +141,21 @@ public class WindowStoreFetchTest {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());
-            final WindowStore<String, Long> stateStore = driver.getWindowStore(STORE_NAME);
+            final SessionStore<String, Long> stateStore = driver.getSessionStore(STORE_NAME);
 
             //write some data
             final int medium = DATA_SIZE / 2 * 2;
             for (int i = 0; i < records.size(); i++) {
                 final KeyValue<String, String> kv = records.get(i);
-                final long windowStartTime = i < medium ? 0 : WINDOW_SIZE;
-                input.pipeInput(kv.key, kv.value, windowStartTime + i);
+                final long windowStartTime = i < medium ? 0 : 1500;
+                input.pipeInput(kv.key, kv.value, windowStartTime);
+                input.pipeInput(kv.key, kv.value, windowStartTime + WINDOW_SIZE);
             }
 
             // query the state store
             try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-                stateStore.fetchAll(0, Long.MAX_VALUE) :
-                stateStore.backwardFetchAll(0, Long.MAX_VALUE)) {
+                stateStore.fetch("key-a", "key-bb") :
+                stateStore.backwardFetch("key-a", "key-bb")) {
 
                 final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                     expectedRecords.iterator() :
@@ -200,8 +165,8 @@ public class WindowStoreFetchTest {
             }
 
             try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-                stateStore.fetch(null, null, 0, Long.MAX_VALUE) :
-                stateStore.backwardFetch(null, null, 0, Long.MAX_VALUE)) {
+                stateStore.findSessions("key-a", "key-bb", 0L, Long.MAX_VALUE) :
+                stateStore.backwardFindSessions("key-a", "key-bb", 0L, Long.MAX_VALUE)) {
 
                 final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                     expectedRecords.iterator() :
@@ -209,39 +174,6 @@ public class WindowStoreFetchTest {
 
                 TestUtils.checkEquals(scanIterator, dataIterator);
             }
-
-            testRange("range", stateStore, innerLow, innerHigh, forward);
-            testRange("until", stateStore, null, middle, forward);
-            testRange("from", stateStore, middle, null, forward);
-
-            testRange("untilBetween", stateStore, null, innerHighBetween, forward);
-            testRange("fromBetween", stateStore, innerLowBetween, null, forward);
-        }
-    }
-
-    private List<KeyValue<Windowed<String>, Long>> filterList(final KeyValueIterator<Windowed<String>, Long> iterator, final String from, final String to) {
-        final Predicate<KeyValue<Windowed<String>, Long>> pred = new Predicate<KeyValue<Windowed<String>, Long>>() {
-            @Override
-            public boolean test(final KeyValue<Windowed<String>, Long> elem) {
-                if (from != null && elem.key.key().compareTo(from) < 0) {
-                    return false;
-                }
-                if (to != null && elem.key.key().compareTo(to) > 0) {
-                    return false;
-                }
-                return elem != null;
-            }
-        };
-
-        return Utils.toList(iterator, pred);
-    }
-
-    private void testRange(final String name, final WindowStore<String, Long> store, final String from, final String to, final boolean forward) {
-        try (final KeyValueIterator<Windowed<String>, Long> resultIterator = forward ? store.fetch(from, to, 0, Long.MAX_VALUE) : store.backwardFetch(from, to, 0, Long.MAX_VALUE);
-             final KeyValueIterator<Windowed<String>, Long> expectedIterator = forward ? store.fetchAll(0, Long.MAX_VALUE) : store.backwardFetchAll(0, Long.MAX_VALUE)) {
-            final List<KeyValue<Windowed<String>, Long>> result = Utils.toList(resultIterator);
-            final List<KeyValue<Windowed<String>, Long>> expected = filterList(expectedIterator, from, to);
-            assertThat(result, is(expected));
         }
     }
 
@@ -269,29 +201,19 @@ public class WindowStoreFetchTest {
         return result;
     }
 
-    private Materialized<String, Long, WindowStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final String name, final boolean cachingEnabled, final boolean loggingEnabled) {
-        final Supplier<WindowBytesStoreSupplier> createStore = () -> {
+    private Materialized<String, Long, SessionStore<Bytes, byte[]>> getStoreConfig(final StoreType type, final String name, final boolean cachingEnabled, final boolean loggingEnabled) {
+        final Supplier<SessionBytesStoreSupplier> createStore = () -> {
             if (type == StoreType.InMemory) {
-                return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofMillis(RETENTION_MS),
-                    Duration.ofMillis(WINDOW_SIZE),
-                    false);
+                return Stores.inMemorySessionStore(STORE_NAME, Duration.ofMillis(RETENTION_MS));
             } else if (type == StoreType.RocksDB) {
-                return Stores.persistentWindowStore(STORE_NAME, Duration.ofMillis(RETENTION_MS),
-                    Duration.ofMillis(WINDOW_SIZE),
-                    false);
-            } else if (type == StoreType.Timed) {
-                return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofMillis(RETENTION_MS),
-                    Duration.ofMillis(WINDOW_SIZE),
-                    false);
+                return Stores.persistentSessionStore(STORE_NAME, Duration.ofMillis(RETENTION_MS));
             } else {
-                return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofMillis(RETENTION_MS),
-                    Duration.ofMillis(WINDOW_SIZE),
-                    false);
+                return Stores.inMemorySessionStore(STORE_NAME, Duration.ofMillis(RETENTION_MS));
             }
         };
 
-        final WindowBytesStoreSupplier stateStoreSupplier = createStore.get();
-        final Materialized<String, Long, WindowStore<Bytes, byte[]>> stateStoreConfig = Materialized
+        final SessionBytesStoreSupplier stateStoreSupplier = createStore.get();
+        final Materialized<String, Long, SessionStore<Bytes, byte[]>> stateStoreConfig = Materialized
                 .<String, Long>as(stateStoreSupplier)
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Long());
