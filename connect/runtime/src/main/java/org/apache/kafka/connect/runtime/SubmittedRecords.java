@@ -38,9 +38,9 @@ class SubmittedRecords {
     /**
      * Enqueue a new source record before dispatching it to a producer.
      * @param record the record about to be dispatched; may not be null but may have a null
-     * {@link SourceRecord#sourcePartition()} and/or {@link SourceRecord#sourceOffset()}
+     *               {@link SourceRecord#sourcePartition()} and/or {@link SourceRecord#sourceOffset()}
      * @return a {@link SubmittedRecord} that can be either {@link SubmittedRecord#ack() acknowledged} once ack'd by
-     * the producer, or {@link #remove removed} if synchronously rejected by the producer
+     *         the producer, or {@link #remove removed} if synchronously rejected by the producer
      */
     @SuppressWarnings("unchecked")
     public SubmittedRecord submit(SourceRecord record) {
