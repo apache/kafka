@@ -38,6 +38,10 @@ class SubmittedRecords {
 
     /**
      * Enqueue a new source record before dispatching it to a producer.
+     * The returned {@link SubmittedRecord} should either be {@link SubmittedRecord#ack() acknowledged} in the
+     * producer callback, or {@link #remove(SubmittedRecord) removed} if the record could not be successfully
+     * sent to the producer.
+     * 
      * @param record the record about to be dispatched; may not be null but may have a null
      *               {@link SourceRecord#sourcePartition()} and/or {@link SourceRecord#sourceOffset()}
      * @return a {@link SubmittedRecord} that can be either {@link SubmittedRecord#ack() acknowledged} once ack'd by
