@@ -85,35 +85,56 @@ public class ConnectorValidationIntegrationTest {
     }
 
     @Test
-    public void testSinkConnectorHasNeitherTopicsListNorTopicsRegex() {
+    public void testSinkConnectorHasNeitherTopicsListNorTopicsRegex() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
         config.remove(TOPICS_CONFIG);
         config.remove(TOPICS_REGEX_CONFIG);
-        connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+            config.get(CONNECTOR_CLASS_CONFIG),
+            config,
+            2, // One error each for topics list and topics regex
+            "Sink connector config should fail preflight validation when neither topics list nor topics regex are provided"
+        );
     }
 
     @Test
-    public void testSinkConnectorHasBothTopicsListAndTopicsRegex() {
+    public void testSinkConnectorHasBothTopicsListAndTopicsRegex() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
         config.put(TOPICS_CONFIG, "t1");
         config.put(TOPICS_REGEX_CONFIG, "r.*");
-        connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+            config.get(CONNECTOR_CLASS_CONFIG),
+            config,
+            2, // One error each for topics list and topics regex
+            "Sink connector config should fail preflight validation when both topics list and topics regex are provided"
+        );
     }
 
     @Test
-    public void testSinkConnectorDeadLetterQueueTopicInTopicsList() {
+    public void testSinkConnectorDeadLetterQueueTopicInTopicsList() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
         config.put(TOPICS_CONFIG, "t1");
         config.put(DLQ_TOPIC_NAME_CONFIG, "t1");
-        connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+            config.get(CONNECTOR_CLASS_CONFIG),
+            config,
+            1,
+            "Sink connector config should fail preflight validation when DLQ topic is included in topics list"
+        );
     }
 
     @Test
-    public void testSinkConnectorDeadLetterQueueTopicMatchesTopicsRegex() {
+    public void testSinkConnectorDeadLetterQueueTopicMatchesTopicsRegex() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
         config.put(TOPICS_REGEX_CONFIG, "r.*");
         config.put(DLQ_TOPIC_NAME_CONFIG, "ruh.roh");
-        connect.validateConnectorConfig(config.get(CONNECTOR_CLASS_CONFIG), config);
+        config.remove(TOPICS_CONFIG);
+        connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
+            config.get(CONNECTOR_CLASS_CONFIG),
+            config,
+            1,
+            "Sink connector config should fail preflight validation when DLQ topic matches topics regex"
+        );
     }
 
     @Test
