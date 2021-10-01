@@ -672,10 +672,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId, final Timer pollTimer) {
+    protected void onJoinPrepare(int generation, String memberId, final Timer offsetCommitTimer) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(pollTimer);
+        maybeAutoCommitOffsetsSync(offsetCommitTimer);
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -996,11 +996,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return true;
 
+        boolean shouldCleanUpConsumedOffsets = !checkConsumedOffsetsAreValid(offsets);
         do {
             if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
                 return false;
             }
 
+            if (shouldCleanUpConsumedOffsets) {
+                cleanUpConsumedOffsets(offsets);
+                shouldCleanUpConsumedOffsets = false;
+            }
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future, timer);
 
@@ -1019,7 +1024,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw future.exception();
 
             if(future.exception() instanceof UnknownTopicOrPartitionException)
-                cleanUpConsumedOffsets(offsets);
+                shouldCleanUpConsumedOffsets = true;
 
             timer.sleep(rebalanceConfig.retryBackoffMs);
         } while (timer.notExpired());
@@ -1059,7 +1064,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void maybeAutoCommitOffsetsSync(Timer timer) {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
-
             try {
                 log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
                 if (!commitOffsetsSync(allConsumedOffsets, timer))
@@ -1075,8 +1079,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
+    private boolean checkConsumedOffsetsAreValid(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
+        if (partitionOffsetsToBeCommitted.isEmpty())
+            return true;
 
+        Set<String> validTopics = metadata.fetch().topics();
+        for (TopicPartition topicPartition : partitionOffsetsToBeCommitted.keySet()) {
+            if (!validTopics.contains(topicPartition.topic())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
         if (partitionOffsetsToBeCommitted.isEmpty())
             return;
 
@@ -1084,25 +1100,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> toGiveUpTopicPartitions = new HashSet<>();
 
         Iterator<TopicPartition> iterator = partitionOffsetsToBeCommitted.keySet().iterator();
-
         while (iterator.hasNext()) {
-
             TopicPartition topicPartition = iterator.next();
-
             if (!validTopics.contains(topicPartition.topic())) {
-
                 toGiveUpTopicPartitions.add(topicPartition);
                 iterator.remove();
             }
-
         }
 
         if (toGiveUpTopicPartitions.size() > 0) {
-
-            //Because toGiveUpTopicPartitions may receive `UnknownTopicOrPartitionException` when submitting their offsets.
-            //We are prepared to abandon them. The worst effect is that these partitions may repeatedly consume some messages
+            //We might get `UnknownTopicOrPartitionException` after submitting their offsets due to topics been deleted. We should update the offsets list here.
+            // The worst effect is that we may keep retrying to commit the offsets for the topics not existed any more, before timeout reached.
             log.warn("Synchronous auto-commit of offsets {} will be abandoned", toGiveUpTopicPartitions);
-
         }
     }
 

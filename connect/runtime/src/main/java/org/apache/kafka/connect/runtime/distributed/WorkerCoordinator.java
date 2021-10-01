@@ -218,7 +218,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId, final Timer pollTimer) {
+    protected void onJoinPrepare(int generation, String memberId, final Timer offsetCommitTimer) {
         log.info("Rebalance started");
         leaderState(null);
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;

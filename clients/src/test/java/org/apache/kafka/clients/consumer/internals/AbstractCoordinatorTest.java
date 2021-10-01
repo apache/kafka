@@ -278,7 +278,7 @@ public class AbstractCoordinatorTest {
         ExecutorService executor = Executors.newFixedThreadPool(1);
         try {
             Timer firstAttemptTimer = mockTime.timer(REQUEST_TIMEOUT_MS);
-            Future<Boolean> firstAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(firstAttemptTimer, mockTime.timer(0)));
+            Future<Boolean> firstAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(firstAttemptTimer, mockTime.timer(10)));
 
             mockTime.sleep(REQUEST_TIMEOUT_MS);
             assertFalse(firstAttempt.get());
@@ -288,7 +288,7 @@ public class AbstractCoordinatorTest {
             mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
             Timer secondAttemptTimer = mockTime.timer(REQUEST_TIMEOUT_MS);
-            Future<Boolean> secondAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(secondAttemptTimer, mockTime.timer(0)));
+            Future<Boolean> secondAttempt = executor.submit(() -> coordinator.joinGroupIfNeeded(secondAttemptTimer, mockTime.timer(10)));
 
             assertTrue(secondAttempt.get());
         } finally {
@@ -614,7 +614,7 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, PROTOCOL_NAME));
 
         // No exception shall be thrown as the generation is reset.
-        coordinator.joinGroupIfNeeded(mockTime.timer(100L), mockTime.timer(0));
+        coordinator.joinGroupIfNeeded(mockTime.timer(100L), mockTime.timer(10));
     }
 
     private boolean joinGroupWithProtocolTypeAndName(String joinGroupResponseProtocolType,
@@ -643,7 +643,7 @@ public class AbstractCoordinatorTest {
                 && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
 
-        return coordinator.joinGroupIfNeeded(mockTime.timer(5000L), mockTime.timer(0));
+        return coordinator.joinGroupIfNeeded(mockTime.timer(5000L), mockTime.timer(10));
     }
 
     @Test
@@ -874,7 +874,7 @@ public class AbstractCoordinatorTest {
         coordinator.requestRejoin("test");
 
         TestUtils.waitForCondition(() -> {
-            coordinator.ensureActiveGroup(new MockTime(1L).timer(100L), new MockTime(1L).timer(0L));
+            coordinator.ensureActiveGroup(new MockTime(1L).timer(100L), new MockTime(1L).timer(10L));
             return !coordinator.heartbeat().hasInflight();
         },
             2000,
@@ -1574,7 +1574,7 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected void onJoinPrepare(int generation, String memberId, Timer pollTimer) {
+        protected void onJoinPrepare(int generation, String memberId, Timer offsetCommitTimer) {
             onJoinPrepareInvokes++;
         }
 
