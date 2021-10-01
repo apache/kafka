@@ -1505,7 +1505,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * Flush all local log segments
    */
-  def flush(): Unit = flush(logEndOffset)
+  def flush(): Unit = flush(logEndOffset + 1)
 
   /**
    * Flush local log segments for all offsets up to offset-1
