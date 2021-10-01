@@ -66,7 +66,7 @@ class SubmittedRecords {
     }
 
     /**
-     * Clear out any acknowledged records and return the latest offset for each source partition that can be committed.
+     * Clear out any acknowledged records at the head of the deques and return the latest offset for each source partition that can be committed.
      * Note that this may take some time to complete if a large number of records has built up, which may occur if a
      * Kafka partition is offline and all records targeting that partition go unacknowledged while records targeting
      * other partitions continue to be dispatched to the producer and sent successfully
