@@ -117,6 +117,7 @@ class SubmittedRecords {
 
         /**
          * Acknowledge this record; signals that its offset may be safely committed.
+         * This is safe to be called from a different thread than what called {@link SubmittedRecords#submit(SourceRecord)}.
          */
         public void ack() {
             this.acked = true;
