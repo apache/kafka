@@ -17,6 +17,7 @@
 package kafka.log
 
 import java.io.File
+
 import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.server.epoch.EpochEntry
 import kafka.server.epoch.LeaderEpochFileCache
@@ -28,7 +29,6 @@ import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import java.nio.file.NoSuchFileException
 import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -586,49 +586,4 @@ class LogSegmentTest {
     Utils.delete(tempDir)
   }
 
-  @Test
-  def testSanityCheckThrowsDuringMissingOffsetIndex(): Unit = {
-    // Missing offset index for non-active segment should throw
-    val seg = createSegment(0)
-    assertFalse(seg.lazyOffsetIndex.file.exists())
-    assertTrue(seg.size == 0)
-    for (timeIndexFileNewlyCreated <- Array(true, false)) {
-      assertThrows(classOf[NoSuchFileException], () => seg.sanityCheck(timeIndexFileNewlyCreated = timeIndexFileNewlyCreated, isActiveSegment = false))
-    }
-
-    // Missing offset index for non-empty active segment should throw
-    seg.append(0, RecordBatch.NO_TIMESTAMP, -1L, LogTestUtils.records(0, "hello"))
-    assertTrue(seg.size > 0)
-    val offsetIndex = seg.lazyOffsetIndex.get
-    assertTrue(offsetIndex.file.exists())
-    offsetIndex.deleteIfExists()
-    for (timeIndexFileNewlyCreated <- Array(true, false)) {
-      assertThrows(classOf[NoSuchFileException], () => seg.sanityCheck(timeIndexFileNewlyCreated = timeIndexFileNewlyCreated, isActiveSegment = true))
-    }
-  }
-
-  @Test
-  def testSanityCheckResizesTimeIndex(): Unit = {
-    val seg = createSegment(0)
-    assertFalse(LocalLog.timeIndexFile(logDir, 0).exists())
-    // Create the lazy offset index to bypass the file existence check in LogSegment.sanityCheck()
-    seg.lazyOffsetIndex.get
-
-    seg.sanityCheck(timeIndexFileNewlyCreated = true, isActiveSegment = false)
-
-    assertTrue(LocalLog.timeIndexFile(logDir, 0).exists())
-    assertTrue(seg.timeIndex.sizeInBytes == 0)
-  }
-
-  @Test
-  def testSanityCheckTransactionIndexCheck(): Unit = {
-    val seg = createSegment(100)
-    seg.append(100, RecordBatch.NO_TIMESTAMP, -1L, LogTestUtils.records(100, "hello"))
-    assertTrue(seg.lazyTimeIndex.file.exists())
-    assertTrue(seg.lazyOffsetIndex.file.exists())
-    seg.sanityCheck(timeIndexFileNewlyCreated = false, isActiveSegment = false)
-    // Intentionally corrupt the transaction index causing LogSegment.sanityCheck() to throw
-    seg.txnIndex.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11))
-    assertThrows(classOf[CorruptIndexException], () => seg.sanityCheck(timeIndexFileNewlyCreated = false, isActiveSegment = false))
-  }
 }
