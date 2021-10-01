@@ -187,6 +187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // LinkedIn internal request types
         case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
         case ApiKeys.LI_COMBINED_CONTROL => handleLiCombinedControlRequest(request)
+        case ApiKeys.LI_MOVE_CONTROLLER => handleMoveControllerRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3142,5 +3143,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     responseData.setStopReplicaPartitionErrors(stopReplicaPartitionErrors)
 
     sendResponseExemptThrottle(request, new LiCombinedControlResponse(responseData))
+  }
+
+  def handleMoveControllerRequest(request: RequestChannel.Request): Unit = {
+    authorizeClusterOperation(request, CLUSTER_ACTION)
+    val moveControllerRequest = request.body[LiMoveControllerRequest]
+
+    val moveControllerResponse = try {
+      zkClient.deleteControllerRaw()
+      LiMoveControllerResponse.prepareResponse(Errors.NONE)
+    } catch {
+      case throwable: Throwable  =>
+        moveControllerRequest.getErrorResponse(throwable)
+    }
+
+    sendResponseExemptThrottle(request, moveControllerResponse)
   }
 }

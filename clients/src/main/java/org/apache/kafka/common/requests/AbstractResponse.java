@@ -184,6 +184,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new LiControlledShutdownSkipSafetyCheckResponse(struct, version);
             case LI_COMBINED_CONTROL:
                 return new LiCombinedControlResponse(struct, version);
+            case LI_MOVE_CONTROLLER:
+                return new LiMoveControllerResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

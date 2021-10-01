@@ -59,6 +59,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LiMoveControllerRequestData;
+import org.apache.kafka.common.message.LiMoveControllerResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -222,7 +224,8 @@ public enum ApiKeys {
     // LinkedIn API keys for APIs not yet upstreamed.
     LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK(1000, "LiControlledShutdownSkipSafetyCheck", true, LiControlledShutdownSkipSafetyCheckRequestData.SCHEMAS, LiControlledShutdownSkipSafetyCheckResponseData.SCHEMAS),
 
-    LI_COMBINED_CONTROL(1001, "LiCombinedControl", true, LiCombinedControlRequestData.SCHEMAS, LiCombinedControlResponseData.SCHEMAS);
+    LI_COMBINED_CONTROL(1001, "LiCombinedControl", true, LiCombinedControlRequestData.SCHEMAS, LiCombinedControlResponseData.SCHEMAS),
+    LI_MOVE_CONTROLLER(1002, "LiMoveController", true, LiMoveControllerRequestData.SCHEMAS, LiMoveControllerResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

@@ -491,6 +491,11 @@ public class MockAdminClient extends AdminClient {
         return null;
     }
 
+    @Override
+    public MoveControllerResult moveController(MoveControllerOptions options) {
+        return null;
+    }
+
     public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
         TopicMetadata metadata = allTopics.get(topicName);
         if (metadata == null) {
