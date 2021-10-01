@@ -26,7 +26,8 @@ import java.util.Map;
 /**
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
  * source offsets.
- * Note that this class is not thread-safe.
+ * Note that this class is not thread-safe, though a {@link SubmittedRecord} can be
+ * {@link SubmittedRecord#ack() acknowledged} from a different thread.
  */
 class SubmittedRecords {
     private final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
