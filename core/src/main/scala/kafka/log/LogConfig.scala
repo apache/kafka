@@ -61,6 +61,7 @@ object Defaults {
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
+  val CompressionLevel = kafka.server.Defaults.CompressionLevel
   val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
@@ -101,6 +102,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val uncleanLeaderElectionEnable = getBoolean(LogConfig.UncleanLeaderElectionEnableProp)
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase(Locale.ROOT)
+  val compressionLevel = getString(LogConfig.CompressionLevelProp)
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
@@ -187,12 +189,22 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
    * Returns per-codec [[CompressionConfig]] for given `compressionType`.
    */
   private def getCompressionConfig(compressionType: CompressionType): CompressionConfig = {
-    compressionType match {
-      case CompressionType.NONE => CompressionConfig.NONE
-      case CompressionType.GZIP => CompressionConfig.gzip.build
-      case CompressionType.SNAPPY => CompressionConfig.snappy.build
-      case CompressionType.LZ4 => CompressionConfig.lz4.build
-      case CompressionType.ZSTD => CompressionConfig.zstd.build
+    if (this.compressionLevel.isEmpty) {
+      compressionType match {
+        case CompressionType.NONE => CompressionConfig.NONE
+        case CompressionType.GZIP => CompressionConfig.gzip.build
+        case CompressionType.SNAPPY => CompressionConfig.snappy.build
+        case CompressionType.LZ4 => CompressionConfig.lz4.build
+        case CompressionType.ZSTD => CompressionConfig.zstd.build
+      }
+    } else {
+      compressionType match {
+        case CompressionType.NONE => CompressionConfig.NONE
+        case CompressionType.GZIP => CompressionConfig.gzip.setLevel(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.SNAPPY => CompressionConfig.snappy.build
+        case CompressionType.LZ4 => CompressionConfig.lz4.setLevel(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.ZSTD => CompressionConfig.zstd.setLevel(Integer.parseInt(this.compressionLevel)).build
+      }
     }
   }
 
@@ -242,6 +254,7 @@ object LogConfig {
   val UncleanLeaderElectionEnableProp = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG
   val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
   val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
+  val CompressionLevelProp = TopicConfig.COMPRESSION_LEVEL_CONFIG
   val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
@@ -277,6 +290,7 @@ object LogConfig {
   val UncleanLeaderElectionEnableDoc = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC
   val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
   val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
+  val CompressionLevelDoc = TopicConfig.COMPRESSION_LEVEL_DOC
   val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
@@ -395,6 +409,7 @@ object LogConfig {
         KafkaConfig.MinInSyncReplicasProp)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*),
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
+      .define(CompressionLevelProp, STRING, Defaults.CompressionLevel, MEDIUM, CompressionLevelDoc, KafkaConfig.CompressionLevelProp)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable, MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)
       .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, new MetadataVersionValidator(), MEDIUM, MessageFormatVersionDoc,
@@ -533,6 +548,8 @@ object LogConfig {
       new ConfigSynonym(KafkaConfig.MinInSyncReplicasProp)),
     CompressionTypeProp -> asList(
       new ConfigSynonym(KafkaConfig.CompressionTypeProp)),
+    CompressionLevelProp -> asList(
+      new ConfigSynonym(KafkaConfig.CompressionLevelProp)),
     PreAllocateEnableProp -> asList(
       new ConfigSynonym(KafkaConfig.LogPreAllocateProp)),
     MessageFormatVersionProp -> asList(
@@ -581,6 +598,7 @@ object LogConfig {
     logProps.put(CleanupPolicyProp, kafkaConfig.logCleanupPolicy)
     logProps.put(MinInSyncReplicasProp, kafkaConfig.minInSyncReplicas)
     logProps.put(CompressionTypeProp, kafkaConfig.compressionType)
+    logProps.put(CompressionLevelProp, kafkaConfig.compressionLevel)
     logProps.put(UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
     logProps.put(PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
     logProps.put(MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)

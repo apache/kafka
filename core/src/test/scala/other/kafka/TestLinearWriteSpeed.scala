@@ -22,11 +22,11 @@ import java.nio._
 import java.nio.channels._
 import java.nio.file.StandardOpenOption
 import java.util.{Properties, Random}
-
 import joptsimple._
 import kafka.log._
 import kafka.message._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.utils.Implicits.PropertiesOps
 import kafka.utils._
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.record._
@@ -113,7 +113,8 @@ object TestLinearWriteSpeed {
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
-    val properties = new Properties(extraProps)
+    val properties = new Properties()
+    properties ++= extraProps
     properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000")
     properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
