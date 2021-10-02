@@ -29,6 +29,16 @@ import java.nio.ByteBuffer;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 
 public final class LZ4Config extends CompressionConfig {
+    public static final int MIN_BLOCK_SIZE = KafkaLZ4BlockOutputStream.BLOCKSIZE_64KB;
+    public static final int MAX_BLOCK_SIZE = KafkaLZ4BlockOutputStream.BLOCKSIZE_4MB;
+    public static final int DEFAULT_BLOCK_SIZE = MIN_BLOCK_SIZE;
+
+    private final int blockSize;
+
+    private LZ4Config(int blockSize) {
+        this.blockSize = blockSize;
+    }
+
     @Override
     public CompressionType getType() {
         return CompressionType.LZ4;
@@ -37,7 +47,7 @@ public final class LZ4Config extends CompressionConfig {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
         try {
-            return new KafkaLZ4BlockOutputStream(buffer, messageVersion == MAGIC_VALUE_V0);
+            return new KafkaLZ4BlockOutputStream(buffer, this.blockSize, false, messageVersion == MAGIC_VALUE_V0);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -54,9 +64,20 @@ public final class LZ4Config extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<LZ4Config> {
+        private int blockSize = DEFAULT_BLOCK_SIZE;
+
+        public LZ4Config.Builder setBlockSize(int blockSize) {
+            if (blockSize < MIN_BLOCK_SIZE || MAX_BLOCK_SIZE < blockSize) {
+                throw new IllegalArgumentException("lz4 doesn't support given block size: " + blockSize);
+            }
+
+            this.blockSize = blockSize;
+            return this;
+        }
+
         @Override
         public LZ4Config build() {
-            return new LZ4Config();
+            return new LZ4Config(this.blockSize);
         }
     }
 }

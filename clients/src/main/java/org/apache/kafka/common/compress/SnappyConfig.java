@@ -30,7 +30,14 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 public final class SnappyConfig extends CompressionConfig {
-    private SnappyConfig() {}
+    public static final int MIN_BLOCK_SIZE = 1024;
+    public static final int DEFAULT_BLOCK_SIZE = 32 * 1024;
+
+    private final int blockSize;
+
+    private SnappyConfig(int blockSize) {
+        this.blockSize = blockSize;
+    }
 
     public CompressionType getType() {
         return CompressionType.SNAPPY;
@@ -39,7 +46,7 @@ public final class SnappyConfig extends CompressionConfig {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
         try {
-            return new SnappyOutputStream(bufferStream);
+            return new SnappyOutputStream(bufferStream, this.blockSize);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -54,9 +61,20 @@ public final class SnappyConfig extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<SnappyConfig> {
+        private int blockSize = DEFAULT_BLOCK_SIZE;
+
+        public Builder setBlockSize(int blockSize) {
+            if (blockSize < MIN_BLOCK_SIZE) {
+                throw new IllegalArgumentException("snappy doesn't support given block size: " + blockSize);
+            }
+
+            this.blockSize = blockSize;
+            return this;
+        }
+
         @Override
         public SnappyConfig build() {
-            return new SnappyConfig();
+            return new SnappyConfig(this.blockSize);
         }
     }
 }

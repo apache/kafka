@@ -32,6 +32,15 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public final class GzipConfig extends CompressionConfig {
+    public static final int MIN_BUFFER_SIZE = 512;
+    public static final int DEFAULT_BUFFER_SIZE = 8 * 1024;
+
+    private final int bufferSize;
+
+    private GzipConfig(int bufferSize) {
+        this.bufferSize = bufferSize;
+    }
+
     public CompressionType getType() {
         return CompressionType.GZIP;
     }
@@ -40,9 +49,9 @@ public final class GzipConfig extends CompressionConfig {
     public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
         try {
             // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
-            // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
+            // bufferSize (8 KB, 0.5 KB by gzip default) to ensure reasonable performance in cases where the caller passes a small
             // number of bytes to write (potentially a single byte)
-            return new BufferedOutputStream(new GZIPOutputStream(buffer, 8 * 1024), 16 * 1024);
+            return new BufferedOutputStream(new GZIPOutputStream(buffer, this.bufferSize), 16 * 1024);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -52,9 +61,9 @@ public final class GzipConfig extends CompressionConfig {
     public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
-            // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
+            // bufferSize (8 KB, 0.5 KB by gzip default) to ensure reasonable performance in cases where the caller reads a small
             // number of bytes (potentially a single byte)
-            return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
+            return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), this.bufferSize),
                 16 * 1024);
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -62,9 +71,20 @@ public final class GzipConfig extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<GzipConfig> {
+        private int bufferSize = DEFAULT_BUFFER_SIZE;
+
+        public Builder setBufferSize(int bufferSize) {
+            if (bufferSize < MIN_BUFFER_SIZE) {
+                throw new IllegalArgumentException("gzip doesn't support given buffer size: " + bufferSize);
+            }
+
+            this.bufferSize = bufferSize;
+            return this;
+        }
+
         @Override
         public GzipConfig build() {
-            return new GzipConfig();
+            return new GzipConfig(this.bufferSize);
         }
     }
 }

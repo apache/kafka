@@ -855,6 +855,14 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
         case LogConfig.CompressionTypeProp =>
           assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
+        case LogConfig.CompressionGzipBufferProp =>
+          assertDynamic(kafkaConfigProp, 512 + 1, () => config.compressionGzipBuffer)
+        case LogConfig.CompressionSnappyBlockProp =>
+          assertDynamic(kafkaConfigProp, 32768 + 1, () => config.compressionSnappyBlock)
+        case LogConfig.CompressionLZ4BlockProp =>
+          assertDynamic(kafkaConfigProp, 4 + 1, () => config.compressionLZ4Block)
+        case LogConfig.CompressionZstdWindowProp =>
+          assertDynamic(kafkaConfigProp, 10, () => config.compressionZstdWindow)
         case LogConfig.SegmentBytesProp =>
           assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
         case LogConfig.SegmentMsProp =>

@@ -35,7 +35,15 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 public final class ZstdConfig extends CompressionConfig {
-    private ZstdConfig() {}
+    public static final int MIN_WINDOW_LOG = 10;
+    public static final int MAX_WINDOW_LOG = 32;
+    public static final int DEFAULT_WINDOW_LOG = 0;
+
+    private final int windowLog;
+
+    private ZstdConfig(int windowLog) {
+        this.windowLog = windowLog;
+    }
 
     public CompressionType getType() {
         return CompressionType.ZSTD;
@@ -44,9 +52,11 @@ public final class ZstdConfig extends CompressionConfig {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
         try {
+            ZstdOutputStreamNoFinalizer zstdOS = new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE);
+            zstdOS.setLong(this.windowLog);
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE), 16 * 1024);
+            return new BufferedOutputStream(zstdOS, 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -78,9 +88,20 @@ public final class ZstdConfig extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<ZstdConfig> {
+        private int windowLog = DEFAULT_WINDOW_LOG;
+
+        public Builder setWindowLog(int windowLog) {
+            if (!(windowLog == DEFAULT_WINDOW_LOG || (MIN_WINDOW_LOG <= windowLog && windowLog <= MAX_WINDOW_LOG))) {
+                throw new IllegalArgumentException("zstd doesn't support given windowLog: " + windowLog);
+            }
+
+            this.windowLog = windowLog;
+            return this;
+        }
+
         @Override
         public ZstdConfig build() {
-            return new ZstdConfig();
+            return new ZstdConfig(this.windowLog);
         }
     }
 }
