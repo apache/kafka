@@ -29,6 +29,12 @@ import java.nio.ByteBuffer;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 
 public final class LZ4Config extends CompressionConfig {
+    private final int level;
+
+    private LZ4Config(int level) {
+        this.level = level;
+    }
+
     @Override
     public CompressionType getType() {
         return CompressionType.LZ4;
@@ -37,7 +43,7 @@ public final class LZ4Config extends CompressionConfig {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
         try {
-            return new KafkaLZ4BlockOutputStream(buffer, messageVersion == MAGIC_VALUE_V0);
+            return new KafkaLZ4BlockOutputStream(buffer, this.level, messageVersion == MAGIC_VALUE_V0);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -54,9 +60,20 @@ public final class LZ4Config extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<LZ4Config> {
+        private int level = KafkaLZ4BlockOutputStream.DEFAULT_COMPRESSION_LEVEL;
+
+        public Builder setLevel(int level) {
+            if (level < KafkaLZ4BlockOutputStream.MIN_COMPRESSION_LEVEL || KafkaLZ4BlockOutputStream.MAX_COMPRESSION_LEVEL < level) {
+                throw new IllegalArgumentException("lz4 doesn't support given compression level: " + level);
+            }
+
+            this.level = level;
+            return this;
+        }
+
         @Override
         public LZ4Config build() {
-            return new LZ4Config();
+            return new LZ4Config(this.level);
         }
     }
 }
