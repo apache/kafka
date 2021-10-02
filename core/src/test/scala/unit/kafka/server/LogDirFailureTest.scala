@@ -19,6 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
+
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll}
@@ -29,7 +30,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -50,8 +51,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     createTopic(topic, partitionNum, brokerCount)
   }
 

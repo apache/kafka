@@ -19,13 +19,13 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.server.QuorumTestHarness
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
@@ -42,7 +42,7 @@ import scala.jdk.CollectionConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-class ReplicationQuotasTest extends ZooKeeperTestHarness {
+class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)

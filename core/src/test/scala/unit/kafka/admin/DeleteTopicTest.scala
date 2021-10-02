@@ -21,8 +21,9 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
 
 import scala.collection.Seq
+import kafka.server.QuorumTestHarness
 import kafka.log.UnifiedLog
-import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
+import kafka.zk.TopicPartitionZNode
 import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.jupiter.api.Assertions._
@@ -34,7 +35,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import scala.jdk.CollectionConverters._
 
-class DeleteTopicTest extends ZooKeeperTestHarness {
+class DeleteTopicTest extends QuorumTestHarness {
 
   var servers: Seq[KafkaServer] = Seq()
 

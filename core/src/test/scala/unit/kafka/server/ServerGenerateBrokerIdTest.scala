@@ -18,17 +18,16 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.server.QuorumTestHarness
 import scala.collection.Seq
-
-import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import java.io.File
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
+class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   var props1: Properties = null
   var config1: KafkaConfig = null
   var props2: Properties = null
@@ -37,8 +36,8 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var servers: Seq[KafkaServer] = Seq()
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)
     config1 = KafkaConfig.fromProps(props1)
     props2 = TestUtils.createBrokerConfig(0, zkConnect)

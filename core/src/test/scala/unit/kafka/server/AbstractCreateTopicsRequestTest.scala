@@ -27,9 +27,11 @@ import org.apache.kafka.common.message.CreateTopicsRequestData._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Timeout
 
 import scala.jdk.CollectionConverters._
 
+@Timeout(15)
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit =
@@ -137,10 +139,12 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       }
 
       // Verify controller broker has the correct metadata
-      verifyMetadata(controllerSocketServer)
+      if (!isKRaftTest()) {
+        verifyMetadata(controllerSocketServer)
+      }
       if (!request.data.validateOnly) {
         // Wait until metadata is propagated and validate non-controller broker has the correct metadata
-        TestUtils.waitForPartitionMetadata(servers, topic.name(), 0)
+        TestUtils.waitForPartitionMetadata(brokers, topic.name(), 0)
       }
       verifyMetadata(notControllerSocketServer)
     }

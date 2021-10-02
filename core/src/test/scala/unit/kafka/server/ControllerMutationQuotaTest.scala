@@ -16,6 +16,7 @@ package kafka.server
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+
 import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -45,8 +46,7 @@ import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -106,8 +106,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Define a quota for ThrottledPrincipal
     defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate))

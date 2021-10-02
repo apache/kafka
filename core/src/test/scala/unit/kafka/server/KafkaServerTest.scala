@@ -17,15 +17,15 @@
 
 package kafka.server
 
+import kafka.server.QuorumTestHarness
 import kafka.api.ApiVersion
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
 
-class KafkaServerTest extends ZooKeeperTestHarness {
+class KafkaServerTest extends QuorumTestHarness {
 
   @Test
   def testAlreadyRegisteredAdvertisedListeners(): Unit = {

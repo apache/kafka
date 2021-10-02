@@ -17,6 +17,7 @@ package kafka.api
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
+
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.metrics.KafkaYammerMetrics
@@ -34,7 +35,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -74,8 +75,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   var quotaTestClients: QuotaTestClients = _
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     val numPartitions = 1
     val leaders = createTopic(topic1, numPartitions, brokerCount)
