@@ -35,7 +35,21 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 public final class ZstdConfig extends CompressionConfig {
-    private ZstdConfig() {}
+    /**
+     * Zstd supports compression levels from 1 up to ZSTD_maxCLevel(), which is currently 22. 0 is reserved for
+     * the default level that is controlled by the library (currently 3), and it also supports negative levels
+     * as an experimental feature; It is why MIN_COMPRESSION_LEVEL is not defined here.
+     *
+     * For details, please refer the official zstd manual: http://facebook.github.io/zstd/zstd_manual.html
+     */
+    static final int MAX_COMPRESSION_LEVEL = 22;
+    static final int DEFAULT_COMPRESSION_LEVEL = 0;
+
+    private final int level;
+
+    private ZstdConfig(int level) {
+        this.level = level;
+    }
 
     public CompressionType getType() {
         return CompressionType.ZSTD;
@@ -46,7 +60,7 @@ public final class ZstdConfig extends CompressionConfig {
         try {
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE), 16 * 1024);
+            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, this.level), 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -78,9 +92,20 @@ public final class ZstdConfig extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<ZstdConfig> {
+        private int level = DEFAULT_COMPRESSION_LEVEL;
+
+        public Builder setLevel(int level) {
+            if (MAX_COMPRESSION_LEVEL < level) {
+                throw new IllegalArgumentException("zstd doesn't support given compression level: " + level);
+            }
+
+            this.level = level;
+            return this;
+        }
+
         @Override
         public ZstdConfig build() {
-            return new ZstdConfig();
+            return new ZstdConfig(this.level);
         }
     }
 }
