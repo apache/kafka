@@ -29,7 +29,7 @@ import java.util.Map;
  * from those partitions. As records are fetched from Kafka, they will be passed to the sink task using the
  * {@link #put(Collection)} API, which should either write them to the downstream system or batch them for
  * later writing. Periodically, Connect will call {@link #flush(Map)} to ensure that batched records are
- * actually pushed to the downstream system..
+ * actually pushed to the downstream system.
  *
  * Below we describe the lifecycle of a SinkTask.
  *
