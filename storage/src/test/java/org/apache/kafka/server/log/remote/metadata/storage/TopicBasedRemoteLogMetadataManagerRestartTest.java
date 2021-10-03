@@ -28,17 +28,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import scala.collection.Seq;
 import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.apache.kafka.server.log.remote.metadata.storage.ConsumerManager.COMMITTED_OFFSETS_FILE_NAME;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
@@ -138,6 +142,26 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
                                                                  topicBasedRlmm().listRemoteLogSegments(leaderTopicIdPartition)));
         Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Collections.singleton(followerSegmentMetadata).iterator(),
                                                                  topicBasedRlmm().listRemoteLogSegments(followerTopicIdPartition)));
+        // Check whether the check-pointed consumer offsets are stored or not.
+        Path committedOffsetsPath = new File(logDir, COMMITTED_OFFSETS_FILE_NAME).toPath();
+        Assertions.assertTrue(committedOffsetsPath.toFile().exists());
+        CommittedOffsetsFile committedOffsetsFile = new CommittedOffsetsFile(committedOffsetsPath.toFile());
+
+        int metadataPartition1 = topicBasedRlmm().metadataPartition(leaderTopicIdPartition);
+        int metadataPartition2 = topicBasedRlmm().metadataPartition(followerTopicIdPartition);
+        Optional<Long> receivedOffsetForPartition1 = topicBasedRlmm().receivedOffsetForPartition(metadataPartition1);
+        Optional<Long> receivedOffsetForPartition2 = topicBasedRlmm().receivedOffsetForPartition(metadataPartition2);
+        Assertions.assertTrue(receivedOffsetForPartition1.isPresent());
+        Assertions.assertTrue(receivedOffsetForPartition2.isPresent());
+
+        // Make sure these offsets are at least 0.
+        Assertions.assertTrue(receivedOffsetForPartition1.get() >= 0);
+        Assertions.assertTrue(receivedOffsetForPartition2.get() >= 0);
+
+        // Check the stored entries and the offsets that were set on consumer are the same.
+        Map<Integer, Long> partitionToOffset = committedOffsetsFile.readEntries();
+        Assertions.assertEquals(partitionToOffset.get(metadataPartition1), receivedOffsetForPartition1.get());
+        Assertions.assertEquals(partitionToOffset.get(metadataPartition2), receivedOffsetForPartition2.get());
 
         // Start Consumer thread
         topicBasedRlmm().startConsumerThread();

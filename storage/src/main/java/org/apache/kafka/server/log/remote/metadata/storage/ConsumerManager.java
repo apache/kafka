@@ -41,9 +41,10 @@ import java.util.concurrent.TimeoutException;
  */
 public class ConsumerManager implements Closeable {
 
+    public static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
+
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
-    private static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
 
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
     private final Time time;
