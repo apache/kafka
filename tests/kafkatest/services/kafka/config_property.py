@@ -32,6 +32,7 @@ SOCKET_SEND_BUFFER_BYTES = "socket.send.buffer.bytes"
 SOCKET_RECEIVE_BUFFER_BYTES = "socket.receive.buffer.bytes"
 SOCKET_REQUEST_MAX_BYTES = "socket.request.max.bytes"
 LOG_DIRS = "log.dirs"
+LOG_DIR = "log.dir"
 NUM_PARTITIONS = "num.partitions"
 NUM_RECOVERY_THREADS_PER_DATA_DIR = "num.recovery.threads.per.data.dir"
 

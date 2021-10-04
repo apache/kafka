@@ -21,6 +21,8 @@ from kafkatest.services.kafka import config_property
 
 class TieredReplicationTest(ReplicationTest):
 
+    # FIXME: Update the topic config such that there are smaller log segments and it gets uploaded to HDFS.
+    #  See DKAFC-1397 for more details.
     TOPIC_CONFIG = {
         "partitions": 3,
         "replication-factor": 3,
@@ -78,6 +80,11 @@ class TieredReplicationTest(ReplicationTest):
             self.zk.start()
 
         server_prop_overides = [
+            # JBOD is not supported in tiered storage
+            [config_property.LOG_DIRS, ""],
+            [config_property.LOG_DIR, "/mnt/kafka/kafka-data-logs-1"],
+
+            # Enable Kafka remote log storage
             [config_property.REMOTE_LOG_STORAGE_SYSTEM_ENABLE, "true"],
             [config_property.REMOTE_LOG_STORAGE_MANAGER_CLASS_NAME, "org.apache.kafka.rsm.hdfs.HDFSRemoteStorageManager"],
             [config_property.REMOTE_LOG_STORAGE_MANAGER_CLASS_PATH,
@@ -85,7 +92,8 @@ class TieredReplicationTest(ReplicationTest):
              + ":/opt/kafka-dev/remote-storage-managers/hdfs/build/dependant-libs/*"],
             [config_property.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME, security_protocol],
 
-            [config_property.REMOTE_LOG_METADATA_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_METADATA_MANAGER_PREFIX_CONFIG]
+            [config_property.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME, "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager"],
+            [config_property.REMOTE_LOG_METADATA_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_METADATA_MANAGER_PREFIX_CONFIG],
             [config_property.REMOTE_LOG_METADATA_TOPIC_NUM_PARTITIONS, "5"],
 
             [config_property.REMOTE_LOG_STORAGE_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_STORAGE_MANAGER_PREFIX_CONFIG],
@@ -93,7 +101,7 @@ class TieredReplicationTest(ReplicationTest):
             [config_property.HDFS_REMOTE_READ_CACHE_BYTES, "8388608"],
             [config_property.HDFS_REMOTE_READ_BYTES, "1048576"],
             # the `sasl.mechanism` is used by the kafka clients which gets invoked by the metadata manager.
-            [config_property.SASL_MECHANISM, client_sasl_mechanism]
+            [config_property.SASL_MECHANISM, client_sasl_mechanism],
         ]
         self.create_kafka(num_nodes=3,
                           security_protocol=security_protocol,

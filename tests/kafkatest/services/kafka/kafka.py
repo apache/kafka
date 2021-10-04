@@ -642,6 +642,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
+        # If 'log.dirs' is not configured, remove the config from the properties file
+        if len(str(override_configs[config_property.LOG_DIRS])) == 0:
+            del override_configs[config_property.LOG_DIRS]
+
         #update template configs with test override configs
         configs.update(override_configs)
 
