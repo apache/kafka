@@ -25,10 +25,13 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
@@ -67,6 +70,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_CONSUMER_PREFIX = "remote.log.metadata.consumer.";
     public static final String BROKER_ID = "broker.id";
     public static final String LOG_DIR = "log.dir";
+    public static final String LOG_DIRS = "log.dirs";
 
     public static final String REMOTE_LOG_METADATA_TOPIC_NAME = "__remote_log_metadata";
     public static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
@@ -105,11 +109,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             throw new IllegalArgumentException(BOOTSTRAP_SERVERS_CONFIG + " config must not be null or empty.");
         }
 
-
-        logDir = (String) props.get(LOG_DIR);
-        if (logDir == null || logDir.isEmpty()) {
-            throw new IllegalArgumentException(LOG_DIR + " config must not be null or empty.");
-        }
+        logDir = getLogDirectory(props);
 
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
@@ -218,5 +218,25 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", consumerProps=" + consumerProps +
                 ", producerProps=" + producerProps +
                 '}';
+    }
+
+    static String getLogDirectory(Map<String, ?> props) {
+        String logDirs = (String) props.get(LOG_DIRS);
+        if (logDirs == null || logDirs.isEmpty()) {
+            logDirs = (String) props.get(LOG_DIR);
+        }
+        if (logDirs == null || logDirs.isEmpty()) {
+            throw new IllegalArgumentException("At least one log directory must be defined via log.dirs or log.dir.");
+        }
+        final List<String> dirs = Arrays.stream(logDirs.split("\\s*,\\s*"))
+                .filter(v -> !v.trim().isEmpty())
+                .collect(Collectors.toList());
+        if (dirs.isEmpty()) {
+            throw new IllegalArgumentException("At least one log directory must be defined via log.dirs or log.dir.");
+        }
+        if (dirs.size() > 1) {
+            throw new IllegalArgumentException("Multiple log directories are not supported when remote log storage is enabled");
+        }
+        return dirs.get(0);
     }
 }
