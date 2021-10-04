@@ -326,8 +326,8 @@ public class MeteredSessionStore<K, V>
                                                          final K keyTo,
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
-        final Bytes bytesKeyFrom = keyFrom == null ? null : keyBytes(keyFrom);
-        final Bytes bytesKeyTo = keyTo == null ? null : keyBytes(keyTo);
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().findSessions(
                 bytesKeyFrom,
@@ -345,8 +345,8 @@ public class MeteredSessionStore<K, V>
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
-        final Bytes bytesKeyFrom = keyFrom == null ? null : keyBytes(keyFrom);
-        final Bytes bytesKeyTo = keyTo == null ? null : keyBytes(keyTo);
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFindSessions(
                 bytesKeyFrom,
@@ -376,7 +376,7 @@ public class MeteredSessionStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+        return key == null ? null : Bytes.wrap(serdes.rawKey(key));
     }
 
     private void maybeRecordE2ELatency() {
