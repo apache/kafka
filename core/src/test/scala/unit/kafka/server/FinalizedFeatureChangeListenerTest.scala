@@ -239,10 +239,11 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
 
     val exitLatch = new CountDownLatch(1)
     Exit.setExitProcedure((_, _) => exitLatch.countDown())
+    val feature1: SupportedVersionRange = brokerFeatures.supportedFeatures.get("feature_1")
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(
-        brokerFeatures.supportedFeatures.get("feature_1").min(),
-        (brokerFeatures.supportedFeatures.get("feature_1").max() + 1).asInstanceOf[Short]))
+        feature1.min(),
+        (feature1.max() + 1).asInstanceOf[Short]))
     val incompatibleFinalizedFeatures = Features.finalizedFeatures(incompatibleFinalizedFeaturesMap.asJava)
     zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, incompatibleFinalizedFeatures))
     val (mayBeFeatureZNodeIncompatibleBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
