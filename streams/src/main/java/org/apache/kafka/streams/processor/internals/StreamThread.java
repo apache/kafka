@@ -36,6 +36,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.errors.NamedTopologyException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -53,6 +54,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -299,6 +301,7 @@ public class StreamThread extends Thread {
     private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private final Map<String, java.util.function.Consumer<Throwable>> topologyExceptionHandlers;
     private final Runnable shutdownErrorHook;
 
     private long lastSeenTopologyVersion = 0L;
@@ -503,6 +506,7 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.topologyExceptionHandlers = new HashMap<>();
         this.cacheResizer = cacheResizer;
 
         // The following sensors are created here but their references are not stored in this object, since within
@@ -575,8 +579,12 @@ public class StreamThread extends Thread {
         try {
             cleanRun = runLoop();
         } catch (final Throwable e) {
+            if (e instanceof NamedTopologyException && topologyExceptionHandlers.containsKey(((NamedTopologyException) e).topologyName())) {
+                topologyExceptionHandlers.get(((NamedTopologyException) e).topologyName()).accept(e);
+            } else {
+                streamsUncaughtExceptionHandler.accept(e);
+            }
             failedStreamThreadSensor.record();
-            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -648,6 +656,10 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void setUncaughtExceptionHandlerForTopology(final String topologyName, final java.util.function.Consumer<Throwable> exceptionHandler) {
+        topologyExceptionHandlers.put(topologyName, exceptionHandler);
     }
 
     public void maybeSendShutdown() {

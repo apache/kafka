@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.NamedTopologyException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -1280,29 +1281,36 @@ public class TaskManager {
             int processed = 0;
             final long then = now;
             try {
-                while (processed < maxNumRecords && task.process(now)) {
-                    task.clearTaskTimeout();
-                    processed++;
+                try {
+                    while (processed < maxNumRecords && task.process(now)) {
+                        task.clearTaskTimeout();
+                        processed++;
+                    }
+                } catch (final TimeoutException timeoutException) {
+                    task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                    log.debug(
+                        String.format(
+                            "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                            task.id()),
+                        timeoutException
+                    );
+                } catch (final TaskMigratedException e) {
+                    log.info("Failed to process stream task {} since it got migrated to another thread already. " +
+                                 "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                    throw e;
+                } catch (final RuntimeException e) {
+                    log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+                    throw e;
+                } finally {
+                    now = time.milliseconds();
+                    totalProcessed += processed;
+                    task.recordProcessBatchTime(now - then);
                 }
-            } catch (final TimeoutException timeoutException) {
-                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                log.debug(
-                    String.format(
-                        "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
-                        task.id()),
-                    timeoutException
-                );
-            } catch (final TaskMigratedException e) {
-                log.info("Failed to process stream task {} since it got migrated to another thread already. " +
-                             "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
-                throw e;
-            } catch (final RuntimeException e) {
-                log.error("Failed to process stream task {} due to the following error:", task.id(), e);
-                throw e;
-            } finally {
-                now = time.milliseconds();
-                totalProcessed += processed;
-                task.recordProcessBatchTime(now - then);
+            } catch (final Throwable e) {
+                final String topologyName = task.id().topologyName();
+                if (topologyName != null) {
+                    throw new NamedTopologyException(topologyName, e);
+                }
             }
         }
 

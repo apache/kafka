@@ -513,8 +513,8 @@ public class KafkaStreams implements AutoCloseable {
         return action;
     }
 
-    private void handleStreamsUncaughtException(final Throwable throwable,
-                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+    protected void handleStreamsUncaughtException(final Throwable throwable,
+                                                  final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = getActionForThrowable(throwable, streamsUncaughtExceptionHandler);
         if (oldHandler) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +

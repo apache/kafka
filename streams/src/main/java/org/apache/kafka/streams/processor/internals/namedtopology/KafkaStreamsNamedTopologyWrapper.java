@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -136,6 +137,24 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                    " as another of the same name already exists");
         }
         topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
+    }
+
+    /**
+     * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
+     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client in order for
+     * it to begin processing the new topology.
+     *
+     * @param topologyExceptionHandler  An exception handler for errors that occur while processing this named topology
+     *
+     * @throws IllegalArgumentException if this topology name is already in use
+     * @throws IllegalStateException    if streams has not been started or has already shut down
+     * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
+     */
+    public void addNamedTopology(final NamedTopology newTopology, final StreamsUncaughtExceptionHandler topologyExceptionHandler) {
+        processStreamThread(
+            thread -> thread.setUncaughtExceptionHandlerForTopology(newTopology.name(),
+                                                                    e -> handleStreamsUncaughtException(e, topologyExceptionHandler)));
+        addNamedTopology(newTopology);
     }
 
     /**
