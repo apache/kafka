@@ -174,7 +174,8 @@ public class KafkaStreams implements AutoCloseable {
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
-    private final Object changeThreadCount = new Object();
+    protected Map<String, java.util.function.Consumer<Throwable>> topologyExceptionHandlers = new HashMap<>();
+    protected final Object changeThreadCount = new Object();
 
     // container states
     /**
@@ -971,6 +972,9 @@ public class KafkaStreams implements AutoCloseable {
             streamsUncaughtExceptionHandler
         );
         streamThread.setStateListener(streamStateListener);
+        for (final Map.Entry<String, Consumer<Throwable>> exceptionHandler : topologyExceptionHandlers.entrySet()) {
+            streamThread.setUncaughtExceptionHandlerForTopology(exceptionHandler.getKey(), exceptionHandler.getValue());
+        }
         threads.add(streamThread);
         threadState.put(streamThread.getId(), streamThread.state());
         queryableStoreProvider.addStoreProviderForThread(streamThread.getName(), new StreamThreadStateStoreProvider(streamThread));

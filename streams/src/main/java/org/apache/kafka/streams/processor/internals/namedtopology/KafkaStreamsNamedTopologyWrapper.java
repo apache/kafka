@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -150,10 +151,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws IllegalStateException    if streams has not been started or has already shut down
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
-    public void addNamedTopology(final NamedTopology newTopology, final StreamsUncaughtExceptionHandler topologyExceptionHandler) {
-        processStreamThread(
-            thread -> thread.setUncaughtExceptionHandlerForTopology(newTopology.name(),
-                                                                    e -> handleStreamsUncaughtException(e, topologyExceptionHandler)));
+    public void addNamedTopology(final NamedTopology newTopology,
+                                 final StreamsUncaughtExceptionHandler topologyExceptionHandler) {
+        synchronized (changeThreadCount) {
+            final Consumer<Throwable> exceptionHandler = e -> handleStreamsUncaughtException(e, topologyExceptionHandler);
+            topologyExceptionHandlers.put(newTopology.name(), exceptionHandler);
+            processStreamThread(
+                thread -> thread.setUncaughtExceptionHandlerForTopology(newTopology.name(),
+                                                                        exceptionHandler));
+        }
         addNamedTopology(newTopology);
     }
 
@@ -173,6 +179,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
 
+        synchronized (changeThreadCount) {
+            topologyExceptionHandlers.remove(topologyToRemove);
+            processStreamThread(
+                thread -> thread.setUncaughtExceptionHandlerForTopology(topologyToRemove, null));
+        }
         topologyMetadata.unregisterTopology(topologyToRemove);
     }
 

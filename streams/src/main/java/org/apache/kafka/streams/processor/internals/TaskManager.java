@@ -1310,6 +1310,8 @@ public class TaskManager {
                 final String topologyName = task.id().topologyName();
                 if (topologyName != null) {
                     throw new NamedTopologyException(topologyName, e);
+                } else {
+                    throw e;
                 }
             }
         }

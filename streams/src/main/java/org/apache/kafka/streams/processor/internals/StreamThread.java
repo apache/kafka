@@ -659,7 +659,11 @@ public class StreamThread extends Thread {
     }
 
     public void setUncaughtExceptionHandlerForTopology(final String topologyName, final java.util.function.Consumer<Throwable> exceptionHandler) {
-        topologyExceptionHandlers.put(topologyName, exceptionHandler);
+        if (exceptionHandler == null) {
+            topologyExceptionHandlers.remove(topologyName);
+        } else {
+            topologyExceptionHandlers.put(topologyName, exceptionHandler);
+        }
     }
 
     public void maybeSendShutdown() {
