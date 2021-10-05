@@ -47,14 +47,23 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         private final List<LeaderAndIsrPartitionState> partitionStates;
         private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
+        private final LeaderAndIsrRequestType type;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
+                    liveLeaders, false);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
+                       Collection<Node> liveLeaders, boolean isFull) {
             super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
+            this.type = isFull ? LeaderAndIsrRequestType.FULL : LeaderAndIsrRequestType.INCREMENTAL;
         }
 
         @Override
@@ -70,6 +79,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveLeaders(leaders);
+
+            if (version >= 5) {
+                data.setType(type.code());
+            }
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);
@@ -183,6 +196,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             return () -> new FlattenedIterator<>(data.topicStates().iterator(),
                 topicState -> topicState.partitionStates().iterator());
         return data.ungroupedPartitionStates();
+    }
+
+    public LeaderAndIsrRequestType type() {
+        return LeaderAndIsrRequestType.forCode(data.type());
     }
 
     public Map<String, Uuid> topicIds() {

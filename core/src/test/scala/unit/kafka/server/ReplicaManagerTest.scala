@@ -28,6 +28,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
+import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
@@ -2914,7 +2915,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testInconsistentIdReturnsError(): Unit = {
+  def testInconsistentIdRecreatesPartition(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -2922,8 +2923,8 @@ class ReplicaManagerTest {
       val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
       val topicNames = topicIds.asScala.map(_.swap).asJava
 
-      val invalidTopicIds = Collections.singletonMap(topic, Uuid.randomUuid())
-      val invalidTopicNames = invalidTopicIds.asScala.map(_.swap).asJava
+      val newTopicIds = Collections.singletonMap(topic, Uuid.randomUuid())
+      val invalidTopicNames = newTopicIds.asScala.map(_.swap).asJava
 
       def leaderAndIsrRequest(epoch: Int, topicIds: java.util.Map[String, Uuid]): LeaderAndIsrRequest =
         new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -2940,18 +2941,28 @@ class ReplicaManagerTest {
         topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
 
+      def verifyPartitionTopicId(expected: Uuid): Unit = {
+        replicaManager.getPartition(topicPartition) match {
+          case Online(partition) => assertEquals(expected, partition.topicId.get)
+          case _ => fail(s"$topicPartition is not online")
+        }
+      }
+
       val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topicIds), (_, _) => ())
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
 
       val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, topicIds), (_, _) => ())
       assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
+      verifyPartitionTopicId(topicIds.get(topic))
 
       // Send request with inconsistent ID.
-      val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, invalidTopicIds), (_, _) => ())
-      assertEquals(Errors.INCONSISTENT_TOPIC_ID, response3.partitionErrors(invalidTopicNames).get(topicPartition))
+      val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, newTopicIds), (_, _) => ())
+      // The request sent with the same leader epoch will be ignored
+      assertEquals(Errors.STALE_CONTROLLER_EPOCH, response3.partitionErrors(invalidTopicNames).get(topicPartition))
 
-      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(2, invalidTopicIds), (_, _) => ())
-      assertEquals(Errors.INCONSISTENT_TOPIC_ID, response4.partitionErrors(invalidTopicNames).get(topicPartition))
+      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(2, newTopicIds), (_, _) => ())
+      assertEquals(Errors.NONE, response4.partitionErrors(invalidTopicNames).get(topicPartition))
+      verifyPartitionTopicId(newTopicIds.get(topic))
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 

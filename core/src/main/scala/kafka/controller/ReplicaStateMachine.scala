@@ -477,7 +477,7 @@ case object ReplicaDeletionStarted extends ReplicaState {
 
 case object ReplicaDeletionSuccessful extends ReplicaState {
   val state: Byte = 5
-  val validPreviousStates: Set[ReplicaState] = Set(ReplicaDeletionStarted)
+  val validPreviousStates: Set[ReplicaState] = Set(ReplicaDeletionStarted, OfflineReplica)
 }
 
 case object ReplicaDeletionIneligible extends ReplicaState {
