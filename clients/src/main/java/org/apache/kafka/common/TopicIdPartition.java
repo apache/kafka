@@ -32,11 +32,32 @@ public class TopicIdPartition {
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
     }
 
+    public TopicIdPartition(String topic, Uuid topicId, int partition) {
+        this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
+        this.topicPartition = new TopicPartition(
+            Objects.requireNonNull(topic, "topic can not be null"),
+            partition);
+    }
+
     /**
      * @return Universally unique id representing this topic partition.
      */
     public Uuid topicId() {
         return topicId;
+    }
+
+    /**
+     * @return the topic name.
+     */
+    public String topic() {
+        return topicPartition.topic();
+    }
+
+    /**
+     * @return the partition id.
+     */
+    public int partition() {
+        return topicPartition.partition();
     }
 
     /**
@@ -55,20 +76,20 @@ public class TopicIdPartition {
             return false;
         }
         TopicIdPartition that = (TopicIdPartition) o;
-        return Objects.equals(topicId, that.topicId) &&
-               Objects.equals(topicPartition, that.topicPartition);
+        return topicId.equals(that.topicId) &&
+               topicPartition.equals(that.topicPartition);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicId, topicPartition);
+        final int prime = 31;
+        int result = prime + topicId.hashCode();
+        result = prime * result + topicPartition.hashCode();
+        return result;
     }
 
     @Override
     public String toString() {
-        return "TopicIdPartition{" +
-               "topicId=" + topicId +
-               ", topicPartition=" + topicPartition +
-               '}';
+        return topicId + ":" + topic() + "-" + partition();
     }
 }
