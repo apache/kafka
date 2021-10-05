@@ -2374,7 +2374,7 @@ class GroupMetadataManagerTest {
       minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
     EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(18))
+    EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(18L))
     EasyMock.replay(logMock)
     EasyMock.replay(replicaManager)
 
