@@ -72,6 +72,8 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -1298,7 +1300,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_MEMBER_ID));
 
-        // now we should see a new join with the empty UNKNOWN_MEMBER_I
+        // now we should see a new join with the empty UNKNOWN_MEMBER_ID
         client.prepareResponse(body -> {
             JoinGroupRequest joinRequest = (JoinGroupRequest) body;
             return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
@@ -2848,6 +2850,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterDroppingOutOfTheGroup() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            final SystemTime realTime = new SystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -2862,39 +2865,14 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_MEMBER_ID));
 
-            boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
+            boolean res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
 
             assertFalse(res);
-            assertEquals(generationId, coordinator.generation().generationId);
-            assertEquals(memberId, coordinator.generation().memberId);
-
-            // Imitating heartbeat thread that clears generation data.
-            coordinator.maybeLeaveGroup("Clear generation data.");
-
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+            assertEquals("", coordinator.generation().memberId);
 
-            client.respond(syncGroupResponse(partitions, Errors.NONE));
-
-            // Join future should succeed but generation already cleared so result of join is false.
-            res = coordinator.joinGroupIfNeeded(time.timer(1));
-
+            res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
             assertFalse(res);
-
-            // should have retried sending a join group request already
-            assertFalse(client.hasPendingResponses());
-            assertEquals(1, client.inFlightRequestCount());
-
-            System.out.println(client.requests());
-
-            // Retry join should then succeed
-            client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
-            client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
-
-            res = coordinator.joinGroupIfNeeded(time.timer(3000));
-
-            assertTrue(res);
-            assertFalse(client.hasPendingResponses());
-            assertFalse(client.hasInFlightRequests());
         }
         Collection<TopicPartition> lost = getLost(partitions);
         assertEquals(lost.isEmpty() ? 0 : 1, rebalanceListener.lostCount);
