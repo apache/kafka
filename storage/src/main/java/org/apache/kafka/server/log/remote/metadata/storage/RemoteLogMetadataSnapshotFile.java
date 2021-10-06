@@ -50,11 +50,11 @@ public class RemoteLogMetadataSnapshotFile {
 
     // File format:
     // <header>[<entry>...]
-    // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
+    // header: <version:short><metadata-partition:int><metadata-partition-offset:long><entries-size:int>
     // entry: <entry-length><entry-bytes>
 
-    // header size: 2 (version) + 4 (partition num) + 8 (offset) = 14
-    private static final int HEADER_SIZE = 14;
+    // header size: 2 (version) + 4 (partition num) + 8 (offset) + 4 (entries size) = 18
+    private static final int HEADER_SIZE = 18;
 
     private final File metadataStoreFile;
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
@@ -99,14 +99,18 @@ public class RemoteLogMetadataSnapshotFile {
 
             // Write metadata partition offset
             headerBuffer.putLong(snapshot.metadataPartitionOffset());
-            headerBuffer.flip();
+
+            // Write entries size
+            Collection<RemoteLogSegmentMetadataSnapshot> metadataSnapshots = snapshot.remoteLogSegmentMetadataSnapshots();
+            headerBuffer.putInt(metadataSnapshots.size());
 
             // Write header
+            headerBuffer.flip();
             fileChannel.write(headerBuffer);
 
             // Write each entry
             ByteBuffer lenBuffer = ByteBuffer.allocate(4);
-            for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : snapshot.remoteLogSegmentMetadataSnapshots()) {
+            for (RemoteLogSegmentMetadataSnapshot metadataSnapshot : metadataSnapshots) {
                 final byte[] serializedBytes = serde.serialize(metadataSnapshot);
                 // entry format: <entry-length><entry-bytes>
 
@@ -147,8 +151,9 @@ public class RemoteLogMetadataSnapshotFile {
             short version = headerBuffer.getShort();
             int metadataPartition = headerBuffer.getInt();
             long metadataPartitionOffset = headerBuffer.getLong();
+            int metadataSnapshotsSize = headerBuffer.getInt();
 
-            List<RemoteLogSegmentMetadataSnapshot> result = new ArrayList<>();
+            List<RemoteLogSegmentMetadataSnapshot> result = new ArrayList<>(metadataSnapshotsSize);
             ByteBuffer lenBuffer = ByteBuffer.allocate(4);
             int lenBufferReadCt;
             while ((lenBufferReadCt = channel.read(lenBuffer)) > 0) {
@@ -178,10 +183,15 @@ public class RemoteLogMetadataSnapshotFile {
                 result.add(remoteLogSegmentMetadata);
             }
 
+            if (metadataSnapshotsSize != result.size()) {
+                throw new IOException("Unexpected entries in the snapshot file. Expected size: " + metadataSnapshotsSize
+                                              + ", but found: " + result.size());
+            }
+
             return Optional.of(new Snapshot(version, metadataPartition, metadataPartitionOffset, result));
         }
     }
-    
+
     /**
      * This class represents the collection of remote log metadata for a specific topic partition.
      */
@@ -203,6 +213,10 @@ public class RemoteLogMetadataSnapshotFile {
                         int metadataPartition,
                         long metadataPartitionOffset,
                         Collection<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadataSnapshots) {
+            // We will add multiple version support in future if needed. For now, the only supported version is CURRENT_VERSION viz 0.
+            if (version != CURRENT_VERSION) {
+                throw new IllegalArgumentException("Unexpected version received: " + version);
+            }
             this.version = version;
             this.metadataPartition = metadataPartition;
             this.metadataPartitionOffset = metadataPartitionOffset;

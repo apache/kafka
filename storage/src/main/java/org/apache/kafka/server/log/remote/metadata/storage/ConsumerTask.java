@@ -75,10 +75,12 @@ class ConsumerTask implements Runnable, Closeable {
     // It indicates whether the closing process has been started or not. If it is set as true,
     // consumer will stop consuming messages and it will not allow partition assignments to be updated.
     private volatile boolean closing = false;
+
     // It indicates whether the consumer needs to assign the partitions or not. This is set when it is
     // determined that the consumer needs to be assigned with the updated partitions.
     private volatile boolean assignPartitions = false;
 
+    // It represents a lock for any operations related to the assignedTopicPartitions.
     private final Object assignPartitionsLock = new Object();
 
     // Remote log metadata topic partitions that consumer is assigned to.
@@ -130,7 +132,8 @@ class ConsumerTask implements Runnable, Closeable {
             committedOffsets = committedOffsetsFile.readEntries();
         } catch (IOException e) {
             // Ignore the error and consumer consumes from the earliest offset.
-            log.error("Encountered error while building committed offsets from the file", e);
+            log.error("Encountered error while building committed offsets from the file. " +
+                              "Consumer will consume from the earliest offset for the assigned partitions.", e);
         }
 
         if (!committedOffsets.isEmpty()) {
@@ -212,7 +215,7 @@ class ConsumerTask implements Runnable, Closeable {
                     if (offset != null) {
                         remotePartitionMetadataEventHandler.syncLogMetadataSnapshot(topicIdPartition, metadataPartition, offset);
                     } else {
-                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{},  and no offset",
+                        log.debug("Skipping syncup of the remote-log-metadata-file for partition:{} , with remote log metadata partition{}, and no offset",
                                 topicIdPartition, metadataPartition);
                     }
                 }

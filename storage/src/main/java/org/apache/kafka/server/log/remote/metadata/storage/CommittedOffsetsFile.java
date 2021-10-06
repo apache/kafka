@@ -75,7 +75,10 @@ public class CommittedOffsetsFile {
         List<Map.Entry<Integer, Long>> entries = checkpointFile.read();
         Map<Integer, Long> partitionToOffsets = new HashMap<>(entries.size());
         for (Map.Entry<Integer, Long> entry : entries) {
-            partitionToOffsets.put(entry.getKey(), entry.getValue());
+            Long existingValue = partitionToOffsets.put(entry.getKey(), entry.getValue());
+            if (existingValue != null) {
+                throw new IOException("Multiple entries exist for key: " + entry.getKey());
+            }
         }
 
         return partitionToOffsets;
