@@ -111,6 +111,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -824,6 +825,14 @@ public class Fetcher<K, V> implements Closeable {
         return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
     }
 
+    static boolean hasUsableTopicIdFetchRequestVersion(NodeApiVersions nodeApiVersions) {
+        ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.FETCH);
+        if (apiVersion == null)
+            return false;
+
+        return apiVersion.maxVersion() >= 13;
+    }
+
     /**
      * For each partition which needs validation, make an asynchronous request to get the end-offsets for the partition
      * with the epoch less than or equal to the epoch the partition last saw.
@@ -1239,7 +1248,15 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
-                builder.add(new TopicIdPartition(topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), partition), new FetchRequest.PartitionData(position.offset,
+                // One option is to store this in the builder and only check on the creation of the builder
+                NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
+                if (nodeApiVersions == null) {
+                    client.tryConnect(node);
+                    return emptyMap();
+                }
+                Uuid topicId = hasUsableTopicIdFetchRequestVersion(nodeApiVersions) ? topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID) : Uuid.ZERO_UUID;
+
+                builder.add(new TopicIdPartition(topicId, partition), new FetchRequest.PartitionData(position.offset,
                     FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 

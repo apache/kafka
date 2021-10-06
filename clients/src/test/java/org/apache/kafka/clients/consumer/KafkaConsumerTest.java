@@ -2071,9 +2071,9 @@ public class KafkaConsumerTest {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         ConsumerPartitionAssignor assignor = new CooperativeStickyAssignor();
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
-
         initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
 
@@ -2661,6 +2661,9 @@ public class KafkaConsumerTest {
                 autoCommitIntervalMs,
                 interceptors,
                 throwOnStableOffsetNotSupported);
+        ApiVersions apiVersions = new ApiVersions();
+        metadata.fetch().nodes().forEach(node ->
+                apiVersions.update(node.idString(), NodeApiVersions.create()));
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
@@ -2681,7 +2684,7 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
-                new ApiVersions());
+                apiVersions);
 
         return new KafkaConsumer<>(
                 loggerFactory,
