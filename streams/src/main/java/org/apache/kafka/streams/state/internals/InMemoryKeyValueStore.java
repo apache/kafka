@@ -79,11 +79,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
-        if (value == null) {
-            map.remove(key);
-        } else {
-            map.put(key, value);
-        }
+        putInternal(key, value);
     }
 
     @Override
@@ -95,16 +91,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return originalValue;
     }
 
+    // the unlocked implementation of put method, to avoid multiple lock/unlock cost in `putAll` method
+    private void putInternal(final Bytes key, final byte[] value) {
+        if (value == null) {
+            map.remove(key);
+        } else {
+            map.put(key, value);
+        }
+    }
+
     @Override
     public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
-            // intended to duplicate codes in #put, to avoid continuously lock/unlock cost
-            // Although the JVM "might" do "lock coarsening" for us, it'd better we make sure it works as what we expected
-            if (entry.value == null) {
-                map.remove(entry.key);
-            } else {
-                map.put(entry.key, entry.value);
-            }
+            putInternal(entry.key, entry.value);
         }
     }
 
