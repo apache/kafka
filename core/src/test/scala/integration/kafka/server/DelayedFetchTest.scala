@@ -186,7 +186,6 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchIsolation = FetchLogEnd,
       isFromFollower = true,
       replicaId = replicaId,
-      topicIds = topicIds,
       fetchPartitionStatus = Seq((new TopicIdPartition(topicIds.get(topicPartition.topic), topicPartition), fetchStatus)))
   }
 
@@ -202,7 +201,6 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchMaxBytes = maxBytes,
       hardMaxBytesLimit = false,
       readPartitionInfo = Seq((new TopicIdPartition(topicIds.get(topicPartition.topic), topicPartition), fetchPartitionData)),
-      topicIds = topicIds,
       clientMetadata = None,
       quota = replicaQuota))
       .andReturn(Seq((new TopicIdPartition(topicIds.get(topicPartition.topic), topicPartition), buildReadResult(error))))

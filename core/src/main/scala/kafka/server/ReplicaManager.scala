@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.io.File
-import java.util
 import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -984,7 +983,6 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchMaxBytes: Int,
                     hardMaxBytesLimit: Boolean,
                     fetchInfos: Seq[(TopicIdPartition, PartitionData)],
-                    topicIds: util.Map[String, Uuid],
                     quota: ReplicaQuota,
                     responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
@@ -1008,7 +1006,6 @@ class ReplicaManager(val config: KafkaConfig,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
-        topicIds = topicIds,
         quota = quota,
         clientMetadata = clientMetadata)
       if (isFromFollower) updateFollowerFetchState(replicaId, result)
@@ -1055,7 +1052,7 @@ class ReplicaManager(val config: KafkaConfig,
         })
       }
       val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit,
-        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, topicIds, fetchPartitionStatus)
+        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
         responseCallback)
 
@@ -1078,21 +1075,11 @@ class ReplicaManager(val config: KafkaConfig,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicIdPartition, PartitionData)],
-                       topicIds: util.Map[String, Uuid],
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicIdPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
-    def topicIdFromSession(topicName: String): Option[Uuid] = {
-      val topicId = topicIds.get(topicName)
-      // if invalid topic ID return None
-      if (topicId == null || topicId == Uuid.ZERO_UUID)
-        None
-      else
-        Some(topicId)
-    }
-
-    def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
+    def read(tp: TopicIdPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
       val partitionFetchSize = fetchInfo.maxBytes
       val followerLogStartOffset = fetchInfo.logStartOffset
@@ -1104,11 +1091,12 @@ class ReplicaManager(val config: KafkaConfig,
             s"remaining response limit $limitBytes" +
             (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
-        val partition = getPartitionOrException(tp)
+        val partition = getPartitionOrException(tp.topicPartition)
         val fetchTimeMs = time.milliseconds
 
         // Check if topic ID from the fetch request/session matches the ID in the log
-        if (!hasConsistentTopicId(topicIdFromSession(partition.topic), partition.topicId))
+        val topicId = if (tp.topicId == Uuid.ZERO_UUID) None else Some(tp.topicId)
+        if (!hasConsistentTopicId(topicId, partition.topicId))
           throw new InconsistentTopicIdException("Topic ID in the fetch session did not match the topic ID in the log.")
 
         // If we are the leader, determine the preferred read-replica
@@ -1186,7 +1174,7 @@ class ReplicaManager(val config: KafkaConfig,
             lastStableOffset = None,
             exception = Some(e))
         case e: Throwable =>
-          brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
+          brokerTopicStats.topicStats(tp.topicPartition.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
 
           val fetchSource = Request.describeReplicaId(replicaId)
@@ -1209,7 +1197,7 @@ class ReplicaManager(val config: KafkaConfig,
     val result = new mutable.ArrayBuffer[(TopicIdPartition, LogReadResult)]
     var minOneMessage = !hardMaxBytesLimit
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
-      val readResult = read(tp.topicPartition, fetchInfo, limitBytes, minOneMessage)
+      val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
       // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
       if (recordBatchSize > 0)

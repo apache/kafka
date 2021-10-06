@@ -279,7 +279,10 @@ public class FetchSessionHandler {
             if (closeSessionDueToTopicIdChange) {
                 canUseTopicIds = partitionsWithTopicIds > 0;
                 Map<TopicIdPartition, PartitionData> toSend = buildFullSession(canUseTopicIds);
-                return new FetchRequestData(toSend, Collections.emptyList(), toSend, nextMetadata.nextCloseExisting(), !requestUsedTopicIds);
+                if (canUseTopicIds && partitionsWithoutTopicIds == 0 || !canUseTopicIds && partitionsWithTopicIds == 0)
+                    return new FetchRequestData(toSend, Collections.emptyList(), toSend, nextMetadata.nextCloseExisting(), !requestUsedTopicIds);
+                Map<TopicIdPartition, PartitionData> emptyMap = new LinkedHashMap<>();
+                return new FetchRequestData(emptyMap, Collections.emptyList(), emptyMap, nextMetadata.closeExisting(), !requestUsedTopicIds);
             }
 
             List<TopicIdPartition> added = new ArrayList<>();
@@ -399,7 +402,6 @@ public class FetchSessionHandler {
      */
     String verifyFullFetchResponsePartitions(Set<TopicIdPartition> topicIdPartitions, Set<Uuid> ids, short version) {
         StringBuilder bld = new StringBuilder();
-        //if (version >= 13) {
         Set<TopicIdPartition> extra =
                 findMissing(topicIdPartitions, sessionPartitions.keySet());
         Set<TopicIdPartition> omitted =
@@ -415,28 +417,6 @@ public class FetchSessionHandler {
             return bld.toString();
         }
         return null;
-            /*
-        } else {
-            Set<TopicPartition> topicPartitions = topicIdPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-            Set<TopicPartition> sessionTopicPartitions = sessionPartitions.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-            Set<TopicPartition> extra =
-                    findMissing(topicPartitions, sessionTopicPartitions);
-            Set<TopicPartition> omitted =
-                    findMissing(sessionTopicPartitions, topicPartitions);
-            if (!omitted.isEmpty()) {
-                bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append(", ");
-            }
-            if (!extra.isEmpty()) {
-                bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append(", ");
-            }
-            if ((!omitted.isEmpty()) || (!extra.isEmpty())) {
-                bld.append("response=(").append(Utils.join(topicIdPartitions, ", ")).append(")");
-                return bld.toString();
-            }
-            return null;
-        }
-
-             */
     }
 
     /**
@@ -449,7 +429,6 @@ public class FetchSessionHandler {
      */
     String verifyIncrementalFetchResponsePartitions(Set<TopicIdPartition> topicIdPartitions, Set<Uuid> ids, short version) {
         StringBuilder bld = new StringBuilder();
-        //if (version >= 13) {
         Set<TopicIdPartition> extra =
                 findMissing(topicIdPartitions, sessionPartitions.keySet());
         if (!extra.isEmpty()) {
@@ -458,17 +437,6 @@ public class FetchSessionHandler {
             return bld.toString();
         }
         return null;
-        //} else {
-          //  Set<TopicPartition> extra =
-            //        findMissing(topicIdPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()),
-             //               sessionPartitions.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
-            //if (!extra.isEmpty()) {
-              //  bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
-              //  bld.append("response=(").append(Utils.join(topicIdPartitions, ", ")).append(")");
-              //  return bld.toString();
-            //}
-            //return null;
-        //}
     }
 
     /**

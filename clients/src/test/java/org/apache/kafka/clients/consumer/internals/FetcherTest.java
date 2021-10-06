@@ -1195,7 +1195,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.UNKNOWN_TOPIC_ID, 0));
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.UNKNOWN_TOPIC_ID, -1L, 0));
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));

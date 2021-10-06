@@ -173,11 +173,27 @@ class CachedPartition(var topic: String,
     mustRespond
   }
 
+  /**
+   * We have different equality checks depending on whether topic IDs are used.
+   * This means we need a different hash function as well. We use name to calculate the hash if the ID is zero and unused.
+   * Otherwise, we use the topic ID in the hash calculation.
+   *
+   * @return the hash code for the CachedPartition depending on what request version we are using.
+   */
   override def hashCode: Int = if (topicId != Uuid.ZERO_UUID) (31 * partition) + topicId.hashCode else
     (31 * partition) + topic.hashCode
 
   def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
+  /**
+   * We have different equality checks depending on whether topic IDs are used.
+   *
+   * This is because when we use topic IDs, a partition with a given ID and an unknown name is the same as a partition with that
+   * ID and a known name. This means we can only use topic ID and partition when determining equality.
+   *
+   * On the other hand, if we are using topic names, all IDs are zero. This means we can only use topic name and partition
+   * when determining equality.
+   */
   override def equals(that: Any): Boolean =
     that match {
       case that: CachedPartition =>
@@ -814,6 +830,12 @@ class FetchManager(private val time: Time,
               debug(s"Session error for ${reqMetadata.sessionId}: expected epoch " +
                 s"${session.epoch}, but got ${reqMetadata.epoch} instead.")
               new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH, reqMetadata)
+            } else  if (reqMetadata.epoch == FINAL_EPOCH) {
+              debug(s"Session closing for ${reqMetadata.sessionId}  " +
+                s"${if (session.usesTopicIds) "to downgrade from " else "to upgrade to "}" +
+                s"topic IDS")
+              cache.remove(session)
+              new SessionlessFetchContext(fetchData)
             } else if (session.usesTopicIds && reqVersion < 13 || !session.usesTopicIds && reqVersion >= 13)  {
               debug(s"Session error for ${reqMetadata.sessionId}: expected  " +
                 s"${if (session.usesTopicIds) "to use topic IDs" else "to not use topic IDs"}" +

@@ -2389,12 +2389,12 @@ class KafkaApisTest {
     expect(replicaManager.getLogConfig(EasyMock.eq(tp))).andReturn(None)
 
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], anyObject[util.Map[String, Uuid]](), anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicIdPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(8)
+        val callback = getCurrentArguments.apply(7)
           .asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
@@ -2964,12 +2964,12 @@ class KafkaApisTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
-      anyObject[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], anyObject[util.Map[String, Uuid]](), anyObject[ReplicaQuota],
+      anyObject[Seq[(TopicIdPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicIdPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(8).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+        val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
         callback(Seq(tidp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
           None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
       }

@@ -47,6 +47,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INITIAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -470,6 +471,45 @@ public class FetchSessionHandlerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testSessionEpochWhenMixedUsageOfTopicIDs(boolean startsWithTopicIds) {
+        Uuid fooId = startsWithTopicIds ? Uuid.randomUuid() : Uuid.ZERO_UUID;
+        Uuid barId = startsWithTopicIds ? Uuid.ZERO_UUID : Uuid.randomUuid();
+        short responseVersion = startsWithTopicIds ? ApiKeys.FETCH.latestVersion() : 12;
+
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(barId, new TopicPartition("bar", 1));
+
+        FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+        FetchSessionHandler.Builder builder = handler.newBuilder();
+        builder.add(tp0,
+                new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+        FetchSessionHandler.FetchRequestData data = builder.build();
+        assertMapsEqual(reqMap(new ReqEntry("foo", fooId, 0, 0, 100, 200)),
+                data.toSend(), data.sessionPartitions());
+        assertTrue(data.metadata().isFull());
+        assertEquals(startsWithTopicIds, data.canUseTopicIds());
+
+        FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
+                respMap(new RespEntry("foo", 0, fooId, 10, 20)));
+        handler.handleResponse(resp, responseVersion);
+
+        // Re-add the first partition. Then add a partition with opposite ID usage.
+        FetchSessionHandler.Builder builder2 = handler.newBuilder();
+        builder2.add(tp0,
+                new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
+        builder2.add(tp1,
+                new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+        FetchSessionHandler.FetchRequestData data2 = builder2.build();
+        // Should have the same session ID, but new epoch and can no longer use topic IDs.
+        // The receiving broker will close the session.
+        assertEquals(123, data2.metadata().sessionId(), "Did not use same session");
+        assertEquals(-1, data2.metadata().epoch(), "Did not have final epoch");
+        assertNotEquals(startsWithTopicIds, data2.canUseTopicIds());
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testIdUsageWithAllForgottenPartitions(boolean useTopicIds) {
         // We want to test when all topics are removed from the session
         Uuid topicId = useTopicIds ? Uuid.randomUuid() : Uuid.ZERO_UUID;
@@ -552,9 +592,9 @@ public class FetchSessionHandlerTest {
             TopicIdPartition tipFoo1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
             TopicIdPartition tipBar0 = new TopicIdPartition(barId, new TopicPartition("bar", 0));
             FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
-                respMap(new RespEntry("foo", 0, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20),
-                        new RespEntry("foo", 1, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20),
-                        new RespEntry("bar", 0, topicIds.getOrDefault("bar", Uuid.ZERO_UUID), 10, 20)));
+                respMap(new RespEntry("foo", 0, fooId, 10, 20),
+                        new RespEntry("foo", 1, fooId, 10, 20),
+                        new RespEntry("bar", 0, barId, 10, 20)));
             String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, version).keySet(),
                     resp1.topicIds(), version);
             assertTrue(issue.contains("extraPartitions="));
@@ -568,15 +608,15 @@ public class FetchSessionHandlerTest {
                     new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
             builder.build();
             FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
-                respMap(new RespEntry("foo", 0, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20),
-                        new RespEntry("foo", 1, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20),
-                        new RespEntry("bar", 0, topicIds.getOrDefault("bar", Uuid.ZERO_UUID), 10, 20)));
+                respMap(new RespEntry("foo", 0, fooId, 10, 20),
+                        new RespEntry("foo", 1, fooId, 10, 20),
+                        new RespEntry("bar", 0, barId, 10, 20)));
             String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, version).keySet(),
                     resp2.topicIds(), version);
             assertNull(issue2);
             FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
-                respMap(new RespEntry("foo", 0, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20),
-                        new RespEntry("foo", 1, topicIds.getOrDefault("foo", Uuid.ZERO_UUID), 10, 20)));
+                respMap(new RespEntry("foo", 0, fooId, 10, 20),
+                        new RespEntry("foo", 1, fooId, 10, 20)));
             String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, version).keySet(),
                     resp3.topicIds(), version);
             assertFalse(issue3.contains("extraPartitions="));

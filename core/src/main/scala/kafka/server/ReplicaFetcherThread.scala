@@ -225,8 +225,7 @@ class ReplicaFetcherThread(name: String,
     val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
     if (!fetchSessionHandler.handleResponse(fetchResponse, clientResponse.requestHeader().apiVersion())) {
       // If we had a topic ID related error, throw it, otherwise return an empty fetch data map.
-      if (fetchResponse.error == Errors.UNKNOWN_TOPIC_ID ||
-          fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR ||
+      if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR ||
           fetchResponse.error == Errors.INCONSISTENT_TOPIC_ID) {
         throw Errors.forCode(fetchResponse.error().code()).exception()
       } else {

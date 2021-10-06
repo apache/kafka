@@ -189,6 +189,10 @@ public class FetchResponse extends AbstractResponse {
         return partitionResponse.preferredReadReplica() != INVALID_PREFERRED_REPLICA_ID;
     }
 
+    public static FetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
+        return partitionResponse(topicIdPartition.topicPartition().partition(), error);
+    }
+
     public static FetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new FetchResponseData.PartitionData()
             .setPartitionIndex(partition)
@@ -255,16 +259,16 @@ public class FetchResponse extends AbstractResponse {
                 hasInconsistentTopicId = true;
             }
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
-                    : topicResponseList.get(topicResponseList.size() - 1);
+                : topicResponseList.get(topicResponseList.size() - 1);
             if (matchingTopic(previousTopic, entry.getKey()))
                 previousTopic.partitions().add(partitionData);
             else {
                 List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                        .setTopic(entry.getKey().topicPartition().topic())
-                        .setTopicId(entry.getKey().topicId())
-                        .setPartitions(partitionResponses));
+                    .setTopic(entry.getKey().topicPartition().topic())
+                    .setTopicId(entry.getKey().topicId())
+                    .setPartitions(partitionResponses));
             }
         }
 

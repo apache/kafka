@@ -698,7 +698,6 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tidp -> validFetchPartitionData),
-        topicIds = topicIds.asJava,
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -722,7 +721,6 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tidp -> invalidFetchPartitionData),
-        topicIds = topicIds.asJava,
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -745,7 +743,6 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tidp -> divergingFetchPartitionData),
-        topicIds = topicIds.asJava,
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -796,21 +793,22 @@ class ReplicaManagerTest {
       // We receive one valid request from the follower and replica state is updated
       var successfulFetch: Option[FetchPartitionData] = None
       def callback(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        successfulFetch = response.headOption.filter { case (topicPartition, _) => topicPartition == tidp }.map { case (_, data) => data }
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter { case (topicIdPartition, _) => topicIdPartition.topicPartition == tidp.topicPartition }.map { case (_, data) => data }
       }
 
       val validFetchPartitionData = new FetchRequest.PartitionData(0L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch))
 
       // Fetch messages simulating a different ID than the one in the log.
+      val inconsistentTidp = new TopicIdPartition(Uuid.randomUuid(), tidp.topicPartition)
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
         fetchMinBytes = 1,
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(tidp -> validFetchPartitionData),
-        topicIds = Collections.singletonMap(topic, Uuid.randomUuid()),
+        fetchInfos = Seq(inconsistentTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -822,14 +820,14 @@ class ReplicaManagerTest {
       // Simulate where the fetch request did not use topic IDs
       // Fetch messages simulating an ID in the log.
       // We should not see topic ID errors.
+      val zeroTidp = new TopicIdPartition(Uuid.ZERO_UUID, tidp.topicPartition)
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
         fetchMinBytes = 1,
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(tidp -> validFetchPartitionData),
-        topicIds = Collections.emptyMap(),
+        fetchInfos = Seq(zeroTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
@@ -840,6 +838,12 @@ class ReplicaManagerTest {
 
       // Next create a topic without a topic ID written in the log.
       val tp2 = new TopicPartition("noIdTopic", 0)
+      val tidp2 = new TopicIdPartition(Uuid.randomUuid(), tp2)
+
+      def callback2(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter { case (topicIdPartition, _) => topicIdPartition.topicPartition == tidp2.topicPartition }.map { case (_, data) => data }
+      }
 
       // Broker 0 becomes leader of the partition
       val leaderAndIsrPartitionState2 = new LeaderAndIsrPartitionState()
@@ -868,28 +872,27 @@ class ReplicaManagerTest {
         fetchMinBytes = 1,
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(tidp -> validFetchPartitionData),
-        topicIds = Collections.singletonMap("noIdTopic", Uuid.randomUuid()),
+        fetchInfos = Seq(tidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback,
+        responseCallback = callback2,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
       assertEquals(Errors.NONE, successfulFetch.get.error)
 
       // Fetch messages simulating the request not containing a topic ID. We should not have an error.
+      val zeroTidp2 = new TopicIdPartition(Uuid.ZERO_UUID, tidp2.topicPartition)
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
         fetchMinBytes = 1,
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(tidp -> validFetchPartitionData),
-        topicIds = Collections.emptyMap(),
+        fetchInfos = Seq(zeroTidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback,
+        responseCallback = callback2,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
@@ -912,6 +915,7 @@ class ReplicaManagerTest {
       // Create 2 partitions, assign replica 0 as the leader for both a different follower (1 and 2) for each
       val tp0 = new TopicPartition(topic, 0)
       val tp1 = new TopicPartition(topic, 1)
+      val topicId = Uuid.randomUuid();
       val tidp0 = new TopicIdPartition(topicId, tp0)
       val tidp1 = new TopicIdPartition(topicId, tp1)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
@@ -919,7 +923,7 @@ class ReplicaManagerTest {
       replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
-      val topicIds = Map(tp0.topic -> Uuid.randomUuid(), tp1.topic -> Uuid.randomUuid()).asJava
+      val topicIds = Map(tp0.topic -> topicId, tp1.topic -> topicId).asJava
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(
           new LeaderAndIsrPartitionState()
@@ -988,7 +992,6 @@ class ReplicaManagerTest {
         fetchInfos = Seq(
           tidp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
           tidp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
-        topicIds = topicIds,
         quota = UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
@@ -1712,7 +1715,6 @@ class ReplicaManagerTest {
       fetchMaxBytes = 100,
       hardMaxBytesLimit = false,
       fetchInfos = Seq(topicIdPartition -> partitionData),
-      topicIds = topicIds.asJava,
       quota = UnboundedQuota,
       isolationLevel = IsolationLevel.READ_UNCOMMITTED,
       responseCallback = callback,
@@ -1994,7 +1996,6 @@ class ReplicaManagerTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       fetchInfos = Seq(partition -> partitionData),
-      topicIds = topicIds.asJava,
       quota = UnboundedQuota,
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel,

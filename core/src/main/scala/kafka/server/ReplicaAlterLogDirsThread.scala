@@ -77,10 +77,8 @@ class ReplicaAlterLogDirsThread(name: String,
 
     // We can build the map from the request since it contains topic IDs and names.
     // Only one ID can be associated with a name and vice versa.
-    val topicIds = new mutable.HashMap[String, Uuid]()
     val topicNames = new mutable.HashMap[Uuid, String]()
     request.data.topics.forEach { topic =>
-      topicIds.put(topic.topic, topic.topicId)
       topicNames.put(topic.topicId, topic.topic)
     }
 
@@ -110,7 +108,6 @@ class ReplicaAlterLogDirsThread(name: String,
       request.maxBytes,
       false,
       fetchData.asScala.toSeq,
-      topicIds.asJava,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,

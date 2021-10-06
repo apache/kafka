@@ -19,7 +19,7 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 
 import kafka.api.LeaderAndIsr
 import kafka.log.{AppendOrigin, LogConfig}
@@ -227,7 +227,6 @@ class ReplicaManagerConcurrencyTest {
         fetchMaxBytes = 1024 * 1024,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(topicIdPartition -> partitionData),
-        topicIds = Collections.singletonMap(topicIdPartition.topicPartition.topic, topicIdPartition.topicId),
         quota = QuotaFactory.UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,

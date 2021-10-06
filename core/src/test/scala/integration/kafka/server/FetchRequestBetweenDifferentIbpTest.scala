@@ -73,7 +73,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     producer.send(record2)
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-    val count = consumer.poll(Duration.ofMillis(1000)).count() + consumer.poll(Duration.ofMillis(1000)).count()
+    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
     assertEquals(2, count)
   }
 
