@@ -240,6 +240,7 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.util" />
   </subpackage>
 
   <subpackage name="metadata">
