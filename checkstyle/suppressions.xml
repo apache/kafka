@@ -97,6 +97,9 @@
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
 
+    <suppress checks="CyclomaticComplexity"
+              files="RequestResponseTest.java"/>
+
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java|FetcherTest.java|KafkaAdminClientTest.java"/>
 
