@@ -341,14 +341,14 @@ class ReplicaManagerConcurrencyTest {
           val delta = new MetadataDelta(latestImage)
           topic.initialize(delta)
           latestImage = delta.apply()
-          replicaManager.applyDelta(latestImage, delta.topicsDelta)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
           val delta = new MetadataDelta(latestImage)
           val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
           latestImage = delta.apply()
           future.complete(updatedLeaderAndIsr)
-          replicaManager.applyDelta(latestImage, delta.topicsDelta)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
         case ShutdownEvent =>
       }
