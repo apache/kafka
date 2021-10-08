@@ -397,6 +397,16 @@ class RemoteLogManagerTest {
     assertEquals(abortedTxns.map(_.asAbortedTransaction), expectedFetchDataInfo.abortedTransactions.get)
   }
 
+  @Test
+  def testGetClassLoaderAwareRemoteStorageManager(): Unit = {
+    val rsmManager: ClassLoaderAwareRemoteStorageManager = createNiceMock(classOf[ClassLoaderAwareRemoteStorageManager])
+    val remoteLogManager =
+      new RemoteLogManager(_ => None, (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
+        override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
+      }
+    assertEquals(rsmManager, remoteLogManager.storageManager())
+  }
+
   private def nonExistentTempFile(): File = {
     val file = TestUtils.tempFile()
     file.delete()
