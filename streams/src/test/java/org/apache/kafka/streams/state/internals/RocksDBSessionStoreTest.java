@@ -118,6 +118,8 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
         ) {
+            // The 2 records with values 2L and 3L are considered expired as
+            // their end times < observed stream time - retentionPeriod + 1.
             assertEquals(valuesToSet(iterator), new HashSet<>(Collections.singletonList(4L)));
         }
     }
