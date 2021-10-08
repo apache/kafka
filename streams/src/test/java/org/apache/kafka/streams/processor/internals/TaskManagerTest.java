@@ -736,6 +736,9 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
         expectRestoreToBeCompleted(consumer, changeLogReader);
         expect(consumer.assignment()).andReturn(taskId00Partitions);
+        // check that we should not commit empty map either
+        consumer.commitSync(eq(emptyMap()));
+        expectLastCall().andStubThrow(new AssertionError("should not invoke commitSync when offset map is empty"));
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
