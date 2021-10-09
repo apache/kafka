@@ -190,7 +190,7 @@ public class NamedTopologyTest {
         assertThat(
             streams.getFullTopologyDescription(),
             equalTo(
-                "Topology - topology-1:\n"
+                "Topology: topology-1:\n"
                     + "   Sub-topology: 0\n"
                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
                     + "      --> none\n"
@@ -222,7 +222,7 @@ public class NamedTopologyTest {
         assertThat(
             streams.getFullTopologyDescription(),
             equalTo(
-                     "Topology - topology-1:\n"
+                     "Topology: topology-1:\n"
                     + "   Sub-topology: 0\n"
                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
                     + "      --> none\n"
@@ -236,7 +236,7 @@ public class NamedTopologyTest {
                     + "    Sink: KSTREAM-SINK-0000000003 (topic: output-1)\n"
                     + "      <-- KSTREAM-FILTER-0000000002\n"
                     + "\n"
-                    + "Topology - topology-2:\n"
+                    + "Topology: topology-2:\n"
                     + "   Sub-topology: 0\n"
                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-2])\n"
                     + "      --> none\n"
@@ -250,7 +250,7 @@ public class NamedTopologyTest {
                     + "    Sink: KSTREAM-SINK-0000000003 (topic: output-2)\n"
                     + "      <-- KSTREAM-FILTER-0000000002\n"
                     + "\n"
-                    + "Topology - topology-3:\n"
+                    + "Topology: topology-3:\n"
                     + "   Sub-topology: 0\n"
                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-3])\n"
                     + "      --> none\n"

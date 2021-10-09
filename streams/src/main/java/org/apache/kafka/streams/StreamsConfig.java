@@ -358,7 +358,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
-    private static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")

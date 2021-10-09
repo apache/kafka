@@ -32,6 +32,8 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
+import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
@@ -56,6 +58,11 @@ public class TopologyConfig extends AbstractConfig {
                      null,
                      Importance.LOW,
                      BUFFERED_RECORDS_PER_PARTITION_DOC)
+            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.MEDIUM,
+                    CACHE_MAX_BYTES_BUFFERING_DOC)
              .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -85,9 +92,10 @@ public class TopologyConfig extends AbstractConfig {
     public final StreamsConfig applicationConfigs;
     public final Properties topologyOverrides;
 
+    public final int maxBufferedSize;
+    public final long cacheSize;
     public final long maxTaskIdleMs;
     public final long taskTimeoutMs;
-    public final int maxBufferedSize;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
 
@@ -104,6 +112,20 @@ public class TopologyConfig extends AbstractConfig {
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;
 
+        if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
+            maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
+        } else {
+            maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        }
+
+        if (isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
+            cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSize);
+        } else {
+            cacheSize = globalAppConfigs.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+        }
+
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
             maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
             log.info("Topology {} is overridding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
@@ -116,13 +138,6 @@ public class TopologyConfig extends AbstractConfig {
             log.info("Topology {} is overriding {} to {}", topologyName, TASK_TIMEOUT_MS_CONFIG, taskTimeoutMs);
         } else {
             taskTimeoutMs = globalAppConfigs.getLong(TASK_TIMEOUT_MS_CONFIG);
-        }
-
-        if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
-            maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
-        } else {
-            maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         }
 
         if (isTopologyOverride(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, topologyOverrides)) {

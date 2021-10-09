@@ -964,6 +964,7 @@ public class KafkaStreams implements AutoCloseable {
             time,
             streamsMetadataState,
             cacheSizePerThread,
+
             stateDirectory,
             delegatingStateRestoreListener,
             threadIdx,

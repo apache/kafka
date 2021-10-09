@@ -942,6 +942,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
         topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
         topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
@@ -949,8 +950,14 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
-        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
 
+        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(500L));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, equalTo(1000L));
         assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, equalTo(15));
@@ -960,21 +967,27 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
-        final Properties topologyOverrides = new Properties();
-        topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
-        topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
-        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
-        topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
+        streamsProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
+        streamsProps.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
+        streamsProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        streamsProps.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        streamsProps.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
 
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
-        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
-
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, not(500L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, not(1000L));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, not(15));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), not(MockTimestampExtractor.class));
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), not(LogAndContinueExceptionHandler.class));
+        final StreamsConfig config = new StreamsConfig(streamsProps);
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                new Properties())
+        );
+        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, is(500L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, is(1000L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), is(MockTimestampExtractor.class));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), is(LogAndContinueExceptionHandler.class));
     }
 
     @Test

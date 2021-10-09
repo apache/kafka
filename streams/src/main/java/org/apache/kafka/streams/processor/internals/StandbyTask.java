@@ -68,7 +68,7 @@ public class StandbyTask extends AbstractTask implements Task {
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.maxTaskIdleMs,
+            config.taskTimeoutMs,
             "standby-task",
             StandbyTask.class
         );

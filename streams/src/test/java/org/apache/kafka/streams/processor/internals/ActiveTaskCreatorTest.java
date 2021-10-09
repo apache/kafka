@@ -30,6 +30,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockClientSupplier;
 import org.easymock.EasyMockRunner;
@@ -79,8 +80,6 @@ public class ActiveTaskCreatorTest {
     final UUID uuid = UUID.randomUUID();
 
     private ActiveTaskCreator activeTaskCreator;
-
-
 
     // non-EOS test
 
@@ -477,6 +476,7 @@ public class ActiveTaskCreatorTest {
         final SourceNode sourceNode = mock(SourceNode.class);
 
         reset(builder, stateDirectory);
+        expect(builder.topologyConfigs()).andStubReturn(new TopologyConfig(new StreamsConfig(properties)));
         expect(builder.buildSubtopology(0)).andReturn(topology).anyTimes();
         expect(stateDirectory.getOrCreateDirectoryForTask(task00)).andReturn(mock(File.class));
         expect(stateDirectory.checkpointFileFor(task00)).andReturn(mock(File.class));

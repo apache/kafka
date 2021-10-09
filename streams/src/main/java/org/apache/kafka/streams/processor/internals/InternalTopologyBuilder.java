@@ -148,9 +148,8 @@ public class InternalTopologyBuilder {
     // TODO KAFKA-13336: we can remove this referance once we make the Topology/NamedTopology class into an interface and implement it
     private NamedTopology namedTopology;
 
-    // TODO KAFKA-13283: we still need to save the topology overrides here since we don't get the app configs until we
-    //  get passed in to the KafkaStreams, once we enforce all configs be passed in when constructing the topology then
-    //  we can make topologyConfigs final and drop the other
+    // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
+    //  this up front and make it final, but for now we have to wait for the global app configs passed in to rewriteTopology
     private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
 
     private boolean hasPersistentStores = false;
@@ -369,7 +368,7 @@ public class InternalTopologyBuilder {
         this.namedTopology = namedTopology;
     }
 
-    public synchronized final TopologyConfig topologyConfigs() {
+    public synchronized TopologyConfig topologyConfigs() {
         return topologyConfigs;
     }
 
@@ -388,7 +387,7 @@ public class InternalTopologyBuilder {
         setStreamsConfig(config);
 
         // maybe strip out caching layers
-        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) == 0L) {
+        if (topologyConfigs.cacheSize == 0L) {
             for (final StateStoreFactory<?> storeFactory : stateFactories.values()) {
                 storeFactory.builder.withCachingDisabled();
             }
