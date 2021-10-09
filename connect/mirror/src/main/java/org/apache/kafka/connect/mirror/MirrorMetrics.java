@@ -95,6 +95,20 @@ class MirrorMetrics implements AutoCloseable {
             "Average time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
 
 
+    private static final MetricNameTemplate OFFSETLAG_SENSOR = new MetricNameTemplate(
+            "offset-lag", SOURCE_CONNECTOR_GROUP,
+            "Lag sync upstream offset lag from source topic offset.", PARTITION_TAGS);
+    private static final MetricNameTemplate OFFSETLAG_SENSOR_MAX = new MetricNameTemplate(
+            "offset-lag-max", SOURCE_CONNECTOR_GROUP,
+            "Max lag sync upstream offset from source topic offset.", PARTITION_TAGS);
+    private static final MetricNameTemplate OFFSETLAG_SENSOR_MIN = new MetricNameTemplate(
+            "offset-lag-min", SOURCE_CONNECTOR_GROUP,
+            "Min lag sync upstream offset  from source topic offset.", PARTITION_TAGS);
+    private static final MetricNameTemplate OFFSETLAG_SENSOR_AVG = new MetricNameTemplate(
+            "offset-lag-avg", SOURCE_CONNECTOR_GROUP,
+            "Average lag sync upstream offset  from source topic offset.", PARTITION_TAGS);
+
+
     private final Metrics metrics; 
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics; 
     private final Map<String, GroupMetrics> groupMetrics = new HashMap<>();
@@ -135,6 +149,9 @@ class MirrorMetrics implements AutoCloseable {
     void replicationLatency(TopicPartition topicPartition, long millis) {
         partitionMetrics.get(topicPartition).replicationLatencySensor.record((double) millis);
     }
+    void recordLag(TopicPartition topicPartition, long lag) {
+        partitionMetrics.get(topicPartition).offsetLagSensor.record((double) lag);
+    }
 
     void recordBytes(TopicPartition topicPartition, long bytes) {
         partitionMetrics.get(topicPartition).byteSensor.record((double) bytes);
@@ -158,6 +175,7 @@ class MirrorMetrics implements AutoCloseable {
         private final Sensor byteSensor;
         private final Sensor recordAgeSensor;
         private final Sensor replicationLatencySensor;
+        private final Sensor offsetLagSensor;
 
         PartitionMetrics(TopicPartition topicPartition) {
             String prefix = topicPartition.topic() + "-" + topicPartition.partition() + "-";
@@ -184,6 +202,13 @@ class MirrorMetrics implements AutoCloseable {
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MAX, tags), new Max());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MIN, tags), new Min());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_AVG, tags), new Avg());
+
+            offsetLagSensor = metrics.sensor(prefix + "offsetLag");
+            offsetLagSensor.add(metrics.metricInstance(OFFSETLAG_SENSOR, tags), new Value());
+            offsetLagSensor.add(metrics.metricInstance(OFFSETLAG_SENSOR_MAX, tags), new Max());
+            offsetLagSensor.add(metrics.metricInstance(OFFSETLAG_SENSOR_MIN, tags), new Min());
+            offsetLagSensor.add(metrics.metricInstance(OFFSETLAG_SENSOR_AVG, tags), new Avg());
+
         }
     }
 

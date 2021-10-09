@@ -32,6 +32,14 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.common.TopicPartitionInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +72,12 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
+
+    private Admin sourceAdminClient;
+    private Scheduler scheduler;
+
+    private Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsetCaches;
+
 
     public MirrorSourceTask() {}
 
@@ -101,6 +115,12 @@ public class MirrorSourceTask extends SourceTask {
         topicPartitionOffsets.forEach(consumer::seek);
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
+
+        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        scheduler = new Scheduler(MirrorSourceTask.class, config.adminTimeout());
+        scheduler.scheduleRepeatingDelayed(this::cacheAllTopicPartitionOffsets, Duration.ofSeconds(10),
+                "refresh all topics latest Offsets");
+
     }
 
     @Override
@@ -146,6 +166,17 @@ public class MirrorSourceTask extends SourceTask {
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
                 metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
                 metrics.recordBytes(topicPartition, byteSize(record.value()));
+
+                // Calc the sync lag, the lag means topic partition latest offset  minus the current sourceTask sync topic offset
+                // lag = latest offset in source cluster - current sync offset in source cluster
+                TopicPartition origintp = new TopicPartition(record.topic(), record.partition());
+                long latest = getLatestoffsetFromCache(origintp);
+                long sync = record.offset();
+                long lag = caclOffsetLag(latest, sync);
+                if (latest != -1 && lag > -1) {
+                    metrics.recordLag(topicPartition, lag);
+                }
+
             }
             if (sourceRecords.isEmpty()) {
                 // WorkerSourceTasks expects non-zero batch size
@@ -294,4 +325,45 @@ public class MirrorSourceTask extends SourceTask {
             return shouldSyncOffsets;
         }
     }
+
+    public void cacheAllTopicPartitionOffsets() {
+        try {
+            ListTopicsResult topics = sourceAdminClient.listTopics();
+            DescribeTopicsResult topicsResult = sourceAdminClient.describeTopics(topics.names().get());
+            Map<String, TopicDescription> allTp = topicsResult.allTopicNames().get();
+            Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
+            for (Map.Entry<String, TopicDescription> td : allTp.entrySet()) {
+                TopicDescription value = td.getValue();
+                List<TopicPartitionInfo> partitionInfos = value.partitions();
+                for (TopicPartitionInfo ti : partitionInfos) {
+                    TopicPartition tp = new TopicPartition(td.getKey(), ti.partition());
+                    partitions.put(tp, OffsetSpec.latest());
+                }
+            }
+            offsetCaches = sourceAdminClient.listOffsets(partitions).all().get();
+        } catch (Exception e) {
+            log.error("Get latest topic offsets catch exception", e);
+        }
+    }
+
+    private long getLatestoffsetFromCache(TopicPartition topicPartition) {
+        if (offsetCaches == null) {
+            cacheAllTopicPartitionOffsets();
+            return -1;
+        }
+        ListOffsetsResult.ListOffsetsResultInfo lfr = offsetCaches.get(topicPartition);
+        if (lfr != null) {
+            return lfr.offset();
+        } else {
+            return -1;
+        }
+    }
+
+    private long caclOffsetLag(long latest, long sync) {
+        if (latest < sync) {
+            return 0;
+        }
+        return latest - sync;
+    }
+
 }
