@@ -93,10 +93,6 @@ class ConsumerTask implements Runnable, Closeable {
     // may or may not have been processed based on the assigned topic partitions.
     private final Map<Integer, Long> partitionToConsumedOffsets = new ConcurrentHashMap<>();
 
-    // Map of remote log metadata topic partition to processed offsets. Received consumer record is
-    // processed as the remote log metadata record's topic partition exists in assigned topic partitions.
-    private final Map<Integer, Long> partitionToProcessedOffsets = new ConcurrentHashMap<>();
-
     // Map of remote log metadata topic partition to processed offsets that were synced in committedOffsetsFile.
     private Map<Integer, Long> lastSyncedPartitionToConsumedOffsets = Collections.emptyMap();
 
@@ -148,7 +144,6 @@ class ConsumerTask implements Runnable, Closeable {
             // Seek to the committed offsets
             for (Map.Entry<Integer, Long> entry : committedOffsets.entrySet()) {
                 partitionToConsumedOffsets.put(entry.getKey(), entry.getValue());
-                partitionToProcessedOffsets.put(entry.getKey(), entry.getValue());
                 consumer.seek(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, entry.getKey()), entry.getValue());
             }
 
@@ -189,7 +184,6 @@ class ConsumerTask implements Runnable, Closeable {
         synchronized (assignPartitionsLock) {
             if (assignedTopicPartitions.contains(remoteLogMetadata.topicIdPartition())) {
                 remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
-                partitionToProcessedOffsets.put(record.partition(), record.offset());
             } else {
                 log.debug("This event {} is skipped as the topic partition is not assigned for this instance.", remoteLogMetadata);
             }
@@ -211,7 +205,7 @@ class ConsumerTask implements Runnable, Closeable {
             synchronized (assignPartitionsLock) {
                 for (TopicIdPartition topicIdPartition : assignedTopicPartitions) {
                     int metadataPartition = topicPartitioner.metadataPartition(topicIdPartition);
-                    Long offset = partitionToProcessedOffsets.get(metadataPartition);
+                    Long offset = partitionToConsumedOffsets.get(metadataPartition);
                     if (offset != null) {
                         remotePartitionMetadataEventHandler.syncLogMetadataSnapshot(topicIdPartition, metadataPartition, offset);
                     } else {
@@ -272,7 +266,6 @@ class ConsumerTask implements Runnable, Closeable {
                 assignedMetaPartitionsSnapshot = new HashSet<>(assignedMetaPartitions);
                 // Removing unassigned meta partitions from partitionToConsumedOffsets and partitionToCommittedOffsets
                 partitionToConsumedOffsets.entrySet().removeIf(entry -> !assignedMetaPartitions.contains(entry.getKey()));
-                partitionToProcessedOffsets.entrySet().removeIf(entry -> !assignedMetaPartitions.contains(entry.getKey()));
 
                 assignPartitions = false;
             }
