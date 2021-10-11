@@ -79,7 +79,7 @@ class SubmittedRecords {
     public void remove(SubmittedRecord record) {
         Deque<SubmittedRecord> deque = records.get(record.partition());
         if (deque == null) {
-            log.warn("Attempted to remove record for partition {}, but no records with that partition are present", record.partition());
+            log.warn("Attempted to remove record from submitted queue for partition {}, but no records with that partition appear to have been submitted", record.partition());
             return;
         }
         deque.removeLastOccurrence(record);
