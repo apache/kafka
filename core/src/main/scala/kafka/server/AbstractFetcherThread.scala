@@ -89,6 +89,10 @@ abstract class AbstractFetcherThread(name: String,
 
   protected val isOffsetForLeaderEpochSupported: Boolean
 
+
+  protected def buildRemoteLogAuxState(partition: TopicPartition, currentLeaderEpoch: Int, fetchOffset: Long,
+                                       leaderLogStartOffset: Long): Unit
+
   override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {
@@ -383,7 +387,12 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch))
                     partitionsWithError += topicPartition
-
+                case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
+                  // No need to retry this as it indicates that the requested offset is moved to tiered storage.
+                  // Check whether topicId is available here.
+                  if (handleOffsetMovedToTieredStorage(topicPartition, None, currentFetchState,
+                    fetchPartitionData.currentLeaderEpoch, partitionData.logStartOffset()))
+                    partitionsWithError += topicPartition
                 case Errors.UNKNOWN_LEADER_EPOCH =>
                   debug(s"Remote broker has a smaller leader epoch for partition $topicPartition than " +
                     s"this replica's current leader epoch of ${currentFetchState.currentLeaderEpoch}.")
@@ -643,7 +652,9 @@ abstract class AbstractFetcherThread(name: String,
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
-  protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
+  private def fetchOffsetAndApplyFun(topicPartition: TopicPartition, topicId: Option[Uuid],
+                                     currentLeaderEpoch: Int,
+                                     truncateAndBuild: => Long => Unit) : PartitionFetchState = {
     val replicaEndOffset = logEndOffset(topicPartition)
 
     /**
@@ -693,12 +704,64 @@ abstract class AbstractFetcherThread(name: String,
       val offsetToFetch = Math.max(leaderStartOffset, replicaEndOffset)
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
       if (leaderStartOffset > replicaEndOffset)
-        truncateFullyAndStartAt(topicPartition, leaderStartOffset)
+        truncateAndBuild(leaderStartOffset)
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
       PartitionFetchState(topicId, offsetToFetch, Some(initialLag), currentLeaderEpoch,
         state = Fetching, lastFetchedEpoch = latestEpoch(topicPartition))
+    }
+  }
+
+  /**
+   * Handle a partition whose offset is out of range and return a new fetch offset.
+   */
+  protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
+    fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
+      leaderLogStartOffset => truncateFullyAndStartAt(topicPartition, leaderLogStartOffset))
+  }
+
+  /**
+   * Handle a partition whose offset is moved to tiered storage and return a new fetch offset.
+   */
+  protected def fetchOffsetAndBuildRemoteLogAuxState(topicPartition: TopicPartition, topicId: Option[Uuid],
+                                                     currentLeaderEpoch: Int,
+                                                     leaderLogStartOffset: Long): PartitionFetchState = {
+    fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
+      leaderLocalLogStartOffset =>
+        buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset))
+  }
+
+  /**
+   * Handle the offset moved to tiered storage error. Return false if
+   * 1) the request succeeded or
+   * 2) was fenced and this thread haven't received new epoch,
+   * which means we need not backoff and retry. True if there was a retriable error.
+   */
+  private def handleOffsetMovedToTieredStorage(topicPartition: TopicPartition,
+                                               topicId: Option[Uuid],
+                                               fetchState: PartitionFetchState,
+                                               requestEpoch: Optional[Integer],
+                                               leaderLogStartOffset: Long): Boolean = {
+    try {
+      val newFetchState = fetchOffsetAndBuildRemoteLogAuxState(topicPartition, topicId, fetchState.currentLeaderEpoch, leaderLogStartOffset)
+      partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
+      info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
+        s"moved to remote tier. Reset fetch offset to ${newFetchState.fetchOffset}")
+      false
+    } catch {
+      case _: FencedLeaderEpochException =>
+        onPartitionFenced(topicPartition, requestEpoch)
+
+      case e @ (_ : UnknownTopicOrPartitionException |
+                _ : UnknownLeaderEpochException |
+                _ : NotLeaderOrFollowerException) =>
+        info(s"Could not build remote log auxiliary state for $topicPartition due to error: ${e.getMessage}")
+        true
+
+      case e: Throwable =>
+        error(s"Error building remote log auxiliary state for $topicPartition", e)
+        true
     }
   }
 

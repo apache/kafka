@@ -244,7 +244,7 @@ case class CommittedPartitionState(
  * 5) lock is used to prevent the follower replica from being updated while ReplicaAlterDirThread is
  *    executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
  */
-class Partition(val topicPartition: TopicPartition,
+class   Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
                 interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
@@ -1394,7 +1394,7 @@ class Partition(val topicPartition: TopicPartition,
       case ListOffsetsRequest.LATEST_TIMESTAMP =>
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
+      case ListOffsetsRequest.EARLIEST_TIMESTAMP | ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
         getOffsetByTimestamp
       case _ =>
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)

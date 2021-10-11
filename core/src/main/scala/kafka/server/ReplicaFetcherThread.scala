@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,11 +17,19 @@
 
 package kafka.server
 
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
+import kafka.log.remote.RemoteIndexCache.TmpFileSuffix
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
+import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
+
+import java.io.{File, InputStream}
+import java.nio.file.{Files, StandardCopyOption}
+import java.util.Optional
 
 import scala.collection.mutable
 
@@ -190,6 +198,72 @@ class ReplicaFetcherThread(name: String,
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = false)
+  }
+
+  override protected def buildRemoteLogAuxState(partition: TopicPartition,
+                                                currentLeaderEpoch: Int,
+                                                leaderLocalLogStartOffset: Long,
+                                                leaderLogStartOffset: Long): Unit = {
+    replicaMgr.localLog(partition).foreach(log =>
+      if (log.remoteStorageSystemEnable && log.config.remoteLogConfig.remoteStorageEnable) {
+        replicaMgr.remoteLogManager().foreach(rlm => {
+          var rlsMetadata: Optional[RemoteLogSegmentMetadata] = Optional.empty()
+          val epoch = log.leaderEpochCache.flatMap(cache => cache.epochForOffset(leaderLocalLogStartOffset))
+          if (epoch.isDefined) {
+            rlsMetadata = rlm.fetchRemoteLogSegmentMetadata(partition, epoch.get, leaderLocalLogStartOffset)
+          } else {
+            // If epoch is not available, then it might be possible that this broker might lost its entire local storage.
+            // We may also have to build the leader epoch cache. To find out the remote log segment metadata for the
+            // leaderLocalLogStartOffset-1, start from the current leader epoch and subtract one to the epoch till
+            // finding the metadata.
+            var previousLeaderEpoch = currentLeaderEpoch
+            while (!rlsMetadata.isPresent && previousLeaderEpoch >= 0) {
+              rlsMetadata = rlm.fetchRemoteLogSegmentMetadata(partition, previousLeaderEpoch, leaderLocalLogStartOffset - 1)
+              previousLeaderEpoch -= 1
+            }
+          }
+          if (rlsMetadata.isPresent) {
+            val epochStream = rlm.storageManager().fetchIndex(rlsMetadata.get(), RemoteStorageManager.IndexType.LEADER_EPOCH)
+            val epochs = readLeaderEpochCheckpoint(epochStream, log.dir)
+
+            // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
+            truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
+
+            log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
+            epochs.foreach(epochEntry => {
+              log.leaderEpochCache.map(cache => cache.assign(epochEntry.epoch, epochEntry.startOffset))
+            })
+            info(s"Updated the epoch cache from remote tier till offset: $leaderLocalLogStartOffset " +
+              s"with size: ${epochs.size} for $partition")
+
+            // Restore producer snapshot
+            val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, leaderLocalLogStartOffset)
+            Files.copy(rlm.storageManager().fetchIndex(rlsMetadata.get(), RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
+              snapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+            log.producerStateManager.reloadSnapshots()
+            log.loadProducerState(leaderLocalLogStartOffset, reloadFromCleanShutdown = false)
+            info(s"Built the leader epoch cache and producer snapshots from remote tier for $partition. " +
+              s"Active producers: ${log.producerStateManager.activeProducers.size}, LeaderLogStartOffset: $leaderLogStartOffset")
+          } else {
+            throw new RemoteStorageException(s"Couldn't build the state from remote store for partition: $partition, " +
+              s"currentLeaderEpoch: $currentLeaderEpoch, leaderLocalLogStartOffset: $leaderLocalLogStartOffset, " +
+              s"leaderLogStartOffset: $leaderLogStartOffset, epoch: $epoch as the previous remote log segment " +
+              s"metadata was not found")
+          }
+        })
+      }
+    )
+  }
+
+  private def readLeaderEpochCheckpoint(stream: InputStream,
+                                        dir: File): List[EpochEntry] = {
+    val tmpFile = new File(dir, "leader-epoch-checkpoint" + TmpFileSuffix)
+    Files.copy(stream, tmpFile.toPath)
+    val epochEntries = new LeaderEpochCheckpointFile(tmpFile).checkpoint.read().toList
+    if (!tmpFile.delete()) {
+      logger.warn("Unable to delete the temporary leader epoch checkpoint file: {}", tmpFile.getAbsolutePath)
+    }
+    epochEntries
   }
 
 }

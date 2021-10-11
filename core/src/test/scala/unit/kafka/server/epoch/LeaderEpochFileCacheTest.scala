@@ -578,4 +578,15 @@ class LeaderEpochFileCacheTest {
     //Then
     cache.truncateFromEnd(7)
   }
+
+  @Test
+  def testGetEpochEntry(): Unit = {
+    cache.assign(2, 100L)
+    cache.assign(3, 500L)
+    cache.assign(5, 1000L)
+
+    assertEquals(EpochEntry(2, 100L), cache.getEpochEntry(2).get)
+    assertEquals(EpochEntry(3, 500L), cache.getEpochEntry(3).get)
+    assertEquals(EpochEntry(5, 1000L), cache.getEpochEntry(5).get)
+  }
 }

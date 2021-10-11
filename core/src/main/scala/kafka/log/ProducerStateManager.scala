@@ -520,6 +520,12 @@ class ProducerStateManager(
     val lastTimestamp = oldestTxnLastTimestamp
     lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
   }
+  
+  def reloadSnapshots(): Unit = {
+    info("Reloading the producer state snapshots")
+    truncateFullyAndStartAt(0L)
+    snapshots = loadSnapshots()
+  }
 
   /**
    * Load producer state snapshots by scanning the _logDir.
