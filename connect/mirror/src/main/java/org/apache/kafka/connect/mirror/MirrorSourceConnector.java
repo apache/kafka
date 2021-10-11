@@ -471,7 +471,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
+        return (topicFilter.shouldReplicateTopic(topic) || replicationPolicy.isHeartbeatsTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
@@ -499,11 +499,6 @@ public class MirrorSourceConnector extends SourceConnector {
             }
             return isCycle(upstreamTopic);
         }
-    }
-
-    // e.g. heartbeats, us-west.heartbeats
-    boolean isHeartbeatTopic(String topic) {
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     String formatRemoteTopic(String topic) {

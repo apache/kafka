@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
- 
+
 import java.time.Duration;
 import java.util.Set;
 import java.util.HashSet;
@@ -156,7 +156,7 @@ public class MirrorClient implements AutoCloseable {
         try {
             // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
             // to use ReplicationPolicy to create the checkpoint topic here.
-            String checkpointTopic = remoteClusterAlias + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+            String checkpointTopic = replicationPolicy.checkpointsTopic(remoteClusterAlias);
             List<TopicPartition> checkpointAssignment =
                 Collections.singletonList(new TopicPartition(checkpointTopic, 0));
             consumer.assign(checkpointAssignment);
@@ -209,17 +209,15 @@ public class MirrorClient implements AutoCloseable {
             }
             visited.add(source);
             topic = replicationPolicy.upstreamTopic(topic);
-        } 
+        }
     }
 
     boolean isHeartbeatTopic(String topic) {
-        // heartbeats are replicated, so we must use ReplicationPolicy here
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
+        return replicationPolicy.isHeartbeatsTopic(topic);
     }
 
     boolean isCheckpointTopic(String topic) {
-        // checkpoints are not replicated, so we don't need to use ReplicationPolicy here
-        return topic.endsWith(MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX);
+        return replicationPolicy.isCheckpointsTopic(topic);
     }
 
     boolean isRemoteTopic(String topic) {
