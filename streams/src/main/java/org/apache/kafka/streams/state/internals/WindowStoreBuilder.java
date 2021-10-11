@@ -35,7 +35,7 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
                               final Serde<K> keySerde,
                               final Serde<V> valueSerde,
                               final Time time) {
-        super(storeSupplier.name(), keySerde, valueSerde, time);
+        super(Objects.requireNonNull(storeSupplier, "storeSupplier cannot be null").name(), keySerde, valueSerde, time); 
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
     }
