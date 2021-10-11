@@ -169,6 +169,24 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def findPreviousEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.lowerEntry(epoch)).map(_.getKey)
+    }
+  }
+
+  def findNextEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.higherEntry(epoch)).map(_.getKey)
+    }
+  }
+
+  def getEpochEntry(epoch: Int): Option[EpochEntry] = {
+    inReadLock(lock) {
+      Option.apply(epochs.get(epoch))
+    }
+  }
+
   /**
     * Returns the Leader Epoch and the End Offset for a requested Leader Epoch.
     *
@@ -265,6 +283,27 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
         debug(s"Cleared entries $removedEntries and rewrote first entry $updatedFirstEntry after " +
           s"truncating to start offset $startOffset, leaving ${epochs.size} in the cache.")
       }
+    }
+  }
+
+  def epochForOffset(offset: Long): Option[Int] = {
+    inReadLock(lock) {
+      var previousEpoch = earliestEntry.map(_.epoch)
+      epochs.values().iterator().forEachRemaining(entry => {
+        if (entry.startOffset == offset)
+          return Some(entry.epoch)
+        if (entry.startOffset > offset)
+          return previousEpoch
+        previousEpoch = Some(entry.epoch)
+      })
+      previousEpoch
+    }
+  }
+
+  def writeTo(leaderEpochCheckpoint: LeaderEpochCheckpoint): LeaderEpochFileCache = {
+    inReadLock(lock) {
+      leaderEpochCheckpoint.write(epochEntries)
+      new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint)
     }
   }
 

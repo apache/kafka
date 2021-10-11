@@ -17,26 +17,26 @@
 
 package kafka.log
 
-import java.io.{Closeable, File, RandomAccessFile}
+import kafka.common.IndexOffsetOverflowException
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem}
+
+import java.io.{File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
-import kafka.common.IndexOffsetOverflowException
-import kafka.utils.CoreUtils.inLock
-import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
-
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param _file The index file
+ * @param indexFile The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
-                             val writable: Boolean) extends Closeable {
+abstract class AbstractIndex(@volatile private var indexFile: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+                             val writable: Boolean) extends CleanableIndex(indexFile) {
   import AbstractIndex._
 
   // Length of the index file
@@ -152,15 +152,13 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
    */
   def isFull: Boolean = _entries >= _maxEntries
 
-  def file: File = _file
-
   def maxEntries: Int = _maxEntries
 
   def entries: Int = _entries
 
   def length: Long = _length
 
-  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
+  def updateParentDir(parentDir: File): Unit = indexFile = new File(parentDir, file.getName)
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
@@ -199,16 +197,6 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
         }
       }
     }
-  }
-
-  /**
-   * Rename the file that backs this offset index
-   *
-   * @throws IOException if rename fails
-   */
-  def renameTo(f: File): Unit = {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
-    finally _file = f
   }
 
   /**

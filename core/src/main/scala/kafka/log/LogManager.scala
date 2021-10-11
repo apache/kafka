@@ -19,6 +19,7 @@ package kafka.log
 
 import kafka.api.ApiVersion
 import kafka.log.LogConfig.MessageFormatVersion
+import kafka.log.remote.RemoteIndexCache
 
 import java.io._
 import java.nio.file.Files
@@ -354,7 +355,11 @@ class LogManager(logDirs: Seq[File],
         }
 
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
-          logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
+          logDir.isDirectory &&
+            UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic &&
+            // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
+            // but not any topic-partition dir.
+            !logDir.getName.equals(RemoteIndexCache.DirName))
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
 

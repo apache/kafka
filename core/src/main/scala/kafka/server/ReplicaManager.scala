@@ -27,6 +27,7 @@ import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
+import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
@@ -546,6 +547,11 @@ class ReplicaManager(val config: KafkaConfig,
 
   def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
+  }
+
+  def remoteLogManager(): Option[RemoteLogManager] = {
+    //todo-tier Have this class initialized with RemoteLogManager
+    None
   }
 
   def getLogDir(topicPartition: TopicPartition): Option[String] = {

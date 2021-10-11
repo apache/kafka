@@ -42,6 +42,11 @@ public class ListOffsetsRequest extends AbstractRequest {
     public static final long LATEST_TIMESTAMP = -1L;
     public static final long MAX_TIMESTAMP = -3L;
 
+    /**
+     * It is used to represent the earliest message stored in the local log which is also called the local-log-start-offset
+     */
+    public static final long EARLIEST_LOCAL_TIMESTAMP = -4L;
+
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 

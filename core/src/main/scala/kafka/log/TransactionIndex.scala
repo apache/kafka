@@ -41,13 +41,14 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile private var _file: File) extends Logging {
+class TransactionIndex(val startOffset: Long, @volatile private var indexFile: File) extends CleanableIndex(indexFile)
+  with Logging {
 
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
-  if (_file.exists)
+  if (indexFile.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
@@ -62,9 +63,7 @@ class TransactionIndex(val startOffset: Long, @volatile private var _file: File)
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def file: File = _file
-
-  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
+  def updateParentDir(parentDir: File): Unit = indexFile = new File(parentDir, file.getName)
 
   /**
    * Delete this index.
@@ -104,13 +103,6 @@ class TransactionIndex(val startOffset: Long, @volatile private var _file: File)
   def close(): Unit = {
     maybeChannel.foreach(_.close())
     maybeChannel = None
-  }
-
-  def renameTo(f: File): Unit = {
-    try {
-      if (file.exists)
-        Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
-    } finally _file = f
   }
 
   def truncateTo(offset: Long): Unit = {
