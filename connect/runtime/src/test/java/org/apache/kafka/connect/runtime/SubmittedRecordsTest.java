@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class SubmittedRecordsTest {
 
@@ -137,7 +138,8 @@ public class SubmittedRecordsTest {
     @Test
     public void testRemoveLastSubmittedRecord() {
         SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
-        submittedRecords.remove(submittedRecord);
+        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecords.removeLastOccurrence(submittedRecord));
+        assertFalse("Attempt to remove already-removed record from submitted queue should fail", submittedRecords.removeLastOccurrence(submittedRecord));
 
         // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
         assertEquals(Collections.emptyMap(), submittedRecords.committableOffsets());
@@ -157,7 +159,7 @@ public class SubmittedRecordsTest {
 
         assertNoEmptyDeques();
 
-        submittedRecords.remove(recordToRemove);
+        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecords.removeLastOccurrence(recordToRemove));
 
         assertNoEmptyDeques();
         // The only record for this partition has been removed; we shouldn't be tracking a deque for it anymore

@@ -32,7 +32,7 @@ import java.util.Map;
  * returned from {@link SourceTask#poll()}. The latest-eligible offsets for each source partition can be retrieved via
  * {@link #committableOffsets()}, the latest-eligible offsets for each source partition can be retrieved, where every
  * record up to and including the record for each returned offset has been either
- * {@link SubmittedRecord#ack() acknowledged} or {@link #remove(SubmittedRecord) removed}.
+ * {@link SubmittedRecord#ack() acknowledged} or {@link #removeLastOccurrence(SubmittedRecord) removed}.
  * Note that this class is not thread-safe, though a {@link SubmittedRecord} can be
  * {@link SubmittedRecord#ack() acknowledged} from a different thread.
  */
@@ -50,13 +50,13 @@ class SubmittedRecords {
     /**
      * Enqueue a new source record before dispatching it to a producer.
      * The returned {@link SubmittedRecord} should either be {@link SubmittedRecord#ack() acknowledged} in the
-     * producer callback, or {@link #remove(SubmittedRecord) removed} if the record could not be successfully
+     * producer callback, or {@link #removeLastOccurrence(SubmittedRecord) removed} if the record could not be successfully
      * sent to the producer.
      * 
      * @param record the record about to be dispatched; may not be null but may have a null
      *               {@link SourceRecord#sourcePartition()} and/or {@link SourceRecord#sourceOffset()}
      * @return a {@link SubmittedRecord} that can be either {@link SubmittedRecord#ack() acknowledged} once ack'd by
-     *         the producer, or {@link #remove removed} if synchronously rejected by the producer
+     *         the producer, or {@link #removeLastOccurrence removed} if synchronously rejected by the producer
      */
     @SuppressWarnings("unchecked")
     public SubmittedRecord submit(SourceRecord record) {
@@ -74,18 +74,25 @@ class SubmittedRecords {
     /**
      * Remove a source record and do not take it into account any longer when tracking offsets.
      * Useful if the record has been synchronously rejected by the producer.
+     * If multiple instances of the same {@link SubmittedRecord} have been submitted already, only the first one found
+     * (traversing from the end of the deque backward) will be removed.
      * @param record the {@link #submit previously-submitted} record to stop tracking; may not be null
+     * @return whether an instance of the record was removed
      */
-    public void remove(SubmittedRecord record) {
+    public boolean removeLastOccurrence(SubmittedRecord record) {
         Deque<SubmittedRecord> deque = records.get(record.partition());
         if (deque == null) {
             log.warn("Attempted to remove record from submitted queue for partition {}, but no records with that partition appear to have been submitted", record.partition());
-            return;
+            return false;
         }
-        deque.removeLastOccurrence(record);
+        boolean result = deque.removeLastOccurrence(record);
         if (deque.isEmpty()) {
             records.remove(record.partition());
         }
+        if (!result) {
+            log.warn("Attempted to remove record from submitted queue for partition {}, but the record has not been submitted or has already been removed", record.partition());
+        }
+        return result;
     }
 
     /**

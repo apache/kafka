@@ -240,8 +240,6 @@ class WorkerSourceTask extends WorkerTask {
                 }
 
                 maybeThrowProducerSendException();
-                updateCommittableOffsets();
-
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
@@ -250,6 +248,9 @@ class WorkerSourceTask extends WorkerTask {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
+
+                updateCommittableOffsets();
+
                 if (toSend == null)
                     continue;
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
@@ -385,7 +386,7 @@ class WorkerSourceTask extends WorkerTask {
                 log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
-                submittedRecords.remove(submittedRecord);
+                submittedRecords.removeLastOccurrence(submittedRecord);
                 counter.retryRemaining();
                 return false;
             } catch (ConnectException e) {
@@ -477,12 +478,14 @@ class WorkerSourceTask extends WorkerTask {
             this.committableOffsets = new HashMap<>();
         }
 
+        // Update the offset writer with any new offsets for records that have been acked.
+        // The offset writer will continue to track all offsets until they are able to be successfully flushed.
+        // IOW, if the offset writer fails to flush, it keeps those offset for the next attempt,
+        // though we may update them here with newer offsets for acked records.
         offsetsToCommit.forEach(offsetWriter::offset);
+
         if (!offsetWriter.beginFlush()) {
-            // There was nothing in the offsets to process, but we still waited for the data in the
-            // buffer to flush. This is useful since this can feed into metrics to monitor, e.g.
-            // flush time, which can be used for monitoring even if the connector doesn't record any
-            // offsets.
+            // There was nothing in the offsets to process, but we still mark a successful offset commit.
             long durationMillis = time.milliseconds() - started;
             recordCommitSuccess(durationMillis);
             log.debug("{} Finished offset commitOffsets successfully in {} ms",
@@ -524,7 +527,7 @@ class WorkerSourceTask extends WorkerTask {
             recordCommitFailure(time.milliseconds() - started, e);
             return false;
         } catch (TimeoutException e) {
-            log.error("{} Timed out waiting to flush offsets to storage", this);
+            log.error("{} Timed out waiting to flush offsets to storage; will try again on next flush interval with latest offsets", this);
             offsetWriter.cancelFlush();
             recordCommitFailure(time.milliseconds() - started, null);
             return false;
