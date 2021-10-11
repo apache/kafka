@@ -18,24 +18,32 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import kafka.api.IntegrationTestHarness;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 
+/**
+ * A test harness class that brings up 3 brokers and registers {@link TopicBasedRemoteLogMetadataManager} on broker with id as 0.
+ */
 public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHarness {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerHarness.class);
 
@@ -49,16 +57,42 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         return Collections.emptyMap();
     }
 
-    public void initialize(Set<TopicIdPartition> topicIdPartitions) {
+    public void initialize(Set<TopicIdPartition> topicIdPartitions,
+                           boolean startConsumerThread) {
         // Call setup to start the cluster.
         super.setUp();
 
-        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager();
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread);
+    }
+
+    public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
+                                                   boolean startConsumerThread) {
+        String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
+        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread) {
+            @Override
+            public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
+                                                     Set<TopicIdPartition> followerPartitions) {
+                Set<TopicIdPartition> allReplicas = new HashSet<>(leaderPartitions);
+                allReplicas.addAll(followerPartitions);
+                // Make sure the topic partition dirs exist as the topics might not have been created on this broker.
+                for (TopicIdPartition topicIdPartition : allReplicas) {
+                    // Create partition directory in the log directory created by topicBasedRemoteLogMetadataManager.
+                    File partitionDir = new File(new File(config().logDir()), topicIdPartition.topicPartition().topic() + "-" + topicIdPartition.topicPartition().partition());
+                    partitionDir.mkdirs();
+                    if (!partitionDir.exists()) {
+                        throw new KafkaException("Partition directory:[" + partitionDir + "] could not be created successfully.");
+                    }
+                }
+
+                super.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
+            }
+        };
 
         // Initialize TopicBasedRemoteLogMetadataManager.
         Map<String, Object> configs = new HashMap<>();
         configs.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList());
         configs.put(BROKER_ID, 0);
+        configs.put(LOG_DIR, logDir);
         configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, METADATA_TOPIC_PARTITIONS_COUNT);
         configs.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, METADATA_TOPIC_REPLICATION_FACTOR);
         configs.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, METADATA_TOPIC_RETENTION_MS);
@@ -72,7 +106,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         try {
             waitUntilInitialized(60_000);
         } catch (TimeoutException e) {
-            throw new RuntimeException(e);
+            throw new KafkaException(e);
         }
 
         topicBasedRemoteLogMetadataManager.onPartitionLeadershipChanges(topicIdPartitions, Collections.emptySet());
@@ -96,14 +130,18 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         return 3;
     }
 
-    protected TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
+    protected TopicBasedRemoteLogMetadataManager remoteLogMetadataManager() {
         return topicBasedRemoteLogMetadataManager;
     }
 
     public void close() throws IOException {
-        Utils.closeQuietly(topicBasedRemoteLogMetadataManager, "TopicBasedRemoteLogMetadataManager");
+        closeRemoteLogMetadataManager();
 
         // Stop the servers and zookeeper.
         tearDown();
+    }
+
+    public void closeRemoteLogMetadataManager() {
+        Utils.closeQuietly(topicBasedRemoteLogMetadataManager, "TopicBasedRemoteLogMetadataManager");
     }
 }
