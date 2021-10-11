@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
  * <code>JwksFileVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation
  * that will load the JWKS from the given file system directory.
  *
- * @see ValidatorCallbackHandlerConfiguration#JWKS_FILE_CONFIG
+ * @see org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI
  * @see VerificationKeyResolver
  */
 

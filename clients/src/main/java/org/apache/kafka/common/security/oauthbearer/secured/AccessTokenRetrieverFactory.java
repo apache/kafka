@@ -17,68 +17,63 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.ACCESS_TOKEN_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.ACCESS_TOKEN_FILE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.LoginCallbackHandlerConfiguration.TOKEN_ENDPOINT_URI_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
+import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
-import java.nio.file.Paths;
-import java.util.Objects;
-import java.util.stream.Stream;
+import java.net.URI;
+import java.util.Locale;
+import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
-import org.apache.kafka.common.config.ConfigException;
 
 public class AccessTokenRetrieverFactory  {
 
     /**
-     * Create an {@link AccessTokenRetriever} from the given
-     * {@link LoginCallbackHandlerConfiguration}.
+     * Create an {@link AccessTokenRetriever} from the given SASL and JAAS configuration.
      *
-     * <b>Note</b>: the returned <code>AccessTokenRetriever</code> is not initialized here and
-     * must be done by the caller.
+     * <b>Note</b>: the returned <code>AccessTokenRetriever</code> is <em>not</em> initialized
+     * here and must be done by the caller prior to use.
      *
-     * Primarily exposed here for unit testing.
+     * @param configs    SASL configuration
+     * @param jaasConfig JAAS configuration
      *
-     * @param conf Configuration for {@link javax.security.auth.callback.CallbackHandler}
-     *
-     * @return Non-<code>null</code> <code>AccessTokenRetriever</code>
+     * @return Non-<code>null</code> {@link AccessTokenRetriever}
      */
 
-    public static AccessTokenRetriever create(LoginCallbackHandlerConfiguration conf) {
-        String accessToken = conf.getAccessToken();
-        String accessTokenFile = conf.getAccessTokenFile();
-        String clientId = conf.getClientId();
+    public static AccessTokenRetriever create(Map<String, ?> configs, Map<String, Object> jaasConfig) {
+        return create(configs, null, jaasConfig);
+    }
 
-        long count = Stream.of(accessToken, accessTokenFile, clientId)
-            .filter(Objects::nonNull)
-            .count();
+    public static AccessTokenRetriever create(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        URI tokenEndpointUri = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);
 
-        if (count != 1) {
-            throw new ConfigException(String.format("The OAuth login configuration must include only one of %s, %s, or %s options", ACCESS_TOKEN_CONFIG, ACCESS_TOKEN_FILE_CONFIG, CLIENT_ID_CONFIG));
-        } else if (accessToken != null) {
-            accessToken = ConfigurationUtils.validateString(ACCESS_TOKEN_CONFIG, accessToken);
-            return new StaticAccessTokenRetriever(accessToken);
-        } else if (accessTokenFile != null) {
-            accessTokenFile = ConfigurationUtils.validateString(ACCESS_TOKEN_FILE_CONFIG, accessTokenFile);
-            return new FileTokenRetriever(Paths.get(accessTokenFile));
+        if (tokenEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
+            return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI));
         } else {
-            clientId = ConfigurationUtils.validateString(CLIENT_ID_CONFIG, clientId);
-            String clientSecret = ConfigurationUtils.validateString(CLIENT_SECRET_CONFIG, conf.getClientSecret());
-            String tokenEndpointUri = ConfigurationUtils.validateString(TOKEN_ENDPOINT_URI_CONFIG, conf.getTokenEndpointUri());
+            ConfigurationUtils jaasCu = new ConfigurationUtils(jaasConfig);
+            String clientId = jaasCu.validateString(CLIENT_ID_CONFIG);
+            String clientSecret = jaasCu.validateString(CLIENT_SECRET_CONFIG);
+            String scope = jaasCu.get(SCOPE_CONFIG);
 
-            SSLSocketFactory sslSocketFactory = ConfigurationUtils.createSSLSocketFactory(conf.originals(), TOKEN_ENDPOINT_URI_CONFIG);
+            SSLSocketFactory sslSocketFactory = cu.createSSLSocketFactory(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);
 
             return new HttpAccessTokenRetriever(clientId,
                 clientSecret,
-                conf.getScope(),
+                scope,
                 sslSocketFactory,
-                tokenEndpointUri,
-                conf.getLoginAttempts(),
-                conf.getLoginRetryWaitMs(),
-                conf.getLoginRetryMaxWaitMs(),
-                conf.getLoginConnectTimeoutMs(),
-                conf.getLoginReadTimeoutMs());
+                tokenEndpointUri.toString(),
+                cu.validateInteger(SASL_LOGIN_RETRY_ATTEMPTS),
+                cu.validateLong(SASL_LOGIN_RETRY_WAIT_MS),
+                cu.validateLong(SASL_LOGIN_RETRY_MAX_WAIT_MS),
+                cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false, null),
+                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false, null));
         }
     }
 

@@ -46,7 +46,20 @@ import org.slf4j.LoggerFactory;
  * <code>PemVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation
  * that will load the PEM files from the given file system directory.
  *
- * @see ValidatorCallbackHandlerConfiguration#PEM_DIRECTORY_CONFIG
+ * The instance is configured with the directory name that contains one or more
+ * <a href=\"https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail\">public key files</a>
+ * which are copies of the OAuth/OIDC provider's public keys.
+ *
+ * Note: the file names in the directory must end in the <code>.pem</code> suffix and the
+ * non-suffix portion of the file name is used as the OAuth/OIDC key ID (<code>kid</code>)
+ * to distinguish between multiple key files in the directory. For example, a file named
+ * <code>cafe0123.pem</code> in the directory will be interpreted as holding the public key
+ * for the ID <code>cafe0123</code>.
+ *
+ * In this mode, the broker will load the PEM files from the configured directory on startup.
+ * In the event that the JWT includes a <code>kid</code> header claim value that isn't in the
+ * PEM files, the broker will reject the JWT and authentication will fail.
+ *
  * @see VerificationKeyResolver
  */
 

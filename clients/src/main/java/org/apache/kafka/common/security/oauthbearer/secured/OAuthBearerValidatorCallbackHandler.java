@@ -43,12 +43,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        Map<String, Object> moduleOptions = ConfigurationUtils.getModuleOptions(saslMechanism, jaasConfigEntries);
-
-        ValidatorCallbackHandlerConfiguration conf = new ValidatorCallbackHandlerConfiguration(moduleOptions);
-        CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(conf);
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf, verificationKeyResolver);
-
+        CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, saslMechanism);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
         configure(verificationKeyResolver, accessTokenValidator);
     }
 

@@ -17,10 +17,14 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
+
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -31,6 +35,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
@@ -41,7 +46,29 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
-    private static final String EXTENSION_PREFIX = "Extension_";
+    public static final String CLIENT_ID_CONFIG = "clientId";
+    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
+    public static final String SCOPE_CONFIG = "scope";
+
+    public static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client ID to uniquely identify the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "clientcredentials grant type.";
+
+    public static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
+        "account and identifies the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "clientcredentials grant type.";
+
+    public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
+        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI + ") may need to specify an " +
+        "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
+        "include with the login request.";
+
+    private static final String EXTENSION_PREFIX = "extension_";
 
     private Map<String, Object> moduleOptions;
 
@@ -53,12 +80,15 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = ConfigurationUtils.getModuleOptions(saslMechanism, jaasConfigEntries);
+        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
+            throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
 
-        LoginCallbackHandlerConfiguration conf = new LoginCallbackHandlerConfiguration(moduleOptions);
-        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(conf);
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(conf);
+        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
+            throw new IllegalArgumentException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
 
+        moduleOptions = Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
+        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
         configure(accessTokenRetriever, accessTokenValidator);
     }
 

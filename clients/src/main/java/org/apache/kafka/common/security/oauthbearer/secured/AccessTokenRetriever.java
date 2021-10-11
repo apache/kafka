@@ -32,7 +32,6 @@ import java.io.IOException;
  *
  * @see HttpAccessTokenRetriever
  * @see FileTokenRetriever
- * @see StaticAccessTokenRetriever
  */
 
 public interface AccessTokenRetriever extends Initable, Closeable {

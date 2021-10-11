@@ -35,13 +35,14 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend read error"),
             null    // success!
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
         r.execute(call);
 
         long secondWait = retryWaitMs * 2;
@@ -58,13 +59,14 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend timeout error"),
             new IOException("pretend read error")
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
 
         assertThrows(IOException.class, () -> r.execute(call));
 
@@ -81,13 +83,14 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend timeout error"),
             new NullPointerException("pretend JSON node /userId in response is null")
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
 
         assertThrows(RuntimeException.class, () -> r.execute(call));
 
@@ -103,13 +106,14 @@ public class RetryTest extends OAuthBearerTest {
             new NullPointerException("pretend JSON node /userId in response is null"),
             null
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
 
         assertThrows(RuntimeException.class, () -> r.execute(call));
 
@@ -122,12 +126,13 @@ public class RetryTest extends OAuthBearerTest {
         Exception[] attempts = new Exception[] {
             null
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
 
         r.execute(createRetryable(attempts));
 
@@ -145,13 +150,14 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend timeout error"),
             new IOException("pretend read error")
         };
+        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 5000;
         long maxWaitMs = 5000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, attempts.length, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
 
         assertThrows(IOException.class, () -> r.execute(call));
 

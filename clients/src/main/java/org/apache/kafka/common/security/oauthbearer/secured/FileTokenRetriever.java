@@ -45,6 +45,9 @@ public class FileTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public String retrieve() throws IOException {
+        if (accessToken == null)
+            throw new IllegalStateException("Access token is null; please call init() first");
+
         return accessToken;
     }
 

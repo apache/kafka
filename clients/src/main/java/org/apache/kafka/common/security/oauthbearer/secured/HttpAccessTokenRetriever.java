@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Objects;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -44,13 +45,15 @@ import org.slf4j.LoggerFactory;
 /**
  * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
  * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
- * ({@link LoginCallbackHandlerConfiguration#CLIENT_ID_CONFIG}/{@link LoginCallbackHandlerConfiguration#CLIENT_SECRET_CONFIG})
- * to a publicized token endpoint URL ({@link LoginCallbackHandlerConfiguration#TOKEN_ENDPOINT_URI_CONFIG}).
+ * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
+ * to a publicized token endpoint URL
+ * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI}).
  *
  * @see AccessTokenRetriever
- * @see LoginCallbackHandlerConfiguration#CLIENT_ID_CONFIG
- * @see LoginCallbackHandlerConfiguration#CLIENT_SECRET_CONFIG
- * @see LoginCallbackHandlerConfiguration#TOKEN_ENDPOINT_URI_CONFIG
+ * @see OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG
+ * @see OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG
+ * @see OAuthBearerLoginCallbackHandler#SCOPE_CONFIG
+ * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI
  */
 
 public class HttpAccessTokenRetriever implements AccessTokenRetriever {
@@ -69,11 +72,11 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private final String tokenEndpointUri;
 
-    private final int loginAttempts;
+    private final int loginRetryAttempts;
 
     private final long loginRetryWaitMs;
 
-    private final long loginMaxWaitMs;
+    private final long loginRetryMaxWaitMs;
 
     private final Integer loginConnectTimeoutMs;
 
@@ -84,9 +87,9 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String scope,
         SSLSocketFactory sslSocketFactory,
         String tokenEndpointUri,
-        int loginAttempts,
+        int loginRetryAttempts,
         long loginRetryWaitMs,
-        long loginMaxWaitMs,
+        long loginRetryMaxWaitMs,
         Integer loginConnectTimeoutMs,
         Integer loginReadTimeoutMs) {
         this.clientId = Objects.requireNonNull(clientId);
@@ -94,9 +97,9 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         this.scope = scope;
         this.sslSocketFactory = sslSocketFactory;
         this.tokenEndpointUri = Objects.requireNonNull(tokenEndpointUri);
-        this.loginAttempts = loginAttempts;
+        this.loginRetryAttempts = loginRetryAttempts;
         this.loginRetryWaitMs = loginRetryWaitMs;
-        this.loginMaxWaitMs = loginMaxWaitMs;
+        this.loginRetryMaxWaitMs = loginRetryMaxWaitMs;
         this.loginConnectTimeoutMs = loginConnectTimeoutMs;
         this.loginReadTimeoutMs = loginReadTimeoutMs;
     }
@@ -122,9 +125,9 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String requestBody = formatRequestBody(scope);
 
         Retry<String> retry = new Retry<>(Time.SYSTEM,
-            loginAttempts,
+            loginRetryAttempts,
             loginRetryWaitMs,
-            loginMaxWaitMs);
+            loginRetryMaxWaitMs);
 
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
@@ -151,7 +154,17 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         Integer connectTimeoutMs,
         Integer readTimeoutMs)
         throws IOException {
-        log.debug("Starting post for {}", con.getURL());
+        handleInput(con, headers, requestBody, connectTimeoutMs, readTimeoutMs);
+        return handleOutput(con);
+    }
+
+    private static void handleInput(HttpURLConnection con,
+        Map<String, String> headers,
+        String requestBody,
+        Integer connectTimeoutMs,
+        Integer readTimeoutMs)
+        throws IOException {
+        log.debug("handleInput - starting post for {}", con.getURL());
         con.setRequestMethod("POST");
         con.setRequestProperty("Accept", "application/json");
 
@@ -176,7 +189,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             con.setReadTimeout(readTimeoutMs);
 
         try {
-            log.debug("post - preparing to connect to {}", con.getURL());
+            log.debug("handleInput - preparing to connect to {}", con.getURL());
             con.connect();
         } catch (ConnectException e) {
             throw new IOException("Failed to connect to: " + con.getURL(), e);
@@ -186,34 +199,36 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             try (OutputStream os = con.getOutputStream()) {
                 ByteArrayInputStream is = new ByteArrayInputStream(requestBody.getBytes(
                     StandardCharsets.UTF_8));
-                log.debug("post - preparing to write request body to {}", con.getURL());
+                log.debug("handleInput - preparing to write request body to {}", con.getURL());
                 copy(is, os);
             }
         }
+    }
 
+    static String handleOutput(final HttpURLConnection con) throws IOException {
         int responseCode = con.getResponseCode();
-        log.debug("post - responseCode: {}", responseCode);
+        log.debug("handleOutput - responseCode: {}", responseCode);
 
         String responseBody = null;
 
         try (InputStream is = con.getInputStream()) {
             ByteArrayOutputStream os = new ByteArrayOutputStream();
-            log.debug("post - preparing to read request body to {}", con.getURL());
+            log.debug("handleOutput - preparing to read request body to {}", con.getURL());
             copy(is, os);
             responseBody = os.toString(StandardCharsets.UTF_8.name());
         } catch (Exception e) {
-            log.warn("post - error retrieving data", e);
+            log.warn("handleOutput - error retrieving data", e);
         }
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
             if (responseBody == null || responseBody.isEmpty())
                 throw new IOException("The token endpoint response was unexpectedly empty");
 
-            log.debug("post - response: {}", responseBody);
+            log.debug("handleOutput - response: {}", responseBody);
 
             return responseBody;
         } else {
-            log.warn("post - error response code: {}, error response body: {}", responseCode, responseBody);
+            log.warn("handleOutput - error response code: {}, error response body: {}", responseCode, responseBody);
             throw new IOException(String.format("The unexpected response code %s was encountered reading the token endpoint response", responseCode));
         }
     }

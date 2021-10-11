@@ -42,36 +42,38 @@ public class Retry<R> {
 
     private final Time time;
 
+    private final int retryAttempts;
+
     private final long retryWaitMs;
 
-    private final long maxWaitMs;
-
-    private final int attempts;
+    private final long retryMaxWaitMs;
 
     private final AtomicInteger currAttempt = new AtomicInteger(INITIAL_CURR_ATTEMPT_VALUE);
 
-    public Retry(Time time, int attempts, long retryWaitMs, long maxWaitMs) {
+    public Retry(Time time, int retryAttempts, long retryWaitMs, long retryMaxWaitMs) {
         this.time = time;
-        this.attempts = attempts;
+        this.retryAttempts = retryAttempts;
         this.retryWaitMs = retryWaitMs;
-        this.maxWaitMs = maxWaitMs;
+        this.retryMaxWaitMs = retryMaxWaitMs;
 
-        if (this.attempts < 1)
-            throw new IllegalArgumentException("attempts value must be positive");
+        if (this.retryAttempts < 0)
+            throw new IllegalArgumentException("retryAttempts value must be non-negative");
 
         if (this.retryWaitMs < 0)
             throw new IllegalArgumentException("retryWaitMs value must be non-negative");
 
-        if (this.maxWaitMs < 0)
-            throw new IllegalArgumentException("maxWaitWs value must be non-negative");
+        if (this.retryMaxWaitMs < 0)
+            throw new IllegalArgumentException("retryMaxWaitMs value must be non-negative");
 
-        if (this.maxWaitMs < this.retryWaitMs)
-            log.warn("maxWaitMs {} is less than retryWaitMs {}", this.maxWaitMs, this.retryWaitMs);
+        if (this.retryMaxWaitMs < this.retryWaitMs)
+            log.warn("retryMaxWaitMs {} is less than retryWaitMs {}", this.retryMaxWaitMs, this.retryWaitMs);
     }
 
     public R execute(Retryable<R> retryable) throws IOException {
         if (currAttempt.get() != INITIAL_CURR_ATTEMPT_VALUE)
             throw new IllegalStateException(String.format("Current attempt count %s is not set to initial starting state %s", currAttempt.get(), INITIAL_CURR_ATTEMPT_VALUE));
+
+        int attempts = retryAttempts + 1;
 
         while (currAttempt.incrementAndGet() <= attempts) {
             try {
@@ -81,9 +83,9 @@ public class Retry<R> {
                     throw e;
                 } else {
                     long waitMs = retryWaitMs * (long) Math.pow(2, currAttempt.get() - 1);
-                    waitMs = Math.min(waitMs, maxWaitMs);
+                    waitMs = Math.min(waitMs, retryMaxWaitMs);
 
-                    String message = String.format("Attempt %s of %s to retryable call resulted in an error; sleeping %s ms before retrying",
+                    String message = String.format("Attempt %s of %s to make call resulted in an error; sleeping %s ms before retrying",
                         currAttempt.get(), attempts, waitMs);
                     log.warn(message, e);
 

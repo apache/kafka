@@ -150,7 +150,7 @@ public class PemDirectoryVerificationKeyResolverTest extends OAuthBearerTest {
         File tmpPemDir = createTempPemDir();
         File pemFile = createTempFile(tmpPemDir, "key-", ".pem", pemEncoded);
 
-        try (PemDirectoryVerificationKeyResolver vkr = new PemDirectoryVerificationKeyResolver(tmpPemDir.getAbsoluteFile().toPath())) {
+        try (PemDirectoryVerificationKeyResolver vkr = new PemDirectoryVerificationKeyResolver(tmpPemDir.toPath())) {
             vkr.init();
 
             String kid = PemDirectoryVerificationKeyResolver.toKid(pemFile);

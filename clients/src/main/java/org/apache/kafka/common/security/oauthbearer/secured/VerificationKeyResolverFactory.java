@@ -17,63 +17,45 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_ENDPOINT_URI_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.JWKS_FILE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.secured.ValidatorCallbackHandlerConfiguration.PEM_DIRECTORY_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URI;
 
-import java.nio.file.Paths;
-import java.util.Objects;
-import java.util.stream.Stream;
+import java.net.URI;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
-import org.apache.kafka.common.config.ConfigException;
-import org.jose4j.http.Get;
 
 public class VerificationKeyResolverFactory {
 
     /**
      * Create an {@link AccessTokenRetriever} from the given
-     * {@link LoginCallbackHandlerConfiguration}.
+     * {@link org.apache.kafka.common.config.SaslConfigs}.
      *
      * <b>Note</b>: the returned <code>CloseableVerificationKeyResolver</code> is not
      * initialized here and must be done by the caller.
      *
      * Primarily exposed here for unit testing.
      *
-     * @param conf Configuration for {@link javax.security.auth.callback.CallbackHandler}
+     * @param configs SASL configuration
      *
-     * @return Non-<code>null</code> <code>AccessTokenRetriever</code>
+     * @return Non-<code>null</code> {@link CloseableVerificationKeyResolver}
      */
+    public static CloseableVerificationKeyResolver create(Map<String, ?> configs) {
+        return create(configs, null);
+    }
 
-    public static CloseableVerificationKeyResolver create(ValidatorCallbackHandlerConfiguration conf) {
-        String jwksFile = conf.getJwksFile();
-        String jwksEndpointUri = conf.getJwksEndpointUri();
-        String pemDirectory = conf.getPemDirectory();
+    public static CloseableVerificationKeyResolver create(Map<String, ?> configs, String saslMechanism) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        URI jwksEndpointUri = cu.validateUri(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
 
-        long count = Stream.of(jwksFile, jwksEndpointUri, pemDirectory)
-            .filter(Objects::nonNull)
-            .count();
-
-        if (count != 1) {
-            throw new ConfigException(String.format("The OAuth validator configuration must include only one of %s, %s, or %s options", JWKS_FILE_CONFIG, JWKS_ENDPOINT_URI_CONFIG, PEM_DIRECTORY_CONFIG));
-        } else if (jwksFile != null) {
-            jwksFile = ConfigurationUtils.validateString(JWKS_FILE_CONFIG, jwksFile);
-            return new JwksFileVerificationKeyResolver(Paths.get(jwksFile));
-        } else if (jwksEndpointUri != null) {
-            jwksEndpointUri = ConfigurationUtils.validateString(JWKS_ENDPOINT_URI_CONFIG, jwksEndpointUri);
-            long refreshIntervalMs = conf.getJwksEndpointRefreshIntervalMs();
-            RefreshingHttpsJwks httpsJkws = new RefreshingHttpsJwks(jwksEndpointUri, refreshIntervalMs);
-            SSLSocketFactory sslSocketFactory = ConfigurationUtils.createSSLSocketFactory(conf.originals(), JWKS_ENDPOINT_URI_CONFIG);
-
-            if (sslSocketFactory != null) {
-                Get get = new Get();
-                get.setSslSocketFactory(sslSocketFactory);
-                httpsJkws.setSimpleHttpGet(get);
-            }
-
-            return new RefreshingHttpsJwksVerificationKeyResolver(httpsJkws);
+        if (jwksEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
+            Path p = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
+            return new JwksFileVerificationKeyResolver(p);
         } else {
-            pemDirectory = ConfigurationUtils.validateString(PEM_DIRECTORY_CONFIG, pemDirectory);
-            return new PemDirectoryVerificationKeyResolver(Paths.get(pemDirectory));
+            long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
+            SSLSocketFactory sslSocketFactory = cu.createSSLSocketFactory(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
+            return new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUri.toString(), refreshIntervalMs, sslSocketFactory);
         }
     }
 

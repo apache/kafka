@@ -38,6 +38,8 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import javax.security.auth.login.AppConfigurationEntry;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
@@ -80,12 +82,14 @@ public abstract class OAuthBearerTest {
                 expectedSubstring));
     }
 
-    protected void configureHandler(AuthenticateCallbackHandler handler, Map<String, Object> options) {
+    protected void configureHandler(AuthenticateCallbackHandler handler,
+        Map<String, ?> configs,
+        Map<String, Object> jaasConfig) {
         TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), options);
+        config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), jaasConfig);
         AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];
 
-        handler.configure(Collections.emptyMap(),
+        handler.configure(configs,
             OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
             Collections.singletonList(kafkaClient));
     }
@@ -178,6 +182,21 @@ public abstract class OAuthBearerTest {
         }
 
         return file;
+    }
+
+    protected Map<String, ?> getSaslConfigs(Map<String, ?> configs) {
+        ConfigDef configDef = new ConfigDef();
+        configDef.withClientSaslSupport();
+        AbstractConfig sslClientConfig = new AbstractConfig(configDef, configs);
+        return sslClientConfig.values();
+    }
+
+    protected Map<String, ?> getSaslConfigs(String name, Object value) {
+        return getSaslConfigs(Collections.singletonMap(name, value));
+    }
+
+    protected Map<String, ?> getSaslConfigs() {
+        return getSaslConfigs(Collections.emptyMap());
     }
 
 }

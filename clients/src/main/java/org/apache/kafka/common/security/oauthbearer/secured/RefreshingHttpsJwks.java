@@ -19,12 +19,18 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.jose4j.jwk.HttpsJwks;
+import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,45 +57,83 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
+    private static final int MISSING_KEY_ID_CACHE_MAX_ENTRIES = 16;
+
+    private static final long MISSING_KEY_ID_CACHE_IN_FLIGHT_MS = 60000;
+
+    private static final int MISSING_KEY_ID_MAX_KEY_LENGTH = 1000;
+
     private static final int SHUTDOWN_TIMEOUT = 10;
 
     private static final TimeUnit SHUTDOWN_TIME_UNIT = TimeUnit.SECONDS;
 
     private final ScheduledExecutorService executorService;
 
-    private final long refreshIntervalMs;
+    private final long refreshMs;
+
+    private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
+
+    private final Map<String, Long> missingKeyIds;
+
+    private List<JsonWebKey> jsonWebKeys;
+
+    private boolean isInited;
 
     /**
      *
-     * @param location          HTTP/HTTPS endpoint from which to retrieve the JWKS based on
-     *                          the OAuth/OIDC standard
-     * @param refreshIntervalMs The number of milliseconds between refresh passes to connect
-     *                          to the OAuth/OIDC JWKS endpoint to retrieve the latest set
+     * @param location  HTTP/HTTPS endpoint from which to retrieve the JWKS based on
+     *                  the OAuth/OIDC standard
+     * @param refreshMs The number of milliseconds between refresh passes to connect
+     *                  to the OAuth/OIDC JWKS endpoint to retrieve the latest set
      */
 
-    public RefreshingHttpsJwks(String location, long refreshIntervalMs) {
+    public RefreshingHttpsJwks(String location, long refreshMs) {
         super(location);
 
-        if (refreshIntervalMs <= 0)
+        if (refreshMs <= 0)
             throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
 
-        setDefaultCacheDuration(refreshIntervalMs);
+        setDefaultCacheDuration(refreshMs);
 
-        this.refreshIntervalMs = refreshIntervalMs;
+        this.refreshMs = refreshMs;
         this.executorService = Executors.newSingleThreadScheduledExecutor();
+        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
+            }
+        };
     }
 
     @Override
-    public void init() {
+    public void init() throws IOException {
         try {
             log.debug("init started");
 
+            List<JsonWebKey> localJWKs;
+
+            try {
+                localJWKs = super.getJsonWebKeys();
+            } catch (JoseException e) {
+                throw new IOException("Could not refresh JWKS", e);
+            }
+
+            try {
+                refreshLock.writeLock().lock();
+                this.jsonWebKeys = localJWKs;
+            } finally {
+                refreshLock.writeLock().unlock();
+            }
+
             executorService.scheduleAtFixedRate(this::refreshInternal,
                 0,
-                refreshIntervalMs,
+                refreshMs,
                 TimeUnit.MILLISECONDS);
-            log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshIntervalMs);
+
+            log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
         } finally {
+            isInited = true;
+
             log.debug("init completed");
         }
     }
@@ -115,6 +159,19 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
         }
     }
 
+    @Override
+    public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
+        if (!isInited)
+            throw new IllegalStateException("Please call init() first");
+
+        try {
+            refreshLock.readLock().lock();
+            return jsonWebKeys;
+        } finally {
+            refreshLock.readLock().unlock();
+        }
+    }
+
     /**
      * Internal method that will refresh the cache and if errors are encountered, re-queues
      * the refresh attempt in a background thread.
@@ -127,6 +184,17 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
             // Call the *actual* refresh implementation.
             refresh();
 
+            List<JsonWebKey> jwks = getJsonWebKeys();
+
+            try {
+                refreshLock.writeLock().lock();
+
+                for (JsonWebKey jwk : jwks)
+                    missingKeyIds.remove(jwk.getKeyId());
+            } finally {
+                refreshLock.writeLock().unlock();
+            }
+
             log.info("JWKS validation key refresh of {} complete", getLocation());
         } catch (JoseException | IOException e) {
             // Let's wait a random, but short amount of time before trying again.
@@ -138,6 +206,33 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
             log.warn(message, e);
 
             executorService.schedule(this::refreshInternal, waitMs, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    public boolean maybeScheduleRefreshForMissingKeyId(String keyId) {
+        if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
+            log.warn("Key ID starting with {} with length {} was too long to cache", keyId.substring(0, 16), keyId.length());
+            return false;
+        } else {
+            try {
+                refreshLock.writeLock().lock();
+
+                // If there's no entry in the missing key ID cache for the incoming key ID,
+                // or it has expired, schedule a refresh.
+                Long lastCheckTime = missingKeyIds.get(keyId);
+                long currTime = System.currentTimeMillis();
+
+                if (lastCheckTime == null || lastCheckTime < currTime) {
+                    lastCheckTime = currTime + MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
+                    missingKeyIds.put(keyId, lastCheckTime);
+                    executorService.schedule(this::refreshInternal, 0, TimeUnit.MILLISECONDS);
+                    return true;
+                } else {
+                    return false;
+                }
+            } finally {
+                refreshLock.writeLock().unlock();
+            }
         }
     }
 

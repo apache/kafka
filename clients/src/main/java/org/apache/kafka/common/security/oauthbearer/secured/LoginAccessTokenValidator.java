@@ -17,6 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -53,10 +56,6 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
 
     public static final String ISSUED_AT_CLAIM_NAME = "iat";
 
-    public static final String SCOPE_CLAIM_NAME_DEFAULT = "scope";
-
-    public static final String SUBJECT_CLAIM_NAME_DEFAULT = "sub";
-
     private final String scopeClaimName;
 
     private final String subClaimName;
@@ -67,7 +66,7 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
      */
 
     public LoginAccessTokenValidator() {
-        this(SCOPE_CLAIM_NAME_DEFAULT, SUBJECT_CLAIM_NAME_DEFAULT);
+        this(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME);
     }
 
     /**
@@ -79,8 +78,8 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
      */
 
     public LoginAccessTokenValidator(String scopeClaimName, String subClaimName) {
-        this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(SCOPE_CLAIM_NAME_DEFAULT, scopeClaimName);
-        this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(SUBJECT_CLAIM_NAME_DEFAULT, subClaimName);
+        this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
+        this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
     }
 
     /**
