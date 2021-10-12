@@ -247,8 +247,8 @@ public class MeteredWindowStore<K, V>
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(
-                keyFrom == null ? null : keyBytes(keyFrom),
-                keyTo == null ? null : keyBytes(keyTo),
+                keyBytes(keyFrom),
+                keyBytes(keyTo),
                 timeFrom,
                 timeTo),
             fetchSensor,
@@ -264,8 +264,8 @@ public class MeteredWindowStore<K, V>
                                                           final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(
-                keyFrom == null ? null : keyBytes(keyFrom),
-                keyTo == null ? null : keyBytes(keyTo),
+                keyBytes(keyFrom),
+                keyBytes(keyTo),
                 timeFrom,
                 timeTo),
             fetchSensor,
