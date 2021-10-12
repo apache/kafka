@@ -148,16 +148,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                        "Unexpected exception thrown while getting the value from store.",
-                        exception.getMessage(),
-                        is(
-                                anyOf(
-                                        containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                                        containsString("The state store, source-table, may have migrated to another instance")
-                                )
-                        )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -241,16 +232,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -495,6 +477,7 @@ public class StoreQueryIntegrationTest {
         //Add thread
         final Optional<String> streamThread = kafkaStreams1.addStreamThread();
         assertThat(streamThread.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
         produceValueRange(key, 0, batch1NumMessages);
         produceValueRange(key2, 0, batch1NumMessages);
@@ -503,6 +486,7 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the batches were processed in a timely manner
         assertThat(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -513,16 +497,7 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -530,9 +505,9 @@ public class StoreQueryIntegrationTest {
 
         final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
         assertThat(removedThreadName.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
-        until(() -> kafkaStreams1.state().equals(KafkaStreams.State.RUNNING));
-
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -543,20 +518,25 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
+    }
+
+    private void verifyRetrievableException(final Exception exception) {
+        assertThat(
+            "Unexpected exception thrown while getting the value from store.",
+            exception.getMessage(),
+            is(
+                anyOf(
+                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                    containsString("The state store, source-table, may have migrated to another instance"),
+                    containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING")
+                )
+            )
+        );
     }
 
     private static void until(final TestCondition condition) {

@@ -17,11 +17,11 @@
 
 package kafka.server
 
+import java.net.InetAddress
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
-import java.net.InetAddress
 
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
@@ -34,7 +34,6 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
-import org.apache.kafka.snapshot.SnapshotWriter
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
@@ -45,14 +44,15 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.raft.RaftConfig.AddressSpec
+import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.snapshot.SnapshotWriter
 
 import scala.collection.{Map, Seq}
-import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 
 class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
@@ -84,14 +84,15 @@ class BrokerServer(
   val supportedFeatures: util.Map[String, VersionRange]
 ) extends KafkaBroker {
 
+  override def brokerState: BrokerState = lifecycleManager.state
+
   import kafka.server.Server._
 
   private val logContext: LogContext = new LogContext(s"[BrokerServer id=${config.nodeId}] ")
 
   this.logIdent = logContext.logPrefix
 
-  val lifecycleManager: BrokerLifecycleManager =
-    new BrokerLifecycleManager(config, time, threadNamePrefix)
+  @volatile private var lifecycleManager: BrokerLifecycleManager = null
 
   private val isShuttingDown = new AtomicBoolean(false)
 
@@ -103,7 +104,7 @@ class BrokerServer(
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
-  var socketServer: SocketServer = null
+  @volatile var socketServer: SocketServer = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
@@ -160,6 +161,8 @@ class BrokerServer(
     lock.lock()
     try {
       if (status != from) return false
+      info(s"Transition from $status to $to")
+
       status = to
       if (to == SHUTTING_DOWN) {
         isShuttingDown.set(true)
@@ -179,6 +182,8 @@ class BrokerServer(
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
       info("Starting broker")
+
+      lifecycleManager = new BrokerLifecycleManager(config, time, threadNamePrefix)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -248,14 +253,24 @@ class BrokerServer(
         scheduler = kafkaScheduler,
         time = time,
         brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch()
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterIsrManager.start()
 
-      this._replicaManager = new ReplicaManager(config, metrics, time, None,
-        kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-        brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
-        threadNamePrefix)
+      this._replicaManager = new ReplicaManager(
+        config = config,
+        metrics = metrics,
+        time = time,
+        scheduler = kafkaScheduler,
+        logManager = logManager,
+        quotaManagers = quotaManagers,
+        metadataCache = metadataCache,
+        logDirFailureChannel = logDirFailureChannel,
+        alterIsrManager = alterIsrManager,
+        brokerTopicStats = brokerTopicStats,
+        isShuttingDown = isShuttingDown,
+        zkClient = None,
+        threadNamePrefix = threadNamePrefix)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -270,7 +285,7 @@ class BrokerServer(
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
         config.brokerId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch(),
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         clientToControllerChannelManager,
         config.requestTimeoutMs
       )
@@ -363,10 +378,26 @@ class BrokerServer(
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
-      dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
-        replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
-        config.nodeId, config, metadataCache, metadataCache, metrics, authorizer, quotaManagers,
-        fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
+      dataPlaneRequestProcessor = new KafkaApis(
+        requestChannel = socketServer.dataPlaneRequestChannel,
+        metadataSupport = raftSupport,
+        replicaManager = replicaManager,
+        groupCoordinator = groupCoordinator,
+        txnCoordinator = transactionCoordinator,
+        autoTopicCreationManager = autoTopicCreationManager,
+        brokerId = config.nodeId,
+        config = config,
+        configRepository = metadataCache,
+        metadataCache = metadataCache,
+        metrics = metrics,
+        authorizer = authorizer,
+        quotas = quotaManagers,
+        fetchManager = fetchManager,
+        brokerTopicStats = brokerTopicStats,
+        clusterId = clusterId,
+        time = time,
+        tokenManager = tokenManager,
+        apiVersionManager = apiVersionManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -451,6 +482,19 @@ class BrokerServer(
       }
       metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
 
+      /**
+       * We must shutdown the scheduler early because otherwise, the scheduler could touch other
+       * resources that might have been shutdown and cause exceptions.
+       * For example, if we didn't shutdown the scheduler first, when LogManager was closing
+       * partitions one by one, the scheduler might concurrently delete old segments due to
+       * retention. However, the old segments could have been closed by the LogManager, which would
+       * cause an IOException and subsequently mark logdir as offline. As a result, the broker would
+       * not flush the remaining partitions or write the clean shutdown marker. Ultimately, the
+       * broker would have to take hours to recover the log during restart.
+       */
+      if (kafkaScheduler != null)
+        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)
@@ -470,9 +514,6 @@ class BrokerServer(
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
-      // be sure to shutdown scheduler after log manager
-      if (kafkaScheduler != null)
-        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
@@ -515,7 +556,5 @@ class BrokerServer(
   }
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
-
-  def currentState(): BrokerState = lifecycleManager.state()
 
 }

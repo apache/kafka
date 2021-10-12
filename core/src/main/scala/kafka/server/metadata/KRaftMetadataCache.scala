@@ -193,6 +193,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  override def getTopicId(topicName: String): Uuid = _currentImage.topics().topicsByName().asScala.get(topicName).map(_.id()).getOrElse(Uuid.ZERO_UUID)
+
+  override def getTopicName(topicId: Uuid): Option[String] = _currentImage.topics().topicsById.asScala.get(topicId).map(_.name())
+
   override def hasAliveBroker(brokerId: Int): Boolean = {
     Option(_currentImage.cluster().broker(brokerId)).count(!_.fenced()) == 1
   }
@@ -232,18 +236,13 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       map(topic => topic.partitions().size())
   }
 
-  override def topicNamesToIds(): util.Map[String, Uuid] = {
-    _currentImage.topics.topicsByName().asScala.map{ case (topicName, topicImage) => (topicName, topicImage.id())}.asJava
-  }
+  override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics.topicNameToIdView()
 
-  override def topicIdsToNames(): util.Map[Uuid, String] = {
-    _currentImage.topics.topicsById().asScala.map{ case (topicId, topicImage) => (topicId, topicImage.name())}.asJava
-  }
+  override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
 
   override def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
     val image = _currentImage
-    (image.topics.topicsByName().asScala.map{ case (topicName, topicImage) => (topicName, topicImage.id())}.asJava,
-      image.topics.topicsById().asScala.map{ case (topicId, topicImage) => (topicId, topicImage.name())}.asJava)
+    (image.topics.topicNameToIdView(), image.topics.topicIdToNameView())
   }
 
   // if the leader is not known, return None;

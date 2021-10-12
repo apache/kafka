@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
@@ -26,13 +27,14 @@ import java.util.Map;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
 
 /**
- * Serializes a {@link KeyAndJoinSide}. The serialized bytes starts with a byte that references
- * to the join side of the key followed by the key in bytes.
+ * The serializer that is used for {@link TimestampedKeyAndJoinSide}, which is a combo key format of <timestamp, left/right flag, raw-key>
+ * @param <K> the raw key type
  */
-public class KeyAndJoinSideSerializer<K> implements WrappingNullableSerializer<KeyAndJoinSide<K>, K, Void> {
+public class TimestampedKeyAndJoinSideSerializer<K> implements WrappingNullableSerializer<TimestampedKeyAndJoinSide<K>, K, Void> {
     private Serializer<K> keySerializer;
+    private final Serializer<Long> timestampSerializer = new LongSerializer();
 
-    KeyAndJoinSideSerializer(final Serializer<K> keySerializer) {
+    TimestampedKeyAndJoinSideSerializer(final Serializer<K> keySerializer) {
         this.keySerializer = keySerializer;
     }
 
@@ -52,12 +54,14 @@ public class KeyAndJoinSideSerializer<K> implements WrappingNullableSerializer<K
     }
 
     @Override
-    public byte[] serialize(final String topic, final KeyAndJoinSide<K> data) {
+    public byte[] serialize(final String topic, final TimestampedKeyAndJoinSide<K> data) {
         final byte boolByte = (byte) (data.isLeftSide() ? 1 : 0);
         final byte[] keyBytes = keySerializer.serialize(topic, data.getKey());
+        final byte[] timestampBytes = timestampSerializer.serialize(topic, data.getTimestamp());
 
         return ByteBuffer
-            .allocate(keyBytes.length + 1)
+            .allocate(timestampBytes.length + 1 + keyBytes.length)
+            .put(timestampBytes)
             .put(boolByte)
             .put(keyBytes)
             .array();
