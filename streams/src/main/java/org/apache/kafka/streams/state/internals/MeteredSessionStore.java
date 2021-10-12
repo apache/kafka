@@ -265,8 +265,6 @@ public class MeteredSessionStore<K, V>
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
                                                   final K keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
@@ -278,8 +276,6 @@ public class MeteredSessionStore<K, V>
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
                                                           final K keyTo) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
@@ -330,8 +326,6 @@ public class MeteredSessionStore<K, V>
                                                          final K keyTo,
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         final Bytes bytesKeyFrom = keyBytes(keyFrom);
         final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(
@@ -351,8 +345,6 @@ public class MeteredSessionStore<K, V>
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
         final Bytes bytesKeyFrom = keyBytes(keyFrom);
         final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(
@@ -384,7 +376,7 @@ public class MeteredSessionStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+        return key == null ? null : Bytes.wrap(serdes.rawKey(key));
     }
 
     private void maybeRecordE2ELatency() {
