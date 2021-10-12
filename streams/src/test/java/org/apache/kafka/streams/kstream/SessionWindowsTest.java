@@ -88,6 +88,12 @@ public class SessionWindowsTest {
     }
 
     @Test
+    public void graceShouldNotCalledAfterGraceSet() {
+        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
+        assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(10)).grace(ofMillis(10)));
+    }
+
+    @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
         verifyEquality(
             SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)),
