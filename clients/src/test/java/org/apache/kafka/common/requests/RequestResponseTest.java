@@ -1296,7 +1296,7 @@ public class RequestResponseTest {
         topicIds.put("test1", Uuid.randomUuid());
         topicIds.put("test2", Uuid.randomUuid());
         return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).
-            metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
+            metadata(metadata).setMaxBytes(1000).removed(toForget).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {

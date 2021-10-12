@@ -262,11 +262,14 @@ public class Fetcher<K, V> implements Closeable {
                 maxVersion = ApiKeys.FETCH.latestVersion();
             }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.topicIds())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.toSendTopicIds())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
-                    .toForget(data.toForget())
+                    .removed(data.toForget())
+                    .removedTopicIds(data.toForgetTopicIds())
+                    .replaced(data.toReplace())
+                    .replacedTopicIds(data.toReplaceTopicIds())
                     .rackId(clientRackId);
 
             if (log.isDebugEnabled()) {
@@ -299,7 +302,7 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.toSendTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 

@@ -140,7 +140,7 @@ class FetchSessionTest {
                     topicIds: util.Map[String, Uuid],
                     toForget: util.List[TopicPartition], isFromFollower: Boolean): FetchRequest = {
     new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData, topicIds).metadata(metadata).toForget(toForget).build
+      0, 0, fetchData, topicIds).metadata(metadata).removed(toForget).build
   }
 
   def createRequestWithoutTopicIds(metadata: JFetchMetadata,
@@ -148,7 +148,7 @@ class FetchSessionTest {
                     topicIds: util.Map[String, Uuid],
                     toForget: util.List[TopicPartition], isFromFollower: Boolean): FetchRequest = {
     new FetchRequest.Builder(12, 12, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData, topicIds).metadata(metadata).toForget(toForget).build
+      0, 0, fetchData, topicIds).metadata(metadata).removed(toForget).build
   }
 
   @Test

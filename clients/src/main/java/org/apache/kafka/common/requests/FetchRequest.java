@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchRequestData.ForgottenTopic;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -124,12 +125,15 @@ public class FetchRequest extends AbstractRequest {
         private final int maxWait;
         private final int minBytes;
         private final int replicaId;
-        private final Map<TopicPartition, PartitionData> fetchData;
-        private final Map<String, Uuid> topicIds;
+        private final Map<TopicPartition, PartitionData> toFetch;
+        private final Map<String, Uuid> toFetchTopicIds;
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
-        private List<TopicPartition> toForget = Collections.emptyList();
+        private List<TopicPartition> removed = Collections.emptyList();
+        private Map<String, Uuid> removedTopicIds = Collections.emptyMap();
+        private List<TopicPartition> replaced = Collections.emptyList();
+        private Map<String, Uuid> replacedTopicIds = Collections.emptyMap();
         private String rackId = "";
 
         public static Builder forConsumer(short maxVersion, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData,
@@ -149,8 +153,8 @@ public class FetchRequest extends AbstractRequest {
             this.replicaId = replicaId;
             this.maxWait = maxWait;
             this.minBytes = minBytes;
-            this.fetchData = fetchData;
-            this.topicIds = topicIds;
+            this.toFetch = fetchData;
+            this.toFetchTopicIds = topicIds;
         }
 
         public Builder isolationLevel(IsolationLevel isolationLevel) {
@@ -169,7 +173,7 @@ public class FetchRequest extends AbstractRequest {
         }
 
         public Map<TopicPartition, PartitionData> fetchData() {
-            return this.fetchData;
+            return this.toFetch;
         }
 
         public Builder setMaxBytes(int maxBytes) {
@@ -177,12 +181,39 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
-        public List<TopicPartition> toForget() {
-            return toForget;
+        public List<TopicPartition> removed() {
+            return removed;
         }
 
-        public Builder toForget(List<TopicPartition> toForget) {
-            this.toForget = toForget;
+        public Builder removed(List<TopicPartition> removed) {
+            this.removed = removed;
+            return this;
+        }
+
+        public Map<String, Uuid> removedTopicIds() {
+            return removedTopicIds;
+        }
+
+        public Builder removedTopicIds(Map<String, Uuid> removedTopicIds) {
+            this.removedTopicIds = removedTopicIds;
+            return this;
+        }
+
+        public List<TopicPartition> replaced() {
+            return replaced;
+        }
+
+        public Builder replaced(List<TopicPartition> replaced) {
+            this.replaced = replaced;
+            return this;
+        }
+
+        public Map<String, Uuid> replacedTopicIds() {
+            return replacedTopicIds;
+        }
+
+        public Builder replacedTopicIds(Map<String, Uuid> replacedTopicIds) {
+            this.replacedTopicIds = replacedTopicIds;
             return this;
         }
 
@@ -199,26 +230,53 @@ public class FetchRequest extends AbstractRequest {
             fetchRequestData.setMaxBytes(maxBytes);
             fetchRequestData.setIsolationLevel(isolationLevel.id());
             fetchRequestData.setForgottenTopicsData(new ArrayList<>());
-            toForget.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic, LinkedHashMap::new, Collectors.toList()))
-                .forEach((topic, partitions) ->
-                    fetchRequestData.forgottenTopicsData().add(new FetchRequestData.ForgottenTopic()
-                        .setTopic(topic)
-                        .setTopicId(topicIds.getOrDefault(topic, Uuid.ZERO_UUID))
-                        .setPartitions(partitions.stream().map(TopicPartition::partition).collect(Collectors.toList())))
-                );
-            fetchRequestData.setTopics(new ArrayList<>());
+
+            Map<String, FetchRequestData.ForgottenTopic> forgottenTopicMap = new LinkedHashMap<>();
+            removed.forEach(topicPartition -> {
+                FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicPartition.topic());
+                if (forgottenTopic == null) {
+                    if (version < 13) {
+                        forgottenTopic = new ForgottenTopic()
+                            .setTopic(topicPartition.topic());
+                    } else {
+                        forgottenTopic = new ForgottenTopic()
+                            .setTopicId(removedTopicIds
+                                .getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID));
+                    }
+                    forgottenTopicMap.put(topicPartition.topic(), forgottenTopic);
+                }
+                forgottenTopic.partitions().add(topicPartition.partition());
+            });
+
+            // If a version older than v13 is used, topic-partition which were replaced
+            // by a topic-partition with the same name but a different topic ID are not
+            // sent out in the "forget" set in order to not remove the newly added
+            // partition in the "fetch" set.
+            if (version >= 13) {
+                replaced.forEach(topicPartition -> {
+                    FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicPartition.topic());
+                    if (forgottenTopic == null) {
+                        forgottenTopic = new ForgottenTopic()
+                            .setTopicId(replacedTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID));
+                        forgottenTopicMap.put(topicPartition.topic(), forgottenTopic);
+                    }
+                    forgottenTopic.partitions().add(topicPartition.partition());
+                });
+            }
+
+            forgottenTopicMap.forEach((topic, forgottenTopic) -> fetchRequestData.forgottenTopicsData().add(forgottenTopic));
 
             // We collect the partitions in a single FetchTopic only if they appear sequentially in the fetchData
+            fetchRequestData.setTopics(new ArrayList<>());
             FetchRequestData.FetchTopic fetchTopic = null;
-            for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
+            for (Map.Entry<TopicPartition, PartitionData> entry : toFetch.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData partitionData = entry.getValue();
 
                 if (fetchTopic == null || !topicPartition.topic().equals(fetchTopic.topic())) {
                     fetchTopic = new FetchRequestData.FetchTopic()
                        .setTopic(topicPartition.topic())
-                       .setTopicId(topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID))
+                       .setTopicId(toFetchTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID))
                        .setPartitions(new ArrayList<>());
                     fetchRequestData.topics().add(fetchTopic);
                 }
@@ -251,9 +309,10 @@ public class FetchRequest extends AbstractRequest {
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
                     append(", maxBytes=").append(maxBytes).
-                    append(", fetchData=").append(fetchData).
+                    append(", fetchData=").append(toFetch).
                     append(", isolationLevel=").append(isolationLevel).
-                    append(", toForget=").append(Utils.join(toForget, ", ")).
+                    append(", removed=").append(Utils.join(removed, ", ")).
+                    append(", replaced=").append(Utils.join(replaced, ", ")).
                     append(", metadata=").append(metadata).
                     append(", rackId=").append(rackId).
                     append(")");

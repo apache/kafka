@@ -509,7 +509,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
                            toForget: Seq[TopicPartition]): FetchRequest =
       FetchRequest.Builder.forConsumer(12, Int.MaxValue, 0,
         createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty), Map[String, Uuid]().asJava)
-        .toForget(toForget.asJava)
+        .removed(toForget.asJava)
         .metadata(metadata)
         .build()
     val foo0 = new TopicPartition("foo", 0)
@@ -569,7 +569,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
                            topicIds: scala.collection.Map[String, Uuid]): FetchRequest = {
       FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), Int.MaxValue, 0,
         createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty), topicIds.asJava)
-        .toForget(toForget.asJava)
+        .removed(toForget.asJava)
         .metadata(metadata)
         .build()
     }

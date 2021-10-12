@@ -305,9 +305,9 @@ class ReplicaFetcherThread(name: String,
     } else {
       val version: Short = if (fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else fetchRequestVersion
       val requestBuilder = FetchRequest.Builder
-        .forReplica(version, replicaId, maxWait, minBytes, fetchData.toSend, fetchData.topicIds)
+        .forReplica(version, replicaId, maxWait, minBytes, fetchData.toSend, fetchData.toSendTopicIds)
         .setMaxBytes(maxBytes)
-        .toForget(fetchData.toForget)
+        .removed(fetchData.toForget)
         .metadata(fetchData.metadata)
       Some(ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
     }
