@@ -189,14 +189,13 @@ public class TaskManager {
 
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
-            commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasks()
-                       .values()
-                       .stream()
-                       .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                       .filter(t -> !corruptedTasks.contains(t.id()))
-                       .collect(Collectors.toSet()),
-                                new HashMap<>()
-            );
+            final Collection<Task> tasksToCommit = tasks()
+                .values()
+                .stream()
+                .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                .filter(t -> !corruptedTasks.contains(t.id()))
+                .collect(Collectors.toSet());
+            commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, new HashMap<>());
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
                          "tasks to clean and revive: {}", e.corruptedTasks());
@@ -1070,7 +1069,7 @@ public class TaskManager {
 
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         try {
-            committed = commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(tasksToCommit, consumedOffsetsAndMetadataPerTask);
+            committed = commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadataPerTask);
         } catch (final TimeoutException timeoutException) {
             consumedOffsetsAndMetadataPerTask
                 .keySet()
@@ -1085,26 +1084,27 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      * @throws TimeoutException if committing offsets failed due to TimeoutException (non-EOS)
      * @throws TaskCorruptedException if committing offsets failed due to TimeoutException (EOS)
-     * @param consumedOffsetsAndMetadataPerTask an empty map that will be filled in with the prepared offsets
+     * @param consumedOffsetsAndMetadata an empty map that will be filled in with the prepared offsets
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit,
-                                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
+    private int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
+                                                            final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         if (rebalanceInProgress) {
             return -1;
         }
 
         int committed = 0;
         for (final Task task : tasksToCommit) {
+            // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
                 final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
-                if (task.isActive()) {
-                    consumedOffsetsAndMetadataPerTask.put(task, offsetAndMetadata);
+                if (!offsetAndMetadata.isEmpty()) {
+                    consumedOffsetsAndMetadata.put(task, offsetAndMetadata);
                 }
             }
         }
 
-        commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+        commitOffsetsOrTransaction(consumedOffsetsAndMetadata);
 
         for (final Task task : tasksToCommit) {
             if (task.commitNeeded()) {
@@ -1135,7 +1135,7 @@ public class TaskManager {
 
     /**
      * Caution: do not invoke this directly if it's possible a rebalance is occurring, as the commit will fail. If
-     * this is a possibility, prefer the {@link #commitAndFillInConsumedOffsetsAndMetadataPerTaskMap} instead.
+     * this is a possibility, prefer the {@link #commitTasksAndMaybeUpdateCommittableOffsets} instead.
      *
      * @throws TaskMigratedException   if committing offsets failed due to CommitFailedException (non-EOS)
      * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS)
