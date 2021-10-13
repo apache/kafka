@@ -32,6 +32,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Iterator;
@@ -46,6 +47,10 @@ import java.util.List;
 public final class MetadataDelta {
     private final MetadataImage image;
 
+    private long highestOffset;
+
+    private int highestEpoch;
+
     private FeaturesDelta featuresDelta = null;
 
     private ClusterDelta clusterDelta = null;
@@ -58,6 +63,8 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
+        this.highestOffset = image.highestOffsetAndEpoch().offset;
+        this.highestEpoch = image.highestOffsetAndEpoch().epoch;
     }
 
     public MetadataImage image() {
@@ -84,16 +91,19 @@ public final class MetadataDelta {
         return clientQuotasDelta;
     }
 
-    public void read(Iterator<List<ApiMessageAndVersion>> reader) {
+    public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
         while (reader.hasNext()) {
             List<ApiMessageAndVersion> batch = reader.next();
             for (ApiMessageAndVersion messageAndVersion : batch) {
-                replay(messageAndVersion.message());
+                replay(highestOffset, highestEpoch, messageAndVersion.message());
             }
         }
     }
 
-    public void replay(ApiMessage record) {
+    public void replay(long offset, int epoch, ApiMessage record) {
+        highestOffset = offset;
+        highestEpoch = epoch;
+
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
@@ -253,14 +263,22 @@ public final class MetadataDelta {
         } else {
             newClientQuotas = clientQuotasDelta.apply();
         }
-        return new MetadataImage(newFeatures, newCluster, newTopics, newConfigs,
-            newClientQuotas);
+        return new MetadataImage(
+            new OffsetAndEpoch(highestOffset, highestEpoch),
+            newFeatures,
+            newCluster,
+            newTopics,
+            newConfigs,
+            newClientQuotas
+        );
     }
 
     @Override
     public String toString() {
         return "MetadataDelta(" +
-            "featuresDelta=" + featuresDelta +
+            "highestOffset=" + highestOffset +
+            ", highestEpoch=" + highestEpoch +
+            ", featuresDelta=" + featuresDelta +
             ", clusterDelta=" + clusterDelta +
             ", topicsDelta=" + topicsDelta +
             ", configsDelta=" + configsDelta +
