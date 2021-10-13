@@ -30,9 +30,8 @@ import java.util.Map;
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
  * source offsets. Records are tracked in the order in which they are submitted, which should match the order they were
  * returned from {@link SourceTask#poll()}. The latest-eligible offsets for each source partition can be retrieved via
- * {@link #committableOffsets()}, the latest-eligible offsets for each source partition can be retrieved, where every
- * record up to and including the record for each returned offset has been either
- * {@link SubmittedRecord#ack() acknowledged} or {@link #removeLastOccurrence(SubmittedRecord) removed}.
+ * {@link #committableOffsets()}, where every record up to and including the record for each returned offset has been
+ * either {@link SubmittedRecord#ack() acknowledged} or {@link #removeLastOccurrence(SubmittedRecord) removed}.
  * Note that this class is not thread-safe, though a {@link SubmittedRecord} can be
  * {@link SubmittedRecord#ack() acknowledged} from a different thread.
  */
