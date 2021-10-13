@@ -553,6 +553,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall().atLeastOnce();
+
         expectTopicCreation(TOPIC);
 
         sourceTask.stop();
@@ -595,6 +598,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
+
+        offsetWriter.offset(PARTITION, OFFSET);
+        PowerMock.expectLastCall().atLeastOnce();
 
         expectTopicCreation(TOPIC);
 

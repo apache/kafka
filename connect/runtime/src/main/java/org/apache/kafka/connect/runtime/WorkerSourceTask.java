@@ -231,6 +231,8 @@ class WorkerSourceTask extends WorkerTask {
         try {
             log.info("{} Executing source task", this);
             while (!isStopping()) {
+                updateCommittableOffsets();
+
                 if (shouldPause()) {
                     onPause();
                     if (awaitUnpause()) {
@@ -249,8 +251,6 @@ class WorkerSourceTask extends WorkerTask {
                     }
                 }
 
-                updateCommittableOffsets();
-
                 if (toSend == null)
                     continue;
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
@@ -264,6 +264,7 @@ class WorkerSourceTask extends WorkerTask {
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
+            updateCommittableOffsets();
             commitOffsets();
         }
     }
