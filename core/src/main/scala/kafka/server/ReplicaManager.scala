@@ -191,6 +191,7 @@ class ReplicaManager(val config: KafkaConfig,
                      time: Time,
                      scheduler: Scheduler,
                      val logManager: LogManager,
+                     val remoteLogManager: Option[RemoteLogManager] = None,
                      quotaManagers: QuotaManagers,
                      val metadataCache: MetadataCache,
                      logDirFailureChannel: LogDirFailureChannel,
@@ -567,11 +568,6 @@ class ReplicaManager(val config: KafkaConfig,
 
   def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
-  }
-
-  def remoteLogManager(): Option[RemoteLogManager] = {
-    //todo-tier Have this class initialized with RemoteLogManager
-    None
   }
 
   def getLogDir(topicPartition: TopicPartition): Option[String] = {

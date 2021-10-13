@@ -105,8 +105,9 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     remoteLogMetadataManager.configure(rlmmProps)
   }
 
-  def onEndpointCreated(): Unit = {
-    // Initialize and configure RSM and RLMM
+  def startup(): Unit = {
+    // Initialize and configure RSM and RLMM. This will start RSM, RLMM resources which may need to start resources
+    // in connecting to the brokers or remote storages.
     configureRSM()
     configureRLMM()
   }
