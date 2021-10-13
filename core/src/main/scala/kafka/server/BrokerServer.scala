@@ -22,11 +22,11 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
@@ -48,6 +48,7 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.snapshot.SnapshotWriter
 
 import scala.collection.{Map, Seq}
@@ -109,6 +110,7 @@ class BrokerServer(
 
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
+  var remoteLogManager: Option[RemoteLogManager] = None
 
   var tokenManager: DelegationTokenManager = null
 
@@ -202,6 +204,8 @@ class BrokerServer(
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
         brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
+      val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+      remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -263,6 +267,7 @@ class BrokerServer(
         time = time,
         scheduler = kafkaScheduler,
         logManager = logManager,
+        remoteLogManager = remoteLogManager,
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
@@ -421,6 +426,9 @@ class BrokerServer(
       // Log static broker configurations.
       new KafkaConfig(config.originals(), true)
 
+      // Start RemoteLogManager before broker start serving the requests.
+      remoteLogManager.foreach(_.startup())
+
       // Enable inbound TCP connections.
       socketServer.startProcessingRequests(authorizerFutures)
 
@@ -438,7 +446,15 @@ class BrokerServer(
     }
   }
 
-  override def shutdown(): Unit = {
+  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
+    if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
+    } else {
+      None
+    }
+  }
+
+  def shutdown(): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
       info("shutting down")
@@ -510,6 +526,11 @@ class BrokerServer(
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
+
+      // Close remote log manager before stopping processing requests, to give a change to any
+      // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
+      // to close gracefully.
+      CoreUtils.swallow(remoteLogManager.foreach(_.close()), this)
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
