@@ -407,11 +407,13 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(
+        topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID),
+        replicaBuffer.getOffset(topicPartition),
         0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
-      forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap, topicIds.asJava)
+      forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)
 
     debug("Issuing fetch request ")
 

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
@@ -99,13 +100,13 @@ public class FetchSessionHandler {
         /**
          * The partitions to send in the request's "forget" list.
          */
-        private final List<TopicPartition> toForget;
+        private final List<TopicIdPartition> toForget;
 
         /**
          * The partitions to send in the request's "forget" list if
          * the version is >= 13.
          */
-        private final List<TopicPartition> toReplace;
+        private final List<TopicIdPartition> toReplace;
 
         /**
          * All of the partitions which exist in the fetch request session.
@@ -123,16 +124,6 @@ public class FetchSessionHandler {
         private final Map<Uuid, String> toSendTopicNames;
 
         /**
-         * Topic IDs for the topics in the `toForget` list.
-         */
-        private final Map<String, Uuid> toForgetTopicIds;
-
-        /**
-         * Topic IDs for the topics in the `toReplace` list.
-         */
-        private final Map<String, Uuid> toReplaceTopicIds;
-
-        /**
          * The metadata to use in this fetch request.
          */
         private final FetchMetadata metadata;
@@ -144,13 +135,11 @@ public class FetchSessionHandler {
         private final boolean canUseTopicIds;
 
         FetchRequestData(Map<TopicPartition, PartitionData> toSend,
-                         List<TopicPartition> toForget,
-                         List<TopicPartition> toReplace,
+                         List<TopicIdPartition> toForget,
+                         List<TopicIdPartition> toReplace,
                          Map<TopicPartition, PartitionData> sessionPartitions,
                          Map<String, Uuid> toSendTopicIds,
                          Map<Uuid, String> toSendTopicNames,
-                         Map<String, Uuid> toForgetTopicIds,
-                         Map<String, Uuid> toReplaceTopicIds,
                          FetchMetadata metadata,
                          boolean canUseTopicIds) {
             this.toSend = toSend;
@@ -159,8 +148,6 @@ public class FetchSessionHandler {
             this.sessionPartitions = sessionPartitions;
             this.toSendTopicIds = toSendTopicIds;
             this.toSendTopicNames = toSendTopicNames;
-            this.toForgetTopicIds = toForgetTopicIds;
-            this.toReplaceTopicIds = toReplaceTopicIds;
             this.metadata = metadata;
             this.canUseTopicIds = canUseTopicIds;
         }
@@ -175,14 +162,14 @@ public class FetchSessionHandler {
         /**
          * Get a list of partitions to forget in this fetch request.
          */
-        public List<TopicPartition> toForget() {
+        public List<TopicIdPartition> toForget() {
             return toForget;
         }
 
         /**
          * Get a list of partitions to forget in this fetch request.
          */
-        public List<TopicPartition> toReplace() {
+        public List<TopicIdPartition> toReplace() {
             return toReplace;
         }
 
@@ -199,14 +186,6 @@ public class FetchSessionHandler {
 
         public Map<Uuid, String> toSendTopicNames() {
             return toSendTopicNames;
-        }
-
-        public Map<String, Uuid> toForgetTopicIds() {
-            return toForgetTopicIds;
-        }
-
-        public Map<String, Uuid> toReplaceTopicIds() {
-            return toReplaceTopicIds;
         }
 
         public FetchMetadata metadata() {
@@ -238,7 +217,14 @@ public class FetchSessionHandler {
                 }
                 bld.append("), toForget=(");
                 prefix = "";
-                for (TopicPartition partition : toForget) {
+                for (TopicIdPartition partition : toForget) {
+                    bld.append(prefix);
+                    bld.append(partition);
+                    prefix = ", ";
+                }
+                bld.append("), toReplace=(");
+                prefix = "";
+                for (TopicIdPartition partition : toReplace) {
                     bld.append(prefix);
                     bld.append(partition);
                     prefix = ", ";
@@ -306,11 +292,11 @@ public class FetchSessionHandler {
         /**
          * Mark that we want data from this partition in the upcoming fetch.
          */
-        public void add(TopicPartition topicPartition, Uuid topicId, PartitionData data) {
+        public void add(TopicPartition topicPartition, PartitionData data) {
             next.put(topicPartition, data);
             // topicIds should not change between adding partitions and building, so we can use putIfAbsent
-            if (!topicId.equals(Uuid.ZERO_UUID)) {
-                topicIds.putIfAbsent(topicPartition.topic(), topicId);
+            if (!data.topicId.equals(Uuid.ZERO_UUID)) {
+                topicIds.putIfAbsent(topicPartition.topic(), data.topicId);
             } else {
                 partitionsWithoutTopicIds++;
             }
@@ -322,7 +308,7 @@ public class FetchSessionHandler {
             if (nextMetadata.isFull()) {
                 if (log.isDebugEnabled()) {
                     log.debug("Built full fetch {} for node {} with {}.",
-                              nextMetadata, node, partitionsToLogString(next.keySet()));
+                              nextMetadata, node, topicPartitionsToLogString(next.keySet()));
                 }
                 sessionPartitions = next;
                 next = null;
@@ -343,16 +329,13 @@ public class FetchSessionHandler {
                 Map<Uuid, String> toSendTopicNames =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
                 return new FetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), toSend,
-                    toSendTopicIds, toSendTopicNames, Collections.emptyMap(), Collections.emptyMap(),
-                    nextMetadata, canUseTopicIds);
+                    toSendTopicIds, toSendTopicNames, nextMetadata, canUseTopicIds);
             }
 
-            List<TopicPartition> added = new ArrayList<>();
-            List<TopicPartition> removed = new ArrayList<>();
-            List<TopicPartition> altered = new ArrayList<>();
-            List<TopicPartition> replaced = new ArrayList<>();
-            Map<String, Uuid> removedTopicIds = new HashMap<>();
-            Map<String, Uuid> replacedTopicIds = new HashMap<>();
+            List<TopicIdPartition> added = new ArrayList<>();
+            List<TopicIdPartition> removed = new ArrayList<>();
+            List<TopicIdPartition> altered = new ArrayList<>();
+            List<TopicIdPartition> replaced = new ArrayList<>();
             for (Iterator<Entry<TopicPartition, PartitionData>> iter =
                      sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
@@ -362,31 +345,23 @@ public class FetchSessionHandler {
                 if (nextData != null) {
                     // We basically check if the new partition had the same topic ID. If not,
                     // we add it to the "replaced" set.
-                    // TODO: Need to think about the case where the topic just got its topic ID
-                    // assigned. In this case, it should not be added to the "replaced" set.
-                    Uuid currentTopicId = sessionTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
-                    Uuid newTopicId = topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
-                    if (currentTopicId.equals(newTopicId)) {
-                        if (!prevData.equals(nextData)) {
-                            // Re-add the altered partition to the end of 'next'
-                            next.put(topicPartition, nextData);
-                            entry.setValue(nextData);
-                            altered.add(topicPartition);
-                        }
-                    } else {
+                    if (!prevData.topicId.equals(nextData.topicId) && !prevData.topicId.equals(Uuid.ZERO_UUID)) {
                         // Re-add the replaced partition to the end of 'next'
                         next.put(topicPartition, nextData);
                         entry.setValue(nextData);
-                        replaced.add(topicPartition);
-                        replacedTopicIds.putIfAbsent(topicPartition.topic(), currentTopicId);
+                        replaced.add(new TopicIdPartition(prevData.topicId, topicPartition));
                         // TODO: Should we update canUseTopicIds as well?
+                    } else if (!prevData.equals(nextData)) {
+                        // Re-add the altered partition to the end of 'next'
+                        next.put(topicPartition, nextData);
+                        entry.setValue(nextData);
+                        altered.add(new TopicIdPartition(nextData.topicId, topicPartition));
                     }
                 } else {
                     // Remove this partition from the session.
                     iter.remove();
                     // Indicate that we no longer want to listen to this partition.
-                    removed.add(topicPartition);
-                    removedTopicIds.putIfAbsent(topicPartition.topic(), sessionTopicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID));
+                    removed.add(new TopicIdPartition(prevData.topicId, topicPartition));
                     // If we do not have this topic ID in the builder or the session, we can not use topic IDs.
                     if (canUseTopicIds && !topicIds.containsKey(topicPartition.topic()) && !sessionTopicIds.containsKey(topicPartition.topic()))
                         canUseTopicIds = false;
@@ -404,7 +379,7 @@ public class FetchSessionHandler {
                     break;
                 }
                 sessionPartitions.put(topicPartition, nextData);
-                added.add(topicPartition);
+                added.add(new TopicIdPartition(nextData.topicId, topicPartition));
             }
 
             // Add topic IDs to session if we can use them. If an ID is inconsistent, we will handle in the receiving broker.
@@ -420,9 +395,9 @@ public class FetchSessionHandler {
 
             if (log.isDebugEnabled()) {
                 log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {}, " +
-                          "replaced {} out of {}", nextMetadata, node, partitionsToLogString(added),
-                          partitionsToLogString(altered), partitionsToLogString(removed),
-                          partitionsToLogString(replaced), partitionsToLogString(sessionPartitions.keySet()));
+                          "replaced {} out of {}", nextMetadata, node, topicIdPartitionsToLogString(added),
+                          topicIdPartitionsToLogString(altered), topicIdPartitionsToLogString(removed),
+                          topicIdPartitionsToLogString(replaced), topicPartitionsToLogString(sessionPartitions.keySet()));
             }
             Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
@@ -434,12 +409,14 @@ public class FetchSessionHandler {
                 Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
             next = null;
             topicIds = null;
-            return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
-                                        Collections.unmodifiableList(replaced), curSessionPartitions,
-                                        toSendTopicIds, toSendTopicNames,
-                                        Collections.unmodifiableMap(removedTopicIds),
-                                        Collections.unmodifiableMap(replacedTopicIds),
-                                        nextMetadata, canUseTopicIds);
+            return new FetchRequestData(toSend,
+                                        Collections.unmodifiableList(removed),
+                                        Collections.unmodifiableList(replaced),
+                                        curSessionPartitions,
+                                        toSendTopicIds,
+                                        toSendTopicNames,
+                                        nextMetadata,
+                                        canUseTopicIds);
         }
     }
 
@@ -459,7 +436,14 @@ public class FetchSessionHandler {
         return new Builder(size, copySessionPartitions);
     }
 
-    private String partitionsToLogString(Collection<TopicPartition> partitions) {
+    private String topicPartitionsToLogString(Collection<TopicPartition> partitions) {
+        if (!log.isTraceEnabled()) {
+            return String.format("%d partition(s)", partitions.size());
+        }
+        return "(" + Utils.join(partitions, ", ") + ")";
+    }
+
+    private String topicIdPartitionsToLogString(Collection<TopicIdPartition> partitions) {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
