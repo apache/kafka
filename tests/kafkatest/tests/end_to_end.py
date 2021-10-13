@@ -55,6 +55,10 @@ class EndToEndTest(Test):
             self.topic: self.topic_config,
             "__consumer_offsets": group_metadata_config
         }
+
+        if self.topic:
+            topics[self.topic] = self.topic_config
+
         self.kafka = KafkaService(self.test_context, num_nodes=num_nodes,
                                   zk=self.zk, topics=topics, **kwargs)
 
