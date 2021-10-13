@@ -29,12 +29,23 @@ import java.util.Objects;
 public final class Batch<T> implements Iterable<T> {
     private final long baseOffset;
     private final int epoch;
+    private final long appendTimestamp;
+    private final int sizeInBytes;
     private final long lastOffset;
     private final List<T> records;
 
-    private Batch(long baseOffset, int epoch, long lastOffset, List<T> records) {
+    private Batch(
+        long baseOffset,
+        int epoch,
+        long appendTimestamp,
+        int sizeInBytes,
+        long lastOffset,
+        List<T> records
+    ) {
         this.baseOffset = baseOffset;
         this.epoch = epoch;
+        this.appendTimestamp = appendTimestamp;
+        this.sizeInBytes = sizeInBytes;
         this.lastOffset = lastOffset;
         this.records = records;
     }
@@ -54,6 +65,13 @@ public final class Batch<T> implements Iterable<T> {
     }
 
     /**
+     * The append timestamp in milliseconds of the batch.
+     */
+    public long appendTimestamp() {
+        return appendTimestamp;
+    }
+
+    /**
      * The list of records in the batch.
      */
     public List<T> records() {
@@ -67,6 +85,13 @@ public final class Batch<T> implements Iterable<T> {
         return epoch;
     }
 
+    /**
+     * The number of bytes used by this batch.
+     */
+    public int sizeInBytes() {
+        return sizeInBytes;
+    }
+
     @Override
     public Iterator<T> iterator() {
         return records.iterator();
@@ -77,6 +102,8 @@ public final class Batch<T> implements Iterable<T> {
         return "Batch(" +
             "baseOffset=" + baseOffset +
             ", epoch=" + epoch +
+            ", appendTimestamp=" + appendTimestamp +
+            ", sizeInBytes=" + sizeInBytes +
             ", lastOffset=" + lastOffset +
             ", records=" + records +
             ')';
@@ -89,35 +116,68 @@ public final class Batch<T> implements Iterable<T> {
         Batch<?> batch = (Batch<?>) o;
         return baseOffset == batch.baseOffset &&
             epoch == batch.epoch &&
+            appendTimestamp == batch.appendTimestamp &&
+            sizeInBytes == batch.sizeInBytes &&
+            lastOffset == batch.lastOffset &&
             Objects.equals(records, batch.records);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(baseOffset, epoch, records);
+        return Objects.hash(
+            baseOffset,
+            epoch,
+            appendTimestamp,
+            sizeInBytes,
+            lastOffset,
+            records
+        );
     }
 
     /**
-     * Create a batch without any records.
+     * Create a control batch without any data records.
      *
      * Internally this is used to propagate offset information for control batches which do not decode to the type T.
      *
      * @param baseOffset offset of the batch
      * @param epoch epoch of the leader that created this batch
+     * @param appendTimestamp timestamp in milliseconds of when the batch was appended
+     * @param sizeInBytes number of bytes used by this batch
      * @param lastOffset offset of the last record of this batch
      */
-    public static <T> Batch<T> empty(long baseOffset, int epoch, long lastOffset) {
-        return new Batch<>(baseOffset, epoch, lastOffset, Collections.emptyList());
+    public static <T> Batch<T> control(
+        long baseOffset,
+        int epoch,
+        long appendTimestamp,
+        int sizeInBytes,
+        long lastOffset
+    ) {
+        return new Batch<>(
+            baseOffset,
+            epoch,
+            appendTimestamp,
+            sizeInBytes,
+            lastOffset,
+            Collections.emptyList()
+        );
     }
 
     /**
-     * Create a batch with the given base offset, epoch and records.
+     * Create a data batch with the given base offset, epoch and records.
      *
      * @param baseOffset offset of the first record in the batch
      * @param epoch epoch of the leader that created this batch
+     * @param appendTimestamp timestamp in milliseconds of when the batch was appended
+     * @param sizeInBytes number of bytes used by this batch
      * @param records the list of records in this batch
      */
-    public static <T> Batch<T> of(long baseOffset, int epoch, List<T> records) {
+    public static <T> Batch<T> data(
+        long baseOffset,
+        int epoch,
+        long appendTimestamp,
+        int sizeInBytes,
+        List<T> records
+    ) {
         if (records.isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
@@ -128,6 +188,13 @@ public final class Batch<T> implements Iterable<T> {
             );
         }
 
-        return new Batch<>(baseOffset, epoch, baseOffset + records.size() - 1, records);
+        return new Batch<>(
+            baseOffset,
+            epoch,
+            appendTimestamp,
+            sizeInBytes,
+            baseOffset + records.size() - 1,
+            records
+        );
     }
 }

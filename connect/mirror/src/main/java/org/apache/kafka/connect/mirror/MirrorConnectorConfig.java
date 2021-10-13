@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -77,6 +78,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
+    public static final String SOURCE_CLUSTER_ALIAS_DEFAULT = "source";
     private static final String SOURCE_CLUSTER_ALIAS_DOC = "Alias of source cluster";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
     public static final String TARGET_CLUSTER_ALIAS_DEFAULT = "target";
@@ -202,6 +204,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
     protected static final String SOURCE_CLUSTER_PREFIX = MirrorMakerConfig.SOURCE_CLUSTER_PREFIX;
     protected static final String TARGET_CLUSTER_PREFIX = MirrorMakerConfig.TARGET_CLUSTER_PREFIX;
     protected static final String SOURCE_PREFIX = MirrorMakerConfig.SOURCE_PREFIX;
@@ -281,6 +287,26 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return props;
     }
 
+    Map<String, Object> targetProducerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + PRODUCER_CLIENT_PREFIX));
+        return props;
+    }
+
+    Map<String, Object> targetConsumerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + CONSUMER_CLIENT_PREFIX));
+        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return props;
+    }
+
     Map<String, Object> sourceAdminConfig() {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
@@ -314,12 +340,36 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String offsetSyncsTopic() {
-        // ".internal" suffix ensures this doesn't get replicated
-        return "mm2-offset-syncs." + targetClusterAlias() + ".internal";
+        String otherClusterAlias = SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? targetClusterAlias()
+                : sourceClusterAlias();
+        return replicationPolicy().offsetSyncsTopic(otherClusterAlias);
+    }
+
+    String offsetSyncsTopicLocation() {
+        return getString(OFFSET_SYNCS_TOPIC_LOCATION);
+    }
+
+    Map<String, Object> offsetSyncsTopicAdminConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceAdminConfig()
+                : targetAdminConfig();
+    }
+
+    Map<String, Object> offsetSyncsTopicProducerConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceProducerConfig()
+                : targetProducerConfig();
+    }
+
+    Map<String, Object> offsetSyncsTopicConsumerConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceConsumerConfig()
+                : targetConsumerConfig();
     }
 
     String heartbeatsTopic() {
-        return MirrorClientConfig.HEARTBEATS_TOPIC;
+        return replicationPolicy().heartbeatsTopic();
     }
 
     // e.g. source1.heartbeats
@@ -328,9 +378,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String checkpointsTopic() {
-        // Checkpoint topics are not "remote topics", as they are not replicated, so we don't
-        // need to use ReplicationPolicy here.
-        return sourceClusterAlias() + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+        return replicationPolicy().checkpointsTopic(sourceClusterAlias());
     }
 
     long maxOffsetLag() {
@@ -654,6 +702,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     OFFSET_LAG_MAX_DEFAULT,
                     ConfigDef.Importance.LOW,
                     OFFSET_LAG_MAX_DOC)
+            .define(
+                    OFFSET_SYNCS_TOPIC_LOCATION,
+                    ConfigDef.Type.STRING,
+                    OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT,
+                    ValidString.in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
+                    ConfigDef.Importance.LOW,
+                    OFFSET_SYNCS_TOPIC_LOCATION_DOC)
             .define(
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,

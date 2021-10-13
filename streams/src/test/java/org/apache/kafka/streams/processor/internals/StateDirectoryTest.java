@@ -236,6 +236,30 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldThrowProcessorStateExceptionIfStateDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace application's stateDir to regular file
+        Utils.delete(appDir);
+        appDir.createNewFile();
+
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionIfTestDirOccupied() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // Replace taskDir to a regular file
+        final File taskDir = new File(appDir, toTaskDirString(taskId));
+        Utils.delete(taskDir);
+        taskDir.createNewFile();
+
+        // Error: ProcessorStateException should be thrown.
+        assertThrows(ProcessorStateException.class, () -> directory.getOrCreateDirectoryForTask(taskId));
+    }
+
+    @Test
     public void shouldNotThrowIfStateDirectoryHasBeenDeleted() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
@@ -360,7 +384,9 @@ public class StateDirectoryTest {
                     put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
                 }
             }),
-            time, true);
+            time,
+            true,
+            false);
         appDir = new File(stateDir, applicationId);
 
         // make sure the File#listFiles returns null and StateDirectory#listAllTaskDirectories is able to handle null
@@ -401,7 +427,9 @@ public class StateDirectoryTest {
                     put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
                 }
             }),
-            time, true);
+            time,
+            true,
+            false);
         final File taskDir = stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
@@ -675,6 +703,31 @@ public class StateDirectoryTest {
         assertThat(namedTopologyDir.mkdir(), is(true));
         assertThat(namedTopologyDir.exists(), is(true));
         directory.clean();
+        assertThat(namedTopologyDir.exists(), is(false));
+    }
+
+    @Test
+    public void shouldRemoveNonEmptyNamedTopologyDirsWhenCallingClearLocalStateForNamedTopology() throws Exception {
+        initializeStateDirectory(true, true);
+        final String topologyName = "topology1";
+        final File taskDir = directory.getOrCreateDirectoryForTask(new TaskId(2, 0, topologyName));
+        final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
+
+        assertThat(taskDir.exists(), is(true));
+        assertThat(namedTopologyDir.exists(), is(true));
+        directory.clearLocalStateForNamedTopology(topologyName);
+        assertThat(taskDir.exists(), is(false));
+        assertThat(namedTopologyDir.exists(), is(false));
+    }
+
+    @Test
+    public void shouldRemoveEmptyNamedTopologyDirsWhenCallingClearLocalStateForNamedTopology() throws IOException {
+        initializeStateDirectory(true, true);
+        final String topologyName = "topology1";
+        final File namedTopologyDir = new File(appDir, "__" + topologyName + "__");
+        assertThat(namedTopologyDir.mkdir(), is(true));
+        assertThat(namedTopologyDir.exists(), is(true));
+        directory.clearLocalStateForNamedTopology(topologyName);
         assertThat(namedTopologyDir.exists(), is(false));
     }
 

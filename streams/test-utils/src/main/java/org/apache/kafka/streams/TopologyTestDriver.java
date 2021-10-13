@@ -195,7 +195,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * trigger manually via {@link #advanceWallClockTime(Duration)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
- * {@link org.apache.kafka.streams.processor.Processor processors}.
+ * {@link org.apache.kafka.streams.processor.api.Processor processors}.
  *
  * <h2>Processor state</h2>
  * <p>
@@ -362,7 +362,8 @@ public class TopologyTestDriver implements Closeable {
                     throw new IllegalStateException();
                 }
             },
-            logContext
+            logContext,
+            mockWallClockTime
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
@@ -417,9 +418,7 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
 
-        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
-            (globalTopology != null && globalTopology.hasPersistentGlobalStore());
-        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory, builder.hasNamedTopologies());
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, internalTopologyBuilder.hasPersistentStores(), false);
     }
 
     private void setupGlobalTask(final Time mockWallClockTime,
@@ -879,7 +878,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
-        for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
+        for (final String storeName : internalTopologyBuilder.allStateStoreNames()) {
             allStores.put(storeName, getStateStore(storeName, false));
         }
         return allStores;
@@ -1336,8 +1335,9 @@ public class TopologyTestDriver implements Closeable {
 
         public TestDriverProducer(final StreamsConfig config,
                                   final KafkaClientSupplier clientSupplier,
-                                  final LogContext logContext) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
+                                  final LogContext logContext,
+                                  final Time time) {
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext, time);
         }
 
         @Override

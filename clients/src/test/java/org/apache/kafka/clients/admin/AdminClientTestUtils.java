@@ -17,13 +17,17 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
+import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 public class AdminClientTestUtils {
@@ -58,7 +62,7 @@ public class AdminClientTestUtils {
     public static DeleteTopicsResult deleteTopicsResult(String topic, Throwable t) {
         KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         future.completeExceptionally(t);
-        return new DeleteTopicsResult(Collections.singletonMap(topic, future));
+        return DeleteTopicsResult.ofTopicNames(Collections.singletonMap(topic, future));
     }
 
     /**
@@ -68,7 +72,7 @@ public class AdminClientTestUtils {
      */
     public static ListTopicsResult listTopicsResult(String topic) {
         KafkaFutureImpl<Map<String, TopicListing>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(topic, new TopicListing(topic, false)));
+        future.complete(Collections.singletonMap(topic, new TopicListing(topic, Uuid.ZERO_UUID, false)));
         return new ListTopicsResult(future);
     }
 
@@ -91,15 +95,33 @@ public class AdminClientTestUtils {
     public static DescribeTopicsResult describeTopicsResult(String topic, TopicDescription description) {
         KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
-        return new DescribeTopicsResult(Collections.singletonMap(topic, future));
+        return DescribeTopicsResult.ofTopicNames(Collections.singletonMap(topic, future));
     }
 
     public static DescribeTopicsResult describeTopicsResult(Map<String, TopicDescription> topicDescriptions) {
-        return new DescribeTopicsResult(topicDescriptions.entrySet().stream()
+        return DescribeTopicsResult.ofTopicNames(topicDescriptions.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<TopicPartition, OffsetAndMetadata> offsets) {
         return new ListConsumerGroupOffsetsResult(KafkaFuture.completedFuture(offsets));
+    }
+
+    /**
+     * Used for benchmark. KafkaAdminClient.getListOffsetsCalls is only accessible
+     * from within the admin package.
+     */
+    public static List<KafkaAdminClient.Call> getListOffsetsCalls(KafkaAdminClient adminClient, 
+                                                                  MetadataOperationContext<ListOffsetsResult.ListOffsetsResultInfo, ListOffsetsOptions> context,
+                                                                  Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                                                  Map<TopicPartition, KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo>> futures) {
+        return adminClient.getListOffsetsCalls(context, topicPartitionOffsets, futures); 
+    }
+
+    /**
+     * Helper to create a KafkaAdminClient with a custom HostResolver accessible to tests outside this package.
+     */
+    public static Admin create(Map<String, Object> conf, HostResolver hostResolver) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, hostResolver);
     }
 }

@@ -55,10 +55,9 @@ public interface EventQueue extends AutoCloseable {
         @Override
         public void handleException(Throwable e) {
             if (e instanceof RejectedExecutionException) {
-                log.info("Not processing {} because the event queue is closed.",
-                    this.toString());
+                log.info("Not processing {} because the event queue is closed.", this);
             } else {
-                log.error("Unexpected error handling {}", this.toString(), e);
+                log.error("Unexpected error handling {}", this, e);
             }
         }
 
@@ -141,7 +140,7 @@ public interface EventQueue extends AutoCloseable {
      * @param deadlineNs        The deadline for starting the event, in monotonic
      *                          nanoseconds.  If the event has not started by this
      *                          deadline, handleException is called with a
-     *                          @{org.apache.kafka.common.errors.TimeoutException},
+     *                          {@link org.apache.kafka.common.errors.TimeoutException},
      *                          and the event is cancelled.
      * @param event             The event to append.
      */
@@ -182,7 +181,7 @@ public interface EventQueue extends AutoCloseable {
     enum EventInsertionType {
         PREPEND,
         APPEND,
-        DEFERRED;
+        DEFERRED
     }
 
     /**
@@ -244,7 +243,7 @@ public interface EventQueue extends AutoCloseable {
      * @param timeSpan      The amount of time to use for the timeout.
      *                      Once the timeout elapses, any remaining queued
      *                      events will get a
-     *                      @{org.apache.kafka.common.errors.TimeoutException}.
+     *                      {@link org.apache.kafka.common.errors.TimeoutException}.
      * @param timeUnit      The time unit to use for the timeout.
      */
     void beginShutdown(String source, Event cleanupEvent, long timeSpan, TimeUnit timeUnit);

@@ -29,8 +29,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +40,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.RangeAssignor.RANGE_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.RoundRobinAssignor.ROUNDROBIN_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.StickyAssignor.STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -46,6 +52,16 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 public class ConsumerConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
+
+    // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
+    // This is to help optimize ConsumerCoordinator#performAssignment method
+    public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS =
+        Collections.unmodifiableList(Arrays.asList(
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
+            COOPERATIVE_STICKY_ASSIGNOR_NAME
+        ));
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
@@ -113,15 +129,17 @@ public class ConsumerConfig extends AbstractConfig {
         "ordered by preference, of supported partition assignment strategies that the client will use to distribute " +
         "partition ownership amongst consumer instances when group management is used. Available options are:" +
         "<ul>" +
-        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: The default assignor, which works on a per-topic basis.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: Assigns partitions on a per-topic basis.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: Assigns partitions to consumers in a round-robin fashion.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: Guarantees an assignment that is " +
         "maximally balanced while preserving as many existing partition assignments as possible.</li>" +
         "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows the same StickyAssignor " +
         "logic, but allows for cooperative rebalancing.</li>" +
         "</ul>" +
+        "<p>The default assignor is [RangeAssignor, CooperativeStickyAssignor], which will use the RangeAssignor by default, " +
+        "but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.</p>" +
         "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
-        "interface allows you to plug in a custom assignment strategy.";
+        "interface allows you to plug in a custom assignment strategy.</p>";
 
     /**
      * <code>auto.offset.reset</code>
@@ -346,7 +364,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
-                                        Collections.singletonList(RangeAssignor.class),
+                                        Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class),
                                         new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)

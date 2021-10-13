@@ -154,6 +154,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     DATA_LOG_DIR_1 = "%s-1" % (DATA_LOG_DIR_PREFIX)
     DATA_LOG_DIR_2 = "%s-2" % (DATA_LOG_DIR_PREFIX)
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "kafka.properties")
+    METADATA_LOG_DIR = os.path.join (PERSISTENT_ROOT, "kafka-metadata-logs")
+    METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
+    METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
     ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
@@ -308,7 +311,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     jmx_attributes=jmx_attributes,
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
-                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft
+                    remote_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
+                    server_prop_overrides=server_prop_overrides
                 )
                 self.controller_quorum = self.remote_controller_quorum
 
@@ -321,6 +325,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.client_sasl_mechanism = client_sasl_mechanism
         self.topics = topics
         self.minikdc = None
+        self.concurrent_start = True # start concurrently by default
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
         if server_prop_overrides is None:
@@ -414,6 +419,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     node.config = KafkaConfig(**kraft_broker_plus_zk_configs)
                 else:
                     node.config = KafkaConfig(**kraft_broker_configs)
+        self.colocated_nodes_started = 0
+        self.nodes_to_start = self.nodes
 
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
         if controller_num_nodes_override < 0:
@@ -555,9 +562,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
-    def start(self, add_principals=""):
+    def start(self, add_principals="", nodes_to_skip=[], timeout_sec=60):
+        """
+        Start the Kafka broker and wait until it registers its ID in ZooKeeper
+        Startup will be skipped for any nodes in nodes_to_skip. These nodes can be started later via add_broker
+        """
         if self.quorum_info.using_zk and self.zk_client_secure and not self.zk.zk_client_secure_port:
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
+
+        if not all([node in self.nodes for node in nodes_to_skip]):
+            raise Exception("nodes_to_skip should be a subset of this service's nodes")
+
         if self.quorum_info.has_brokers_and_controllers and (
                 self.controller_security_protocol != self.intercontroller_security_protocol or
                 self.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS and self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
@@ -576,18 +591,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # than the number of nodes in the service
 
         self.start_minikdc_if_necessary(add_principals)
+
+        # save the nodes we want to start in a member variable so we know which nodes to start and which to skip
+        # in start_node
+        self.nodes_to_start = [node for node in self.nodes if node not in nodes_to_skip]
+
         if self.quorum_info.using_zk:
             self._ensure_zk_chroot()
 
         if self.remote_controller_quorum:
             self.remote_controller_quorum.start()
         Service.start(self)
+        if self.concurrent_start:
+            # We didn't wait while starting each individual node, so wait for them all now
+            for node in self.nodes_to_start:
+                with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+                    monitor.offset = 0
+                    self.wait_for_start(node, monitor, timeout_sec)
 
         if self.quorum_info.using_zk:
             self.logger.info("Waiting for brokers to register at ZK")
 
-            expected_broker_ids = set(self.nodes)
-            wait_until(lambda: {node for node in self.nodes if self.is_registered(node)} == expected_broker_ids,
+            expected_broker_ids = set(self.nodes_to_start)
+            wait_until(lambda: {node for node in self.nodes_to_start if self.is_registered(node)} == expected_broker_ids,
                        timeout_sec=30, backoff_sec=1, err_msg="Kafka servers didn't register at ZK within 30 seconds")
 
         # Create topics if necessary
@@ -598,6 +624,43 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
+        self.concurrent_start = False # in case it was True and this method was invoked directly instead of via start_concurrently()
+
+    def start_concurrently(self, add_principals="", timeout_sec=60):
+        self.concurrent_start = True # ensure it is True in case it has been explicitly disabled elsewhere
+        self.start(add_principals = add_principals, timeout_sec=timeout_sec)
+        self.concurrent_start = False
+
+    def add_broker(self, node):
+        """
+        Starts an individual node. add_broker should only be used for nodes skipped during initial kafka service startup
+        """
+        if node in self.nodes_to_start:
+            raise Exception("Add broker should only be used for nodes that haven't already been started")
+
+        self.logger.debug(self.who_am_i() + ": killing processes and attempting to clean up before starting")
+        # Added precaution - kill running processes, clean persistent files
+        # try/except for each step, since each of these steps may fail if there are no processes
+        # to kill or no files to remove
+        try:
+            self.stop_node(node)
+        except Exception:
+            pass
+
+        try:
+            self.clean_node(node)
+        except Exception:
+            pass
+
+        if node not in self.nodes_to_start:
+            self.nodes_to_start += [node]
+        self.logger.debug("%s: starting node" % self.who_am_i(node))
+        # ensure we wait for the broker to start by setting concurrent start to False for the invocation of start_node()
+        orig_concurrent_start = self.concurrent_start
+        self.concurrent_start = False
+        self.start_node(node)
+        self.concurrent_start = orig_concurrent_start
+        wait_until(lambda: self.is_registered(node), 30, 1)
 
     def _ensure_zk_chroot(self):
         self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
@@ -703,6 +766,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else [broker_to_controller_listener_name, self.controller_listener_name(self.controller_quorum.intercontroller_security_protocol)]
 
     def start_node(self, node, timeout_sec=60):
+        if node not in self.nodes_to_start:
+            return
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
 
         self.node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
@@ -747,12 +812,21 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node.account.ssh(cmd)
 
         cmd = self.start_cmd(node)
-        self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
-            node.account.ssh(cmd)
-            # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
-            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
-                               err_msg="Kafka server didn't finish startup in %d seconds" % timeout_sec)
+        self.logger.debug("Attempting to start KafkaService %s on %s with command: %s" %\
+                          ("concurrently" if self.concurrent_start else "serially", str(node.account), cmd))
+        if self.node_quorum_info.has_controller_role and self.node_quorum_info.has_broker_role:
+            self.colocated_nodes_started += 1
+        if self.concurrent_start:
+            node.account.ssh(cmd) # and then don't wait for the startup message
+        else:
+            with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+                node.account.ssh(cmd)
+                self.wait_for_start(node, monitor, timeout_sec)
+
+    def wait_for_start(self, node, monitor, timeout_sec=60):
+        # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
+        monitor.wait_until("Kafka\s*Server.*started", timeout_sec=timeout_sec, backoff_sec=.25,
+                           err_msg="Kafka server didn't finish startup in %d seconds" % timeout_sec)
 
         if self.quorum_info.using_zk or self.quorum_info.has_brokers: # TODO: SCRAM currently unsupported for controller quorum
             # Credentials for inter-broker communication are created before starting Kafka.
@@ -786,15 +860,31 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
-        sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
+        cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
+        force_sigkill_due_to_too_few_colocated_controllers =\
+            clean_shutdown and cluster_has_colocated_controllers\
+            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+        if force_sigkill_due_to_too_few_colocated_controllers:
+            self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
+                             (self.colocated_nodes_started, self.num_nodes_controller_role))
+
+        sig = signal.SIGTERM if clean_shutdown and not force_sigkill_due_to_too_few_colocated_controllers else signal.SIGKILL
 
         for pid in pids:
             node.account.signal(pid, sig, allow_fail=False)
+
+        node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
+        node_has_colocated_controllers = node_quorum_info.has_controller_role and node_quorum_info.has_broker_role
+        if pids and node_has_colocated_controllers:
+            self.colocated_nodes_started -= 1
 
         try:
             wait_until(lambda: len(self.pids(node)) == 0, timeout_sec=timeout_sec,
                        err_msg="Kafka node failed to stop in %d seconds" % timeout_sec)
         except Exception:
+            if node_has_colocated_controllers:
+                # it didn't stop
+                self.colocated_nodes_started += 1
             self.thread_dump(node)
             raise
 
@@ -1034,6 +1124,49 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
+
+    def has_under_replicated_partitions(self):
+        """
+        Check whether the cluster has under-replicated partitions.
+
+        :return True if there are under-replicated partitions, False otherwise.
+        """
+        return len(self.describe_under_replicated_partitions()) > 0
+
+    def await_no_under_replicated_partitions(self, timeout_sec=30):
+        """
+        Wait for all under-replicated partitions to clear.
+
+        :param timeout_sec: the maximum time in seconds to wait
+        """
+        wait_until(lambda: not self.has_under_replicated_partitions(),
+                   timeout_sec = timeout_sec,
+                   err_msg="Timed out waiting for under-replicated-partitions to clear")
+
+    def describe_under_replicated_partitions(self):
+        """
+        Use the topic tool to find the under-replicated partitions in the cluster.
+
+        :return the under-replicated partitions as a list of dictionaries
+                (e.g. [{"topic": "foo", "partition": 1}, {"topic": "bar", "partition": 0}, ... ])
+        """
+
+        node = self.nodes[0]
+        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --describe --under-replicated-partitions" % \
+            self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection)
+
+        self.logger.debug("Running topic command to describe under-replicated partitions\n%s" % cmd)
+        output = ""
+        for line in node.account.ssh_capture(cmd):
+            output += line
+
+        under_replicated_partitions = self.parse_describe_topic(output)["partitions"]
+        self.logger.debug("Found %d under-replicated-partitions" % len(under_replicated_partitions))
+
+        return under_replicated_partitions
 
     def describe_topic(self, topic, node=None):
         if node is None:
@@ -1301,8 +1434,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def restart_node(self, node, clean_shutdown=True, timeout_sec=60):
         """Restart the given node."""
+        # ensure we wait for the broker to start by setting concurrent start to False for the invocation of start_node()
+        orig_concurrent_start = self.concurrent_start
+        self.concurrent_start = False
         self.stop_node(node, clean_shutdown, timeout_sec)
         self.start_node(node, timeout_sec)
+        self.concurrent_start = orig_concurrent_start
 
     def _describe_topic_line_for_partition(self, partition, describe_topic_output):
         # Lines look like this: Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2

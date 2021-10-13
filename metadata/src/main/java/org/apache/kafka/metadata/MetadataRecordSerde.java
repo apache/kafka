@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
 
 public class MetadataRecordSerde extends AbstractApiMessageSerde {
+    public static final MetadataRecordSerde INSTANCE = new MetadataRecordSerde();
 
     @Override
     public ApiMessage apiMessageFor(short apiKey) {

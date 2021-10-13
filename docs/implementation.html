@@ -32,29 +32,29 @@
 
     <h4 class="anchor-heading"><a id="recordbatch" class="anchor-link"></a><a href="#recordbatch">5.3.1 Record Batch</a></h4>
 	<p> The following is the on-disk format of a RecordBatch. </p>
-	<p><pre class="line-numbers"><code class="language-java">		baseOffset: int64
-		batchLength: int32
-		partitionLeaderEpoch: int32
-		magic: int8 (current magic value is 2)
-		crc: int32
-		attributes: int16
-			bit 0~2:
-				0: no compression
-				1: gzip
-				2: snappy
-				3: lz4
-				4: zstd
-			bit 3: timestampType
-			bit 4: isTransactional (0 means not transactional)
-			bit 5: isControlBatch (0 means not a control batch)
-			bit 6~15: unused
-		lastOffsetDelta: int32
-		firstTimestamp: int64
-		maxTimestamp: int64
-		producerId: int64
-		producerEpoch: int16
-		baseSequence: int32
-		records: [Record]</code></pre></p>
+	<pre class="line-numbers"><code class="language-text">baseOffset: int64
+batchLength: int32
+partitionLeaderEpoch: int32
+magic: int8 (current magic value is 2)
+crc: int32
+attributes: int16
+    bit 0~2:
+        0: no compression
+        1: gzip
+        2: snappy
+        3: lz4
+        4: zstd
+    bit 3: timestampType
+    bit 4: isTransactional (0 means not transactional)
+    bit 5: isControlBatch (0 means not a control batch)
+    bit 6~15: unused
+lastOffsetDelta: int32
+firstTimestamp: int64
+maxTimestamp: int64
+producerId: int64
+producerEpoch: int16
+baseSequence: int32
+records: [Record]</code></pre>
     <p> Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. </p>
 
     <p>The CRC covers the data from the attributes to the end of the batch (i.e. all the bytes that follow the CRC). It is located after the magic byte, which
@@ -71,27 +71,27 @@
     <h5 class="anchor-heading"><a id="controlbatch" class="anchor-link"></a><a href="#controlbatch">5.3.1.1 Control Batches</a></h5>
     <p>A control batch contains a single record called the control record. Control records should not be passed on to applications. Instead, they are used by consumers to filter out aborted transactional messages.</p>
     <p> The key of a control record conforms to the following schema: </p>
-    <p><pre class="line-numbers"><code class="language-java">       version: int16 (current version is 0)
-       type: int16 (0 indicates an abort marker, 1 indicates a commit)</code></pre></p>
+    <pre class="line-numbers"><code class="language-text">version: int16 (current version is 0)
+type: int16 (0 indicates an abort marker, 1 indicates a commit)</code></pre>
     <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
 
     <h4 class="anchor-heading"><a id="record" class="anchor-link"></a><a href="#record">5.3.2 Record</a></h4>
 	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
-	<p><pre class="line-numbers"><code class="language-java">		length: varint
-		attributes: int8
-			bit 0~7: unused
-		timestampDelta: varlong
-		offsetDelta: varint
-		keyLength: varint
-		key: byte[]
-		valueLen: varint
-		value: byte[]
-		Headers => [Header]</code></pre></p>
+	<pre class="line-numbers"><code class="language-text">length: varint
+attributes: int8
+    bit 0~7: unused
+timestampDelta: varlong
+offsetDelta: varint
+keyLength: varint
+key: byte[]
+valueLen: varint
+value: byte[]
+Headers => [Header]</code></pre>
 	<h5 class="anchor-heading"><a id="recordheader" class="anchor-link"></a><a href="#recordheader">5.3.2.1 Record Header</a></h5>
-	<p><pre class="line-numbers"><code class="language-java">		headerKeyLength: varint
-		headerKey: String
-		headerValueLength: varint
-		Value: byte[]</code></pre></p>
+	<pre class="line-numbers"><code class="language-text">headerKeyLength: varint
+headerKey: String
+headerValueLength: varint
+Value: byte[]</code></pre>
     <p>We use the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
     is also encoded as a varint.</p>
 
@@ -102,41 +102,42 @@
     </p>
 
     <b>Message Set:</b><br>
-    <p><pre class="line-numbers"><code class="language-java">    MessageSet (Version: 0) => [offset message_size message]
-        offset => INT64
-        message_size => INT32
-        message => crc magic_byte attributes key value
-            crc => INT32
-            magic_byte => INT8
-            attributes => INT8
-                bit 0~2:
-                    0: no compression
-                    1: gzip
-                    2: snappy
-                bit 3~7: unused
-            key => BYTES
-            value => BYTES</code></pre></p>
-    <p><pre class="line-numbers"><code class="language-java">    MessageSet (Version: 1) => [offset message_size message]
-        offset => INT64
-        message_size => INT32
-        message => crc magic_byte attributes timestamp key value
-            crc => INT32
-            magic_byte => INT8
-            attributes => INT8
-                bit 0~2:
-                    0: no compression
-                    1: gzip
-                    2: snappy
-                    3: lz4
-                bit 3: timestampType
-                    0: create time
-                    1: log append time
-                bit 4~7: unused
-            timestamp => INT64
-            key => BYTES
-            value => BYTES</code></pre></p>
+    <pre class="line-numbers"><code class="language-text">MessageSet (Version: 0) => [offset message_size message]
+offset => INT64
+message_size => INT32
+message => crc magic_byte attributes key value
+    crc => INT32
+    magic_byte => INT8
+    attributes => INT8
+        bit 0~2:
+            0: no compression
+            1: gzip
+            2: snappy
+        bit 3~7: unused
+    key => BYTES
+    value => BYTES</code></pre>
+    <pre class="line-numbers"><code class="language-text">MessageSet (Version: 1) => [offset message_size message]
+offset => INT64
+message_size => INT32
+message => crc magic_byte attributes timestamp key value
+    crc => INT32
+    magic_byte => INT8
+    attributes => INT8
+        bit 0~2:
+            0: no compression
+            1: gzip
+            2: snappy
+            3: lz4
+        bit 3: timestampType
+            0: create time
+            1: log append time
+        bit 4~7: unused
+    timestamp => INT64
+    key => BYTES
+    value => BYTES</code></pre>
     <p>
         In versions prior to Kafka 0.10, the only supported message format version (which is indicated in the magic value) was 0. Message format version 1 was introduced with timestamp support in version 0.10.
+    </p>
     <ul>
         <li>Similarly to version 2 above, the lowest bits of attributes represent the compression type.</li>
         <li>In version 1, the producer should always set the timestamp type bit to 0. If the topic is configured to use log append time,
@@ -144,7 +145,6 @@
 	    the broker will overwrite the timestamp type and the timestamp in the message set.</li>
         <li>The highest bits of attributes must be set to 0.</li>
     </ul>
-    </p>
     <p>In message format versions 0 and 1 Kafka supports recursive messages to enable compression. In this case the message's attributes must be set
       to indicate one of the compression types and the value field will contain a message set compressed with that type. We often refer
       to the nested messages as "inner messages" and the wrapping message as the "outer message." Note that the key should be null
@@ -163,7 +163,7 @@
     A log for a topic named "my_topic" with two partitions consists of two directories (namely <code>my_topic_0</code> and <code>my_topic_1</code>) populated with data files containing the messages for that topic. The format of the log files is a sequence of "log entries""; each log entry is a 4 byte integer <i>N</i> storing the message length which is followed by the <i>N</i> message bytes. Each message is uniquely identified by a 64-bit integer <i>offset</i> giving the byte position of the start of this message in the stream of all messages ever sent to that topic on that partition. The on-disk format of each message is given below. Each log file is named with the offset of the first message it contains. So the first file created will be 00000000000.kafka, and each additional file will have an integer name roughly <i>S</i> bytes from the previous file where <i>S</i> is the max log file size given in the configuration.
     </p>
     <p>
-    The exact binary format for records is versioned and maintained as a standard interface so record batches can be transferred between producer, broker, and client without recopying or conversion when desirable. The previous section included details about the on-disk format of records.</p>
+    The exact binary format for records is versioned and maintained as a standard interface so record batches can be transferred between producer, broker, and client without recopying or conversion when desirable. The previous section included details about the on-disk format of records.
     </p>
    <p>
     The use of the message offset as the message id is unusual. Our original idea was to use a GUID generated by the producer, and maintain a mapping from GUID to offset on each broker. But since a consumer must maintain an ID for each server, the global uniqueness of the GUID provides no value. Furthermore, the complexity of maintaining the mapping from a random id to an offset requires a heavy weight index structure which must be synchronized with disk, essentially requiring a full persistent random-access data structure. Thus to simplify the lookup structure we decided to use a simple per-partition atomic counter which could be coupled with the partition id and node id to uniquely identify a message; this makes the lookup structure simpler, though multiple seeks per consumer request are still likely. However once we settled on a counter, the jump to directly using the offset seemed natural&mdash;both after all are monotonically increasing integers unique to a partition. Since the offset is hidden from the consumer API this decision is ultimately an implementation detail and we went with the more efficient approach.
@@ -186,21 +186,21 @@
 
     <p> The following is the format of the results sent to the consumer.
 
-    <pre class="line-numbers"><code class="language-text">    MessageSetSend (fetch result)
+    <pre class="line-numbers"><code class="language-text">MessageSetSend (fetch result)
 
-    total length     : 4 bytes
-    error code       : 2 bytes
-    message 1        : x bytes
-    ...
-    message n        : x bytes</code></pre>
+total length     : 4 bytes
+error code       : 2 bytes
+message 1        : x bytes
+...
+message n        : x bytes</code></pre>
 
-    <pre class="line-numbers"><code class="language-text">    MultiMessageSetSend (multiFetch result)
+    <pre class="line-numbers"><code class="language-text">MultiMessageSetSend (multiFetch result)
 
-    total length       : 4 bytes
-    error code         : 2 bytes
-    messageSetSend 1
-    ...
-    messageSetSend n</code></pre>
+total length       : 4 bytes
+error code         : 2 bytes
+messageSetSend 1
+...
+messageSetSend n</code></pre>
     <h4 class="anchor-heading"><a id="impl_deletes" class="anchor-link"></a><a href="#impl_deletes">Deletes</a></h4>
     <p>
     Data is deleted one log segment at a time. The log manager applies two metrics to identify segments which are
@@ -260,7 +260,7 @@
     </p>
 
     <h4 class="anchor-heading"><a id="impl_zkbroker" class="anchor-link"></a><a href="#impl_zkbroker">Broker Node Registry</a></h4>
-    <pre class="line-numbers"><code class="language-json">    /brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)</code></pre>
+    <pre class="line-numbers"><code class="language-json">/brokers/ids/[0...N] --> {"jmx_port":...,"timestamp":...,"endpoints":[...],"host":...,"version":...,"port":...} (ephemeral node)</code></pre>
     <p>
     This is a list of all present broker nodes, each of which provides a unique logical broker id which identifies it to consumers (which must be given as part of its configuration). On startup, a broker node registers itself by creating a znode with the logical broker id under /brokers/ids. The purpose of the logical broker id is to allow a broker to be moved to a different physical machine without affecting consumers. An attempt to register a broker id that is already in use (say because two servers are configured with the same broker id) results in an error.
     </p>
@@ -268,7 +268,7 @@
     Since the broker registers itself in ZooKeeper using ephemeral znodes, this registration is dynamic and will disappear if the broker is shutdown or dies (thus notifying consumers it is no longer available).
     </p>
     <h4 class="anchor-heading"><a id="impl_zktopic" class="anchor-link"></a><a href="#impl_zktopic">Broker Topic Registry</a></h4>
-    <pre class="line-numbers"><code class="language-json">    /brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)</code></pre>
+    <pre class="line-numbers"><code class="language-json">/brokers/topics/[topic]/partitions/[0...N]/state --> {"controller_epoch":...,"leader":...,"version":...,"leader_epoch":...,"isr":[...]} (ephemeral node)</code></pre>
 
     <p>
     Each broker registers itself under the topics it maintains and stores the number of partitions for that topic.

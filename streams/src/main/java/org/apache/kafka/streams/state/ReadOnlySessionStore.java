@@ -126,14 +126,15 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param keyFrom                The first key that could be in the range
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo                  The last key that could be in the range
+     * A null value indicates that the range ends with the last element in the store.
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where
      *                               iteration starts.
      * @param latestSessionStartTime the end timestamp of the latest session to search for, where
      *                               iteration ends.
      * @return iterator of sessions with the matching keys and aggregated values, from earliest to
      * latest session time.
-     * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                             final K keyTo,
@@ -151,14 +152,15 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param keyFrom                The first key that could be in the range
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo                  The last key that could be in the range
+     * A null value indicates that the range ends with the last element in the store.
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where
      *                               iteration starts.
      * @param latestSessionStartTime the end timestamp of the latest session to search for, where
      *                               iteration ends.
      * @return iterator of sessions with the matching keys and aggregated values, from earliest to
      * latest session time.
-     * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                             final K keyTo,
@@ -176,14 +178,15 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param keyFrom                The first key that could be in the range
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo                  The last key that could be in the range
+     * A null value indicates that the range ends with the last element in the store.
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where
      *                               iteration ends.
      * @param latestSessionStartTime the end timestamp of the latest session to search for, where
      *                               iteration starts.
      * @return backward iterator of sessions with the matching keys and aggregated values, from
      * latest to earliest session time.
-     * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
                                                                     final K keyTo,
@@ -201,14 +204,15 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param keyFrom                The first key that could be in the range
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo                  The last key that could be in the range
+     * A null value indicates that the range ends with the last element in the store.
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where
      *                               iteration ends.
      * @param latestSessionStartTime the end timestamp of the latest session to search for, where
      *                               iteration starts.
      * @return backward iterator of sessions with the matching keys and aggregated values, from
      * latest to earliest session time.
-     * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
                                                                     final K keyTo,
@@ -289,10 +293,11 @@ public interface ReadOnlySessionStore<K, AGG> {
      * available session to the newest/latest session.
      *
      * @param keyFrom first key in the range to find aggregated session values for
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo   last key in the range to find aggregated session values for
+     * A null value indicates that the range ends with the last element in the store.
      * @return KeyValueIterator containing all sessions for the provided key, from oldest to newest
      * session.
-     * @throws NullPointerException If null is used for any of the keys.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom, final K keyTo);
 
@@ -304,10 +309,11 @@ public interface ReadOnlySessionStore<K, AGG> {
      * available session to the oldest/earliest session.
      *
      * @param keyFrom first key in the range to find aggregated session values for
+     * A null value indicates a starting position from the first element in the store.
      * @param keyTo   last key in the range to find aggregated session values for
+     * A null value indicates that the range ends with the last element in the store.
      * @return backward KeyValueIterator containing all sessions for the provided key, from newest
      * to oldest session.
-     * @throws NullPointerException If null is used for any of the keys.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom, final K keyTo) {
         throw new UnsupportedOperationException(

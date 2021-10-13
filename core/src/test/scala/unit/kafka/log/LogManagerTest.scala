@@ -20,7 +20,7 @@ package kafka.log
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository}
+import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
@@ -125,8 +125,8 @@ class LogManagerTest {
 
       logManagerForTest.get.shutdown()
 
-      assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
+      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
@@ -245,10 +245,11 @@ class LogManagerTest {
   def testCleanupSegmentsToMaintainSize(): Unit = {
     val setSize = TestUtils.singletonRecords("test".getBytes()).sizeInBytes
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
     val segmentBytes = 10 * setSize
-    configRepository.setTopicConfig(name, LogConfig.SegmentBytesProp, segmentBytes.toString)
-    configRepository.setTopicConfig(name, LogConfig.RetentionBytesProp, (5L * 10L * setSize + 10L).toString)
+    val properties = new Properties()
+    properties.put(LogConfig.SegmentBytesProp, segmentBytes.toString)
+    properties.put(LogConfig.RetentionBytesProp, (5L * 10L * setSize + 10L).toString)
+    val configRepository = MockConfigRepository.forTopic(name, properties)
 
     logManager = createLogManager(configRepository = configRepository)
     logManager.startup(Set.empty)
@@ -302,8 +303,7 @@ class LogManagerTest {
 
   private def testDoesntCleanLogs(policy: String): Unit = {
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
-    configRepository.setTopicConfig(name, LogConfig.CleanupPolicyProp, policy)
+    val configRepository = MockConfigRepository.forTopic(name, LogConfig.CleanupPolicyProp, policy)
 
     logManager = createLogManager(configRepository = configRepository)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
@@ -329,8 +329,7 @@ class LogManagerTest {
   @Test
   def testTimeBasedFlush(): Unit = {
     logManager.shutdown()
-    val configRepository = new CachedConfigRepository
-    configRepository.setTopicConfig(name, LogConfig.FlushMsProp, "1000")
+    val configRepository = MockConfigRepository.forTopic(name, LogConfig.FlushMsProp, "1000")
 
     logManager = createLogManager(configRepository = configRepository)
     logManager.startup(Set.empty)
@@ -421,7 +420,7 @@ class LogManagerTest {
   }
 
   private def createLogManager(logDirs: Seq[File] = Seq(this.logDir),
-                               configRepository: ConfigRepository = new CachedConfigRepository): LogManager = {
+                               configRepository: ConfigRepository = new MockConfigRepository): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
       configRepository = configRepository,
@@ -498,7 +497,7 @@ class LogManagerTest {
     }
   }
 
-  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+  private def readLog(log: UnifiedLog, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
     log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
@@ -509,10 +508,10 @@ class LogManagerTest {
   @Test
   def testTopicConfigChangeUpdatesLogConfig(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -545,7 +544,7 @@ class LogManagerTest {
   @Test
   def testConfigChangeGetsCleanedUp(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
 
@@ -564,10 +563,10 @@ class LogManagerTest {
   @Test
   def testBrokerConfigChangeDeliveredToAllLogs(): Unit = {
     logManager.shutdown()
-    val spyConfigRepository = spy(new CachedConfigRepository)
+    val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -584,6 +583,45 @@ class LogManagerTest {
 
     verify(spyConfigRepository, times(1)).topicConfig(testTopicOne)
     verify(spyConfigRepository, times(1)).topicConfig(testTopicTwo)
+  }
+
+  /**
+   * Test when compact is removed that cleaning of the partitions is aborted.
+   */
+  @Test
+  def testTopicConfigChangeStopCleaningIfCompactIsRemoved(): Unit = {
+    logManager.shutdown()
+    logManager = createLogManager(configRepository = new MockConfigRepository)
+    val spyLogManager = spy(logManager)
+
+    val topic = "topic"
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+
+    val oldProperties = new Properties()
+    oldProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val oldLogConfig = LogConfig.fromProps(logConfig.originals, oldProperties)
+
+    val log0 = spyLogManager.getOrCreateLog(tp0, topicId = None)
+    log0.updateConfig(oldLogConfig)
+    val log1 = spyLogManager.getOrCreateLog(tp1, topicId = None)
+    log1.updateConfig(oldLogConfig)
+
+    assertEquals(Set(log0, log1), spyLogManager.logsByTopic(topic).toSet)
+
+    val newProperties = new Properties()
+    newProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+
+    spyLogManager.updateTopicConfig(topic, newProperties)
+
+    assertTrue(log0.config.delete)
+    assertTrue(log1.config.delete)
+    assertFalse(log0.config.compact)
+    assertFalse(log1.config.compact)
+
+    verify(spyLogManager, times(1)).topicConfigUpdated(topic)
+    verify(spyLogManager, times(1)).abortCleaning(tp0)
+    verify(spyLogManager, times(1)).abortCleaning(tp1)
   }
 
   /**

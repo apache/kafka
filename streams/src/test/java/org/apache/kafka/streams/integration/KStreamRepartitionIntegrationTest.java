@@ -81,6 +81,7 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
@@ -674,7 +675,7 @@ public class KStreamRepartitionIntegrationTest {
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
-                                                                 .values()
+                                                                 .topicNameValues()
                                                                  .get(topic)
                                                                  .get();
 

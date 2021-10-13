@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -87,8 +88,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
         builder.initializeSubscription();
 
-        assertTrue(builder.earliestResetTopicsPattern().matcher(earliestTopic).matches());
-        assertTrue(builder.latestResetTopicsPattern().matcher(latestTopic).matches());
+        assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(OffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy(latestTopic), equalTo(OffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -100,8 +101,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
         builder.initializeSubscription();
 
-        assertTrue(builder.earliestResetTopicsPattern().matcher("earliestTestTopic").matches());
-        assertTrue(builder.latestResetTopicsPattern().matcher("latestTestTopic").matches());
+        assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(OffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(OffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -110,8 +111,8 @@ public class InternalTopologyBuilderTest {
         builder.initializeSubscription();
 
         assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
-        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
-        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
 
     @Test
@@ -121,9 +122,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
         builder.initializeSubscription();
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
-        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
-        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+        assertThat(expectedPattern.pattern(), builder.sourceTopicsPatternString(), equalTo("test-.*"));
+
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
 
     @Test
@@ -303,8 +304,9 @@ public class InternalTopologyBuilderTest {
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
+        final String patternString = builder.sourceTopicsPatternString();
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -326,7 +328,9 @@ public class InternalTopologyBuilderTest {
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
 
-        assertThat(builder.sourceTopicPattern().pattern(), equalTo(expectedPattern.pattern()));
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -354,7 +358,9 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topic-\\d");
         builder.addSource(null, "source-1", null, null, null, expectedPattern);
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -363,7 +369,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topics[A-Z]"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -372,7 +380,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-foo", "topic-bar");
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -616,9 +626,9 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
-        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1");
-        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2");
-        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3");
+        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1", builder.topologyName());
+        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2", builder.topologyName());
+        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3", builder.topologyName());
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),

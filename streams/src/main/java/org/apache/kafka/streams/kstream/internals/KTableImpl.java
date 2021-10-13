@@ -58,7 +58,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressi
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -133,12 +133,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private boolean sendOldValues = false;
 
+    @SuppressWarnings("deprecation") // Old PAPI compatibility.
     public KTableImpl(final String name,
                       final Serde<K> keySerde,
                       final Serde<V> valueSerde,
                       final Set<String> subTopologySourceNodes,
                       final String queryableStoreName,
-                      final ProcessorSupplier<?, ?> processorSupplier,
+                      final org.apache.kafka.streams.processor.ProcessorSupplier<?, ?> processorSupplier,
                       final GraphNode graphNode,
                       final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
@@ -308,7 +309,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
+        final KTableNewProcessorSupplier<K, V, K, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -542,7 +543,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
-        final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
+        final ProcessorSupplier<K, Change<V>, K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
             storeName,
             this
@@ -831,7 +832,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             source.materialize();
             return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-            return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
+            return ((KStreamAggProcessorSupplier<?, S, K, V>) processorSupplier).view();
         } else if (processorSupplier instanceof KTableNewProcessorSupplier) {
             return ((KTableNewProcessorSupplier<?, ?, K, V>) processorSupplier).view();
         } else {

@@ -24,11 +24,12 @@ import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Java
 import org.junit.jupiter.api.BeforeEach
 
 object SslEndToEndAuthorizationTest {
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     private val Pattern = "O=A (.*?),CN=(.*?)".r
 
     // Use full DN as client principal to test special characters in principal

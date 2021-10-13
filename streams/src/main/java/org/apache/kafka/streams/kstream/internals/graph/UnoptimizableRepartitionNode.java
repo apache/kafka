@@ -22,8 +22,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Properties;
-
 /**
  * Repartition node that is not subject of optimization algorithm
  */
@@ -52,7 +50,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addProcessor(
