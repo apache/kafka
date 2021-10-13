@@ -2104,10 +2104,10 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Apply a KRaft topic change delta.
    *
-   * @param newImage        The new metadata image.
    * @param delta           The delta to apply.
+   * @param newImage        The new metadata image.
    */
-  def applyDelta(newImage: MetadataImage, delta: TopicsDelta): Unit = {
+  def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
 

@@ -113,34 +113,34 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
-  override def publish(newHighestMetadataOffset: Long,
-                       delta: MetadataDelta,
-                       newImage: MetadataImage): Unit = {
+  override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+    val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
+
     try {
-      trace(s"Publishing delta $delta with highest offset $newHighestMetadataOffset")
+      trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
 
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset ${newHighestMetadataOffset}.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset ${newHighestMetadataOffset}.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
       }
 
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, newHighestMetadataOffset)
+        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
       }
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
         // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(newImage, topicsDelta)
+        replicaManager.applyDelta(topicsDelta, newImage)
 
         // Handle the case where the old consumer offsets topic was deleted.
         if (topicsDelta.topicWasDeleted(Topic.GROUP_METADATA_TOPIC_NAME)) {
@@ -233,7 +233,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         finishInitializingReplicaManager(newImage)
       }
     } catch {
-      case t: Throwable => error(s"Error publishing broker metadata at ${newHighestMetadataOffset}", t)
+      case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
     } finally {
       _firstPublish = false
