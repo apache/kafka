@@ -159,8 +159,6 @@ public class JoinStoreIntegrationTest {
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
-        System.out.println(builder.build().describe());
-
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
             final Admin admin = Admin.create(ADMIN_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
