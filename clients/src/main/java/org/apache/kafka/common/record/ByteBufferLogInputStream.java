@@ -38,6 +38,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         this.maxMessageSize = maxMessageSize;
     }
 
+    @Override
     public MutableRecordBatch nextBatch() {
         int remaining = buffer.remaining();
 
