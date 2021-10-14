@@ -147,9 +147,14 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
             bld.append("\t" + Utils.join(leaderAndIsrLiveLeaders, ", ") + "\n");
 
             bld.append("updateMetadataLiveBrokers=\n");
+            /*
+             * Now that the LiCombinedControl request has been enabled in production and proven
+             * to be a stable feature, we can skip the logging of live brokers in the UpdateMetadata request to
+             * make the log file sizes smaller.
             for (LiCombinedControlRequestData.UpdateMetadataBroker broker: updateMetadataLiveBrokers) {
                 bld.append("\t" + broker + "\n");
             }
+             */
 
             bld.append("stopReplicaPartitions=\n");
             for (LiCombinedControlRequestData.StopReplicaPartitionState partitionState: stopReplicaPartitions) {
