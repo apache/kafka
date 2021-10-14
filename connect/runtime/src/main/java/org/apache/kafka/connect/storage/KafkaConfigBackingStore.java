@@ -34,6 +34,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -44,6 +45,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +64,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 /**
  * <p>
@@ -206,6 +209,21 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .field("creation-timestamp", Schema.INT64_SCHEMA)
             .build();
 
+    public static final String RESTART_PREFIX = "restart-connector-";
+
+    public static String RESTART_KEY(String connectorName) {
+        return RESTART_PREFIX + connectorName;
+    }
+
+    public static final boolean ONLY_FAILED_DEFAULT = false;
+    public static final boolean INCLUDE_TASKS_DEFAULT = false;
+    public static final String ONLY_FAILED_FIELD_NAME = "only-failed";
+    public static final String INCLUDE_TASKS_FIELD_NAME = "include-tasks";
+    public static final Schema RESTART_REQUEST_V0 = SchemaBuilder.struct()
+            .field(INCLUDE_TASKS_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
+            .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
+            .build();
+
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
     private final Object lock;
@@ -224,6 +242,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // Connector and task configs: name or id -> config map
     private final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    private final Supplier<TopicAdmin> topicAdminSupplier;
+    private SharedTopicAdmin ownTopicAdmin;
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
@@ -241,11 +261,17 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final WorkerConfigTransformer configTransformer;
 
+    @Deprecated
     public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
+        this(converter, config, configTransformer, null);
+    }
+
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
+        this.topicAdminSupplier = adminSupplier;
 
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
         if (this.topic == null || this.topic.trim().length() == 0)
@@ -283,7 +309,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public void stop() {
         log.info("Closing KafkaConfigBackingStore");
-        configLog.stop();
+        try {
+            configLog.stop();
+        } finally {
+            if (ownTopicAdmin != null) {
+                ownTopicAdmin.close();
+            }
+        }
         log.info("Closed KafkaConfigBackingStore");
     }
 
@@ -454,6 +486,23 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         }
     }
 
+    @Override
+    public void putRestartRequest(RestartRequest restartRequest) {
+        log.debug("Writing {} to Kafka", restartRequest);
+        String key = RESTART_KEY(restartRequest.connectorName());
+        Struct value = new Struct(RESTART_REQUEST_V0);
+        value.put(INCLUDE_TASKS_FIELD_NAME, restartRequest.includeTasks());
+        value.put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.send(key, serializedValue);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write {} to Kafka: ", restartRequest, e);
+            throw new ConnectException("Error writing " + restartRequest + " to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = ConnectUtils.lookupKafkaClusterId(config);
@@ -471,6 +520,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
+        Supplier<TopicAdmin> adminSupplier;
+        if (topicAdminSupplier != null) {
+            adminSupplier = topicAdminSupplier;
+        } else {
+            // Create our own topic admin supplier that we'll close when we're stopped
+            ownTopicAdmin = new SharedTopicAdmin(adminProps);
+            adminSupplier = ownTopicAdmin;
+        }
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).configStorageTopicSettings()
                                             : Collections.emptyMap();
@@ -481,30 +538,25 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier);
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<String, byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
-        Runnable createTopics = new Runnable() {
-            @Override
-            public void run() {
-                log.debug("Creating admin client to manage Connect internal config topic");
-                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    // Create the topic if it doesn't exist
-                    Set<String> newTopics = admin.createTopics(topicDescription);
-                    if (!newTopics.contains(topic)) {
-                        // It already existed, so check that the topic cleanup policy is compact only and not delete
-                        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                        admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                                DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
-                    }
-                }
+                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
+        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
+            log.debug("Creating admin client to manage Connect internal config topic");
+            // Create the topic if it doesn't exist
+            Set<String> newTopics = admin.createTopics(topicDescription);
+            if (!newTopics.contains(topic)) {
+                // It already existed, so check that the topic cleanup policy is compact only and not delete
+                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                admin.verifyTopicCleanupPolicyOnlyCompact(topic,
+                        DistributedConfig.CONFIG_TOPIC_CONFIG, "connector configurations");
             }
         };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @SuppressWarnings("unchecked")
@@ -698,6 +750,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
+            } else if (record.key().startsWith(RESTART_PREFIX)) {
+                RestartRequest request = recordToRestartRequest(record, value);
+                // Only notify the listener if this backing store is already successfully started (having caught up the first time)
+                if (request != null && started) {
+                    updateListener.onRestartRequest(request);
+                }
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 if (value.value() == null) {
                     log.error("Ignoring session key because it is unexpectedly null");
@@ -740,6 +798,36 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             }
         }
 
+    }
+
+    @SuppressWarnings("unchecked")
+    RestartRequest recordToRestartRequest(ConsumerRecord<String, byte[]> record, SchemaAndValue value) {
+        String connectorName = record.key().substring(RESTART_PREFIX.length());
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring restart request because the value is not a Map but is {}", value.value() == null ? "null" : value.value().getClass());
+            return null;
+        }
+
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object failed = valueAsMap.get(ONLY_FAILED_FIELD_NAME);
+        boolean onlyFailed;
+        if (!(failed instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", ONLY_FAILED_FIELD_NAME, failed == null ? "null" : failed.getClass(), ONLY_FAILED_DEFAULT);
+            onlyFailed = ONLY_FAILED_DEFAULT;
+        } else {
+            onlyFailed = (Boolean) failed;
+        }
+
+        Object withTasks = valueAsMap.get(INCLUDE_TASKS_FIELD_NAME);
+        boolean includeTasks;
+        if (!(withTasks instanceof Boolean)) {
+            log.warn("Invalid data for restart request '{}' field should be a Boolean but is {}, defaulting to {}", INCLUDE_TASKS_FIELD_NAME, withTasks == null ? "null" : withTasks.getClass(), INCLUDE_TASKS_DEFAULT);
+            includeTasks = INCLUDE_TASKS_DEFAULT;
+        } else {
+            includeTasks = (Boolean) withTasks;
+        }
+        return new RestartRequest(connectorName, onlyFailed, includeTasks);
     }
 
     private ConnectorTaskId parseTaskId(String key) {

@@ -32,4 +32,8 @@ public class MockRocksDbConfigSetter implements RocksDBConfigSetter {
 
         configMap.putAll(configs);
     }
+
+    @Override
+    public void close(String storeName, Options options) {
+    }
 }

@@ -18,14 +18,17 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiKeysTest {
@@ -59,15 +62,28 @@ public class ApiKeysTest {
     public void testResponseThrottleTime() {
         Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         // Newer protocol apis include throttle time ms even for cluster actions
-        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR);
-        for (ApiKeys apiKey: ApiKeys.values()) {
+        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR, ApiKeys.ALLOCATE_PRODUCER_IDS);
+        for (ApiKeys apiKey: ApiKeys.zkBrokerApis()) {
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");
             if ((apiKey.clusterAction && !clusterActionsWithThrottleTimeMs.contains(apiKey))
                 || authenticationKeys.contains(apiKey))
-                assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
+                assertNull(throttleTimeField, "Unexpected throttle time field: " + apiKey);
             else
-                assertNotNull("Throttle time field missing: " + apiKey, throttleTimeField);
+                assertNotNull(throttleTimeField, "Throttle time field missing: " + apiKey);
         }
     }
+
+    @Test
+    public void testApiScope() {
+        Set<ApiKeys> apisMissingScope = new HashSet<>();
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            if (apiKey.messageType.listeners().isEmpty()) {
+                apisMissingScope.add(apiKey);
+            }
+        }
+        assertEquals(Collections.emptySet(), apisMissingScope,
+            "Found some APIs missing scope definition");
+    }
+
 }

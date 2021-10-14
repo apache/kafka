@@ -20,32 +20,15 @@ package kafka.security.authorizer
 import java.net.InetAddress
 
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.{Authorizer => LegacyAuthorizer}
-import org.apache.kafka.common.acl._
-import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer}
 
-import scala.annotation.nowarn
-
 
 object AuthorizerUtils {
 
-  @nowarn("cat=deprecation")
-  def createAuthorizer(className: String): Authorizer = {
-    Utils.newInstance(className, classOf[Object]) match {
-      case auth: Authorizer => auth
-      case auth: kafka.security.auth.Authorizer => new AuthorizerWrapper(auth)
-      case _ => throw new ConfigException(s"Authorizer does not implement ${classOf[Authorizer].getName} or ${classOf[LegacyAuthorizer].getName}.")
-    }
-  }
-
-  def validateAclBinding(aclBinding: AclBinding): Unit = {
-    if (aclBinding.isUnknown)
-      throw new IllegalArgumentException("ACL binding contains unknown elements")
-  }
+  def createAuthorizer(className: String): Authorizer = Utils.newInstance(className, classOf[Authorizer])
 
   def isClusterResource(name: String): Boolean = name.equals(Resource.CLUSTER_NAME)
 

@@ -17,15 +17,17 @@
 
 package kafka.log
 
-import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
+import kafka.api.KAFKA_3_0_IV1
+import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
-import org.junit.Assert._
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
+import scala.annotation.nowarn
 
 class LogConfigTest {
 
@@ -39,13 +41,15 @@ class LogConfigTest {
   @Test
   def ensureNoStaticInitializationOrderDependency(): Unit = {
     // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
-    assertTrue(KafkaConfig.LogRetentionTimeMillisProp != null)
-    assertTrue(LogConfig.configNames.forall { config =>
-      val serverConfigOpt = LogConfig.serverConfigName(config)
-      serverConfigOpt.isDefined && (serverConfigOpt.get != null)
-    })
+    assertNotNull(KafkaConfig.LogRetentionTimeMillisProp)
+    assertTrue(LogConfig.configNames.filter(config => !LogConfig.configsWithNoServerDefaults.contains(config))
+      .forall { config =>
+        val serverConfigOpt = LogConfig.serverConfigName(config)
+        serverConfigOpt.isDefined && (serverConfigOpt.get != null)
+      })
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
@@ -53,21 +57,25 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+    // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
+    assertEquals(KAFKA_3_0_IV1.version, logProps.get(LogConfig.MessageFormatVersionProp))
   }
 
   @Test
   def testFromPropsEmpty(): Unit = {
     val p = new Properties()
     val config = LogConfig(p)
-    Assert.assertEquals(LogConfig(), config)
+    assertEquals(LogConfig(), config)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.foreach(name => name match {
@@ -78,6 +86,10 @@ class LogConfigTest {
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
+      case LogConfig.RemoteLogStorageEnableProp => assertPropertyInvalid(name, "not_a_boolean")
+      case LogConfig.LocalLogRetentionMsProp => assertPropertyInvalid(name, "not_a_number", "-3")
+      case LogConfig.LocalLogRetentionBytesProp => assertPropertyInvalid(name, "not_a_number", "-3")
+
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
@@ -119,7 +131,7 @@ class LogConfigTest {
   def testToHtmlTable(): Unit = {
     val html = LogConfig.configDefCopy.toHtmlTable
     val expectedConfig = "<td>file.delete.delay.ms</td>"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+    assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
   }
 
   /* Sanity check that toHtml produces one of the expected configs */
@@ -127,7 +139,7 @@ class LogConfigTest {
   def testToHtml(): Unit = {
     val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
     val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+    assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
   }
 
   /* Sanity check that toEnrichedRst produces one of the expected configs */
@@ -135,7 +147,7 @@ class LogConfigTest {
   def testToEnrichedRst(): Unit = {
     val rst = LogConfig.configDefCopy.toEnrichedRst
     val expectedConfig = "``file.delete.delay.ms``"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+    assertTrue(rst.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $rst")
   }
 
   /* Sanity check that toEnrichedRst produces one of the expected configs */
@@ -143,7 +155,7 @@ class LogConfigTest {
   def testToRst(): Unit = {
     val rst = LogConfig.configDefCopy.toRst
     val expectedConfig = "``file.delete.delay.ms``"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+    assertTrue(rst.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $rst")
   }
 
   @Test
@@ -160,6 +172,28 @@ class LogConfigTest {
     val keyWithNoServerMapping = configDef.configKeys.get(configNameWithNoServerMapping)
     val nullServerDefault = configDef.getConfigValue(keyWithNoServerMapping, LogConfig.ServerDefaultHeaderName)
     assertNull(nullServerDefault)
+  }
+
+  @Test
+  def testOverriddenConfigsAsLoggableString(): Unit = {
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put("unknown.broker.password.config", "aaaaa")
+    kafkaProps.put(KafkaConfig.SslKeyPasswordProp, "somekeypassword")
+    kafkaProps.put(KafkaConfig.LogRetentionBytesProp, "50")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    val topicOverrides = new Properties
+    // Only set as a topic config
+    topicOverrides.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    // Overrides value from broker config
+    topicOverrides.setProperty(LogConfig.RetentionBytesProp, "100")
+    // Unknown topic config, but known broker config
+    topicOverrides.setProperty(KafkaConfig.SslTruststorePasswordProp, "sometrustpasswrd")
+    // Unknown config
+    topicOverrides.setProperty("unknown.topic.password.config", "bbbb")
+    // We don't currently have any sensitive topic configs, if we add them, we should set one here
+    val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(kafkaConfig), topicOverrides)
+    assertEquals("{min.insync.replicas=2, retention.bytes=100, ssl.truststore.password=(redacted), unknown.topic.password.config=(redacted)}",
+      logConfig.overriddenConfigsAsLoggableString)
   }
 
   private def isValid(configValue: String): Boolean = {
@@ -179,4 +213,72 @@ class LogConfigTest {
     })
   }
 
+  @Test
+  def testLocalLogRetentionDerivedProps(): Unit = {
+    val props = new Properties()
+    val retentionBytes = 1024
+    val retentionMs = 1000L
+    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
+    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
+    val logConfig = new LogConfig(props)
+
+    assertEquals(retentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(retentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+  }
+
+  @Test
+  def testLocalLogRetentionDerivedDefaultProps(): Unit = {
+    val logConfig = new LogConfig( new Properties())
+
+    // Local retention defaults are derived from retention properties which can be default or custom.
+    assertEquals(Defaults.RetentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(Defaults.RetentionSize, logConfig.remoteLogConfig.localRetentionBytes)
+  }
+
+  @Test
+  def testLocalLogRetentionProps(): Unit = {
+    val props = new Properties()
+    val localRetentionMs = 500
+    val localRetentionBytes = 1000
+    props.put(LogConfig.RetentionBytesProp, 2000.toString)
+    props.put(LogConfig.RetentionMsProp, 1000.toString)
+
+    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
+    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
+    val logConfig = new LogConfig(props)
+
+    assertEquals(localRetentionMs, logConfig.remoteLogConfig.localRetentionMs)
+    assertEquals(localRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+  }
+
+  @Test
+  def testInvalidLocalLogRetentionProps(): Unit = {
+    // Check for invalid localRetentionMs, < -2
+    doTestInvalidLocalLogRetentionProps(-3, 10, 2, 500L)
+
+    // Check for invalid localRetentionBytes < -2
+    doTestInvalidLocalLogRetentionProps(500L, -3, 2, 1000L)
+
+    // Check for invalid case of localRetentionMs > retentionMs
+    doTestInvalidLocalLogRetentionProps(2000L, 2, 100, 1000L)
+
+    // Check for invalid case of localRetentionBytes > retentionBytes
+    doTestInvalidLocalLogRetentionProps(500L, 200, 100, 1000L)
+
+    // Check for invalid case of localRetentionMs (-1 viz unlimited) > retentionMs,
+    doTestInvalidLocalLogRetentionProps(-1, 200, 100, 1000L)
+
+    // Check for invalid case of localRetentionBytes(-1 viz unlimited) > retentionBytes
+    doTestInvalidLocalLogRetentionProps(2000L, -1, 100, 1000L)
+  }
+
+  private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long, localRetentionBytes: Int, retentionBytes: Int, retentionMs: Long) = {
+    val props = new Properties()
+    props.put(LogConfig.RetentionBytesProp, retentionBytes.toString)
+    props.put(LogConfig.RetentionMsProp, retentionMs.toString)
+
+    props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
+    props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
+    assertThrows(classOf[ConfigException], () => new LogConfig(props));
+  }
 }

@@ -18,9 +18,11 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -49,7 +51,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
@@ -117,7 +119,8 @@ public class NioEchoServer extends Thread {
         LogContext logContext = new LogContext();
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
-                    securityProtocol, config, credentialCache, tokenCache, time, logContext);
+                securityProtocol, config, credentialCache, tokenCache, time, logContext,
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         this.metrics = new Metrics();
         this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                 "MetricGroup", channelBuilder, logContext);
@@ -187,8 +190,8 @@ public class NioEchoServer extends Thread {
                 if (metricType == MetricType.MAX || metricType == MetricType.AVG)
                     expected = Double.NaN;
 
-                assertEquals("Metric not updated " + metricName + " expected:<" + expectedValue + "> but was:<"
-                    + metricValue(metricName) + ">", expected, metricValue(metricName), EPS);
+                assertEquals(expected, metricValue(metricName), EPS, "Metric not updated " + metricName +
+                    " expected:<" + expectedValue + "> but was:<" + metricValue(metricName) + ">");
             } else if (metricType == MetricType.TOTAL)
                 TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
                         thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
@@ -251,7 +254,7 @@ public class NioEchoServer extends Thread {
     private static boolean maybeBeginServerReauthentication(KafkaChannel channel, NetworkReceive networkReceive, Time time) {
         try {
             if (TestUtils.apiKeyFrom(networkReceive) == ApiKeys.SASL_HANDSHAKE) {
-                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.nanoseconds());
+                return channel.maybeBeginServerReauthentication(networkReceive, time::nanoseconds);
             }
         } catch (Exception e) {
             // ignore

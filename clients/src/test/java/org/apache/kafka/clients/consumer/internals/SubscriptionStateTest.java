@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
@@ -30,7 +31,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -43,11 +44,11 @@ import java.util.regex.Pattern;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SubscriptionStateTest {
 
@@ -312,7 +313,7 @@ public class SubscriptionStateTest {
     public void patternSubscription() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
-        assertEquals("Expected subscribed topics count is incorrect", 2, state.subscription().size());
+        assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
 
     @Test
@@ -792,6 +793,20 @@ public class SubscriptionStateTest {
         assertTrue(state.hasValidPosition(tp0));
         assertFalse(state.awaitingValidation(tp0));
         assertFalse(state.isOffsetResetNeeded(tp0));
+    }
+
+    @Test
+    public void nullPositionLagOnNoPosition() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
+
+        state.updateHighWatermark(tp0, 1L);
+        state.updateLastStableOffset(tp0, 1L);
+
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
     }
 
 }

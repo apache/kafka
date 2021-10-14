@@ -18,8 +18,8 @@ package kafka.admin
 
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidReplicationFactorException
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.Map
 

@@ -17,17 +17,17 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfigTransformerTest {
 
@@ -42,7 +42,7 @@ public class ConfigTransformerTest {
 
     private ConfigTransformer configTransformer;
 
-    @Before
+    @BeforeEach
     public void setup() {
         configTransformer = new ConfigTransformer(Collections.singletonMap("test", new TestConfigProvider()));
     }

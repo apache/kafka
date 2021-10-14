@@ -23,13 +23,14 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
 
 public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
-    private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 

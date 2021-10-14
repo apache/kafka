@@ -21,7 +21,7 @@ import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKe
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.GROUP
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
@@ -32,14 +32,14 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
   private var notificationListener: ZkNodeChangeNotificationListener = _
   private var notificationHandler: TestNotificationHandler = _
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     zkClient.createAclPaths()
     notificationHandler = new TestNotificationHandler()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (notificationListener != null) {
       notificationListener.close()

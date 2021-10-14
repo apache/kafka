@@ -71,7 +71,11 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(inner, storeSupplier.retainDuplicates());
+        return new ChangeLoggingWindowBytesStore(
+            inner,
+            storeSupplier.retainDuplicates(),
+            WindowKeySchema::toStoreKeyBinary
+        );
     }
 
     public long retentionPeriod() {

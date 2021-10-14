@@ -576,7 +576,7 @@ public class Selector implements Selectable, AutoCloseable {
                     attemptRead(channel);
                 }
 
-                if (channel.hasBytesBuffered()) {
+                if (channel.hasBytesBuffered() && !explicitlyMutedChannels.contains(channel)) {
                     //this channel has bytes enqueued in intermediary buffers that we could not read
                     //(possibly because no memory). it may be the case that the underlying socket will
                     //not come up in the next poll() and so we need to remember this channel for the
@@ -742,6 +742,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void mute(KafkaChannel channel) {
         channel.mute();
         explicitlyMutedChannels.add(channel);
+        keysWithBufferedRead.remove(channel.selectionKey());
     }
 
     @Override
@@ -754,6 +755,9 @@ public class Selector implements Selectable, AutoCloseable {
         // Remove the channel from explicitlyMutedChannels only if the channel has been actually unmuted.
         if (channel.maybeUnmute()) {
             explicitlyMutedChannels.remove(channel);
+            if (channel.hasBytesBuffered()) {
+                keysWithBufferedRead.add(channel.selectionKey());
+            }
         }
     }
 
@@ -821,7 +825,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Clears all the results from the previous poll. This is invoked by Selector at the start of
      * a poll() when all the results from the previous poll are expected to have been handled.
      * <p>
-     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedSends()} to
+     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedReceives()} to
      * clear `completedSends` and `completedReceives` as soon as they are processed to avoid
      * holding onto large request/response buffers from multiple connections longer than necessary.
      * Clients rely on Selector invoking {@link #clear()} at the start of each poll() since memory usage
@@ -1221,11 +1225,13 @@ public class Selector implements Selectable, AutoCloseable {
                     new WindowedCount(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
+            this.selectTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
             this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
             this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
+            this.ioTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io", "doing I/O"));
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
@@ -1268,12 +1274,27 @@ public class Selector implements Selectable, AutoCloseable {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
-        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        /**
+         * This method generates `time-total` metrics but has a couple of deficiencies: no `-ns` suffix and no dash between basename
+         * and `time-toal` suffix.
+         * @deprecated use {{@link #createIOThreadRatioMeter(Metrics, String, Map, String, String)}} for new metrics instead
+         */
+        @Deprecated
+        private Meter createIOThreadRatioMeterLegacy(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
-                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+                    String.format("*Deprecated* The fraction of time the I/O thread spent %s", action), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
-                    String.format("The total time the I/O thread spent %s", action), metricTags);
+                    String.format("*Deprecated* The total time the I/O thread spent %s", action), metricTags);
+            return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
+        }
+
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                                               String baseName, String action) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
+                String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "-time-ns-total", groupName,
+                String.format("The total time the I/O thread spent %s", action), metricTags);
             return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
 

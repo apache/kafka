@@ -65,6 +65,16 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             return data.toString();
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Builder && this.data.equals(((Builder) other).data);
+        }
+
+        @Override
+        public int hashCode() {
+            return data.hashCode();
+        }
     }
 
     private final CreateTopicsRequestData data;

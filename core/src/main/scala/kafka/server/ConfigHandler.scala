@@ -19,10 +19,9 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
-
 import DynamicConfig.Broker._
-import kafka.api.ApiVersion
 import kafka.controller.KafkaController
+import kafka.log.LogConfig.MessageFormatVersion
 import kafka.log.{LogConfig, LogManager}
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
@@ -32,10 +31,12 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Try
@@ -48,35 +49,23 @@ trait ConfigHandler {
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes in ZK.
-  * The callback provides the topic name and the full properties set read from ZK
+  * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
+  * The callback provides the topic name and the full properties set.
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers, kafkaController: KafkaController) extends ConfigHandler with Logging  {
-
-  private def updateLogConfig(topic: String,
-                              topicConfig: Properties,
-                              configNamesToExclude: Set[String]): Unit = {
-    logManager.topicConfigUpdated(topic)
-    val logs = logManager.logsByTopic(topic)
-    if (logs.nonEmpty) {
-      /* combine the default properties with the overrides in zk to create the new LogConfig */
-      val props = new Properties()
-      topicConfig.asScala.forKeyValue { (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
-      }
-      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach(_.updateConfig(logConfig))
-    }
-  }
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
+                         val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
-
-    updateLogConfig(topic, topicConfig, configNamesToExclude)
+    val props = new Properties()
+    topicConfig.asScala.forKeyValue { (key, value) =>
+      if (!configNamesToExclude.contains(key)) props.put(key, value)
+    }
+    logManager.updateTopicConfig(topic, props)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
-      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
+      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
@@ -89,7 +78,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
 
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
-      kafkaController.enableTopicUncleanLeaderElection(topic)
+      kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
   }
 
@@ -107,12 +96,18 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     }
   }
 
+  @nowarn("cat=deprecation")
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
+      if (messageFormatVersion.shouldIgnore) {
+        if (messageFormatVersion.shouldWarn)
+          warn(messageFormatVersion.topicWarningMessage(topic))
+        Some(LogConfig.MessageFormatVersionProp)
+      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion.messageFormatVersion) {
+        warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(LogConfig.MessageFormatVersionProp)
       } else
         None
@@ -130,26 +125,26 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
   def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties): Unit = {
     val clientId = sanitizedClientId.map(Sanitizer.desanitize)
     val producerQuota =
-      if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
-        Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong.toDouble, true))
+      if (config.containsKey(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
       else
         None
     quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
     val consumerQuota =
-      if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
-        Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong.toDouble, true))
+      if (config.containsKey(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
       else
         None
     quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
     val requestQuota =
-      if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
-        Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
+      if (config.containsKey(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG).toDouble, true))
       else
         None
     quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
     val controllerMutationQuota =
-      if (config.containsKey(DynamicConfig.Client.ControllerMutationOverrideProp))
-        Some(new Quota(config.getProperty(DynamicConfig.Client.ControllerMutationOverrideProp).toDouble, true))
+      if (config.containsKey(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG))
+        Some(new Quota(config.getProperty(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG).toDouble, true))
       else
         None
     quotaManagers.controllerMutation.updateQuota(sanitizedUser, clientId, sanitizedClientId, controllerMutationQuota)
@@ -190,7 +185,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
 class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
 
   def processConfigChanges(ip: String, config: Properties): Unit = {
-    val ipConnectionRateQuota = Option(config.getProperty(DynamicConfig.Ip.IpConnectionRateOverrideProp)).map(_.toInt)
+    val ipConnectionRateQuota = Option(config.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
     val updatedIp = {
       if (ip != ConfigEntityName.Default) {
         try {

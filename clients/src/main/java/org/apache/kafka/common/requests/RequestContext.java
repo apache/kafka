@@ -175,4 +175,19 @@ public class RequestContext implements AuthorizableRequestContext {
     public int correlationId() {
         return header.correlationId();
     }
+
+    @Override
+    public String toString() {
+        return "RequestContext(" +
+            "header=" + header +
+            ", connectionId='" + connectionId + '\'' +
+            ", clientAddress=" + clientAddress +
+            ", principal=" + principal +
+            ", listenerName=" + listenerName +
+            ", securityProtocol=" + securityProtocol +
+            ", clientInformation=" + clientInformation +
+            ", fromPrivilegedListener=" + fromPrivilegedListener +
+            ", principalSerde=" + principalSerde +
+            ')';
+    }
 }

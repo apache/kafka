@@ -24,9 +24,11 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.SlidingWindows;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,24 +39,24 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
+
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
     private final SlidingWindows windows;
-    private final Initializer<Agg> initializer;
-    private final Aggregator<? super K, ? super V, Agg> aggregator;
+    private final Initializer<VAgg> initializer;
+    private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
 
     private boolean sendOldValues = false;
 
     public KStreamSlidingWindowAggregate(final SlidingWindows windows,
                                          final String storeName,
-                                         final Initializer<Agg> initializer,
-                                         final Aggregator<? super K, ? super V, Agg> aggregator) {
+                                         final Initializer<VAgg> initializer,
+                                         final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -62,7 +64,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<KIn, VIn, Windowed<KIn>, Change<VAgg>> get() {
         return new KStreamSlidingWindowAggregateProcessor();
     }
 
@@ -75,31 +77,22 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         sendOldValues = true;
     }
 
-    private class KStreamSlidingWindowAggregateProcessor extends AbstractProcessor<K, V> {
-        private TimestampedWindowStore<K, Agg> windowStore;
-        private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
-        private Sensor lateRecordDropSensor;
+    private class KStreamSlidingWindowAggregateProcessor extends ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
+        private TimestampedWindowStore<KIn, VAgg> windowStore;
+        private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private Boolean reverseIteratorPossible = null;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Windowed<KIn>, Change<VAgg>> context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
-            metrics = internalProcessorContext.metrics();
+            final InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext =
+                (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
+            final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
-            lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
-                threadId,
-                context.taskId().toString(),
-                internalProcessorContext.currentNode().name(),
-                metrics
-            );
-            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
+            droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
+            windowStore = context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
@@ -108,52 +101,71 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         @Override
-        public void process(final K key, final V value) {
-            if (key == null || value == null) {
-                log.warn(
-                    "Skipping record due to null key or value. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
-                );
+        public void process(final Record<KIn, VIn> record) {
+            if (record.key() == null || record.value() == null) {
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
+                    log.warn(
+                        "Skipping record due to null key or value. "
+                            + "topic=[{}] partition=[{}] offset=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    );
+                } else {
+                    log.warn(
+                        "Skipping record due to null key or value. Topic, partition, and offset not known."
+                    );
+                }
                 droppedRecordsSensor.record();
                 return;
             }
 
-            final long inputRecordTimestamp = context().timestamp();
+            final long inputRecordTimestamp = record.timestamp();
             observedStreamTime = Math.max(observedStreamTime, inputRecordTimestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
-                log.warn(
-                    "Skipping record for expired window. " +
-                        "key=[{}] " +
-                        "topic=[{}] " +
-                        "partition=[{}] " +
-                        "offset=[{}] " +
-                        "timestamp=[{}] " +
-                        "window=[{},{}] " +
-                        "expiration=[{}] " +
-                        "streamTime=[{}]",
-                    key,
-                    context().topic(),
-                    context().partition(),
-                    context().offset(),
-                    context().timestamp(),
-                    inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp,
-                    closeTime,
-                    observedStreamTime
-                );
-                lateRecordDropSensor.record();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
+                    log.warn(
+                        "Skipping record for expired window. " +
+                            "topic=[{}] " +
+                            "partition=[{}] " +
+                            "offset=[{}] " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}] " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset(),
+                        record.timestamp(),
+                        inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp,
+                        closeTime,
+                        observedStreamTime
+                    );
+                } else {
+                    log.warn(
+                        "Skipping record for expired window. Topic, partition, and offset not known. " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}] " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        record.timestamp(),
+                        inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp,
+                        closeTime,
+                        observedStreamTime
+                    );
+                }
+                droppedRecordsSensor.record();
                 return;
             }
 
             if (inputRecordTimestamp < windows.timeDifferenceMs()) {
-                processEarly(key, value, inputRecordTimestamp, closeTime);
+                processEarly(record.key(), record.value(), inputRecordTimestamp, closeTime);
                 return;
             }
 
             if (reverseIteratorPossible == null) {
                 try {
-                    windowStore.backwardFetch(key, 0L, 0L);
+                    windowStore.backwardFetch(record.key(), 0L, 0L);
                     reverseIteratorPossible = true;
                     log.debug("Sliding Windows aggregate using a reverse iterator");
                 } catch (final UnsupportedOperationException e)  {
@@ -163,19 +175,19 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             if (reverseIteratorPossible) {
-                processReverse(key, value, inputRecordTimestamp, closeTime);
+                processReverse(record.key(), record.value(), inputRecordTimestamp, closeTime);
             } else {
-                processInOrder(key, value, inputRecordTimestamp, closeTime);
+                processInOrder(record.key(), record.value(), inputRecordTimestamp, closeTime);
             }
         }
 
-        public void processInOrder(final K key, final V value, final long inputRecordTimestamp, final long closeTime) {
+        public void processInOrder(final KIn key, final VIn value, final long inputRecordTimestamp, final long closeTime) {
 
             final Set<Long> windowStartTimes = new HashSet<>();
 
             // aggregate that will go in the current record’s left/right window (if needed)
-            ValueAndTimestamp<Agg> leftWinAgg = null;
-            ValueAndTimestamp<Agg> rightWinAgg = null;
+            ValueAndTimestamp<VAgg> leftWinAgg = null;
+            ValueAndTimestamp<VAgg> rightWinAgg = null;
 
             //if current record's left/right windows already exist
             boolean leftWinAlreadyCreated = false;
@@ -184,7 +196,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             Long previousRecordTimestamp = null;
 
             try (
-                final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
+                final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> iterator = windowStore.fetch(
                     key,
                     key,
                     Math.max(0, inputRecordTimestamp - 2 * windows.timeDifferenceMs()),
@@ -192,7 +204,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {
-                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> windowBeingProcessed = iterator.next();
+                    final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowBeingProcessed = iterator.next();
                     final long startTime = windowBeingProcessed.key.window().start();
                     windowStartTimes.add(startTime);
                     final long endTime = startTime + windows.timeDifferenceMs();
@@ -224,13 +236,13 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             createWindows(key, value, inputRecordTimestamp, closeTime, windowStartTimes, rightWinAgg, leftWinAgg, leftWinAlreadyCreated, rightWinAlreadyCreated, previousRecordTimestamp);
         }
 
-        public void processReverse(final K key, final V value, final long inputRecordTimestamp, final long closeTime) {
+        public void processReverse(final KIn key, final VIn value, final long inputRecordTimestamp, final long closeTime) {
 
             final Set<Long> windowStartTimes = new HashSet<>();
 
             // aggregate that will go in the current record’s left/right window (if needed)
-            ValueAndTimestamp<Agg> leftWinAgg = null;
-            ValueAndTimestamp<Agg> rightWinAgg = null;
+            ValueAndTimestamp<VAgg> leftWinAgg = null;
+            ValueAndTimestamp<VAgg> rightWinAgg = null;
 
             //if current record's left/right windows already exist
             boolean leftWinAlreadyCreated = false;
@@ -239,7 +251,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             Long previousRecordTimestamp = null;
 
             try (
-                final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.backwardFetch(
+                final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> iterator = windowStore.backwardFetch(
                     key,
                     key,
                     Math.max(0, inputRecordTimestamp - 2 * windows.timeDifferenceMs()),
@@ -247,7 +259,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {
-                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> windowBeingProcessed = iterator.next();
+                    final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowBeingProcessed = iterator.next();
                     final long startTime = windowBeingProcessed.key.window().start();
                     windowStartTimes.add(startTime);
                     final long endTime = startTime + windows.timeDifferenceMs();
@@ -288,7 +300,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
          * windows with negative start times, which is not supported. Instead, we will put them into the [0, timeDifferenceMs]
          * window as a "workaround", and we will update or create their right windows as new records come in later
          */
-        private void processEarly(final K key, final V value, final long inputRecordTimestamp, final long closeTime) {
+        private void processEarly(final KIn key, final VIn value, final long inputRecordTimestamp, final long closeTime) {
             if (inputRecordTimestamp < 0 || inputRecordTimestamp >= windows.timeDifferenceMs()) {
                 log.error(
                     "Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp. Timestamp {} does not fall between 0 <= {}",
@@ -298,15 +310,15 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             // A window from [0, timeDifferenceMs] that holds all early records
-            KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> combinedWindow = null;
-            ValueAndTimestamp<Agg> rightWinAgg = null;
+            KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> combinedWindow = null;
+            ValueAndTimestamp<VAgg> rightWinAgg = null;
             boolean rightWinAlreadyCreated = false;
             final Set<Long> windowStartTimes = new HashSet<>();
 
             Long previousRecordTimestamp = null;
 
             try (
-                final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
+                final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> iterator = windowStore.fetch(
                     key,
                     key,
                     0,
@@ -314,7 +326,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {
-                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> windowBeingProcessed = iterator.next();
+                    final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowBeingProcessed = iterator.next();
                     final long startTime = windowBeingProcessed.key.window().start();
                     windowStartTimes.add(startTime);
                     final long windowMaxRecordTimestamp = windowBeingProcessed.value.timestamp();
@@ -365,7 +377,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             if (combinedWindow == null) {
                 final TimeWindow window = new TimeWindow(0, windows.timeDifferenceMs());
-                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
+                final ValueAndTimestamp<VAgg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
                 updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
 
             } else {
@@ -375,13 +387,13 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         }
 
-        private void createWindows(final K key,
-                                   final V value,
+        private void createWindows(final KIn key,
+                                   final VIn value,
                                    final long inputRecordTimestamp,
                                    final long closeTime,
                                    final Set<Long> windowStartTimes,
-                                   final ValueAndTimestamp<Agg> rightWinAgg,
-                                   final ValueAndTimestamp<Agg> leftWinAgg,
+                                   final ValueAndTimestamp<VAgg> rightWinAgg,
+                                   final ValueAndTimestamp<VAgg> leftWinAgg,
                                    final boolean leftWinAlreadyCreated,
                                    final boolean rightWinAlreadyCreated,
                                    final Long previousRecordTimestamp) {
@@ -395,7 +407,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             //create left window for new record
             if (!leftWinAlreadyCreated) {
-                final ValueAndTimestamp<Agg> valueAndTime;
+                final ValueAndTimestamp<VAgg> valueAndTime;
                 if (leftWindowNotEmpty(previousRecordTimestamp, inputRecordTimestamp)) {
                     valueAndTime = ValueAndTimestamp.make(leftWinAgg.value(), inputRecordTimestamp);
                 } else {
@@ -412,8 +424,8 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         private void createCurrentRecordRightWindow(final long inputRecordTimestamp,
-                                                    final ValueAndTimestamp<Agg> rightWinAgg,
-                                                    final K key) {
+                                                    final ValueAndTimestamp<VAgg> rightWinAgg,
+                                                    final KIn key) {
             final TimeWindow window = new TimeWindow(inputRecordTimestamp + 1, inputRecordTimestamp + 1 + windows.timeDifferenceMs());
             windowStore.put(
                 key,
@@ -428,11 +440,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private void createPreviousRecordRightWindow(final long windowStart,
                                                      final long inputRecordTimestamp,
-                                                     final K key,
-                                                     final V value,
+                                                     final KIn key,
+                                                     final VIn value,
                                                      final long closeTime) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + windows.timeDifferenceMs());
-            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
+            final ValueAndTimestamp<VAgg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
             updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
         }
 
@@ -449,22 +461,22 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         // checks if the aggregate we found has records that fall into the current record's right window; if yes, the right window is not empty
-        private boolean rightWindowIsNotEmpty(final ValueAndTimestamp<Agg> rightWinAgg, final long inputRecordTimestamp) {
+        private boolean rightWindowIsNotEmpty(final ValueAndTimestamp<VAgg> rightWinAgg, final long inputRecordTimestamp) {
             return rightWinAgg != null && rightWinAgg.timestamp() > inputRecordTimestamp;
         }
 
         private void updateWindowAndForward(final Window window,
-                                            final ValueAndTimestamp<Agg> valueAndTime,
-                                            final K key,
-                                            final V value,
+                                            final ValueAndTimestamp<VAgg> valueAndTime,
+                                            final KIn key,
+                                            final VIn value,
                                             final long closeTime,
                                             final long inputRecordTimestamp) {
             final long windowStart = window.start();
             final long windowEnd = window.end();
             if (windowEnd > closeTime) {
                 //get aggregate from existing window
-                final Agg oldAgg = getValueOrNull(valueAndTime);
-                final Agg newAgg = aggregator.apply(key, value, oldAgg);
+                final VAgg oldAgg = getValueOrNull(valueAndTime);
+                final VAgg newAgg = aggregator.apply(key, value, oldAgg);
 
                 final long newTimestamp = oldAgg == null ? inputRecordTimestamp : Math.max(inputRecordTimestamp, valueAndTime.timestamp());
                 windowStore.put(
@@ -472,40 +484,51 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     ValueAndTimestamp.make(newAgg, newTimestamp),
                     windowStart);
                 tupleForwarder.maybeForward(
-                    new Windowed<K>(key, window),
+                    new Windowed<>(key, window),
                     newAgg,
                     sendOldValues ? oldAgg : null,
                     newTimestamp);
             } else {
-                log.warn(
-                    "Skipping record for expired window. " +
-                        "key=[{}] " +
-                        "topic=[{}] " +
-                        "partition=[{}] " +
-                        "offset=[{}] " +
-                        "timestamp=[{}] " +
-                        "window=[{},{}] " +
-                        "expiration=[{}] " +
-                        "streamTime=[{}]",
-                    key,
-                    context().topic(),
-                    context().partition(),
-                    context().offset(),
-                    context().timestamp(),
-                    windowStart, windowEnd,
-                    closeTime,
-                    observedStreamTime
-                );
-                lateRecordDropSensor.record();
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
+                    log.warn(
+                        "Skipping record for expired window. " +
+                            "topic=[{}] " +
+                            "partition=[{}] " +
+                            "offset=[{}] " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}] " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset(),
+                        inputRecordTimestamp,
+                        windowStart, windowEnd,
+                        closeTime,
+                        observedStreamTime
+                    );
+                } else {
+                    log.warn(
+                        "Skipping record for expired window. Topic, partition, and offset not known. " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}] " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        inputRecordTimestamp,
+                        windowStart, windowEnd,
+                        closeTime,
+                        observedStreamTime
+                    );
+                }
+                droppedRecordsSensor.record();
             }
         }
     }
 
     @Override
-    public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
-        return new KTableValueGetterSupplier<Windowed<K>, Agg>() {
+    public KTableValueGetterSupplier<Windowed<KIn>, VAgg> view() {
+        return new KTableValueGetterSupplier<Windowed<KIn>, VAgg>() {
 
-            public KTableValueGetter<Windowed<K>, Agg> get() {
+            public KTableValueGetter<Windowed<KIn>, VAgg> get() {
                 return new KStreamWindowAggregateValueGetter();
             }
 
@@ -516,19 +539,17 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         };
     }
 
-    private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
-        private TimestampedWindowStore<K, Agg> windowStore;
+    private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
+        private TimestampedWindowStore<KIn, VAgg> windowStore;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+            windowStore = context.getStateStore(storeName);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public ValueAndTimestamp<Agg> get(final Windowed<K> windowedKey) {
-            final K key = windowedKey.key();
+        public ValueAndTimestamp<VAgg> get(final Windowed<KIn> windowedKey) {
+            final KIn key = windowedKey.key();
             return windowStore.fetch(key, windowedKey.window().start());
         }
 

@@ -26,8 +26,8 @@ import org.apache.kafka.common.utils.Utils
 
 import java.util.Properties
 
-import org.junit.Assert.{assertEquals, assertTrue, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, assertThrows}
+import org.junit.jupiter.api.Test
 
 class FeatureCommandTest extends BaseRequestTest {
   override def brokerCount: Int = 3

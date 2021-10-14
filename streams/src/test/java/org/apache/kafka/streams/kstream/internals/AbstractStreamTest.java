@@ -30,9 +30,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
@@ -44,6 +41,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class AbstractStreamTest {
 
     @Test
@@ -71,6 +69,7 @@ public class AbstractStreamTest {
         verify(valueTransformerWithKeySupplier);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -82,14 +81,15 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(supplier);
 
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
 
-        final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
-        for (final int expectedKey : expectedKeys) {
-            inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+
+            assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
         }
-
-        assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
     }
 
     private static class ExtendedKStream<K, V> extends AbstractStream<K, V> {
@@ -108,7 +108,7 @@ public class AbstractStreamTest {
         }
     }
 
-    private static class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
+    private static class ExtendedKStreamDummy<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
 
         private final Random rand;
 
@@ -117,11 +117,11 @@ public class AbstractStreamTest {
         }
 
         @Override
-        public Processor<K, V> get() {
+        public org.apache.kafka.streams.processor.Processor<K, V> get() {
             return new ExtendedKStreamDummyProcessor();
         }
 
-        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
+        private class ExtendedKStreamDummyProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, V> {
             @Override
             public void process(final K key, final V value) {
                 // flip a coin and filter

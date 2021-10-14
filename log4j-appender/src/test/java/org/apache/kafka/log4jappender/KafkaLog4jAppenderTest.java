@@ -21,24 +21,25 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
-import org.easymock.EasyMock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class KafkaLog4jAppenderTest {
 
@@ -140,7 +141,7 @@ public class KafkaLog4jAppenderTest {
         MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
         replaceProducerWithMocked(mockKafkaLog4jAppender, true);
 
-        assertDoesNotThrow(() -> logger.error(getMessage(0)));
+        logger.error(getMessage(0));
     }
 
     @Test
@@ -148,7 +149,7 @@ public class KafkaLog4jAppenderTest {
         Properties props = getLog4jConfigWithRealProducer(true);
         PropertyConfigurator.configure(props);
 
-        assertDoesNotThrow(() -> logger.error(getMessage(0)));
+        logger.error(getMessage(0));
     }
 
     @Test
@@ -160,17 +161,14 @@ public class KafkaLog4jAppenderTest {
     }
 
     private void replaceProducerWithMocked(MockKafkaLog4jAppender mockKafkaLog4jAppender, boolean success) {
-        MockProducer<byte[], byte[]> producer = EasyMock.niceMock(MockProducer.class);
-        Future<RecordMetadata> futureMock = EasyMock.niceMock(Future.class);
-        try {
-            if (!success)
-                EasyMock.expect(futureMock.get())
-                    .andThrow(new ExecutionException("simulated timeout", new TimeoutException()));
-        } catch (InterruptedException | ExecutionException e) {
-            // just mocking
-        }
-        EasyMock.expect(producer.send(EasyMock.anyObject())).andReturn(futureMock);
-        EasyMock.replay(producer, futureMock);
+        @SuppressWarnings("unchecked")
+        MockProducer<byte[], byte[]> producer = mock(MockProducer.class);
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        if (success)
+            future.complete(new RecordMetadata(new TopicPartition("tp", 0), 0, 0, 0, 0, 0));
+        else
+            future.completeExceptionally(new TimeoutException("simulated timeout"));
+        when(producer.send(any())).thenReturn(future);
         // reconfiguring mock appender
         mockKafkaLog4jAppender.setKafkaProducer(producer);
         mockKafkaLog4jAppender.activateOptions();

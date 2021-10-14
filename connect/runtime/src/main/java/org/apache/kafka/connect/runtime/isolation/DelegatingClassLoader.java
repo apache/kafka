@@ -50,46 +50,65 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
+/**
+ * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
+ *
+ * <p>
+ * Under the current scheme for classloading isolation in Connect, the delegating classloader loads
+ * plugin classes that it finds in its child plugin classloaders. For classes that are not plugins,
+ * this delegating classloader delegates its loading to its parent. This makes this classloader a
+ * child-first classloader.
+ * <p>
+ * This class is thread-safe and parallel capable.
+ */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
     private static final String UNDEFINED_VERSION = "undefined";
 
-    private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
-    private final Map<String, String> aliases;
+    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
+    private final ConcurrentMap<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
-    private final SortedSet<PluginDesc<Transformation>> transformations;
-    private final SortedSet<PluginDesc<Predicate>> predicates;
+    private final SortedSet<PluginDesc<Transformation<?>>> transformations;
+    private final SortedSet<PluginDesc<Predicate<?>>> predicates;
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<String> pluginPaths;
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
-    private static final Class[] SERVICE_LOADER_PLUGINS = new Class[] {ConnectRestExtension.class, ConfigProvider.class};
+    private static final Class<?>[] SERVICE_LOADER_PLUGINS = new Class<?>[] {ConnectRestExtension.class, ConfigProvider.class};
     private static final Set<String> PLUGIN_MANIFEST_FILES =
         Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
             .collect(Collectors.toSet());
 
+    // Although this classloader does not load classes directly but rather delegates loading to a
+    // PluginClassLoader or its parent through its base class, because of the use of inheritance in
+    // in the latter case, this classloader needs to also be declared as parallel capable to use
+    // fine-grain locking when loading classes.
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
-        this.pluginLoaders = new HashMap<>();
-        this.aliases = new HashMap<>();
+        this.pluginLoaders = new ConcurrentHashMap<>();
+        this.aliases = new ConcurrentHashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
@@ -120,11 +139,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         return headerConverters;
     }
 
-    public Set<PluginDesc<Transformation>> transformations() {
+    public Set<PluginDesc<Transformation<?>>> transformations() {
         return transformations;
     }
 
-    public Set<PluginDesc<Predicate>> predicates() {
+    public Set<PluginDesc<Predicate<?>>> predicates() {
         return predicates;
     }
 
@@ -177,7 +196,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return classLoader;
     }
 
-    private static PluginClassLoader newPluginClassLoader(
+    protected PluginClassLoader newPluginClassLoader(
             final URL pluginLocation,
             final URL[] urls,
             final ClassLoader parent
@@ -236,13 +255,13 @@ public class DelegatingClassLoader extends URLClassLoader {
             log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
         } catch (IOException e) {
             log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
-        } catch (InstantiationException | IllegalAccessException e) {
+        } catch (ReflectiveOperationException e) {
             log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
         }
     }
 
     private void registerPlugin(Path pluginLocation)
-            throws InstantiationException, IllegalAccessException, IOException {
+        throws IOException, ReflectiveOperationException {
         log.info("Loading plugin from: {}", pluginLocation);
         List<URL> pluginUrls = new ArrayList<>();
         for (Path path : PluginUtils.pluginUrls(pluginLocation)) {
@@ -264,7 +283,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             ClassLoader loader,
             URL[] urls,
             Path pluginLocation
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
@@ -293,39 +312,36 @@ public class DelegatingClassLoader extends URLClassLoader {
         // Apply here what java.sql.DriverManager does to discover and register classes
         // implementing the java.sql.Driver interface.
         AccessController.doPrivileged(
-                new PrivilegedAction<Void>() {
-                    @Override
-                    public Void run() {
-                        ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
-                                Driver.class,
-                                loader
+            (PrivilegedAction<Void>) () -> {
+                ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
+                        Driver.class,
+                        loader
+                );
+                Iterator<Driver> driversIterator = loadedDrivers.iterator();
+                try {
+                    while (driversIterator.hasNext()) {
+                        Driver driver = driversIterator.next();
+                        log.debug(
+                                "Registered java.sql.Driver: {} to java.sql.DriverManager",
+                                driver
                         );
-                        Iterator<Driver> driversIterator = loadedDrivers.iterator();
-                        try {
-                            while (driversIterator.hasNext()) {
-                                Driver driver = driversIterator.next();
-                                log.debug(
-                                        "Registered java.sql.Driver: {} to java.sql.DriverManager",
-                                        driver
-                                );
-                            }
-                        } catch (Throwable t) {
-                            log.debug(
-                                    "Ignoring java.sql.Driver classes listed in resources but not"
-                                            + " present in class loader's classpath: ",
-                                    t
-                            );
-                        }
-                        return null;
                     }
+                } catch (Throwable t) {
+                    log.debug(
+                            "Ignoring java.sql.Driver classes listed in resources but not"
+                                    + " present in class loader's classpath: ",
+                            t
+                    );
                 }
+                return null;
+            }
         );
     }
 
     private PluginScanResult scanPluginPath(
             ClassLoader loader,
             URL[] urls
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
@@ -337,19 +353,29 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Connector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
-                getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, Predicate.class, loader),
+                getTransformationPluginDesc(loader, reflections),
+                getPredicatePluginDesc(loader, reflections),
                 getServiceLoaderPluginDesc(ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
                 getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
         );
     }
 
+    @SuppressWarnings({"unchecked"})
+    private Collection<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+        return (Collection<PluginDesc<Predicate<?>>>) (Collection<?>) getPluginDesc(reflections, Predicate.class, loader);
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private Collection<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) throws ReflectiveOperationException {
+        return (Collection<PluginDesc<Transformation<?>>>) (Collection<?>) getPluginDesc(reflections, Transformation.class, loader);
+    }
+
     private <T> Collection<PluginDesc<T>> getPluginDesc(
             Reflections reflections,
             Class<T> klass,
             ClassLoader loader
-    ) throws InstantiationException, IllegalAccessException {
+    ) throws ReflectiveOperationException {
         Set<Class<? extends T>> plugins;
         try {
             plugins = reflections.getSubTypesOf(klass);
@@ -362,12 +388,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
+                result.add(pluginDesc(plugin, versionFor(plugin), loader));
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
         }
         return result;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private <T> PluginDesc<T> pluginDesc(Class<? extends T> plugin, String version, ClassLoader loader) {
+        return new PluginDesc(plugin, version, loader);
     }
 
     @SuppressWarnings("unchecked")
@@ -377,7 +408,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         try {
             ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
             for (T pluginImpl : serviceLoader) {
-                result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(),
+                result.add(pluginDesc((Class<? extends T>) pluginImpl.getClass(),
                     versionFor(pluginImpl), loader));
             }
         } finally {
@@ -390,9 +421,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
     }
 
-    private static <T> String versionFor(Class<? extends T> pluginKlass) throws IllegalAccessException, InstantiationException {
+    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         // Temporary workaround until all the plugins are versioned.
-        return Connector.class.isAssignableFrom(pluginKlass) ? versionFor(pluginKlass.newInstance()) : UNDEFINED_VERSION;
+        return Connector.class.isAssignableFrom(pluginKlass) ?
+            versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;
     }
 
     @Override

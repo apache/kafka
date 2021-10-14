@@ -23,10 +23,9 @@ import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
-
 import com.typesafe.scalalogging.Logger
-import javax.management._
 
+import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint

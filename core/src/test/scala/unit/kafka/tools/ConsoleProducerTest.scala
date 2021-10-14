@@ -20,8 +20,8 @@ package kafka.tools
 import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 import java.util
 
@@ -113,6 +113,14 @@ class ConsoleProducerTest {
     val config = new ConsoleProducer.ProducerConfig(clientIdOverride)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals("producer-1",
+      producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
+  }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals("console-producer",
       producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
   }
 }

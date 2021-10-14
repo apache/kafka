@@ -17,10 +17,10 @@
 package org.apache.kafka.connect.mirror;
 
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.List;
 import java.util.Map;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class MirrorHeartBeatConnectorTest {
 
@@ -34,7 +34,7 @@ public class MirrorHeartBeatConnectorTest {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size());
+        assertEquals(0, output.size(), "Expected task to not be created");
     }
 
     @Test
@@ -47,6 +47,6 @@ public class MirrorHeartBeatConnectorTest {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);
         List<Map<String, String>> output = connector.taskConfigs(1);
         // expect one task will be created, even the replication is disabled
-        assertEquals(1, output.size());
+        assertEquals(1, output.size(), "Task should have been created even with replication disabled");
     }
 }

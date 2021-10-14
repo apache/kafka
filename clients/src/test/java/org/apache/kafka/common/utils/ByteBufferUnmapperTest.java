@@ -18,7 +18,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.MappedByteBuffer;

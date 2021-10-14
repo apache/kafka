@@ -27,7 +27,6 @@ import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -53,9 +52,9 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                Collections.singletonList(theStoreProvider),
                 new GlobalStateStoreProvider(globalStateStores)
             );
+        storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
 
     @Test

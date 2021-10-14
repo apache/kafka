@@ -20,8 +20,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.security.KeyStore;
 import java.util.Arrays;
@@ -30,10 +30,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -199,7 +199,7 @@ public class DefaultSslEngineFactoryTest {
     private DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
     Map<String, Object> configs = new HashMap<>();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         factory = new DefaultSslEngineFactory();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
@@ -214,8 +214,8 @@ public class DefaultSslEngineFactoryTest {
         KeyStore trustStore = factory.truststore();
         List<String> aliases = Collections.list(trustStore.aliases());
         assertEquals(Collections.singletonList("kafka0"), aliases);
-        assertNotNull("Certificate not loaded", trustStore.getCertificate("kafka0"));
-        assertNull("Unexpected private key", trustStore.getKey("kafka0", null));
+        assertNotNull(trustStore.getCertificate("kafka0"), "Certificate not loaded");
+        assertNull(trustStore.getKey("kafka0", null), "Unexpected private key");
     }
 
     @Test
@@ -227,10 +227,10 @@ public class DefaultSslEngineFactoryTest {
         KeyStore trustStore = factory.truststore();
         List<String> aliases = Collections.list(trustStore.aliases());
         assertEquals(Arrays.asList("kafka0", "kafka1"), aliases);
-        assertNotNull("Certificate not loaded", trustStore.getCertificate("kafka0"));
-        assertNull("Unexpected private key", trustStore.getKey("kafka0", null));
-        assertNotNull("Certificate not loaded", trustStore.getCertificate("kafka1"));
-        assertNull("Unexpected private key", trustStore.getKey("kafka1", null));
+        assertNotNull(trustStore.getCertificate("kafka0"), "Certificate not loaded");
+        assertNull(trustStore.getKey("kafka0", null), "Unexpected private key");
+        assertNotNull(trustStore.getCertificate("kafka1"), "Certificate not loaded");
+        assertNull(trustStore.getKey("kafka1", null), "Unexpected private key");
     }
 
     @Test
@@ -268,9 +268,9 @@ public class DefaultSslEngineFactoryTest {
         KeyStore keyStore = factory.keystore();
         List<String> aliases = Collections.list(keyStore.aliases());
         assertEquals(Collections.singletonList("kafka"), aliases);
-        assertNotNull("Certificate not loaded", keyStore.getCertificate("kafka"));
-        assertNotNull("Private key not loaded",
-                keyStore.getKey("kafka", keyPassword == null ? null : keyPassword.value().toCharArray()));
+        assertNotNull(keyStore.getCertificate("kafka"), "Certificate not loaded");
+        assertNotNull(keyStore.getKey("kafka", keyPassword == null ? null : keyPassword.value().toCharArray()),
+            "Private key not loaded");
     }
 
     @Test
@@ -282,8 +282,8 @@ public class DefaultSslEngineFactoryTest {
         KeyStore trustStore = factory.truststore();
         List<String> aliases = Collections.list(trustStore.aliases());
         assertEquals(Collections.singletonList("kafka0"), aliases);
-        assertNotNull("Certificate not found", trustStore.getCertificate("kafka0"));
-        assertNull("Unexpected private key", trustStore.getKey("kafka0", null));
+        assertNotNull(trustStore.getCertificate("kafka0"), "Certificate not found");
+        assertNull(trustStore.getKey("kafka0", null), "Unexpected private key");
     }
 
     @Test
@@ -305,8 +305,8 @@ public class DefaultSslEngineFactoryTest {
         KeyStore keyStore = factory.keystore();
         List<String> aliases = Collections.list(keyStore.aliases());
         assertEquals(Collections.singletonList("kafka"), aliases);
-        assertNotNull("Certificate not found", keyStore.getCertificate("kafka"));
-        assertNotNull("Private key not found", keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()));
+        assertNotNull(keyStore.getCertificate("kafka"), "Certificate not found");
+        assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
     }
 
     private String pemFilePath(String pem) throws Exception {

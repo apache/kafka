@@ -236,7 +236,7 @@ The following metrics are emitted:
     record-age-ms-min
     record-age-ms-max
     record-age-ms-avg
-    replication-latecny-ms  # time it takes records to propagate source->target
+    replication-latency-ms  # time it takes records to propagate source->target
     replication-latency-ms-min
     replication-latency-ms-max
     replication-latency-ms-avg

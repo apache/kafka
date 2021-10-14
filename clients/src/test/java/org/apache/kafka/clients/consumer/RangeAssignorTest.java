@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.MemberInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,8 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RangeAssignorTest {
 
@@ -51,7 +51,7 @@ public class RangeAssignorTest {
 
     private List<MemberInfo> staticMemberInfos;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         staticMemberInfos = new ArrayList<>();
         staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1)));

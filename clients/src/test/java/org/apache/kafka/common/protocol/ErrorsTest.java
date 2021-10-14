@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.common.protocol;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class ErrorsTest {
 
@@ -35,7 +35,7 @@ public class ErrorsTest {
         for (Errors error : Errors.values()) {
             codeSet.add(error.code());
         }
-        assertEquals("Error codes must be unique", codeSet.size(), Errors.values().length);
+        assertEquals(codeSet.size(), Errors.values().length, "Error codes must be unique");
     }
 
     @Test
@@ -45,20 +45,20 @@ public class ErrorsTest {
             if (error != Errors.NONE)
                 exceptionSet.add(error.exception().getClass());
         }
-        assertEquals("Exceptions must be unique", exceptionSet.size(), Errors.values().length - 1); // Ignore NONE
+        assertEquals(exceptionSet.size(), Errors.values().length - 1, "Exceptions must be unique"); // Ignore NONE
     }
 
     @Test
     public void testExceptionsAreNotGeneric() {
         for (Errors error : Errors.values()) {
             if (error != Errors.NONE)
-                assertNotEquals("Generic ApiException should not be used", error.exception().getClass(), ApiException.class);
+                assertNotEquals(error.exception().getClass(), ApiException.class, "Generic ApiException should not be used");
         }
     }
 
     @Test
     public void testNoneException() {
-        assertNull("The NONE error should not have an exception", Errors.NONE.exception());
+        assertNull(Errors.NONE.exception(), "The NONE error should not have an exception");
     }
 
     @Test
@@ -68,13 +68,13 @@ public class ErrorsTest {
         Errors expectedError = Errors.forException(new TimeoutException());
         Errors actualError = Errors.forException(new ExtendedTimeoutException());
 
-        assertEquals("forException should match super classes", expectedError, actualError);
+        assertEquals(expectedError, actualError, "forException should match super classes");
     }
 
     @Test
     public void testForExceptionDefault() {
         Errors error = Errors.forException(new ApiException());
-        assertEquals("forException should default to unknown", Errors.UNKNOWN_SERVER_ERROR, error);
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR, error, "forException should default to unknown");
     }
 
     @Test

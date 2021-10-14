@@ -22,26 +22,27 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.util.Properties;
 import java.util.function.Predicate;
 
@@ -52,8 +53,18 @@ public class StandbyTaskCreationIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    @BeforeClass
+    public static void startCluster() throws IOException, InterruptedException {
+        CLUSTER.start();
+        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
     @Rule
     public TestName testName = new TestName();
@@ -64,11 +75,6 @@ public class StandbyTaskCreationIntegrationTest {
     private KafkaStreams client2;
     private volatile boolean client1IsOk = false;
     private volatile boolean client2IsOk = false;
-
-    @BeforeClass
-    public static void createTopics() throws InterruptedException {
-        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
-    }
 
     @After
     public void after() {
@@ -99,7 +105,6 @@ public class StandbyTaskCreationIntegrationTest {
         builder.addStateStore(keyValueStoreBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {}
 
@@ -162,14 +167,14 @@ public class StandbyTaskCreationIntegrationTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client2IsOk = true;
             }

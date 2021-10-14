@@ -28,8 +28,8 @@ import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdE
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
@@ -40,7 +40,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   var servers: Seq[KafkaServer] = Seq()
   val brokerMetaPropsFile = "meta.properties"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
@@ -48,7 +48,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -214,7 +214,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
     val checkpoint = new BrokerMetadataCheckpoint(
       new File(logDir + File.separator + brokerMetaPropsFile))
-    checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
+    checkpoint.write(ZkMetaProperties(clusterId, brokerId).toProperties)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
@@ -222,11 +222,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
       val brokerMetadataOpt = new BrokerMetadataCheckpoint(
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
-        case Some(brokerMetadata) =>
-          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
+        case Some(properties) =>
+          val brokerMetadata = new RawMetaProperties(properties)
+          if (brokerMetadata.clusterId.exists(_ != clusterId)) return false
         case _ => return false
       }
     }
     true
   }
+
 }

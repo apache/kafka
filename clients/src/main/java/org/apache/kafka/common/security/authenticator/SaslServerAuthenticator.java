@@ -36,6 +36,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.ReauthenticationContext;
 import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.network.SslTransportLayer;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -65,6 +66,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLSession;
 import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
@@ -83,6 +85,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
@@ -125,6 +128,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Time time;
     private final ReauthInfo reauthInfo;
     private final ChannelMetadataRegistry metadataRegistry;
+    private final Supplier<ApiVersionsResponse> apiVersionSupplier;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -152,7 +156,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    TransportLayer transportLayer,
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
                                    ChannelMetadataRegistry metadataRegistry,
-                                   Time time) {
+                                   Time time,
+                                   Supplier<ApiVersionsResponse> apiVersionSupplier) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -164,6 +169,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.time = time;
         this.reauthInfo = new ReauthInfo();
         this.metadataRegistry = metadataRegistry;
+        this.apiVersionSupplier = apiVersionSupplier;
 
         this.configs = configs;
         @SuppressWarnings("unchecked")
@@ -176,13 +182,13 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
             if (!subjects.containsKey(mechanism))
                 throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
-            LOG.debug("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, mechanism,
+            LOG.trace("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, mechanism,
                     connectionsMaxReauthMsByMechanism.get(mechanism));
         }
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNameParser, null);
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, kerberosNameParser, null);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
@@ -293,7 +299,10 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
-        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress(), listenerName.value());
+        Optional<SSLSession> sslSession = transportLayer instanceof SslTransportLayer ?
+                Optional.of(((SslTransportLayer) transportLayer).sslSession()) : Optional.empty();
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol,
+                clientAddress(), listenerName.value(), sslSession);
         KafkaPrincipal principal = principalBuilder.build(context);
         if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
             principal.tokenAuthenticated(true);
@@ -558,11 +567,6 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     // Visible to override for testing
-    protected ApiVersionsResponse apiVersionsResponse() {
-        return ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-    }
-
-    // Visible to override for testing
     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
         this.enableKafkaSaslAuthenticateHeaders = flag;
     }
@@ -578,7 +582,7 @@ public class SaslServerAuthenticator implements Authenticator {
         else {
             metadataRegistry.registerClientInformation(new ClientInformation(apiVersionsRequest.data().clientSoftwareName(),
                 apiVersionsRequest.data().clientSoftwareVersion()));
-            sendKafkaResponse(context, apiVersionsResponse());
+            sendKafkaResponse(context, apiVersionSupplier.get());
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }
     }

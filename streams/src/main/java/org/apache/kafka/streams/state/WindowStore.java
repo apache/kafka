@@ -36,24 +36,6 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
 
     /**
-     * Use the current record timestamp as the {@code windowStartTimestamp} and
-     * delegate to {@link WindowStore#put(Object, Object, long)}.
-     * <p>
-     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
-     * is unlikely to be the correct windowStartTimestamp in general.
-     *
-     * @param key   The key to associate the value to
-     * @param value The value to update, it can be null;
-     *              if the serialized bytes are also null it is interpreted as delete
-     * @throws NullPointerException if the given key is {@code null}
-     * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
-     * to identify the window frame to which the key belongs.
-     * Use {@link #put(Object, Object, long)} instead.
-     */
-    @Deprecated
-    void put(K key, V value);
-
-    /**
      * Put a key-value pair into the window with given window start timestamp
      * <p>
      * If serialized value bytes are null it is interpreted as delete. Note that deletes will be
@@ -99,8 +81,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if the given key is {@code null}
      */
-    // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
@@ -135,15 +117,16 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * This iterator must be closed after use.
      *
      * @param keyFrom     the first key in the range
+     *                    A null value indicates a starting position from the first element in the store.
      * @param keyTo       the last key in the range
+     *                    A null value indicates that the range ends with the last element in the store.
      * @param timeFrom time range start (inclusive)
      * @param timeTo   time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       if one of the given keys is {@code null}
      */
-    // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom, long timeTo);
 
     @Override
@@ -185,8 +168,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    // note, this method must be kept if super#fetchAll(...) is removed
-    @SuppressWarnings("deprecation")
+    // WindowStore keeps a long-based implementation of ReadOnlyWindowStore#fetch Instant-based
+    // if super#fetch is removed, keep this implementation as it serves PAPI Stores.
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override

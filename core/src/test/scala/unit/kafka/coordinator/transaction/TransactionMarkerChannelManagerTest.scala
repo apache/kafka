@@ -32,8 +32,8 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -107,6 +107,7 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(expectedTransition),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(() => {
         txnMetadata2.completeTransitionTo(expectedTransition)
@@ -148,8 +149,8 @@ class TransactionMarkerChannelManagerTest {
     }
 
     assertNotNull(addMarkerFuture)
-    assertTrue("Add marker task failed with exception " + addMarkerFuture.get().get,
-      addMarkerFuture.get().isSuccess)
+    assertTrue(addMarkerFuture.get().isSuccess,
+      "Add marker task failed with exception " + addMarkerFuture.get().get)
 
     EasyMock.verify(txnStateManager)
   }
@@ -345,6 +346,7 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(() => {
         txnMetadata2.completeTransitionTo(txnTransitionMetadata2)
@@ -392,6 +394,7 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(() => {
         txnMetadata2.pendingState = None
@@ -439,6 +442,7 @@ class TransactionMarkerChannelManagerTest {
       EasyMock.eq(coordinatorEpoch),
       EasyMock.eq(txnTransitionMetadata2),
       EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(() => capturedErrorsCallback.getValue.apply(Errors.COORDINATOR_NOT_AVAILABLE))
       .andAnswer(() => {

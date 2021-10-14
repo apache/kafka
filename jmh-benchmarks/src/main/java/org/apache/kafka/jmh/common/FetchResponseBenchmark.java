@@ -18,6 +18,8 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -42,9 +44,9 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -61,11 +63,17 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData;
+    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
+
+    Map<String, Uuid> topicIds;
+
+    Map<Uuid, String> topicNames;
 
     ResponseHeader header;
 
-    FetchResponse<MemoryRecords> fetchResponse;
+    FetchResponse fetchResponse;
+
+    FetchResponseData fetchResponseData;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -75,23 +83,37 @@ public class FetchResponseBenchmark {
                 new SimpleRecord(1002, "key3".getBytes(StandardCharsets.UTF_8), "value3".getBytes(StandardCharsets.UTF_8)));
 
         this.responseData = new LinkedHashMap<>();
+        this.topicIds = new HashMap<>();
+        this.topicNames = new HashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topic, id);
+            topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                FetchResponse.PartitionData<MemoryRecords> partitionData = new FetchResponse.PartitionData<>(
-                    Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records);
+                FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+                                .setPartitionIndex(partitionId)
+                                .setLastStableOffset(0)
+                                .setLogStartOffset(0)
+                                .setRecords(records);
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = new FetchResponse<>(Errors.NONE, responseData, 0, 0);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse<MemoryRecords> fetchResponse = new FetchResponse<>(Errors.NONE, responseData, 0, 0);
-        return fetchResponse.responseData().size();
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        return fetchResponse.data().responses().size();
+    }
+
+    @Benchmark
+    public int testPartitionMapFromData() {
+        return new FetchResponse(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

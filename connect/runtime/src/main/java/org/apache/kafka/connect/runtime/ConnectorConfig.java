@@ -494,7 +494,7 @@ public class ConnectorConfig extends AbstractConfig {
                         .filter(c -> Modifier.isPublic(c.getModifiers()))
                         .map(Class::getName)
                         .collect(Collectors.joining(", "));
-                String message = childClassNames.trim().isEmpty() ?
+                String message = Utils.isBlank(childClassNames) ?
                         aliasKind + " is abstract and cannot be created." :
                         aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
                 throw new ConfigException(key, String.valueOf(cls), message);

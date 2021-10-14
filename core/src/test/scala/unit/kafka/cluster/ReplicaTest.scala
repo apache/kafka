@@ -18,13 +18,13 @@ package kafka.cluster
 
 import java.util.Properties
 
-import kafka.log.{ClientRecordDeletion, Log, LogConfig, LogManager}
+import kafka.log.{ClientRecordDeletion, UnifiedLog, LogConfig, LogManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class ReplicaTest {
 
@@ -32,16 +32,16 @@ class ReplicaTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime()
   val brokerTopicStats = new BrokerTopicStats
-  var log: Log = _
+  var log: UnifiedLog = _
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
-    log = Log(logDir,
+    log = UnifiedLog(logDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -50,10 +50,12 @@ class ReplicaTest {
       time = time,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     log.close()
     brokerTopicStats.close()

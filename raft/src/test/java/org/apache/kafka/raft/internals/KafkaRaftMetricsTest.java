@@ -29,9 +29,11 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
@@ -49,6 +51,8 @@ public class KafkaRaftMetricsTest {
     private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
 
+    private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+
     @AfterEach
     public void tearDown() {
         if (raftMetrics != null) {
@@ -59,7 +63,7 @@ public class KafkaRaftMetricsTest {
 
     private QuorumState buildQuorumState(Set<Integer> voters) {
         return new QuorumState(
-            localId,
+            OptionalInt.of(localId),
             voters,
             electionTimeoutMs,
             fetchTimeoutMs,
@@ -91,7 +95,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.candidateStateOrThrow().recordGrantedVote(1);
-        state.transitionToLeader(2L);
+        state.transitionToLeader(2L, accumulator);
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());

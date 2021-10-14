@@ -17,26 +17,38 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
+import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 class KStreamImplJoin {
 
@@ -44,6 +56,28 @@ class KStreamImplJoin {
     private final boolean leftOuter;
     private final boolean rightOuter;
 
+    static class TimeTracker {
+        private long emitIntervalMs = 1000L;
+        long streamTime = ConsumerRecord.NO_TIMESTAMP;
+        long minTime = Long.MAX_VALUE;
+        long nextTimeToEmit;
+
+        public void setEmitInterval(final long emitIntervalMs) {
+            this.emitIntervalMs = emitIntervalMs;
+        }
+
+        public void advanceStreamTime(final long recordTimestamp) {
+            streamTime = Math.max(recordTimestamp, streamTime);
+        }
+
+        public void updatedMinTime(final long recordTimestamp) {
+            minTime = Math.min(recordTimestamp, minTime);
+        }
+
+        public void advanceNextTimeToEmit() {
+            nextTimeToEmit += emitIntervalMs;
+        }
+    }
 
     KStreamImplJoin(final InternalStreamsBuilder builder,
                     final boolean leftOuter,
@@ -55,7 +89,7 @@ class KStreamImplJoin {
 
     public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
                                                final KStream<K1, V2> other,
-                                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                                               final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends R> joiner,
                                                final JoinWindows windows,
                                                final StreamJoined<K1, V1, V2> streamJoined) {
 
@@ -118,20 +152,33 @@ class KStreamImplJoin {
         final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamProcessorName, otherWindowStreamProcessorParams);
         builder.addGraphNode(otherGraphNode, otherWindowedStreamsNode);
 
+        Optional<StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K1>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStore = Optional.empty();
+        if (leftOuter) {
+            outerJoinWindowStore = Optional.of(sharedOuterJoinWindowStoreBuilder(windows, streamJoinedInternal, joinThisGeneratedName));
+        }
+
+        // Time shared between joins to keep track of the maximum stream time
+        final TimeTracker sharedTimeTracker = new TimeTracker();
+
+        final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
+            true,
             otherWindowStore.name(),
-            windows.beforeMs,
-            windows.afterMs,
+            internalWindows,
             joiner,
-            leftOuter
+            leftOuter,
+            outerJoinWindowStore.map(StoreBuilder::name),
+            sharedTimeTracker
         );
 
         final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
+            false,
             thisWindowStore.name(),
-            windows.afterMs,
-            windows.beforeMs,
-            AbstractStream.reverseJoiner(joiner),
-            rightOuter
+            internalWindows,
+            AbstractStream.reverseJoinerWithKey(joiner),
+            rightOuter,
+            outerJoinWindowStore.map(StoreBuilder::name),
+            sharedTimeTracker
         );
 
         final PassThrough<K1, R> joinMerge = new PassThrough<>();
@@ -149,8 +196,13 @@ class KStreamImplJoin {
                    .withOtherWindowStoreBuilder(otherWindowStore)
                    .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
                    .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
+                   .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
                    .withValueJoiner(joiner)
                    .withNodeName(joinMergeName);
+
+        if (internalWindows.spuriousResultFixEnabled()) {
+            joinBuilder.withSpuriousResultFixEnabled();
+        }
 
         final GraphNode joinGraphNode = joinBuilder.build();
 
@@ -204,6 +256,69 @@ class KStreamImplJoin {
         );
         if (loggingEnabled) {
             builder.withLoggingEnabled(logConfig);
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        return builder;
+    }
+
+    private <K, V1, V2> String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
+        final String outerJoinSuffix = rightOuter ? "-outer-shared-join" : "-left-shared-join";
+
+        if (streamJoinedInternal.thisStoreSupplier() != null && !streamJoinedInternal.thisStoreSupplier().name().isEmpty()) {
+            return streamJoinedInternal.thisStoreSupplier().name() + outerJoinSuffix;
+        } else if (streamJoinedInternal.storeName() != null) {
+            return streamJoinedInternal.storeName() + outerJoinSuffix;
+        } else {
+            return KStreamImpl.OUTERSHARED_NAME
+                + joinThisGeneratedName.substring(
+                rightOuter
+                    ? KStreamImpl.OUTERTHIS_NAME.length()
+                    : KStreamImpl.JOINTHIS_NAME.length());
+        }
+    }
+
+    private <K, V1, V2> StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
+                                                                                                                                              final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+                                                                                                                                              final String joinThisGeneratedName) {
+        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
+        final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName) + "-store";
+
+        // we are using a key-value store with list-values for the shared store, and have the window retention / grace period
+        // handled totally on the processor node level, and hence here we are only validating these values but not using them at all
+        final Duration retentionPeriod = Duration.ofMillis(windows.size() + windows.gracePeriodMs());
+        final Duration windowSize = Duration.ofMillis(windows.size());
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        if (retentionMs < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSizeMs < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (windowSizeMs > retentionMs) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                    + storeName + " must be no smaller than its window size. Got size=["
+                    + windowSizeMs + "], retention=[" + retentionMs + "]");
+        }
+
+        final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoinedInternal.keySerde());
+        final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde());
+
+        final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder =
+            new ListValueStoreBuilder<>(
+                persistent ? Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName),
+                timestampedKeyAndJoinSideSerde,
+                leftOrRightValueSerde,
+                Time.SYSTEM
+            );
+
+        if (streamJoinedInternal.loggingEnabled()) {
+            builder.withLoggingEnabled(streamJoinedInternal.logConfig());
         } else {
             builder.withLoggingDisabled();
         }

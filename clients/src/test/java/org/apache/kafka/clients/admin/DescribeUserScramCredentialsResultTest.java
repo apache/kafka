@@ -20,13 +20,13 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class DescribeUserScramCredentialsResultTest {
     @Test
@@ -74,7 +74,7 @@ public class DescribeUserScramCredentialsResultTest {
         } catch (Exception expected) {
             // ignore, expected
         }
-        assertEquals("Expected 2 users with credentials", Arrays.asList(goodUser, failedUser), results.users().get());
+        assertEquals(Arrays.asList(goodUser, failedUser), results.users().get(), "Expected 2 users with credentials");
         UserScramCredentialsDescription goodUserDescription = results.description(goodUser).get();
         assertEquals(new UserScramCredentialsDescription(goodUser, Arrays.asList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescription);
         try {
@@ -102,12 +102,12 @@ public class DescribeUserScramCredentialsResultTest {
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
                         Arrays.asList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
-        assertEquals("Expected 1 user with credentials", Arrays.asList(goodUser), results.users().get());
+        assertEquals(Arrays.asList(goodUser), results.users().get(), "Expected 1 user with credentials");
         Map<String, UserScramCredentialsDescription> allResults = results.all().get();
         assertEquals(1, allResults.size());
         UserScramCredentialsDescription goodUserDescriptionViaAll = allResults.get(goodUser);
         assertEquals(new UserScramCredentialsDescription(goodUser, Arrays.asList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescriptionViaAll);
-        assertEquals("Expected same thing via all() and description()", goodUserDescriptionViaAll, results.description(goodUser).get());
+        assertEquals(goodUserDescriptionViaAll, results.description(goodUser).get(), "Expected same thing via all() and description()");
         try {
             results.description(unknownUser).get();
             fail("expected description(unknownUser) to fail when there is no such user even when all() succeeds");

@@ -19,8 +19,8 @@ package kafka.api
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.PartitionInfo
 import org.apache.kafka.common.internals.Topic
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -34,7 +34,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   def testSimpleConsumption(): Unit = {
     val numRecords = 10000
     val producer = createProducer()
-    sendRecords(producer, numRecords, tp)
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
@@ -42,7 +43,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertEquals(1, consumer.assignment.size)
 
     consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     // check async commit callbacks
     sendAndAwaitAsyncCommit(consumer)

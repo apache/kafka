@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.streams import StreamsStandbyTaskService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
@@ -43,6 +44,7 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                                                  'replication-factor': 1}
                                                  })
 
+    @cluster(num_nodes=10)
     def test_standby_tasks_rebalance(self):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(

@@ -39,10 +39,10 @@ import org.apache.kafka.common.record.RecordBatch
  *
  * The timestamps in the same time index file are guaranteed to be monotonically increasing.
  *
- * The index support timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
+ * The index supports timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
  * the offset of the message whose indexed timestamp is closest but smaller or equals to the target timestamp.
  *
- * Time index files can be opened in two ways: either as an empty, mutable index that allows appends or
+ * Time index files can be opened in two ways: either as an empty, mutable index that allows appending or
  * an immutable read-only index file that has previously been populated. The makeReadOnly method will turn a mutable file into an
  * immutable one and truncate off any extra bytes. This is done when the index file is rolled over.
  *
@@ -102,7 +102,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   /**
    * Attempt to append a time index entry to the time index.
-   * The new entry is appended only if both the timestamp and offsets are greater than the last appended timestamp and
+   * The new entry is appended only if both the timestamp and offset are greater than the last appended timestamp and
    * the last appended offset.
    *
    * @param timestamp The timestamp of the new time index entry

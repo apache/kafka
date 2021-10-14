@@ -20,20 +20,21 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_COUNT_OFFSET;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultRecordBatchTest {
 
@@ -66,7 +67,7 @@ public class DefaultRecordBatchTest {
                     assertEquals(isTransactional, batch.isTransactional());
                     assertEquals(timestampType, batch.timestampType());
                     assertEquals(timestamp, batch.maxTimestamp());
-                    assertEquals(RecordBatch.NO_TIMESTAMP, batch.firstTimestamp());
+                    assertEquals(RecordBatch.NO_TIMESTAMP, batch.baseTimestamp());
                     assertEquals(isControlBatch, batch.isControlBatch());
                 }
             }
@@ -93,9 +94,7 @@ public class DefaultRecordBatchTest {
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) record.ensureValid();
         }
     }
 
@@ -123,9 +122,7 @@ public class DefaultRecordBatchTest {
             assertEquals(baseSequence, batch.baseSequence());
             assertEquals(baseSequence + 1, batch.lastSequence());
 
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
+            for (Record record : batch) record.ensureValid();
         }
     }
 
@@ -198,7 +195,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -207,7 +204,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.NONE, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -216,7 +213,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 5);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test
@@ -225,7 +222,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = recordsWithInvalidRecordCount(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP, 2);
         // force iteration through the batch to execute validation
         // batch validation is a part of normal workflow for LogValidator.validateMessagesAndAssignOffsets
-        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::isValid));
+        assertThrows(InvalidRecordException.class, () -> batch.forEach(Record::ensureValid));
     }
 
     @Test

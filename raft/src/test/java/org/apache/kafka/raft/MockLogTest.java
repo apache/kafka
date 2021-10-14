@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
@@ -26,19 +27,26 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,10 +54,16 @@ public class MockLogTest {
 
     private MockLog log;
     private final TopicPartition topicPartition = new TopicPartition("mock-topic", 0);
+    private final Uuid topicId = Uuid.randomUuid();
 
     @BeforeEach
     public void setup() {
-        log = new MockLog(topicPartition);
+        log = new MockLog(topicPartition, topicId, new LogContext());
+    }
+
+    @AfterEach
+    public void cleanup() {
+        log.close();
     }
 
     @Test
@@ -58,46 +72,8 @@ public class MockLogTest {
     }
 
     @Test
-    public void testAppendAsLeaderHelper() {
-        int epoch = 2;
-        SimpleRecord recordOne = new SimpleRecord("one".getBytes());
-        log.appendAsLeader(Collections.singleton(recordOne), epoch);
-        assertEquals(epoch, log.lastFetchedEpoch());
-        assertEquals(0L, log.startOffset());
-        assertEquals(1L, log.endOffset().offset);
-
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
-        List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
-
-        RecordBatch batch = batches.get(0);
-        assertEquals(0, batch.baseOffset());
-        assertEquals(0, batch.lastOffset());
-
-        List<Record> fetchedRecords = Utils.toList(batch.iterator());
-        assertEquals(1, fetchedRecords.size());
-        assertEquals(recordOne, new SimpleRecord(fetchedRecords.get(0)));
-        assertEquals(0, fetchedRecords.get(0).offset());
-
-        SimpleRecord recordTwo = new SimpleRecord("two".getBytes());
-        SimpleRecord recordThree = new SimpleRecord("three".getBytes());
-        log.appendAsLeader(Arrays.asList(recordTwo, recordThree), epoch);
-        assertEquals(0L, log.startOffset());
-        assertEquals(3L, log.endOffset().offset);
-
-        records = log.read(0, Isolation.UNCOMMITTED).records;
-        batches = Utils.toList(records.batches().iterator());
-        assertEquals(2, batches.size());
-
-        fetchedRecords = Utils.toList(records.records().iterator());
-        assertEquals(3, fetchedRecords.size());
-        assertEquals(recordOne, new SimpleRecord(fetchedRecords.get(0)));
-        assertEquals(0, fetchedRecords.get(0).offset());
-
-        assertEquals(recordTwo, new SimpleRecord(fetchedRecords.get(1)));
-        assertEquals(1, fetchedRecords.get(1).offset());
-
-        assertEquals(recordThree, new SimpleRecord(fetchedRecords.get(2)));
-        assertEquals(2, fetchedRecords.get(2).offset());
+    public void testTopicId() {
+        assertEquals(topicId, log.topicId());
     }
 
     @Test
@@ -105,10 +81,10 @@ public class MockLogTest {
         int epoch = 2;
         SimpleRecord recordOne = new SimpleRecord("one".getBytes());
         SimpleRecord recordTwo = new SimpleRecord("two".getBytes());
-        log.appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
+        appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
         SimpleRecord recordThree = new SimpleRecord("three".getBytes());
-        log.appendAsLeader(Collections.singleton(recordThree), epoch);
+        appendAsLeader(Collections.singleton(recordThree), epoch);
 
         assertEquals(0L, log.startOffset());
         assertEquals(3L, log.endOffset().offset);
@@ -123,11 +99,21 @@ public class MockLogTest {
     }
 
     @Test
+    public void testTruncateBelowHighWatermark() {
+        appendBatch(5, 1);
+        LogOffsetMetadata highWatermark = new LogOffsetMetadata(5L);
+        log.updateHighWatermark(highWatermark);
+        assertEquals(highWatermark, log.highWatermark());
+        assertThrows(IllegalArgumentException.class, () -> log.truncateTo(4L));
+        assertEquals(highWatermark, log.highWatermark());
+    }
+
+    @Test
     public void testUpdateHighWatermark() {
         appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
-        assertEquals(newOffset, log.highWatermark());
+        assertEquals(newOffset.offset, log.highWatermark().offset);
     }
 
     @Test
@@ -146,34 +132,70 @@ public class MockLogTest {
 
     @Test
     public void testAppendAsLeader() {
-        // The record passed-in offsets are not going to affect the eventual offsets.
-        final long initialOffset = 5L;
+        int epoch = 2;
+        SimpleRecord recordOne = new SimpleRecord("one".getBytes());
+        List<SimpleRecord> expectedRecords = new ArrayList<>();
+
+        expectedRecords.add(recordOne);
+        appendAsLeader(Collections.singleton(recordOne), epoch);
+
+        assertEquals(new OffsetAndEpoch(expectedRecords.size(), epoch), log.endOffsetForEpoch(epoch));
+        assertEquals(epoch, log.lastFetchedEpoch());
+        validateReadRecords(expectedRecords, log);
+
+        SimpleRecord recordTwo = new SimpleRecord("two".getBytes());
+        SimpleRecord recordThree = new SimpleRecord("three".getBytes());
+        expectedRecords.add(recordTwo);
+        expectedRecords.add(recordThree);
+        appendAsLeader(Arrays.asList(recordTwo, recordThree), epoch);
+
+        assertEquals(new OffsetAndEpoch(expectedRecords.size(), epoch), log.endOffsetForEpoch(epoch));
+        assertEquals(epoch, log.lastFetchedEpoch());
+        validateReadRecords(expectedRecords, log);
+    }
+
+    @Test
+    public void testUnexpectedAppendOffset() {
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
         final int currentEpoch = 3;
-        log.appendAsLeader(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo), currentEpoch);
+        final long initialOffset = log.endOffset().offset;
 
-        assertEquals(0, log.startOffset());
-        assertEquals(1, log.endOffset().offset);
-        assertEquals(currentEpoch, log.lastFetchedEpoch());
+        log.appendAsLeader(
+            MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+            currentEpoch
+        );
 
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
-        List<ByteBuffer> extractRecords = new ArrayList<>();
-        for (Record record : records.records()) {
-            extractRecords.add(record.value());
-        }
+        // Throw exception for out of order records
+        assertThrows(
+            RuntimeException.class,
+            () -> {
+                log.appendAsLeader(
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+                    currentEpoch
+                );
+            }
+        );
 
-        assertEquals(1, extractRecords.size());
-        assertEquals(recordFoo.value(), extractRecords.get(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(1, currentEpoch)), log.endOffsetForEpoch(currentEpoch));
+        assertThrows(
+            RuntimeException.class,
+            () -> {
+                log.appendAsFollower(
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
+                );
+            }
+        );
     }
 
     @Test
     public void testAppendControlRecord() {
-        final long initialOffset = 5L;
+        final long initialOffset = 0;
         final int currentEpoch = 3;
         LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
-        log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(
-            initialOffset, 2, messageData), currentEpoch);
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        log.appendAsLeader(
+            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, buffer, messageData),
+            currentEpoch
+        );
 
         assertEquals(0, log.startOffset());
         assertEquals(1, log.endOffset().offset);
@@ -191,18 +213,24 @@ public class MockLogTest {
         }
 
         assertEquals(1, extractRecords.size());
-        assertEquals(Optional.of(new OffsetAndEpoch(1, currentEpoch)), log.endOffsetForEpoch(currentEpoch));
+        assertEquals(new OffsetAndEpoch(1, currentEpoch), log.endOffsetForEpoch(currentEpoch));
     }
 
     @Test
-    public void testAppendAsFollower() {
-        final long initialOffset = 5L;
+    public void testAppendAsFollower() throws IOException {
+        final long initialOffset = 5;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
-        assertEquals(5L, log.startOffset());
-        assertEquals(6L, log.endOffset().offset);
+        assertEquals(initialOffset, log.startOffset());
+        assertEquals(initialOffset + 1, log.endOffset().offset);
         assertEquals(3, log.lastFetchedEpoch());
 
         Records records = log.read(5L, Isolation.UNCOMMITTED).records;
@@ -213,8 +241,8 @@ public class MockLogTest {
 
         assertEquals(1, extractRecords.size());
         assertEquals(recordFoo.value(), extractRecords.get(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(5, 0)), log.endOffsetForEpoch(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(log.endOffset().offset, epoch)), log.endOffsetForEpoch(epoch));
+        assertEquals(new OffsetAndEpoch(5, 0), log.endOffsetForEpoch(0));
+        assertEquals(new OffsetAndEpoch(log.endOffset().offset, epoch), log.endOffsetForEpoch(epoch));
     }
 
     @Test
@@ -229,7 +257,7 @@ public class MockLogTest {
         recordTwoBuffer.putInt(2);
         SimpleRecord recordTwo = new SimpleRecord(recordTwoBuffer);
 
-        log.appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
+        appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
         Records records = log.read(0, Isolation.UNCOMMITTED).records;
 
@@ -309,7 +337,7 @@ public class MockLogTest {
 
         // Update to a high watermark with valid offset metadata
         log.updateHighWatermark(readInfo.startOffsetMetadata);
-        assertEquals(readInfo.startOffsetMetadata, log.highWatermark());
+        assertEquals(readInfo.startOffsetMetadata.offset, log.highWatermark().offset);
 
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
@@ -338,12 +366,12 @@ public class MockLogTest {
         appendBatch(5, 3);
         appendBatch(10, 4);
 
-        assertEquals(Optional.of(new OffsetAndEpoch(0, 0)), log.endOffsetForEpoch(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(2));
-        assertEquals(Optional.of(new OffsetAndEpoch(20L, 3)), log.endOffsetForEpoch(3));
-        assertEquals(Optional.of(new OffsetAndEpoch(30L, 4)), log.endOffsetForEpoch(4));
-        assertEquals(Optional.empty(), log.endOffsetForEpoch(5));
+        assertEquals(new OffsetAndEpoch(0, 0), log.endOffsetForEpoch(0));
+        assertEquals(new OffsetAndEpoch(15L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(15L, 1), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(20L, 3), log.endOffsetForEpoch(3));
+        assertEquals(new OffsetAndEpoch(30L, 4), log.endOffsetForEpoch(4));
+        assertEquals(new OffsetAndEpoch(30L, 4), log.endOffsetForEpoch(5));
     }
 
     @Test
@@ -353,11 +381,18 @@ public class MockLogTest {
     }
 
     @Test
-    public void testReadOutOfRangeOffset() {
+    public void testReadOutOfRangeOffset() throws IOException {
         final long initialOffset = 5L;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
+
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
             Isolation.UNCOMMITTED));
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1,
@@ -370,15 +405,15 @@ public class MockLogTest {
         assertEquals(5L, log.endOffset().offset);
 
         log.initializeLeaderEpoch(2);
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 2)), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(5L, 2), log.endOffsetForEpoch(2));
 
         // Initialize a new epoch at the same end offset. The epoch cache ensures
         // that the start offset of each retained epoch increases monotonically.
         log.initializeLeaderEpoch(3);
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(2));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(5L, 3), log.endOffsetForEpoch(3));
     }
 
     @Test
@@ -395,16 +430,491 @@ public class MockLogTest {
         assertEquals(2, log.lastFetchedEpoch());
     }
 
+    @Test
+    public void testCreateSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 0;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        RawSnapshotReader snapshot = log.readSnapshot(snapshotId).get();
+        assertEquals(0, snapshot.sizeInBytes());
+    }
+
+    @Test
+    public void testCreateSnapshotValidation() {
+        int numberOfRecords = 10;
+        int firstEpoch = 1;
+        int secondEpoch = 3;
+
+        appendBatch(numberOfRecords, firstEpoch);
+        appendBatch(numberOfRecords, secondEpoch);
+        log.updateHighWatermark(new LogOffsetMetadata(2 * numberOfRecords));
+
+        // Test snapshot id for the first epoch
+        log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, firstEpoch)).get().close();
+        log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch)).get().close();
+        log.createNewSnapshot(new OffsetAndEpoch(1, firstEpoch)).get().close();
+
+        // Test snapshot id for the second epoch
+        log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch)).get().close();
+        log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch)).get().close();
+        log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch)).get().close();
+    }
+
+    @Test
+    public void testCreateSnapshotLaterThanHighWatermark() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, epoch))
+        );
+    }
+
+    @Test
+    public void testCreateSnapshotMuchLaterEpoch() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, epoch + 1))
+        );
+    }
+
+    @Test
+    public void testCreateSnapshotBeforeLogStartOffset() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
+        assertEquals(snapshotId.offset, log.startOffset());
+
+        assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch)));
+    }
+
+    @Test
+    public void testCreateSnapshotMuchEalierEpoch() {
+        int numberOfRecords = 10;
+        int epoch = 2;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
+        assertEquals(snapshotId.offset, log.startOffset());
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, epoch - 1))
+        );
+    }
+
+    @Test
+    public void testCreateSnapshotWithMissingEpoch() {
+        int firstBatchRecords = 5;
+        int firstEpoch = 1;
+        int missingEpoch = firstEpoch + 1;
+        int secondBatchRecords = 5;
+        int secondEpoch = missingEpoch + 1;
+
+        int numberOfRecords = firstBatchRecords + secondBatchRecords;
+
+        appendBatch(firstBatchRecords, firstEpoch);
+        appendBatch(secondBatchRecords, secondEpoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(1, missingEpoch))
+        );
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(firstBatchRecords, missingEpoch))
+        );
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(secondBatchRecords, missingEpoch))
+        );
+    }
+
+    @Test
+    public void testCreateExistingSnapshot() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
+        assertEquals(snapshotId.offset, log.startOffset());
+        assertEquals(Optional.empty(), log.createNewSnapshot(snapshotId));
+    }
+
+    @Test
+    public void testReadMissingSnapshot() {
+        assertFalse(log.readSnapshot(new OffsetAndEpoch(10, 0)).isPresent());
+    }
+
+    @Test
+    public void testUpdateLogStartOffset() throws IOException {
+        int offset = 10;
+        int epoch = 0;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(offset, epoch);
+
+        appendBatch(offset, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(offset));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
+        assertEquals(offset, log.startOffset());
+        assertEquals(epoch, log.lastFetchedEpoch());
+        assertEquals(offset, log.endOffset().offset);
+
+        int newRecords = 10;
+        appendBatch(newRecords, epoch + 1);
+        log.updateHighWatermark(new LogOffsetMetadata(offset + newRecords));
+
+        // Start offset should not change since a new snapshot was not generated
+        assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(offset + newRecords, epoch)));
+        assertEquals(offset, log.startOffset());
+
+        assertEquals(epoch + 1, log.lastFetchedEpoch());
+        assertEquals(offset + newRecords, log.endOffset().offset);
+        assertEquals(offset + newRecords, log.highWatermark().offset);
+    }
+
+    @Test
+    public void testUpdateLogStartOffsetWithMissingSnapshot() {
+        int offset = 10;
+        int epoch = 0;
+
+        appendBatch(offset, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(offset));
+
+        assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(1, epoch)));
+        assertEquals(0, log.startOffset());
+        assertEquals(epoch, log.lastFetchedEpoch());
+        assertEquals(offset, log.endOffset().offset);
+        assertEquals(offset, log.highWatermark().offset);
+    }
+
+    @Test
+    public void testFailToIncreaseLogStartPastHighWatermark() throws IOException {
+        int offset = 10;
+        int epoch = 0;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * offset, epoch);
+
+        appendBatch(3 * offset, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(offset));
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.deleteBeforeSnapshot(snapshotId)
+        );
+    }
+
+    @Test
+    public void testTruncateFullyToLatestSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 0;
+        OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch);
+
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(sameEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.truncateToLatestSnapshot());
+        assertEquals(sameEpochSnapshotId.offset, log.startOffset());
+        assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
+        assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
+        assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset);
+
+        OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1);
+
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.truncateToLatestSnapshot());
+        assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
+        assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
+        assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
+        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset);
+    }
+
+    @Test
+    public void testDoesntTruncateFully() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch - 1);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertFalse(log.truncateToLatestSnapshot());
+
+        appendBatch(numberOfRecords, epoch);
+
+        OffsetAndEpoch olderOffsetSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderOffsetSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertFalse(log.truncateToLatestSnapshot());
+    }
+
+    @Test
+    public void testTruncateWillRemoveOlderSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(sameEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
+        appendBatch(numberOfRecords, epoch);
+
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.truncateToLatestSnapshot());
+        assertEquals(Optional.empty(), log.readSnapshot(sameEpochSnapshotId));
+    }
+
+    @Test
+    public void testUpdateLogStartOffsetWillRemoveOlderSnapshot() throws IOException {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(sameEpochSnapshotId.offset));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(sameEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
+        appendBatch(numberOfRecords, greaterEpochSnapshotId.epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(greaterEpochSnapshotId.offset));
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshot(greaterEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.deleteBeforeSnapshot(greaterEpochSnapshotId));
+        assertEquals(Optional.empty(), log.readSnapshot(sameEpochSnapshotId));
+    }
+
+    @Test
+    public void testValidateEpochGreaterThanLastKnownEpoch() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 1);
+        assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(log.endOffset().offset, epoch)),
+            resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateEpochLessThanOldestSnapshotEpoch() throws IOException {
+        int offset = 1;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch - 1);
+        assertEquals(ValidOffsetAndEpoch.snapshot(olderEpochSnapshotId), resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetLessThanOldestSnapshotOffset() throws IOException {
+        int offset = 2;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch);
+        assertEquals(ValidOffsetAndEpoch.snapshot(olderEpochSnapshotId), resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetEqualToOldestSnapshotOffset() throws IOException {
+        int offset = 2;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch);
+        assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind());
+    }
+
+    @Test
+    public void testValidateUnknownEpochLessThanLastKnownGreaterThanOldestSnapshot() throws IOException {
+        int numberOfRecords = 5;
+        int offset = 10;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        appendBatch(numberOfRecords, 1);
+        appendBatch(numberOfRecords, 2);
+        appendBatch(numberOfRecords, 4);
+
+        // offset is not equal to oldest snapshot's offset
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3);
+        assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(20, 2)), resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateEpochLessThanFirstEpochInLog() throws IOException {
+        int numberOfRecords = 5;
+        int offset = 10;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
+        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        appendBatch(numberOfRecords, 3);
+
+        // offset is not equal to oldest snapshot's offset
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
+        assertEquals(ValidOffsetAndEpoch.diverging(olderEpochSnapshotId), resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetGreatThanEndOffset() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch);
+        assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(log.endOffset().offset, epoch)),
+            resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetLessThanLEO() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+        appendBatch(numberOfRecords, epoch + 1);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(11, epoch);
+        assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(10, epoch)), resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateValidEpochAndOffset() {
+        int numberOfRecords = 5;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch);
+        assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind());
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
-        Records records = log.read(startOffset, isolation).records;
+        // The current MockLog implementation reads at most one batch
+
         long firstReadOffset = -1L;
         long lastReadOffset = -1L;
-        for (Record record : records.records()) {
-            if (firstReadOffset < 0)
-                firstReadOffset = record.offset();
-            if (record.offset() > lastReadOffset)
-                lastReadOffset = record.offset();
+
+        long currentStart = startOffset;
+        boolean foundRecord = true;
+        while (foundRecord) {
+            foundRecord = false;
+
+            Records records = log.read(currentStart, isolation).records;
+            for (Record record : records.records()) {
+                foundRecord = true;
+
+                if (firstReadOffset < 0L) {
+                    firstReadOffset = record.offset();
+                }
+
+                if (record.offset() > lastReadOffset) {
+                    lastReadOffset = record.offset();
+                }
+            }
+
+            currentStart = lastReadOffset + 1;
         }
+
         if (firstReadOffset < 0) {
             return Optional.empty();
         } else {
@@ -434,6 +944,22 @@ public class MockLogTest {
         public int hashCode() {
             return Objects.hash(startOffset, endOffset);
         }
+
+        @Override
+        public String toString() {
+            return String.format("OffsetRange(startOffset=%s, endOffset=%s)", startOffset, endOffset);
+        }
+    }
+
+    private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
+        log.appendAsLeader(
+            MemoryRecords.withRecords(
+                log.endOffset().offset,
+                CompressionType.NONE,
+                records.toArray(new SimpleRecord[records.size()])
+            ),
+            epoch
+        );
     }
 
     private void appendBatch(int numRecords, int epoch) {
@@ -441,6 +967,33 @@ public class MockLogTest {
         for (int i = 0; i < numRecords; i++) {
             records.add(new SimpleRecord(String.valueOf(i).getBytes()));
         }
-        log.appendAsLeader(records, epoch);
+
+        appendAsLeader(records, epoch);
+    }
+
+    private static void validateReadRecords(List<SimpleRecord> expectedRecords, MockLog log) {
+        assertEquals(0L, log.startOffset());
+        assertEquals(expectedRecords.size(), log.endOffset().offset);
+
+        int currentOffset = 0;
+        while (currentOffset < log.endOffset().offset) {
+            Records records = log.read(currentOffset, Isolation.UNCOMMITTED).records;
+            List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
+
+            assertTrue(batches.size() > 0);
+            for (RecordBatch batch : batches) {
+                assertTrue(batch.countOrNull() > 0);
+                assertEquals(currentOffset, batch.baseOffset());
+                assertEquals(currentOffset + batch.countOrNull() - 1, batch.lastOffset());
+
+                for (Record record : batch) {
+                    assertEquals(currentOffset, record.offset());
+                    assertEquals(expectedRecords.get(currentOffset), new SimpleRecord(record));
+                    currentOffset += 1;
+                }
+
+                assertEquals(currentOffset - 1, batch.lastOffset());
+            }
+        }
     }
 }

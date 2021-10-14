@@ -30,25 +30,6 @@ public class SslConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String PRINCIPAL_BUILDER_CLASS_DOC = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release. In recent versions,
-     *   the config is optional and there is no default.
-     */
-    // use FQN to avoid import deprecation warning
-    @Deprecated
-    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS =
-            org.apache.kafka.common.security.auth.DefaultPrincipalBuilder.class.getName();
-
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
         + "The default is 'TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. "
@@ -148,17 +129,6 @@ public class SslConfigs {
 
     public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = "ssl.engine.factory.class";
     public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
-
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SSL_CLIENT_AUTH_CONFIG = BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SSL_CLIENT_AUTH_DOC = BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC;
 
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)

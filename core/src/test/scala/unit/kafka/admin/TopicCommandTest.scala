@@ -22,8 +22,8 @@ import kafka.utils.Exit
 import org.apache.kafka.clients.admin.PartitionReassignment
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -82,6 +82,26 @@ class TopicCommandTest {
   }
 
   @Test
+  def testCreateWithPartitionCountWithoutReplicationFactor(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--partitions", "2",
+          "--topic", topicName)))
+  }
+
+  @Test
+  def testCreateWithReplicationFactorWithoutPartitionCount(): Unit = {
+    assertCheckArgsExitCode(1,
+      new TopicCommandOptions(
+        Array("--bootstrap-server", brokerList,
+          "--create",
+          "--replication-factor", "3",
+          "--topic", topicName)))
+  }
+
+  @Test
   def testCreateWithAssignmentAndPartitionCount(): Unit = {
     assertCheckArgsExitCode(1,
       new TopicCommandOptions(
@@ -89,7 +109,7 @@ class TopicCommandTest {
           "--create",
           "--replica-assignment", "3:0,5:1",
           "--partitions", "2",
-          "--topic", "testTopic")))
+          "--topic", topicName)))
   }
 
   @Test
@@ -100,7 +120,7 @@ class TopicCommandTest {
           "--create",
           "--replica-assignment", "3:0,5:1",
           "--replication-factor", "2",
-          "--topic", "testTopic")))
+          "--topic", topicName)))
   }
 
   @Test

@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.TestInputTopic;
@@ -47,6 +46,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
@@ -54,6 +54,7 @@ public class KStreamTransformValuesTest {
     @Mock(MockType.NICE)
     private ProcessorContext context;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -96,6 +97,7 @@ public class KStreamTransformValuesTest {
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransformWithKey() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -143,7 +145,7 @@ public class KStreamTransformValuesTest {
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KStreamTransformValues<String, String, String> transformValues = new KStreamTransformValues<>(transformer);
-        final Processor<String, String> processor = transformValues.get();
+        final org.apache.kafka.streams.processor.Processor<String, String> processor = transformValues.get();
 
         processor.init(context);
 

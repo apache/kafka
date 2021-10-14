@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,8 +68,8 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertFalse(builder.hasRoomFor(1));
-        assertThrows(IllegalArgumentException.class, () -> builder.appendRecord("a", null));
+        assertTrue(builder.bytesNeeded(Arrays.asList("a"), null).isPresent());
+        assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
         assertEquals(1, builtBatches.size());
@@ -112,9 +111,8 @@ class BatchBuilderTest {
         );
 
         String record = "i am a record";
-        int recordSize = serde.recordSize(record);
 
-        while (builder.hasRoomFor(recordSize)) {
+        while (!builder.bytesNeeded(Arrays.asList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 
@@ -125,5 +123,4 @@ class BatchBuilderTest {
         assertTrue(sizeInBytes <= batchSize, "Built batch size "
             + sizeInBytes + " is larger than max batch size " + batchSize);
     }
-
 }

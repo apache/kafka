@@ -20,7 +20,6 @@ package kafka.server
 import java.{lang, util}
 import java.util.Properties
 import java.util.concurrent.CompletionStage
-
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
@@ -29,9 +28,10 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
 
@@ -80,6 +80,7 @@ class DynamicBrokerConfigTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testConfigUpdateWithSomeInvalidConfigs(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -96,6 +97,9 @@ class DynamicBrokerConfigTest {
     // Test update of configs with invalid type
     val invalidProps = Map(KafkaConfig.LogCleanerThreadsProp -> "invalid")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
+
+    val excludedTopicConfig = Map(KafkaConfig.LogMessageFormatVersionProp -> "0.10.2")
+    verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, excludedTopicConfig)
   }
 
   @Test
@@ -143,8 +147,7 @@ class DynamicBrokerConfigTest {
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
       override def reconfigure(configs: util.Map[String, _]): Unit = {}
     }
-    assertThrows(classOf[IllegalArgumentException],
-      () => config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps)))
+    assertThrows(classOf[IllegalArgumentException], () => config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps)))
     config.dynamicConfig.addReconfigurable(createReconfigurable(validReconfigurableProps))
 
     def createBrokerReconfigurable(configs: Set[String]) = new BrokerReconfigurable {
@@ -152,8 +155,7 @@ class DynamicBrokerConfigTest {
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = {}
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
-    assertThrows(classOf[IllegalArgumentException],
-      () => config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps)))
+    assertThrows(classOf[IllegalArgumentException], () => config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps)))
     config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(validReconfigurableProps))
   }
 
@@ -222,12 +224,7 @@ class DynamicBrokerConfigTest {
       updateConfig()
       assertEquals(value, config.originals.get(name))
     } else {
-      try {
-        config.dynamicConfig.validate(props, perBrokerConfig)
-        fail("Invalid config did not fail validation")
-      } catch {
-        case e: Exception => // expected exception
-      }
+      assertThrows(classOf[Exception], () => config.dynamicConfig.validate(props, perBrokerConfig))
       updateConfig()
       assertEquals(oldValue, config.originals.get(name))
     }
@@ -243,12 +240,7 @@ class DynamicBrokerConfigTest {
 
     // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided in
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
-    try {
-      config.dynamicConfig.validate(props, perBrokerConfig = true)
-      fail("Invalid config did not fail validation")
-    } catch {
-      case e: ConfigException => // expected exception
-    }
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
     // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
     // startup and when configs are updated in ZK. Update should apply valid configs and ignore
@@ -275,8 +267,8 @@ class DynamicBrokerConfigTest {
       case e: ConfigException => // expected exception
     }
     val persistedProps = configWithSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"))
+    assertFalse(persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"),
+      "Password not encoded")
     val decodedProps = configWithSecret.dynamicConfig.fromPersistentProps(persistedProps, perBrokerConfig = true)
     assertEquals("myLoginModule required;", decodedProps.getProperty(KafkaConfig.SaslJaasConfigProp))
   }
@@ -291,8 +283,8 @@ class DynamicBrokerConfigTest {
     dynamicProps.put(KafkaConfig.SaslJaasConfigProp, "dynamicLoginModule required;")
 
     val persistedProps = config.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"))
+    assertFalse(persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"),
+      "Password not encoded")
     config.dynamicConfig.updateBrokerConfig(0, persistedProps)
     assertEquals("dynamicLoginModule required;", config.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
@@ -358,12 +350,8 @@ class DynamicBrokerConfigTest {
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
     EasyMock.expect(kafkaServer.authorizer).andReturn(Some(authorizer)).anyTimes()
     EasyMock.replay(kafkaServer)
-    try {
-      kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
-    } catch {
-      case _: Throwable => // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
-    }
-
+    // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+    assertThrows(classOf[Throwable], () => kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer))
     props.put("super.users", "User:admin")
     kafkaServer.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals("User:admin", authorizer.superUsers)

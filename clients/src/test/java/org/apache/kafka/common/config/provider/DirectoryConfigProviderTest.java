@@ -19,9 +19,9 @@ package org.apache.kafka.common.config.provider;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,13 +29,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.toSet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DirectoryConfigProviderTest {
 
@@ -55,7 +57,7 @@ public class DirectoryConfigProviderTest {
         return file;
     }
 
-    @Before
+    @BeforeEach
     public void setup() throws IOException {
         provider = new DirectoryConfigProvider();
         provider.configure(Collections.emptyMap());
@@ -73,7 +75,7 @@ public class DirectoryConfigProviderTest {
         siblingFile = writeFile(new File(parent, "siblingFile"));
     }
 
-    @After
+    @AfterEach
     public void close() throws IOException {
         provider.close();
         Utils.delete(parent);
@@ -144,6 +146,12 @@ public class DirectoryConfigProviderTest {
         ConfigData configData = provider.get(null, Collections.singleton("foo"));
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testServiceLoaderDiscovery() {
+        ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof DirectoryConfigProvider));
     }
 }
 

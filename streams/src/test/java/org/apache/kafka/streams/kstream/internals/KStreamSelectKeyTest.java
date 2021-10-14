@@ -41,6 +41,7 @@ public class KStreamSelectKeyTest {
     private final String topicName = "topic_key_select";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testSelectKey() {
         final StreamsBuilder builder = new StreamsBuilder();

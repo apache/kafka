@@ -19,14 +19,13 @@ package kafka.cluster
 
 import java.nio.charset.StandardCharsets
 
-import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -34,10 +33,10 @@ class BrokerEndPointTest {
 
   @Test
   def testHashAndEquals(): Unit = {
-    val broker1 = TestUtils.createBroker(1, "myhost", 9092)
-    val broker2 = TestUtils.createBroker(1, "myhost", 9092)
-    val broker3 = TestUtils.createBroker(2, "myhost", 1111)
-    val broker4 = TestUtils.createBroker(1, "other", 1111)
+    val broker1 = new BrokerEndPoint(1, "myhost", 9092)
+    val broker2 = new BrokerEndPoint(1, "myhost", 9092)
+    val broker3 = new BrokerEndPoint(2, "myhost", 1111)
+    val broker4 = new BrokerEndPoint(1, "other", 1111)
 
     assertEquals(broker1, broker2)
     assertNotEquals(broker1, broker3)

@@ -119,6 +119,15 @@ public class DataInputStreamReadable implements Readable, Closeable {
     }
 
     @Override
+    public int remaining() {
+        try {
+            return input.available();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
     public void close() {
         try {
             input.close();

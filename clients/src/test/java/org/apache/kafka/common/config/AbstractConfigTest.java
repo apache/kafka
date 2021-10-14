@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,11 +36,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AbstractConfigTest {
 
@@ -227,12 +228,12 @@ public class AbstractConfigTest {
         props.put(ConfiguredFakeMetricsReporter.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
-        assertTrue(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called",
-            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
+        assertTrue(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        assertFalse(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used",
-            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
+        assertFalse(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used");
     }
 
     private void testValidInputs(String configValue) {
@@ -276,52 +277,48 @@ public class AbstractConfigTest {
         ClassLoader restrictedClassLoader = new RestrictedClassLoader();
         ClassLoader defaultClassLoader = AbstractConfig.class.getClassLoader();
 
-        // Test default classloading where all classes are visible to thread context classloader
-        Thread.currentThread().setContextClassLoader(defaultClassLoader);
-        ClassTestConfig testConfig = new ClassTestConfig();
-        testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
-
-        // Test default classloading where default classes are not visible to thread context classloader
-        // Static classloading is used for default classes, so instance creation should succeed.
-        Thread.currentThread().setContextClassLoader(restrictedClassLoader);
-        testConfig = new ClassTestConfig();
-        testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
-
-        // Test class overrides with names or classes where all classes are visible to thread context classloader
-        Thread.currentThread().setContextClassLoader(defaultClassLoader);
-        ClassTestConfig.testOverrides();
-
-        // Test class overrides with names or classes where all classes are visible to Kafka classloader, context classloader is null
-        Thread.currentThread().setContextClassLoader(null);
-        ClassTestConfig.testOverrides();
-
-        // Test class overrides where some classes are not visible to thread context classloader
-        Thread.currentThread().setContextClassLoader(restrictedClassLoader);
-        // Properties specified as classes should succeed
-        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Collections.singletonList(ClassTestConfig.RESTRICTED_CLASS));
-        testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.RESTRICTED_CLASS);
-        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS));
-        testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS);
-        // Properties specified as classNames should fail to load classes
+        ClassLoader originClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS.getName(), null);
-            fail("Config created with class property that cannot be loaded");
-        } catch (ConfigException e) {
-            // Expected Exception
-        }
-        try {
-            testConfig = new ClassTestConfig(null, Arrays.asList(ClassTestConfig.VISIBLE_CLASS.getName(), ClassTestConfig.RESTRICTED_CLASS.getName()));
-            testConfig.getConfiguredInstances("list.prop", MetricsReporter.class);
-            fail("Should have failed to load class");
-        } catch (KafkaException e) {
-            // Expected Exception
-        }
-        try {
-            testConfig = new ClassTestConfig(null, ClassTestConfig.VISIBLE_CLASS.getName() + "," + ClassTestConfig.RESTRICTED_CLASS.getName());
-            testConfig.getConfiguredInstances("list.prop", MetricsReporter.class);
-            fail("Should have failed to load class");
-        } catch (KafkaException e) {
-            // Expected Exception
+            // Test default classloading where all classes are visible to thread context classloader
+            Thread.currentThread().setContextClassLoader(defaultClassLoader);
+            ClassTestConfig testConfig = new ClassTestConfig();
+            testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
+
+            // Test default classloading where default classes are not visible to thread context classloader
+            // Static classloading is used for default classes, so instance creation should succeed.
+            Thread.currentThread().setContextClassLoader(restrictedClassLoader);
+            testConfig = new ClassTestConfig();
+            testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
+
+            // Test class overrides with names or classes where all classes are visible to thread context classloader
+            Thread.currentThread().setContextClassLoader(defaultClassLoader);
+            ClassTestConfig.testOverrides();
+
+            // Test class overrides with names or classes where all classes are visible to Kafka classloader, context classloader is null
+            Thread.currentThread().setContextClassLoader(null);
+            ClassTestConfig.testOverrides();
+
+            // Test class overrides where some classes are not visible to thread context classloader
+            Thread.currentThread().setContextClassLoader(restrictedClassLoader);
+            // Properties specified as classes should succeed
+            testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Collections.singletonList(ClassTestConfig.RESTRICTED_CLASS));
+            testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.RESTRICTED_CLASS);
+            testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS));
+            testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS);
+
+            // Properties specified as classNames should fail to load classes
+            assertThrows(ConfigException.class, () -> new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS.getName(), null),
+                "Config created with class property that cannot be loaded");
+
+            ClassTestConfig config = new ClassTestConfig(null, Arrays.asList(ClassTestConfig.VISIBLE_CLASS.getName(), ClassTestConfig.RESTRICTED_CLASS.getName()));
+            assertThrows(KafkaException.class, () -> config.getConfiguredInstances("list.prop", MetricsReporter.class),
+                "Should have failed to load class");
+
+            ClassTestConfig config2 = new ClassTestConfig(null, ClassTestConfig.VISIBLE_CLASS.getName() + "," + ClassTestConfig.RESTRICTED_CLASS.getName());
+            assertThrows(KafkaException.class, () -> config2.getConfiguredInstances("list.prop", MetricsReporter.class),
+                "Should have failed to load class");
+        } finally {
+            Thread.currentThread().setContextClassLoader(originClassLoader);
         }
     }
 

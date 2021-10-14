@@ -79,6 +79,8 @@ public class TemperatureDemo {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
+        final Duration duration24Hours = Duration.ofHours(24);
+
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> source = builder.stream("iot-temperature");
@@ -88,7 +90,7 @@ public class TemperatureDemo {
             // to group and reduce them, a key is needed ("temp" has been chosen)
             .selectKey((key, value) -> "temp")
             .groupByKey()
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(TEMPERATURE_WINDOW_SIZE)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(TEMPERATURE_WINDOW_SIZE), duration24Hours))
             .reduce((value1, value2) -> {
                 if (Integer.parseInt(value1) > Integer.parseInt(value2)) {
                     return value1;
@@ -99,7 +101,7 @@ public class TemperatureDemo {
             .toStream()
             .filter((key, value) -> Integer.parseInt(value) > TEMPERATURE_THRESHOLD);
 
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, TEMPERATURE_WINDOW_SIZE);
 
         // need to override key serde to Windowed<String> type
         max.to("iot-temperature-max", Produced.with(windowedSerde, Serdes.String()));

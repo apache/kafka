@@ -17,22 +17,20 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Optional, Properties}
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Collections, Optional, Properties}
 
 import kafka.cluster.Partition
-import kafka.log.{Log, LogManager, LogOffsetSnapshot}
+import kafka.log.{UnifiedLog, LogManager, LogOffsetSnapshot}
 import kafka.utils._
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
 import kafka.server.QuotaFactory.QuotaManagers
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -43,6 +41,8 @@ class ReplicaManagerQuotasTest {
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
+  val topicId = Uuid.randomUuid()
+  val topicIds = Collections.singletonMap("test-topic", topicId)
   val fetchInfo = Seq(
     topicPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
     topicPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
@@ -66,13 +66,14 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
-    assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
+    assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with only one throttled, we should get the first")
 
-    assertEquals("But we shouldn't get the second", 0,
-      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
+    assertEquals(0, fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size,
+      "But we shouldn't get the second")
   }
 
   @Test
@@ -92,12 +93,13 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
-    assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
-    assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
+    assertEquals(0, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with both throttled, we should get no messages")
+    assertEquals(0, fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with both throttled, we should get no messages")
   }
 
   @Test
@@ -117,12 +119,13 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
-    assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
-    assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
+    assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with both non-throttled, we should get both messages")
+    assertEquals(1, fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with both non-throttled, we should get both messages")
   }
 
   @Test
@@ -142,13 +145,14 @@ class ReplicaManagerQuotasTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
+      topicIds = topicIds,
       quota = quota,
       clientMetadata = None)
-    assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
+    assertEquals(1, fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size,
+      "Given two partitions, with only one throttled, we should get the first")
 
-    assertEquals("But we should get the second too since it's throttled but in sync", 1,
-      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
+    assertEquals(1, fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size,
+      "But we should get the second too since it's throttled but in sync")
   }
 
   @Test
@@ -185,6 +189,7 @@ class ReplicaManagerQuotasTest {
         fetchIsolation = FetchLogEnd,
         isFromFollower = true,
         replicaId = 1,
+        topicIds = topicIds,
         fetchPartitionStatus = List((tp, fetchPartitionStatus))
       )
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
@@ -193,22 +198,22 @@ class ReplicaManagerQuotasTest {
       }
     }
 
-    assertTrue("In sync replica should complete", setupDelayedFetch(isReplicaInSync = true).tryComplete())
-    assertFalse("Out of sync replica should not complete", setupDelayedFetch(isReplicaInSync = false).tryComplete())
+    assertTrue(setupDelayedFetch(isReplicaInSync = true).tryComplete(), "In sync replica should complete")
+    assertFalse(setupDelayedFetch(isReplicaInSync = false).tryComplete(), "Out of sync replica should not complete")
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
                  bothReplicasInSync: Boolean = false): Unit = {
-    val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log: Log = createNiceMock(classOf[Log])
+    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.highWatermark).andReturn(5).anyTimes()
     expect(log.lastStableOffset).andReturn(5).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(20L)).anyTimes()
+    expect(log.topicId).andReturn(Some(topicId)).anyTimes()
 
     //if we ask for len 1 return a message
     expect(log.read(anyObject(),
@@ -243,9 +248,16 @@ class ReplicaManagerQuotasTest {
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
-      new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId),
+      logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
+      alterIsrManager = alterIsrManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
@@ -263,7 +275,7 @@ class ReplicaManagerQuotasTest {
     }
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Option(replicaManager).foreach(_.shutdown(false))
     Option(quotaManager).foreach(_.shutdown())

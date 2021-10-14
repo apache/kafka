@@ -26,10 +26,12 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -66,6 +68,7 @@ public class MeteredTimestampedWindowStoreTest {
     private static final int WINDOW_SIZE_MS = 10;
 
     private InternalMockProcessorContext context;
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
@@ -86,14 +89,16 @@ public class MeteredTimestampedWindowStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
 
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
+            Time.SYSTEM,
+            taskId
         );
     }
 
@@ -145,7 +150,7 @@ public class MeteredTimestampedWindowStoreTest {
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
         final String defaultChangelogTopicName =
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME, taskId.topologyName());
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
     }
 
@@ -200,7 +205,6 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
         EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
         EasyMock.replay(innerStoreMock);
@@ -215,7 +219,7 @@ public class MeteredTimestampedWindowStoreTest {
         store.init((StateStoreContext) context, innerStoreMock);
 
         try {
-            store.put("key", ValueAndTimestamp.make(42L, 60000));
+            store.put("key", ValueAndTimestamp.make(42L, 60000), 60000L);
         } catch (final StreamsException exception) {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from processor context.");
@@ -225,7 +229,6 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
         EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
         EasyMock.replay(innerStoreMock);
@@ -240,7 +243,7 @@ public class MeteredTimestampedWindowStoreTest {
         store.init((StateStoreContext) context, innerStoreMock);
 
         try {
-            store.put("key", ValueAndTimestamp.make(42L, 60000));
+            store.put("key", ValueAndTimestamp.make(42L, 60000), 60000L);
         } catch (final StreamsException exception) {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from constructor parameters.");

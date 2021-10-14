@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{AppendOrigin, Log}
+import kafka.log.{AppendOrigin, UnifiedLog, LogConfig}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -51,7 +51,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
   val random = new Random
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
 
     replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
@@ -60,7 +60,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     EasyMock.reset(replicaManager)
     if (executor != null)
@@ -160,8 +160,10 @@ object AbstractCoordinatorConcurrencyTest {
   class TestReplicaManager extends ReplicaManager(
     null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
 
+    @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
+
     def createDelayedProducePurgatory(timer: MockTimer): Unit = {
       producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
@@ -176,7 +178,8 @@ object AbstractCoordinatorConcurrencyTest {
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()): Unit = {
+                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                               requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -204,20 +207,28 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
+
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)
     }
-    @volatile var logs: mutable.Map[TopicPartition, (Log, Long)] = _
-    def getOrCreateLogs(): mutable.Map[TopicPartition, (Log, Long)] = {
+
+    def getOrCreateLogs(): mutable.Map[TopicPartition, (UnifiedLog, Long)] = {
       if (logs == null)
-        logs = mutable.Map[TopicPartition, (Log, Long)]()
+        logs = mutable.Map[TopicPartition, (UnifiedLog, Long)]()
       logs
     }
-    def updateLog(topicPartition: TopicPartition, log: Log, endOffset: Long): Unit = {
+
+    def updateLog(topicPartition: TopicPartition, log: UnifiedLog, endOffset: Long): Unit = {
       getOrCreateLogs().put(topicPartition, (log, endOffset))
     }
-    override def getLog(topicPartition: TopicPartition): Option[Log] =
+
+    override def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = {
+      getOrCreateLogs().get(topicPartition).map(_._1.config)
+    }
+
+    override def getLog(topicPartition: TopicPartition): Option[UnifiedLog] =
       getOrCreateLogs().get(topicPartition).map(l => l._1)
+
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
       getOrCreateLogs().get(topicPartition).map(l => l._2)
   }

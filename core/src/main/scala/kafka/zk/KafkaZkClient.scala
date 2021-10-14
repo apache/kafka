@@ -17,7 +17,6 @@
 package kafka.zk
 
 import java.util.Properties
-
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
@@ -38,6 +37,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
+import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
@@ -497,7 +497,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }.toSet
 
     val setDataRequests = updatedAssignments.map { case TopicIdReplicaAssignment(topic, topicIdOpt, assignments) =>
-      SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicIdOpt.get, assignments), ZkVersion.MatchAnyVersion)
+      SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicIdOpt, assignments), ZkVersion.MatchAnyVersion)
     }.toSeq
 
     retryRequestsUntilConnected(setDataRequests, expectedControllerEpochZkVersion)
@@ -507,13 +507,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId unique topic ID for the topic
+   * @param topicId unique topic ID for the topic if the version supports it
    * @param assignment the partition to replica mapping to set for the given topic
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String,
-                            topicId: Uuid,
+                            topicId: Option[Uuid],
                             assignment: collection.Map[TopicPartition, ReplicaAssignment],
                             expectedControllerEpochZkVersion: Int): SetDataResponse = {
     val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicId, assignment), ZkVersion.MatchAnyVersion)
@@ -523,13 +523,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId unique topic ID for the topic
+   * @param topicId unique topic ID for the topic if the version supports it
    * @param assignment the partition to replica mapping to set for the given topic
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @throws KeeperException if there is an error while setting assignment
    */
   def setTopicAssignment(topic: String,
-                         topicId: Uuid,
+                         topicId: Option[Uuid],
                          assignment: Map[TopicPartition, ReplicaAssignment],
                          expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion) = {
     val setDataResponse = setTopicAssignmentRaw(topic, topicId, assignment, expectedControllerEpochZkVersion)
@@ -539,11 +539,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Create the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId unique topic ID for the topic
+   * @param topicId unique topic ID for the topic if the version supports it
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, topicId: Uuid, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
+  def createTopicAssignment(topic: String, topicId: Option[Uuid], assignment: Map[TopicPartition, Seq[Int]]): Unit = {
     val persistedAssignments = assignment.map { case (k, v) => k -> ReplicaAssignment(v) }
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(topicId, persistedAssignments))
   }
@@ -609,7 +609,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets the topic IDs for the given topics.
    * @param topics the topics we wish to retrieve the Topic IDs for
    * @return the Topic IDs
-   * @throws IllegalStateException if a topic in topics does not have a Topic ID
    */
   def getTopicIdsForTopics(topics: Set[String]): Map[String, Uuid] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
@@ -621,10 +620,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
-    }.map(_.get)
-      .map(topicIdAssignment => (topicIdAssignment.topic,
-        topicIdAssignment.topicId.getOrElse(
-          throw new IllegalStateException("Topic " + topicIdAssignment.topic + " does not have a topic ID."))))
+    }.filter(_.flatMap(_.topicId).isDefined)
+      .map(_.get)
+      .map(topicIdAssignment => (topicIdAssignment.topic, topicIdAssignment.topicId.get))
       .toMap
   }
 
@@ -1942,12 +1940,45 @@ object KafkaZkClient {
             connectionTimeoutMs: Int,
             maxInFlightRequests: Int,
             time: Time,
+            name: String,
+            zkClientConfig: ZKClientConfig,
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
-            name: Option[String] = None,
-            zkClientConfig: Option[ZKClientConfig] = None) = {
+            createChrootIfNecessary: Boolean = false
+  ): KafkaZkClient = {
+
+    /* ZooKeeper 3.6.0 changed the default configuration for JUTE_MAXBUFFER from 4 MB to 1 MB.
+     * This causes a regression if Kafka tries to retrieve a large amount of data across many
+     * znodes – in such a case the ZooKeeper client will repeatedly emit a message of the form
+     * "java.io.IOException: Packet len <####> is out of range".
+     *
+     * We restore the 3.4.x/3.5.x behavior unless the caller has set the property (note that ZKConfig
+     * auto configures itself if certain system properties have been set).
+     *
+     * See https://github.com/apache/zookeeper/pull/1129 for the details on why the behavior
+     * changed in 3.6.0.
+     */
+    if (zkClientConfig.getProperty(ZKConfig.JUTE_MAXBUFFER) == null)
+      zkClientConfig.setProperty(ZKConfig.JUTE_MAXBUFFER, ((4096 * 1024).toString))
+
+    if (createChrootIfNecessary) {
+      val chrootIndex = connectString.indexOf("/")
+      if (chrootIndex > 0) {
+        val zkConnWithoutChrootForChrootCreation = connectString.substring(0, chrootIndex)
+        val zkClientForChrootCreation = apply(zkConnWithoutChrootForChrootCreation, isSecure, sessionTimeoutMs,
+          connectionTimeoutMs, maxInFlightRequests, time, name, zkClientConfig, metricGroup, metricType)
+        try {
+          val chroot = connectString.substring(chrootIndex)
+          if (!zkClientForChrootCreation.pathExists(chroot)) {
+            zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
+          }
+        } finally {
+          zkClientForChrootCreation.close()
+        }
+      }
+    }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType, name, zkClientConfig)
+      time, metricGroup, metricType, zkClientConfig, name)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

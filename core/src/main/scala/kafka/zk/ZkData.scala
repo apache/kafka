@@ -19,7 +19,6 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
-
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
@@ -40,6 +39,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.server.common.ProducerIdsBlock
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
@@ -283,7 +283,7 @@ object TopicZNode {
                                       topicId: Option[Uuid],
                                       assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(topicId: Uuid,
+  def encode(topicId: Option[Uuid],
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -299,11 +299,11 @@ object TopicZNode {
 
     val topicAssignment = mutable.Map(
       "version" -> 3,
-      "topic_id" -> topicId.toString,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
     )
+    topicId.foreach(id => topicAssignment += "topic_id" -> id.toString)
 
     Json.encodeAsBytes(topicAssignment.asJava)
   }
@@ -766,7 +766,33 @@ object BrokerSequenceIdZNode {
 }
 
 object ProducerIdBlockZNode {
+  val CurrentVersion: Long = 1L
+
   def path = "/latest_producer_id_block"
+
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdsBlock): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> CurrentVersion,
+      "broker" -> producerIdBlock.brokerId,
+      "block_start" -> producerIdBlock.producerIdStart.toString,
+      "block_end" -> producerIdBlock.producerIdEnd.toString).asJava
+    )
+  }
+
+  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdsBlock = {
+    val jsonDataAsString = jsonData.map(_.toChar).mkString
+    try {
+      Json.parseBytes(jsonData).map(_.asJsonObject).flatMap { js =>
+        val brokerId = js("broker").to[Int]
+        val blockStart = js("block_start").to[String].toLong
+        val blockEnd = js("block_end").to[String].toLong
+        Some(new ProducerIdsBlock(brokerId, blockStart, Math.toIntExact(blockEnd - blockStart + 1)))
+      }.getOrElse(throw new KafkaException(s"Failed to parse the producerId block json $jsonDataAsString"))
+    } catch {
+      case e: java.lang.NumberFormatException =>
+        // this should never happen: the written data has exceeded long type limit
+        throw new KafkaException(s"Read jason data $jsonDataAsString contains producerIds that have exceeded long type limit", e)
+    }
+  }
 }
 
 object DelegationTokenAuthZNode {

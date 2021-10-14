@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package integration.kafka.api
+package kafka.api
 
 import java.util.Properties
 
@@ -25,8 +25,8 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.junit.{After, Before, Test}
-import org.junit.Assert.assertEquals
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.Seq
 import scala.collection.mutable.Buffer
@@ -50,7 +50,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val topicConfig = new Properties()
@@ -62,7 +62,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     createReadCommittedConsumer("transactional-group")
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
@@ -70,7 +70,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testTransactionalProducerSingleBrokerMaxInFlightOne() = {
+  def testTransactionalProducerSingleBrokerMaxInFlightOne(): Unit = {
     // We want to test with one broker to verify multiple requests queued on a connection
     assertEquals(1, servers.size)
 

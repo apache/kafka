@@ -28,9 +28,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.test.TestRecord;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +42,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -50,7 +51,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.hasProperty;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTopicsTest {
     private static final Logger log = LoggerFactory.getLogger(TestTopicsTest.class);
@@ -66,7 +67,7 @@ public class TestTopicsTest {
 
     private final Instant testBaseTime = Instant.parse("2019-06-01T10:00:00Z");
 
-    @Before
+    @BeforeEach
     public void setup() {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
@@ -74,10 +75,14 @@ public class TestTopicsTest {
         final KStream<Long, String> source = builder.stream(INPUT_TOPIC_MAP, Consumed.with(longSerde, stringSerde));
         final KStream<String, Long> mapped = source.map((key, value) -> new KeyValue<>(value, key));
         mapped.to(OUTPUT_TOPIC_MAP, Produced.with(stringSerde, longSerde));
-        testDriver = new TopologyTestDriver(builder.build());
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        testDriver = new TopologyTestDriver(builder.build(), properties);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         try {
             testDriver.close();
@@ -254,7 +259,7 @@ public class TestTopicsTest {
         final Headers headers = new RecordHeaders(
                 new Header[]{
                     new RecordHeader("foo", "value".getBytes()),
-                    new RecordHeader("bar", (byte[]) null),
+                    new RecordHeader("bar", null),
                     new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
                 });
         final TestInputTopic<Long, String> inputTopic =
@@ -326,14 +331,14 @@ public class TestTopicsTest {
     public void testNonExistingOutputTopic() {
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic("no-exist", longSerde.deserializer(), stringSerde.deserializer());
-        assertThrows("Uninitialized topic", NoSuchElementException.class, outputTopic::readRecord);
+        assertThrows(NoSuchElementException.class, outputTopic::readRecord, "Uninitialized topic");
     }
 
     @Test
     public void testNonUsedOutputTopic() {
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
-        assertThrows("Uninitialized topic", NoSuchElementException.class, outputTopic::readRecord);
+        assertThrows(NoSuchElementException.class, outputTopic::readRecord, "Uninitialized topic");
     }
 
     @Test
@@ -346,14 +351,14 @@ public class TestTopicsTest {
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
         //No more output in topic
-        assertThrows("Empty topic", NoSuchElementException.class, outputTopic::readRecord);
+        assertThrows(NoSuchElementException.class, outputTopic::readRecord, "Empty topic");
     }
 
     @Test
     public void testNonExistingInputTopic() {
         final TestInputTopic<Long, String> inputTopic =
             testDriver.createInputTopic("no-exist", longSerde.serializer(), stringSerde.serializer());
-        assertThrows("Unknown topic", IllegalArgumentException.class, () -> inputTopic.pipeInput(1L, "Hello"));
+        assertThrows(IllegalArgumentException.class, () -> inputTopic.pipeInput(1L, "Hello"), "Unknown topic");
     }
 
     @Test

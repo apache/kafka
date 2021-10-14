@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -45,9 +45,9 @@ import java.util.stream.StreamSupport;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UpdateMetadataRequestTest {
 
@@ -61,7 +61,7 @@ public class UpdateMetadataRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
+        for (short version : UPDATE_METADATA.allVersions()) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
                     version, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
             UpdateMetadataRequest request = builder.build();
@@ -81,7 +81,7 @@ public class UpdateMetadataRequestTest {
     public void testVersionLogic() {
         String topic0 = "topic0";
         String topic1 = "topic1";
-        for (short version = UPDATE_METADATA.oldestVersion(); version <= UPDATE_METADATA.latestVersion(); version++) {
+        for (short version : UPDATE_METADATA.allVersions()) {
             List<UpdateMetadataPartitionState> partitionStates = asList(
                 new UpdateMetadataPartitionState()
                     .setTopicName(topic0)

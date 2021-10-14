@@ -46,8 +46,6 @@ public class ConnectMetricsTest {
     static {
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
     }
 
     private ConnectMetrics metrics;
@@ -165,6 +163,6 @@ public class ConnectMetricsTest {
     }
 
     static MetricName metricName(String name) {
-        return new MetricName(name, "test_group", "metrics for testing", Collections.<String, String>emptyMap());
+        return new MetricName(name, "test_group", "metrics for testing", Collections.emptyMap());
     }
 }

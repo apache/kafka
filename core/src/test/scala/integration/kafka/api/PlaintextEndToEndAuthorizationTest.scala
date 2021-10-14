@@ -19,8 +19,9 @@ package kafka.api
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
 
 // This test case uses a separate listener for client and inter-broker communication, from
@@ -30,7 +31,7 @@ object PlaintextEndToEndAuthorizationTest {
   private var clientListenerName = None: Option[String]
   @volatile
   private var serverListenerName = None: Option[String]
-  class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestClientPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       clientListenerName = Some(context.listenerName)
       context match {
@@ -42,7 +43,7 @@ object PlaintextEndToEndAuthorizationTest {
     }
   }
 
-  class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestServerPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       serverListenerName = Some(context.listenerName)
       context match {
@@ -69,7 +70,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp()
