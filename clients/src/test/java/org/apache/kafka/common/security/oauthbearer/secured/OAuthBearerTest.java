@@ -31,11 +31,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -122,11 +123,10 @@ public abstract class OAuthBearerTest {
     }
 
     protected Retryable<String> createRetryable(Exception[] attempts) {
-        AtomicInteger counter = new AtomicInteger(0);
+        Iterator<Exception> i = Arrays.asList(attempts).iterator();
 
         return () -> {
-            int currAttempt = counter.getAndIncrement();
-            Exception e = attempts[currAttempt];
+            Exception e = i.hasNext() ? i.next() : null;
 
             if (e == null) {
                 return "success!";

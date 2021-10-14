@@ -267,9 +267,8 @@ object Defaults {
   val SaslLoginRefreshWindowJitter = SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER
   val SaslLoginRefreshMinPeriodSeconds = SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS
   val SaslLoginRefreshBufferSeconds = SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS
-  val SaslLoginRetryAttempts = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_ATTEMPTS
-  val SaslLoginRetryMaxWaitMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_MAX_WAIT_MS
-  val SaslLoginRetryWaitMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_WAIT_MS
+  val SaslLoginRetryBackoffMaxMs = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS
+  val SaslLoginRetryBackoffMs = SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS
   val SaslOAuthBearerScopeClaimName = SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME
   val SaslOAuthBearerSubClaimName = SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME
   val SaslOAuthBearerJwksEndpointRefreshMs = SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS
@@ -602,9 +601,8 @@ object KafkaConfig {
 
   val SaslLoginConnectTimeoutMsProp = SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS
   val SaslLoginReadTimeoutMsProp = SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS
-  val SaslLoginRetryAttemptsProp = SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS
-  val SaslLoginRetryMaxWaitMsProp = SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS
-  val SaslLoginRetryWaitMsProp = SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS
+  val SaslLoginRetryBackoffMaxMsProp = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS
+  val SaslLoginRetryBackoffMsProp = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS
   val SaslOAuthBearerScopeClaimNameProp = SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME
   val SaslOAuthBearerSubClaimNameProp = SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME
   val SaslOAuthBearerTokenEndpointUriProp = SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI
@@ -1027,9 +1025,8 @@ object KafkaConfig {
 
   val SaslLoginConnectTimeoutMsDoc = SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC
   val SaslLoginReadTimeoutMsDoc = SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC
-  val SaslLoginRetryAttemptsDoc = SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS_DOC
-  val SaslLoginRetryMaxWaitMsDoc = SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS_DOC
-  val SaslLoginRetryWaitMsDoc = SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS_DOC
+  val SaslLoginRetryBackoffMaxMsDoc = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS
+  val SaslLoginRetryBackoffMsDoc = SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC
   val SaslOAuthBearerScopeClaimNameDoc = SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC
   val SaslOAuthBearerSubClaimNameDoc = SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC
   val SaslOAuthBearerTokenEndpointUriDoc = SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI_DOC
@@ -1330,9 +1327,8 @@ object KafkaConfig {
       .define(SaslLoginRefreshBufferSecondsProp, SHORT, Defaults.SaslLoginRefreshBufferSeconds, MEDIUM, SaslLoginRefreshBufferSecondsDoc)
       .define(SaslLoginConnectTimeoutMsProp, INT, null, LOW, SaslLoginConnectTimeoutMsDoc)
       .define(SaslLoginReadTimeoutMsProp, INT, null, LOW, SaslLoginReadTimeoutMsDoc)
-      .define(SaslLoginRetryAttemptsProp, INT, Defaults.SaslLoginRetryAttempts, LOW, SaslLoginRetryAttemptsDoc)
-      .define(SaslLoginRetryMaxWaitMsProp, LONG, Defaults.SaslLoginRetryMaxWaitMs, LOW, SaslLoginRetryMaxWaitMsDoc)
-      .define(SaslLoginRetryWaitMsProp, LONG, Defaults.SaslLoginRetryWaitMs, LOW, SaslLoginRetryWaitMsDoc)
+      .define(SaslLoginRetryBackoffMaxMsProp, LONG, Defaults.SaslLoginRetryBackoffMaxMs, LOW, SaslLoginRetryBackoffMaxMsDoc)
+      .define(SaslLoginRetryBackoffMsProp, LONG, Defaults.SaslLoginRetryBackoffMs, LOW, SaslLoginRetryBackoffMsDoc)
       .define(SaslOAuthBearerScopeClaimNameProp, STRING, Defaults.SaslOAuthBearerScopeClaimName, LOW, SaslOAuthBearerScopeClaimNameDoc)
       .define(SaslOAuthBearerSubClaimNameProp, STRING, Defaults.SaslOAuthBearerSubClaimName, LOW, SaslOAuthBearerSubClaimNameDoc)
       .define(SaslOAuthBearerTokenEndpointUriProp, STRING, null, MEDIUM, SaslOAuthBearerTokenEndpointUriDoc)

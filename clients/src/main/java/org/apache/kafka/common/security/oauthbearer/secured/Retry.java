@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +26,6 @@ import org.slf4j.LoggerFactory;
  * Retry encapsulates the mechanism to perform a retry and then exponential
  * backoff using provided wait times between attempts.
  *
- * We have some state exposed to the caller to determine how many attempts were
- * made. This is mostly to expose for testing purposes. As a result, the
- * Retry class is not meant to be used more than once.
- *
  * @param <R> Result type
  */
 
@@ -38,68 +33,72 @@ public class Retry<R> {
 
     private static final Logger log = LoggerFactory.getLogger(Retry.class);
 
-    private static final int INITIAL_CURR_ATTEMPT_VALUE = 0;
-
     private final Time time;
 
-    private final int retryAttempts;
+    private final long retryBackoffMs;
 
-    private final long retryWaitMs;
+    private final long retryBackoffMaxMs;
 
-    private final long retryMaxWaitMs;
-
-    private final AtomicInteger currAttempt = new AtomicInteger(INITIAL_CURR_ATTEMPT_VALUE);
-
-    public Retry(Time time, int retryAttempts, long retryWaitMs, long retryMaxWaitMs) {
+    public Retry(Time time, long retryBackoffMs, long retryBackoffMaxMs) {
         this.time = time;
-        this.retryAttempts = retryAttempts;
-        this.retryWaitMs = retryWaitMs;
-        this.retryMaxWaitMs = retryMaxWaitMs;
+        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
 
-        if (this.retryAttempts < 0)
-            throw new IllegalArgumentException("retryAttempts value must be non-negative");
+        if (this.retryBackoffMs < 0)
+            throw new IllegalArgumentException(String.format("retryBackoffMs value %s must be non-negative", retryBackoffMs));
 
-        if (this.retryWaitMs < 0)
-            throw new IllegalArgumentException("retryWaitMs value must be non-negative");
+        if (this.retryBackoffMaxMs < 0)
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs %s value must be non-negative", retryBackoffMaxMs));
 
-        if (this.retryMaxWaitMs < 0)
-            throw new IllegalArgumentException("retryMaxWaitMs value must be non-negative");
-
-        if (this.retryMaxWaitMs < this.retryWaitMs)
-            log.warn("retryMaxWaitMs {} is less than retryWaitMs {}", this.retryMaxWaitMs, this.retryWaitMs);
+        if (this.retryBackoffMaxMs < this.retryBackoffMs)
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs %s is less than retryBackoffMs %s", retryBackoffMaxMs, retryBackoffMs));
     }
 
     public R execute(Retryable<R> retryable) throws IOException {
-        if (currAttempt.get() != INITIAL_CURR_ATTEMPT_VALUE)
-            throw new IllegalStateException(String.format("Current attempt count %s is not set to initial starting state %s", currAttempt.get(), INITIAL_CURR_ATTEMPT_VALUE));
+        int currAttempt = 0;
+        long end = time.milliseconds() + retryBackoffMaxMs;
+        IOException error = null;
 
-        int attempts = retryAttempts + 1;
+        while (time.milliseconds() <= end) {
+            currAttempt++;
 
-        while (currAttempt.incrementAndGet() <= attempts) {
             try {
                 return retryable.call();
             } catch (IOException e) {
-                if (currAttempt.get() >= attempts) {
-                    throw e;
-                } else {
-                    long waitMs = retryWaitMs * (long) Math.pow(2, currAttempt.get() - 1);
-                    waitMs = Math.min(waitMs, retryMaxWaitMs);
+                if (error == null)
+                    error = e;
 
-                    String message = String.format("Attempt %s of %s to make call resulted in an error; sleeping %s ms before retrying",
-                        currAttempt.get(), attempts, waitMs);
-                    log.warn(message, e);
+                long waitMs = retryBackoffMs * (long) Math.pow(2, currAttempt - 1);
+                long diff = end - time.milliseconds();
+                waitMs = Math.min(waitMs, diff);
 
-                    time.sleep(waitMs);
+                if (waitMs <= 0)
+                    break;
+
+                String message = String.format("Attempt %s to make call resulted in an error; sleeping %s ms before retrying",
+                    currAttempt, waitMs);
+                log.warn(message, e);
+
+                time.sleep(waitMs);
+            } catch (UnretryableException e) {
+                // We've deemed this error to not be worth retrying, so collect the error and
+                // fail immediately.
+                if (error == null) {
+                    if (e.getCause() instanceof IOException)
+                        error = (IOException) e.getCause();
+                    else
+                        error = new IOException(e.getCause());
                 }
+
+                break;
             }
         }
 
-        // Really shouldn't ever get to here, but...
-        throw new IllegalStateException("Exhausted all retry attempts but neither returned value or encountered exception");
-    }
+        if (error == null)
+            // Really shouldn't ever get to here, but...
+            error = new IOException("Exhausted all retry attempts but no attempt returned value or encountered exception");
 
-    public int getAttemptsMade() {
-        return currAttempt.get();
+        throw error;
     }
 
 }

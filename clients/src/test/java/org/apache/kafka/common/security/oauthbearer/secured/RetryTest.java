@@ -35,21 +35,19 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend read error"),
             null    // success!
         };
-        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
         r.execute(call);
 
         long secondWait = retryWaitMs * 2;
         long thirdWait = retryWaitMs * 4;
         long totalWait = retryWaitMs + secondWait + thirdWait;
         assertEquals(totalWait, time.milliseconds());
-        assertEquals(attempts.length, r.getAttemptsMade());
     }
 
     @Test
@@ -57,23 +55,20 @@ public class RetryTest extends OAuthBearerTest {
         Exception[] attempts = new Exception[] {
             new IOException("pretend connect error"),
             new IOException("pretend timeout error"),
-            new IOException("pretend read error")
+            new IOException("pretend read error"),
+            new IOException("pretend another read error"),
         };
-        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
-        long maxWaitMs = 10000;
+        long maxWaitMs = 1000 + 2000 + 3999;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
         assertThrows(IOException.class, () -> r.execute(call));
 
-        long secondWait = retryWaitMs * 2;
-        long totalWait = retryWaitMs + secondWait;
-        assertEquals(totalWait, time.milliseconds());
-        assertEquals(attempts.length, r.getAttemptsMade());
+        assertEquals(maxWaitMs, time.milliseconds());
     }
 
     @Test
@@ -83,21 +78,19 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend timeout error"),
             new NullPointerException("pretend JSON node /userId in response is null")
         };
-        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
         assertThrows(RuntimeException.class, () -> r.execute(call));
 
         long secondWait = retryWaitMs * 2;
         long totalWait = retryWaitMs + secondWait;
         assertEquals(totalWait, time.milliseconds());
-        assertEquals(attempts.length, r.getAttemptsMade());
     }
 
     @Test
@@ -106,41 +99,17 @@ public class RetryTest extends OAuthBearerTest {
             new NullPointerException("pretend JSON node /userId in response is null"),
             null
         };
-        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 1000;
         long maxWaitMs = 10000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
         assertThrows(RuntimeException.class, () -> r.execute(call));
 
-        assertEquals(0, time.milliseconds());   // No wait time because we...
-        assertEquals(1, r.getAttemptsMade());   // ...failed on the first attempt
-    }
-
-    @Test
-    public void testReuseRetry() throws IOException {
-        Exception[] attempts = new Exception[] {
-            null
-        };
-        int retryAttempts = attempts.length - 1;
-        long retryWaitMs = 1000;
-        long maxWaitMs = 10000;
-
-        Time time = new MockTime(0, 0, 0);
-        assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
-
-        r.execute(createRetryable(attempts));
-
-        assertEquals(0, time.milliseconds());   // No wait time because we...
-        assertEquals(1, r.getAttemptsMade());   // ...succeeded on the first attempt
-
-        // Don't try to use again even if we succeeded!
-        assertThrows(IllegalStateException.class, () -> r.execute(createRetryable(attempts)));
+        assertEquals(0, time.milliseconds());
     }
 
     @Test
@@ -150,22 +119,17 @@ public class RetryTest extends OAuthBearerTest {
             new IOException("pretend timeout error"),
             new IOException("pretend read error")
         };
-        int retryAttempts = attempts.length - 1;
         long retryWaitMs = 5000;
         long maxWaitMs = 5000;
         Retryable<String> call = createRetryable(attempts);
 
         Time time = new MockTime(0, 0, 0);
         assertEquals(0L, time.milliseconds());
-        Retry<String> r = new Retry<>(time, retryAttempts, retryWaitMs, maxWaitMs);
+        Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
         assertThrows(IOException.class, () -> r.execute(call));
 
-        // Here the total wait is the same value of maxWaitMs between both of our
-        // failures.
-        long totalWait = retryWaitMs + retryWaitMs;
-        assertEquals(totalWait, time.milliseconds());
-        assertEquals(attempts.length, r.getAttemptsMade());
+        assertEquals(maxWaitMs, time.milliseconds());
     }
 
 }

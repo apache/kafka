@@ -21,12 +21,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIME
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
@@ -102,18 +100,14 @@ public class OAuthCompatibilityTest {
             .type(Long.class)
             .dest("readTimeoutMs")
             .help(SASL_LOGIN_READ_TIMEOUT_MS_DOC);
-        parser.addArgument("--retry-attempts")
-            .type(Integer.class)
-            .dest("retryAttempts")
-            .help(SASL_LOGIN_RETRY_ATTEMPTS_DOC);
-        parser.addArgument("--retry-wait-ms")
+        parser.addArgument("--retry-backoff-ms")
             .type(Long.class)
-            .dest("retryWaitMs")
-            .help(SASL_LOGIN_RETRY_WAIT_MS_DOC);
-        parser.addArgument("--retry-max-wait-ms")
+            .dest("retryBackoffMs")
+            .help(SASL_LOGIN_RETRY_BACKOFF_MS_DOC);
+        parser.addArgument("--retry-backoff-max-ms")
             .type(Long.class)
-            .dest("retryMaxWaitMs")
-            .help(SASL_LOGIN_RETRY_MAX_WAIT_MS_DOC);
+            .dest("retryBackoffMax")
+            .help(SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC);
         parser.addArgument("--scope-claim-name")
             .dest("scopeClaimName")
             .help(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC);
@@ -213,9 +207,8 @@ public class OAuthCompatibilityTest {
         Map<String, Object> c = new HashMap<>();
         maybeAddLong(namespace, "connectTimeoutMs", c, SASL_LOGIN_CONNECT_TIMEOUT_MS);
         maybeAddLong(namespace, "readTimeoutMs", c, SASL_LOGIN_READ_TIMEOUT_MS);
-        maybeAddInt(namespace, "retryAttempts", c, SASL_LOGIN_RETRY_ATTEMPTS);
-        maybeAddLong(namespace, "retryWaitMs", c, SASL_LOGIN_RETRY_WAIT_MS);
-        maybeAddLong(namespace, "retryMaxWaitMs", c, SASL_LOGIN_RETRY_MAX_WAIT_MS);
+        maybeAddLong(namespace, "retryBackoffMs", c, SASL_LOGIN_RETRY_BACKOFF_MS);
+        maybeAddLong(namespace, "retryBackoffMax", c, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         maybeAddString(namespace, "scopeClaimName", c, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         maybeAddString(namespace, "subClaimName", c, SASL_OAUTHBEARER_SUB_CLAIM_NAME);
         maybeAddString(namespace, "tokenEndpointUri", c, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);

@@ -25,15 +25,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -60,7 +61,34 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private static final Logger log = LoggerFactory.getLogger(HttpAccessTokenRetriever.class);
 
+    private static final Set<Integer> UNRETRYABLE_HTTP_CODES;
+
     public static final String AUTHORIZATION_HEADER = "Authorization";
+
+    static {
+        // This does not have to be an exhaustive list. There are other HTTP codes that
+        // are defined in different RFCs (e.g. https://datatracker.ietf.org/doc/html/rfc6585)
+        // that we won't worry about yet. The worst case if a status code is missing from
+        // this set is that the request will be retried.
+        UNRETRYABLE_HTTP_CODES = new HashSet<>();
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_BAD_REQUEST);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_UNAUTHORIZED);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_PAYMENT_REQUIRED);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_FORBIDDEN);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_NOT_FOUND);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_BAD_METHOD);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_NOT_ACCEPTABLE);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_PROXY_AUTH);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_CONFLICT);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_GONE);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_LENGTH_REQUIRED);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_PRECON_FAILED);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_ENTITY_TOO_LARGE);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_REQ_TOO_LONG);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_UNSUPPORTED_TYPE);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_NOT_IMPLEMENTED);
+        UNRETRYABLE_HTTP_CODES.add(HttpURLConnection.HTTP_VERSION);
+    }
 
     private final String clientId;
 
@@ -72,11 +100,9 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private final String tokenEndpointUri;
 
-    private final int loginRetryAttempts;
+    private final long loginRetryBackoffMs;
 
-    private final long loginRetryWaitMs;
-
-    private final long loginRetryMaxWaitMs;
+    private final long loginRetryBackoffMaxMs;
 
     private final Integer loginConnectTimeoutMs;
 
@@ -87,9 +113,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String scope,
         SSLSocketFactory sslSocketFactory,
         String tokenEndpointUri,
-        int loginRetryAttempts,
-        long loginRetryWaitMs,
-        long loginRetryMaxWaitMs,
+        long loginRetryBackoffMs,
+        long loginRetryBackoffMaxMs,
         Integer loginConnectTimeoutMs,
         Integer loginReadTimeoutMs) {
         this.clientId = Objects.requireNonNull(clientId);
@@ -97,9 +122,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         this.scope = scope;
         this.sslSocketFactory = sslSocketFactory;
         this.tokenEndpointUri = Objects.requireNonNull(tokenEndpointUri);
-        this.loginRetryAttempts = loginRetryAttempts;
-        this.loginRetryWaitMs = loginRetryWaitMs;
-        this.loginRetryMaxWaitMs = loginRetryMaxWaitMs;
+        this.loginRetryBackoffMs = loginRetryBackoffMs;
+        this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
         this.loginConnectTimeoutMs = loginConnectTimeoutMs;
         this.loginReadTimeoutMs = loginReadTimeoutMs;
     }
@@ -125,9 +149,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String requestBody = formatRequestBody(scope);
 
         Retry<String> retry = new Retry<>(Time.SYSTEM,
-            loginRetryAttempts,
-            loginRetryWaitMs,
-            loginRetryMaxWaitMs);
+            loginRetryBackoffMs,
+            loginRetryBackoffMaxMs);
 
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
@@ -153,7 +176,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String requestBody,
         Integer connectTimeoutMs,
         Integer readTimeoutMs)
-        throws IOException {
+        throws IOException, UnretryableException {
         handleInput(con, headers, requestBody, connectTimeoutMs, readTimeoutMs);
         return handleOutput(con);
     }
@@ -163,7 +186,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String requestBody,
         Integer connectTimeoutMs,
         Integer readTimeoutMs)
-        throws IOException {
+        throws IOException, UnretryableException {
         log.debug("handleInput - starting post for {}", con.getURL());
         con.setRequestMethod("POST");
         con.setRequestProperty("Accept", "application/json");
@@ -188,12 +211,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         if (readTimeoutMs != null)
             con.setReadTimeout(readTimeoutMs);
 
-        try {
-            log.debug("handleInput - preparing to connect to {}", con.getURL());
-            con.connect();
-        } catch (ConnectException e) {
-            throw new IOException("Failed to connect to: " + con.getURL(), e);
-        }
+        log.debug("handleInput - preparing to connect to {}", con.getURL());
+        con.connect();
 
         if (requestBody != null) {
             try (OutputStream os = con.getOutputStream()) {
@@ -222,14 +241,23 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
             if (responseBody == null || responseBody.isEmpty())
-                throw new IOException("The token endpoint response was unexpectedly empty");
+                throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %s from %s", responseCode, con.getURL()));
 
-            log.debug("handleOutput - response: {}", responseBody);
+            log.debug("handleOutput - responseCode: {}, response: {}", responseCode, responseBody);
 
             return responseBody;
         } else {
             log.warn("handleOutput - error response code: {}, error response body: {}", responseCode, responseBody);
-            throw new IOException(String.format("The unexpected response code %s was encountered reading the token endpoint response", responseCode));
+
+            if (UNRETRYABLE_HTTP_CODES.contains(responseCode)) {
+                // We know that this is a non-transient error, so let's not keep retrying the
+                // request unnecessarily.
+                throw new UnretryableException(new IOException(String.format("The response code %s was encountered reading the token endpoint response; will not attempt further retries", responseCode)));
+            } else {
+                // We don't know if this is a transient (retryable) error or not, so let's assume
+                // it is.
+                throw new IOException(String.format("The unexpected response code %s was encountered reading the token endpoint response", responseCode));
+            }
         }
     }
 

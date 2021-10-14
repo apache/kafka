@@ -114,31 +114,22 @@ public class SaslConfigs {
 
     // These are only specified here outside their normal groupings so that they can be
     // forward referencing.
-    public static final String SASL_LOGIN_RETRY_ATTEMPTS = "sasl.login.retry.attempts";
-    public static final String SASL_LOGIN_RETRY_WAIT_MS = "sasl.login.retry.wait.ms";
-    public static final String SASL_LOGIN_RETRY_MAX_WAIT_MS = "sasl.login.retry.max.wait.ms";
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MS = "sasl.login.retry.backoff.ms";
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MAX_MS = "sasl.login.retry.backoff.max.ms";
 
     private static final String EXPONENTIAL_BACKOFF_NOTE = " Login uses an exponential backoff algorithm with an initial wait based on the"
-            + " " + SASL_LOGIN_RETRY_WAIT_MS
+            + " " + SASL_LOGIN_RETRY_BACKOFF_MS
             + " setting and will double in wait length between attempts up to a maximum wait length specified by the"
-            + " " + SASL_LOGIN_RETRY_MAX_WAIT_MS
+            + " " + SASL_LOGIN_RETRY_BACKOFF_MAX_MS
             + " setting.";
 
-    public static final int DEFAULT_SASL_LOGIN_RETRY_ATTEMPTS = 2;
-    public static final String SASL_LOGIN_RETRY_ATTEMPTS_DOC = "The (optional) number of retry attempts to connect to the external authentication provider to"
-            + " log in this client, making the total number of attempts"
-            + " " + SASL_LOGIN_RETRY_ATTEMPTS
-            + " + 1."
-            + EXPONENTIAL_BACKOFF_NOTE
-            + OAUTHBEARER_NOTE;
-
-    public static final long DEFAULT_SASL_LOGIN_RETRY_MAX_WAIT_MS = 10000;
-    public static final String SASL_LOGIN_RETRY_MAX_WAIT_MS_DOC = "The (optional) value in milliseconds for the maximum wait between login attempts to the"
+    public static final long DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS = 10000;
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC = "The (optional) value in milliseconds for the maximum wait between login attempts to the"
             + " external authentication provider."
             + EXPONENTIAL_BACKOFF_NOTE;
 
-    public static final long DEFAULT_SASL_LOGIN_RETRY_WAIT_MS = 250;
-    public static final String SASL_LOGIN_RETRY_WAIT_MS_DOC = "The (optional) value in milliseconds for the initial wait between login attempts to the external"
+    public static final long DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS = 100;
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MS_DOC = "The (optional) value in milliseconds for the initial wait between login attempts to the external"
             + " authentication provider."
             + EXPONENTIAL_BACKOFF_NOTE;
 
@@ -209,9 +200,8 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_LOGIN_CLASS, ConfigDef.Type.CLASS, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_LOGIN_CLASS_DOC)
                 .define(SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS, ConfigDef.Type.INT, null, ConfigDef.Importance.LOW, SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC)
                 .define(SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS, ConfigDef.Type.INT, null, ConfigDef.Importance.LOW, SASL_LOGIN_READ_TIMEOUT_MS_DOC)
-                .define(SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS, ConfigDef.Type.INT, DEFAULT_SASL_LOGIN_RETRY_ATTEMPTS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_ATTEMPTS_DOC)
-                .define(SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_MAX_WAIT_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_MAX_WAIT_MS_DOC)
-                .define(SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_WAIT_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_WAIT_MS_DOC)
+                .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
+                .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI_DOC)

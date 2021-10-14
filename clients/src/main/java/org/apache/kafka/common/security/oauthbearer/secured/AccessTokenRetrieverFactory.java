@@ -19,9 +19,8 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_ATTEMPTS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_MAX_WAIT_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_WAIT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
@@ -69,9 +68,8 @@ public class AccessTokenRetrieverFactory  {
                 scope,
                 sslSocketFactory,
                 tokenEndpointUri.toString(),
-                cu.validateInteger(SASL_LOGIN_RETRY_ATTEMPTS),
-                cu.validateLong(SASL_LOGIN_RETRY_WAIT_MS),
-                cu.validateLong(SASL_LOGIN_RETRY_MAX_WAIT_MS),
+                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
+                cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
                 cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false, null),
                 cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false, null));
         }
