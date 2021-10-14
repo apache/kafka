@@ -311,6 +311,7 @@ class CachingSessionStore
         return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
+    @Override
     public void flush() {
         context.cache().flush(cacheName);
         wrapped().flush();
@@ -321,6 +322,7 @@ class CachingSessionStore
         context.cache().flush(cacheName);
     }
 
+    @Override
     public void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
             () -> context.cache().flush(cacheName),

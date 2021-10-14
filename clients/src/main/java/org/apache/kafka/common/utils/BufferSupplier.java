@@ -61,6 +61,7 @@ public abstract class BufferSupplier implements AutoCloseable {
     /**
      * Release all resources associated with this supplier.
      */
+    @Override
     public abstract void close();
 
     private static class DefaultSupplier extends BufferSupplier {

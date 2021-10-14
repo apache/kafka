@@ -16,24 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.Serializable;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractStickyAssignor.class);
@@ -1216,6 +1206,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             this.dstMemberId = dstMemberId;
         }
 
+        @Override
         public String toString() {
             return this.srcMemberId + "->" + this.dstMemberId;
         }

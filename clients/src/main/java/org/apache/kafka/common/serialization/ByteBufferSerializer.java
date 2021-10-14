@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.nio.ByteBuffer;
 
 public class ByteBufferSerializer implements Serializer<ByteBuffer> {
+    @Override
     public byte[] serialize(String topic, ByteBuffer data) {
         if (data == null)
             return null;

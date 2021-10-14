@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.feature;
 
-import static java.util.stream.Collectors.joining;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 import java.util.Objects;
 
-import org.apache.kafka.common.utils.Utils;
+import static java.util.stream.Collectors.joining;
 
 /**
  * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
@@ -86,6 +86,7 @@ class BaseVersionRange {
         return maxValue;
     }
 
+    @Override
     public String toString() {
         return String.format(
             "%s[%s]",

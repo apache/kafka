@@ -1344,6 +1344,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         }
 
+        @Override
         public void close() {
             synchronized (AbstractCoordinator.this) {
                 this.closed = true;

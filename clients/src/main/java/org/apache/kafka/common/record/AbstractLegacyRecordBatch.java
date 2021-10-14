@@ -287,6 +287,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             this.offsetAndSizeBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
         }
 
+        @Override
         public AbstractLegacyRecordBatch nextBatch() throws IOException {
             offsetAndSizeBuffer.clear();
             Utils.readFully(stream, offsetAndSizeBuffer);

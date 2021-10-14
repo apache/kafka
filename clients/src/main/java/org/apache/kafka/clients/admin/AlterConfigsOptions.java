@@ -37,6 +37,7 @@ public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
+    @Override
     public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
