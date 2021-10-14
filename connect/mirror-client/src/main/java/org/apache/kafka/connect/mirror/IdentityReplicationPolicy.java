@@ -87,6 +87,6 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
     }
 
     private boolean looksLikeHeartbeat(String topic) {
-        return topic != null && topic.endsWith(MirrorClientConfig.HEARTBEATS_TOPIC);
+        return topic != null && topic.endsWith(heartbeatsTopic());
     }
 }

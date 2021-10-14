@@ -87,15 +87,15 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param state               State of the respective segment of remoteLogSegmentId.
      * @param segmentLeaderEpochs leader epochs occurred within this segment.
      */
-    private RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
-                                     long startOffset,
-                                     long endOffset,
-                                     long maxTimestampMs,
-                                     int brokerId,
-                                     long eventTimestampMs,
-                                     int segmentSizeInBytes,
-                                     RemoteLogSegmentState state,
-                                     Map<Integer, Long> segmentLeaderEpochs) {
+    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
+                                    long startOffset,
+                                    long endOffset,
+                                    long maxTimestampMs,
+                                    int brokerId,
+                                    long eventTimestampMs,
+                                    int segmentSizeInBytes,
+                                    RemoteLogSegmentState state,
+                                    Map<Integer, Long> segmentLeaderEpochs) {
         super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");

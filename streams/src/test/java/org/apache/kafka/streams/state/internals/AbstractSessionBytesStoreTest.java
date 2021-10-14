@@ -212,7 +212,7 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.put(kv.key, kv.value);
         }
 
-        // add some that shouldn't appear in the results
+        // add some that should only be fetched in infinite fetch
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
 
@@ -221,6 +221,29 @@ public abstract class AbstractSessionBytesStoreTest {
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions("aa", "bb", 0L, Long.MAX_VALUE)) {
+            assertEquals(expected, toList(values));
+        }
+
+        // infinite keyFrom fetch case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch(null, "bb")) {
+            assertEquals(expected, toList(values));
+        }
+
+        // remove the one added for unlimited start fetch case
+        expected.remove(0);
+        // infinite keyTo fetch case
+        expected.add(KeyValue.pair(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", null)) {
+            assertEquals(expected, toList(values));
+        }
+
+        // fetch all case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch(null, null)) {
             assertEquals(expected, toList(values));
         }
     }
@@ -238,7 +261,7 @@ public abstract class AbstractSessionBytesStoreTest {
             sessionStore.put(kv.key, kv.value);
         }
 
-        // add some that shouldn't appear in the results
+        // add some that should only be fetched in infinite fetch
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
 
@@ -247,6 +270,29 @@ public abstract class AbstractSessionBytesStoreTest {
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFindSessions("aa", "bb", 0L, Long.MAX_VALUE)) {
+            assertEquals(toList(expected.descendingIterator()), toList(values));
+        }
+
+        // infinite keyFrom fetch case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch(null, "bb")) {
+            assertEquals(toList(expected.descendingIterator()), toList(values));
+        }
+
+        // remove the one added for unlimited start fetch case
+        expected.remove(0);
+        // infinite keyTo fetch case
+        expected.add(KeyValue.pair(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch("aa", null)) {
+            assertEquals(toList(expected.descendingIterator()), toList(values));
+        }
+
+        // fetch all case
+        expected.add(0, KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch(null, null)) {
             assertEquals(toList(expected.descendingIterator()), toList(values));
         }
     }
@@ -408,6 +454,24 @@ public abstract class AbstractSessionBytesStoreTest {
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
         }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.findSessions(null, "aa", 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.findSessions("a", null, 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.findSessions(null, null, 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
     }
 
     @Test
@@ -445,6 +509,24 @@ public abstract class AbstractSessionBytesStoreTest {
                  sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions(null, "aa", 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions("a", null, 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions(null, null, 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
         }
     }
 
@@ -690,26 +772,6 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() {
-        assertThrows(NullPointerException.class, () -> sessionStore.findSessions(null, "anyKeyTo", 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() {
-        assertThrows(NullPointerException.class, () -> sessionStore.findSessions("anyKeyFrom", null, 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() {
-        assertThrows(NullPointerException.class, () -> sessionStore.fetch(null, "anyToKey"));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFetchNullToKey() {
-        assertThrows(NullPointerException.class, () -> sessionStore.fetch("anyFromKey", null));
     }
 
     @Test
