@@ -23,6 +23,9 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -200,6 +203,18 @@ public class TimestampedWindowStoreBuilder<K, V>
         @Override
         public boolean isOpen() {
             return wrapped.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(final Query<R> query,
+            final PositionBound positionBound,
+            final boolean collectExecutionInfo) {
+
+            final long start = System.nanoTime();
+            final QueryResult<R> result = wrapped.query(query, positionBound, collectExecutionInfo);
+            final long end = System.nanoTime();
+            result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
+            return result;
         }
 
         @Override

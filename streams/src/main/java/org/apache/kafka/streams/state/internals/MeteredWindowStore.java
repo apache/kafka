@@ -333,4 +333,8 @@ public class MeteredWindowStore<K, V>
             e2eLatencySensor.record(e2eLatency, currentTime);
         }
     }
+
+    public StateSerdes<K, V> serdes() {
+        return serdes;
+    }
 }

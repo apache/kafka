@@ -20,6 +20,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,5 +71,9 @@ public class QueryableStoreProvider {
 
     public void removeStoreProviderForThread(final String threadName) {
         this.storeProviders.remove(threadName);
+    }
+
+    public Collection<StreamThreadStateStoreProvider> getStoreProviders() {
+        return storeProviders.values();
     }
 }

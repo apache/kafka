@@ -28,6 +28,11 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -61,6 +66,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +111,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private final RocksDBMetricsRecorder metricsRecorder;
 
     protected volatile boolean open = false;
+    private StateStoreContext context;
+    private Map<String, Map<Integer, Long>> seenOffsets = new HashMap<>();
 
     RocksDBStore(final String name,
                  final String metricsScope) {
@@ -252,6 +260,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, new RocksDBBatchingRestoreCallback(this));
+        this.context = context;
     }
 
     @Override
@@ -269,6 +278,29 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         return open;
     }
 
+    @Override
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+
+        if (context == null) {
+            throw new IllegalStateException("Store is not yet initialized");
+        } else {
+            final int partition = this.context.taskId().partition();
+            if (StoreQueryUtils.isPermitted(seenOffsets, positionBound, partition)) {
+                final QueryResult<R> result = StoreQueryUtils.requireKVQuery(query, this,
+                    collectExecutionInfo);
+                final Position currentPosition = Position.fromMap(seenOffsets);
+                result.setPosition(currentPosition);
+                return result;
+            } else {
+                return QueryResult.notUpToBound(Position.fromMap(seenOffsets), positionBound,
+                    partition);
+            }
+        }
+    }
+
     private void validateStoreOpen() {
         if (!open) {
             throw new InvalidStateStoreException("Store " + name + " is currently closed");
@@ -281,6 +313,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         dbAccessor.put(key.get(), value);
+        // FIXME record metadata can be null because when this store is used as a Segment,
+        // we never call init(). Is that correct?
+        // to make this logic work properly for segmented stores, we either need to
+        // track the seen offsets one level up (in the RocksDBSegmentedBytesStore) OR
+        // we need to get a reference to the context here.
+        if (context != null && context.recordMetadata().isPresent()) {
+            final RecordMetadata meta = context.recordMetadata().get();
+            seenOffsets.computeIfAbsent(meta.topic(), t -> new HashMap<>())
+                .put(meta.partition(), meta.offset());
+        }
     }
 
     @Override

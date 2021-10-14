@@ -23,10 +23,20 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import static java.util.Objects.requireNonNull;
 
 public class ValueAndTimestampSerde<V> extends WrappingNullableSerde<ValueAndTimestamp<V>, Void, V> {
+    private final Serde<V> valueSerde;
+
     public ValueAndTimestampSerde(final Serde<V> valueSerde) {
         super(
             new ValueAndTimestampSerializer<>(requireNonNull(valueSerde, "valueSerde was null").serializer()),
             new ValueAndTimestampDeserializer<>(requireNonNull(valueSerde, "valueSerde was null").deserializer())
         );
+        this.valueSerde = valueSerde;
+    }
+
+    @Override
+    public String toString() {
+        return "ValueAndTimestampSerde{" +
+            "valueSerde=" + valueSerde +
+            '}';
     }
 }

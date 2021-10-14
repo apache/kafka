@@ -19,9 +19,15 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * State store context interface.
@@ -41,6 +47,27 @@ public interface StateStoreContext {
      * @return the task id
      */
     TaskId taskId();
+
+    /**
+     * Return the metadata of the current record if available. Processors may be invoked to
+     * process a source record from an input topic, to run a scheduled punctuation
+     * (see {@link org.apache.kafka.streams.processor.api.ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}),
+     * or because a parent processor called {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}.
+     * <p>
+     * In the case of a punctuation, there is no source record, so this metadata would be
+     * undefined. Note that when a punctuator invokes {@link ProcessorContext#forward(Record)},
+     * downstream processors will receive the forwarded record as a regular
+     * {@link Processor#process(Record)} invocation. In other words, it wouldn't be apparent to
+     * downstream processors whether or not the record being processed came from an input topic
+     * or punctuation and therefore whether or not this metadata is defined. This is why
+     * the return type of this method is {@link Optional}.
+     * <p>
+     * If there is any possibility of punctuators upstream, any access
+     * to this field should consider the case of
+     * "<code>recordMetadata().isPresent() == false</code>".
+     * Of course, it would be safest to always guard this condition.
+     */
+    Optional<RecordMetadata> recordMetadata();
 
     /**
      * Returns the default key serde.
