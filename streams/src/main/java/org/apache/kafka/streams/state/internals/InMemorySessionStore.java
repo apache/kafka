@@ -30,6 +30,10 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
@@ -150,7 +154,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
             final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position = position.update(meta.topic(), meta.partition(), meta.offset());
+            position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
         }
     }
 
@@ -312,6 +316,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+        return StoreQueryUtils.handleBasicQueries(query, positionBound, collectExecutionInfo, this);
     }
 
     @Override

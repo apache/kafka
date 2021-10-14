@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
@@ -265,7 +266,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         long offset = 0;
         for (final KeyValue<Bytes, byte[]> k : entries) {
             inMemoryKeyValueStore.put(k.key, k.value);
-            expected.update("input", 0, offset);
+            expected.withComponent("input", 0, offset);
             offset++;
         }
 
