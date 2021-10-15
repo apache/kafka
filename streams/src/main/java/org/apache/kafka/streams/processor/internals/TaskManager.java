@@ -1299,16 +1299,12 @@ public class TaskManager {
                 throw e;
             } catch (final StreamsException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
-                if (task.id().topologyName() != null) {
-                    e.setTopologyName(task.id().topologyName());
-                }
+                e.setTaskId(task.id());
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
                 final StreamsException exception = new StreamsException(e);
-                if (task.id().topologyName() != null) {
-                    exception.setTopologyName(task.id().topologyName());
-                }
+                exception.setTaskId(task.id());
                 throw exception;
             } finally {
                 now = time.milliseconds();

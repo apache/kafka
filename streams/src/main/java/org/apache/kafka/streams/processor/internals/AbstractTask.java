@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -175,10 +174,7 @@ public abstract class AbstractTask implements Task {
                 exception = new StreamsException(errorMessage);
             }
 
-            if (id().topologyName() != null) {
-                exception.setTopologyName(id().topologyName());
-            }
-
+            exception.setTaskId(id);
             throw exception;
         }
 
