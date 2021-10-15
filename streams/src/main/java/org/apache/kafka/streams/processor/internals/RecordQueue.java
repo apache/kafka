@@ -47,6 +47,7 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
+    private long headRecordSizeInBytes = 0;
     private long partitionTime = UNKNOWN;
 
     private final Sensor droppedRecordsSensor;
@@ -206,6 +207,7 @@ public class RecordQueue {
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
+            headRecordSizeInBytes = (raw.key() != null ? raw.serializedKeySize() : 0) + (raw.value() != null ? raw.serializedValueSize() : 0);
         }
 
         // if all records in the FIFO queue are corrupted, make the last one the headRecord

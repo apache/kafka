@@ -84,6 +84,9 @@ public class TaskMetrics {
     private static final String NUM_BUFFERED_RECORDS_DESCRIPTION = "The count of buffered records that are polled " +
         "from consumer and not yet processed for this active task";
 
+    private static final String TOTAL_BYTES = "total-bytes";
+    private static final String TOTAL_BYTES_DESCRIPTION = "The total number of bytes accumulated by this task";
+
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
                                               final StreamsMetricsImpl streamsMetrics) {
@@ -124,6 +127,21 @@ public class TaskMetrics {
             streamsMetrics.taskLevelTagMap(threadId, taskId),
             name,
             NUM_BUFFERED_RECORDS_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor totalBytesSensor(final String threadId,
+                                                     final String taskId,
+                                                     final StreamsMetricsImpl streamsMetrics) {
+        final String name = ACTIVE_TASK_PREFIX + TOTAL_BYTES;
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.DEBUG);
+        addValueMetricToSensor(
+                sensor,
+                TASK_LEVEL_GROUP,
+                streamsMetrics.taskLevelTagMap(threadId, taskId),
+                name,
+                TOTAL_BYTES_DESCRIPTION
         );
         return sensor;
     }

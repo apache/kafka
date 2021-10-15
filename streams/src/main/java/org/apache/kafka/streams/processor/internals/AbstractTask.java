@@ -59,6 +59,7 @@ public abstract class AbstractTask implements Task {
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
     private final long taskTimeoutMs;
+    protected long bytesConsumed = 0L;
 
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
@@ -199,4 +200,15 @@ public abstract class AbstractTask implements Task {
             deadlineMs = NO_DEADLINE;
         }
     }
+
+    @Override
+    public long getBytesConsumed() {
+        return bytesConsumed;
+    }
+
+    @Override
+    public void setBytesConsumed(long bytesConsumed) {
+        this.bytesConsumed = bytesConsumed;
+    }
+
 }

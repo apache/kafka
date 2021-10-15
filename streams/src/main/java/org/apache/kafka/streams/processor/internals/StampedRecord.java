@@ -49,6 +49,10 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
         return value.headers();
     }
 
+    public int serializedKeySize() { return value.serializedKeySize(); }
+
+    public int serializedValueSize() { return value.serializedValueSize(); }
+
     @Override
     public String toString() {
         return value.toString() + ", timestamp = " + timestamp;
