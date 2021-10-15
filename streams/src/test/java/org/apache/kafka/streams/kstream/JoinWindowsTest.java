@@ -74,6 +74,7 @@ public class JoinWindowsTest {
         assertThrows(IllegalArgumentException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(ANY_GRACE)));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void graceShouldNotCalledAfterGraceSet() {
         assertThrows(IllegalStateException.class, () -> JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
