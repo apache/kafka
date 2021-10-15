@@ -1271,6 +1271,7 @@ public class TaskManager {
 
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     * @throws StreamsException      if any task threw an exception while processing
      */
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
@@ -1296,9 +1297,19 @@ public class TaskManager {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
+            } catch (final StreamsException e) {
+                log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+                if (task.id().topologyName() != null) {
+                    e.setTopologyName(task.id().topologyName());
+                }
+                throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
-                throw e;
+                final StreamsException exception = new StreamsException(e);
+                if (task.id().topologyName() != null) {
+                    exception.setTopologyName(task.id().topologyName());
+                }
+                throw exception;
             } finally {
                 now = time.milliseconds();
                 totalProcessed += processed;

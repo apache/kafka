@@ -168,11 +168,18 @@ public abstract class AbstractTask implements Task {
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 
+            final StreamsException exception;
             if (cause != null) {
-                throw new TimeoutException(errorMessage, cause);
+               exception = new StreamsException(errorMessage, cause);
             } else {
-                throw new TimeoutException(errorMessage);
+                exception = new StreamsException(errorMessage);
             }
+
+            if (id().topologyName() != null) {
+                exception.setTopologyName(id().topologyName());
+            }
+
+            throw exception;
         }
 
         if (cause != null) {
