@@ -785,6 +785,7 @@ public class StreamThread extends Thread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
+        long totalBytesConsumed = 0L;
         if (state == State.RUNNING) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -812,7 +813,13 @@ public class StreamThread extends Thread {
                     processLatencySensor.record(processLatency / (double) processed, now);
 
                     totalProcessed += processed;
+                    totalBytesConsumed += processedData.totalBytesConsumed;
                     totalRecordsProcessedSinceLastSummary += processed;
+                }
+
+                if (bufferSize > maxBufferSizeBytes && bufferSize - totalBytesConsumed <= maxBufferSizeBytes) {
+                    bufferSize -= totalBytesConsumed;
+                    mainConsumer.resume(mainConsumer.paused());
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -976,7 +983,17 @@ public class StreamThread extends Thread {
 
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
-            taskManager.addRecordsToTasks(records);
+        }
+
+        bufferSize += polledRecordsSize;
+
+        if (bufferSize > maxBufferSizeBytes) {
+            log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
+            mainConsumer.pause(records.partitions());
+        } else {
+            if (!records.isEmpty()) {
+                taskManager.addRecordsToTasks(records);
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
