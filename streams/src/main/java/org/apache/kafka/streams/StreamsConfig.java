@@ -369,8 +369,14 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
+
+    /** {@code input.buffer.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
+    private static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -378,8 +384,14 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
+
+    /** {@code statestore.cache.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
+    private static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
@@ -682,12 +694,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     ACCEPTABLE_RECOVERY_LAG_DOC)
-            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+            .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
                     atLeast(0),
                     Importance.MEDIUM,
-                    CACHE_MAX_BYTES_BUFFERING_DOC)
+                    STATESTORE_CACHE_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -788,6 +800,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    512 * 1024 * 1024,
+                    Importance.MEDIUM,
+                    INPUT_BUFFER_MAX_BYTES_DOC)
 
             // LOW
 
@@ -796,11 +813,6 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
-            .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                    Type.INT,
-                    1000,
-                    Importance.LOW,
-                    BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(BUILT_IN_METRICS_VERSION_CONFIG,
                     Type.STRING,
                     METRICS_LATEST,
