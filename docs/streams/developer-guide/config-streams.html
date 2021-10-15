@@ -280,7 +280,7 @@ settings.put(... , ...);</code></pre>
             <td>30000 milliseconds (30 seconds)</td>
           </tr>
           <tr class="row-even"><td>num.standby.replicas</td>
-            <td>Medium</td>
+            <td>High</td>
             <td colspan="2">The number of standby replicas for each task.</td>
             <td>0</td>
           </tr>
@@ -680,13 +680,17 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               preferred to restart on an instance that has standby replicas so that the local state store restoration process from its
               changelog can be minimized.  Details about how Kafka Streams makes use of the standby replicas to minimize the cost of
               resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.
+              <dl class="docutils">
+                <dt>Recommendation:</dt>
+                <dd>Increase the number of standbys to 1 to get instant fail-over, ie, high-availability.
+                  Note that you will require more client side storage space as well (twice as much with 1 standby).</dd>
+              </dl>
+              <dl class="docutils">
+                <dt>Note:</dt>
+                <dd>If you enable <cite>n</cite> standby tasks, you need to provision <cite>n+1</cite> <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instances.</dd>
+              </dl>
             </div>
           </blockquote>
-        </div>
-        <div class="admonition note">
-          <p class="first admonition-title">Note</p>
-          <p class="last">If you enable <cite>n</cite> standby tasks, you need to provision <cite>n+1</cite> <code class="docutils literal"><span class="pre">KafkaStreams</span></code>
-            instances.</p>
         </div>
         <div class="section" id="num-stream-threads">
           <h4><a class="toc-backref" href="#id11">num.stream.threads</a><a class="headerlink" href="#num-stream-threads" title="Permalink to this headline"></a></h4>
@@ -755,7 +759,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               <dl class="docutils">
                 <dt>Recommendation:</dt>
                 <dd>Increase the replication factor to 3 to ensure that the internal Kafka Streams topic can tolerate up to 2 broker failures.
-                  Note that you will require more storage space as well (3 times more with the replication factor of 3).</dd>
+                  Note that you will require more storage space as well (3x with the replication factor of 3).</dd>
               </dl>
             </div></blockquote>
         </div>
@@ -953,19 +957,19 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
         <tbody valign="top">
         <tr class="row-odd"><td>allow.auto.create.topics</td>
           <td>Consumer</td>
-          <td>false</td>
+          <td><code class="docutils literal"><span class="pre">false</span></code></td>
         </tr>
         <tr class="row-even"><td>auto.offset.reset</td>
           <td>Consumer</td>
-          <td>earliest</td>
+          <td><code class="docutils literal"><span class="pre">earliest</span></code></td>
         </tr>
         <tr class="row-odd"><td>linger.ms</td>
           <td>Producer</td>
-          <td>100</td>
+          <td><code class="docutils literal"><span class="pre">100</span></code></td>
         </tr>
         <tr class="row-odd"><td>max.poll.records</td>
           <td>Consumer</td>
-          <td>1000</td>
+          <td><code class="docutils literal"><span class="pre">1000</span></code></td>
         </tr>
         </tbody>
       </table>
@@ -993,15 +997,20 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
             <td><code class="docutils literal"><span class="pre">acks=1</span></code></td>
             <td><code class="docutils literal"><span class="pre">acks=all</span></code></td>
           </tr>
-          <tr class="row-odd"><td>replication.factor</td>
+          <tr class="row-odd"><td>replication.factor (for broker version 2.3 or older)/td>
             <td>Streams</td>
-            <td><code class="docutils literal"><span class="pre">1</span></code></td>
+            <td><code class="docutils literal"><span class="pre">-1</span></code></td>
             <td><code class="docutils literal"><span class="pre">3</span></code></td>
           </tr>
           <tr class="row-even"><td>min.insync.replicas</td>
             <td>Broker</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>num.standby.replicas</td>
+            <td>Streams</td>
+            <td><code class="docutils literal"><span class="pre">0</span></code></td>
+            <td><code class="docutils literal"><span class="pre">1</span></code></td>
           </tr>
           </tbody>
         </table>
@@ -1025,12 +1034,19 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           <h4><a class="toc-backref" href="#id23">replication.factor</a><a class="headerlink" href="#id2" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>See the <a class="reference internal" href="#replication-factor-parm"><span class="std std-ref">description here</span></a>.</div></blockquote>
-          <pre class="line-numbers"><code class="language-java">Properties streamsSettings = new Properties();
-streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
-streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
-streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");</code></pre>
-
         </div>
+        <div class="section" id="i32">
+          <h4><a class="toc-backref" href="#id23">num.standby.replicas</a><a class="headerlink" href="#id2" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>See the <a class="reference internal" href="#streams-developer-guide-standby-replicas"><span class="std std-ref">description here</span></a>.</div></blockquote>
+        </div>
+        <pre class="line-numbers"><code class="language-java">Properties streamsSettings = new Properties();
+// for broker version is 2.3. or older
+//streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
+streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
+streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), 1);</code></pre>
+
       </div>
     </div>
   </div>
