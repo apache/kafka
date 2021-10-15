@@ -1281,21 +1281,37 @@ public class TaskManager {
         }
     }
 
+    static class ProcessData {
+
+        int totalProcessed;
+
+        long totalBytesConsumed;
+
+        ProcessData(int totalProcessed, long totalBytesConsumed) {
+            this.totalProcessed = totalProcessed;
+            this.totalBytesConsumed = totalBytesConsumed;
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException      if any task threw an exception while processing
      */
-    int process(final int maxNumRecords, final Time time) {
+    ProcessData process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
+        long totalBytesConsumed = 0L;
 
         long now = time.milliseconds();
         for (final Task task : activeTaskIterable()) {
             int processed = 0;
+            long bytesConsumed = 0L;
+            task.setBytesConsumed(0L);
             final long then = now;
             try {
                 while (processed < maxNumRecords && task.process(now)) {
                     task.clearTaskTimeout();
                     processed++;
+                    bytesConsumed += task.getBytesConsumed();
                 }
             } catch (final TimeoutException timeoutException) {
                 task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
@@ -1319,11 +1335,12 @@ public class TaskManager {
             } finally {
                 now = time.milliseconds();
                 totalProcessed += processed;
+                totalBytesConsumed += bytesConsumed;
                 task.recordProcessBatchTime(now - then);
             }
         }
 
-        return totalProcessed;
+        return new ProcessData(totalProcessed, totalBytesConsumed);
     }
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {

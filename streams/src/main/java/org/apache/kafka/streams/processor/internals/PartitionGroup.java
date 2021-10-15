@@ -64,10 +64,12 @@ public class PartitionGroup {
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
+    private final Sensor totalBytesSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
     private int totalBuffered;
+    private long totalBytesBuffered;
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
 
@@ -92,6 +94,7 @@ public class PartitionGroup {
                    final Function<TopicPartition, OptionalLong> lagProvider,
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
+                   final Sensor totalBytesSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
@@ -100,6 +103,7 @@ public class PartitionGroup {
         this.enforcedProcessingSensor = enforcedProcessingSensor;
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
+        this.totalBytesSensor = totalBytesSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
@@ -266,6 +270,11 @@ public class PartitionGroup {
             if (record != null) {
                 --totalBuffered;
 
+                totalBytesBuffered -= (record.key() != null ? record.serializedKeySize() : 0) +
+                        (record.value() != null ? record.serializedValueSize() : 0);
+
+                totalBytesSensor.record(totalBuffered);
+
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
                     allBuffered = false;
@@ -317,6 +326,14 @@ public class PartitionGroup {
 
         totalBuffered += newSize - oldSize;
 
+        long rawRecordsSizeInBytes = 0L;
+        for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
+            rawRecordsSizeInBytes += (rawRecord.key() != null ? rawRecord.serializedKeySize() : 0)
+                    + (rawRecord.value() != null ? rawRecord.serializedValueSize() : 0);
+        }
+
+        totalBytesBuffered += rawRecordsSizeInBytes;
+        totalBytesSensor.record(totalBytesBuffered);
         return newSize;
     }
 

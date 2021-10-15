@@ -357,6 +357,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
     private static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
+    /** {@code input.buffer.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
+    private static final String INPUT_BUFFER_MAX_BYTES_CONFIG_DOC = "Maximum bytes of records to buffer across all threads";
+
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
     private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
@@ -368,6 +373,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     /** {@statestore.cache.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
+    private static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
+
+    /** {@code statestore.cache.max.bytes} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
     private static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";

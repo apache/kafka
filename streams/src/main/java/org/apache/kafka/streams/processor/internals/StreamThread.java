@@ -282,6 +282,8 @@ public class StreamThread extends Thread {
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
     private long totalCommittedSinceLastSummary = 0L;
+    private long maxBufferSizeBytes;
+    private long bufferSize = 0L;
 
     private long now;
     private long lastPollMs;
@@ -326,6 +328,7 @@ public class StreamThread extends Thread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxBufferSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
@@ -428,7 +431,8 @@ public class StreamThread extends Thread {
             referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize
+            cache::resize,
+            maxBufferSizeBytes
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -489,7 +493,8 @@ public class StreamThread extends Thread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final java.util.function.Consumer<Long> cacheResizer,
+                        final long maxBufferSizeBytes) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -557,6 +562,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.maxBufferSizeBytes = maxBufferSizeBytes;
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -798,7 +804,8 @@ public class StreamThread extends Thread {
              */
             do {
                 log.debug("Processing tasks with {} iterations.", numIterations);
-                final int processed = taskManager.process(numIterations, time);
+                final TaskManager.ProcessData processedData = taskManager.process(numIterations, time);
+                final int processed = processedData.totalProcessed;
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -969,12 +976,21 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
+        long polledRecordsSize = 0L;
+
         for (final TopicPartition topicPartition: records.partitions()) {
             records
                 .records(topicPartition)
                 .stream()
                 .max(Comparator.comparing(ConsumerRecord::offset))
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
+
+            polledRecordsSize += records
+                    .records(topicPartition)
+                    .stream()
+                    .mapToLong(record -> (record.key() != null ? record.serializedKeySize() : 0)
+                            + (record.value() != null ? record.serializedValueSize() : 0))
+                    .sum();
         }
 
         log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
@@ -985,9 +1001,15 @@ public class StreamThread extends Thread {
             pollRecordsSensor.record(numRecords, now);
         }
 
-        if (!records.isEmpty()) {
-            pollRecordsSensor.record(numRecords, now);
-            taskManager.addRecordsToTasks(records);
+        bufferSize += polledRecordsSize;
+
+        if (bufferSize > maxBufferSizeBytes) {
+            log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
+            mainConsumer.pause(records.partitions());
+        } else {
+            if (!records.isEmpty()) {
+                taskManager.addRecordsToTasks(records);
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
