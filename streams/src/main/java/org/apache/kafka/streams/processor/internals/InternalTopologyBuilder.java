@@ -1986,7 +1986,7 @@ public class InternalTopologyBuilder {
             if (namedTopology == null) {
                 sb.append("Topologies:\n ");
             } else {
-                sb.append("Topology - ").append(namedTopology).append(":\n ");
+                sb.append("Topology: ").append(namedTopology).append(":\n ");
             }
             final TopologyDescription.Subtopology[] sortedSubtopologies =
                 subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[0]);
