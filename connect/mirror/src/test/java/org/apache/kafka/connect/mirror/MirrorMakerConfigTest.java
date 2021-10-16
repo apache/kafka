@@ -104,7 +104,7 @@ public class MirrorMakerConfigTest {
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
-            "top-leve metrics reporters aren't included in client configs");
+            "top-level metrics reporters aren't included in client configs");
         assertEquals("secret1", aClientConfig.getPassword("ssl.truststore.password").value(),
             "security properties are picked up in MirrorClientConfig");
         assertEquals("secret1", ((Password) aClientConfig.adminConfig().get("ssl.truststore.password")).value(),
@@ -236,18 +236,20 @@ public class MirrorMakerConfigTest {
         SourceAndTarget b = new SourceAndTarget("a", "b");
         Map<String, String> aProps = mirrorConfig.workerConfig(a);
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
+        assertEquals(null, aProps.get("xxx"), "b's replication-level prop is ignored in a");
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
         assertEquals("456", bProps.get("status.storage.replication.factor"));
+        assertEquals("yyy", bProps.get("xxx")); // should be null?
         assertEquals("client-one", bProps.get("producer.client.id"),
             "producer props should be passed through to worker producer config: " + bProps);
-        assertEquals("SASL", bProps.get("producer.security.protocol"),
+        assertEquals("PLAINTEXT", bProps.get("security.protocol"),
             "replication-level security props should be passed through to worker producer config");
         assertEquals("SASL", bProps.get("producer.security.protocol"),
-            "replication-level security props should be passed through to worker producer config");
+            "producer props should be passed through to worker producer config: " + bProps);
         assertEquals("PLAINTEXT", bProps.get("consumer.security.protocol"),
             "replication-level security props should be passed through to worker consumer config");
         assertEquals("secret1", bProps.get("ssl.truststore.password"),
-            "security properties should be passed through to worker config: " + bProps);
+            "top-level security properties should be passed through to worker config: " + bProps);
         assertEquals("secret1", bProps.get("producer.ssl.truststore.password"),
             "security properties should be passed through to worker producer config: " + bProps);
         assertEquals("secret2", bProps.get("ssl.key.password"),
