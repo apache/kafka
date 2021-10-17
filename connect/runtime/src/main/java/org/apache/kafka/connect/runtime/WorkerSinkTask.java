@@ -396,6 +396,8 @@ class WorkerSinkTask extends WorkerTask {
                     log.debug("{} Rewinding topic partition {} to offset {}", this, entry.getKey(), entry.getValue().offset());
                     consumer.seek(entry.getKey(), entry.getValue().offset());
                 }
+                // Clear messages that might have been left in messageBatch after last poll
+                messageBatch.clear();
                 currentOffsets = new HashMap<>(lastCommittedOffsets);
                 onCommitCompleted(t, commitSeqno, null);
             }
