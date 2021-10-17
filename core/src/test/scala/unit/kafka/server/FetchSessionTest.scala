@@ -38,6 +38,8 @@ import scala.collection.mutable.ArrayBuffer
 @Timeout(120)
 class FetchSessionTest {
 
+  private val evictor = "principal=MyPrincipal"
+
   @Test
   def testNewSessionId(): Unit = {
     val cache = new FetchSessionCache(3, 100)
@@ -71,22 +73,22 @@ class FetchSessionTest {
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
     assertEquals(0, cache.size)
-    val id1 = cache.maybeCreateSession(0, false, 10, true, () => dummyCreate(10))
-    val id2 = cache.maybeCreateSession(10, false, 20, true, () => dummyCreate(20))
-    val id3 = cache.maybeCreateSession(20, false, 30, true, () => dummyCreate(30))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, true, () => dummyCreate(40)))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, true, () => dummyCreate(5)))
+    val id1 = cache.maybeCreateSession(0, false, evictor, 10, true, () => dummyCreate(10))
+    val id2 = cache.maybeCreateSession(10, false, evictor, 20, true, () => dummyCreate(20))
+    val id3 = cache.maybeCreateSession(20, false, evictor, 30, true, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, evictor, 40, true, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, evictor, 5, true, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
-    val id4 = cache.maybeCreateSession(210, false, 11, true, () => dummyCreate(11))
+    val id4 = cache.maybeCreateSession(210, false, evictor, 11, true, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
-    val id5 = cache.maybeCreateSession(410, false, 50, true, () => dummyCreate(50))
+    val id5 = cache.maybeCreateSession(410, false, evictor, 50, true, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, true, () => dummyCreate(5)))
-    val id6 = cache.maybeCreateSession(410, true, 5, true, () => dummyCreate(5))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, evictor, 5, true, () => dummyCreate(5)))
+    val id6 = cache.maybeCreateSession(410, true, evictor, 5, true, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
   }
 
@@ -96,7 +98,7 @@ class FetchSessionTest {
     assertEquals(0, cache.totalPartitions)
     assertEquals(0, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id1 = cache.maybeCreateSession(0, false, 2, true, () => dummyCreate(2))
+    val id1 = cache.maybeCreateSession(0, false, evictor, 2, true, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
@@ -104,7 +106,7 @@ class FetchSessionTest {
     assertEquals(2, cache.totalPartitions)
     assertEquals(1, cache.size)
     assertEquals(0, cache.evictionsMeter.count)
-    val id2 = cache.maybeCreateSession(0, false, 4, true, () => dummyCreate(4))
+    val id2 = cache.maybeCreateSession(0, false, evictor, 4, true, () => dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
@@ -113,7 +115,7 @@ class FetchSessionTest {
     assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
-    val id3 = cache.maybeCreateSession(200, false, 5, true, () => dummyCreate(5))
+    val id3 = cache.maybeCreateSession(200, false, evictor, 5, true, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
     assertEquals(9, cache.totalPartitions)
@@ -179,6 +181,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -214,6 +217,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -235,6 +239,7 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
+      evictor,
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -279,6 +284,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -314,6 +320,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -334,6 +341,7 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
+      evictor,
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -358,6 +366,7 @@ class FetchSessionTest {
       request.version,
       request.metadata,
       request.isFromFollower,
+      evictor,
       request.fetchData(topicNames),
       request.forgottenTopics(topicNames),
       topicIds
@@ -375,6 +384,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -413,6 +423,7 @@ class FetchSessionTest {
       request3.version,
       request3.metadata,
       request3.isFromFollower,
+      evictor,
       request3.fetchData(topicNames),
       request3.forgottenTopics(topicNames),
       topicIds
@@ -427,6 +438,7 @@ class FetchSessionTest {
       request4.version,
       request4.metadata,
       request4.isFromFollower,
+      evictor,
       request4.fetchData(topicNames),
       request4.forgottenTopics(topicNames),
       topicIds
@@ -441,6 +453,7 @@ class FetchSessionTest {
       request5.version,
       request5.metadata,
       request5.isFromFollower,
+      evictor,
       request5.fetchData(topicNames),
       request5.forgottenTopics(topicNames),
       topicIds
@@ -465,6 +478,7 @@ class FetchSessionTest {
       request6.version,
       request6.metadata,
       request6.isFromFollower,
+      evictor,
       request6.fetchData(topicNames),
       request6.forgottenTopics(topicNames),
       topicIds
@@ -480,6 +494,7 @@ class FetchSessionTest {
       request7.version,
       request7.metadata,
       request7.isFromFollower,
+      evictor,
       request7.fetchData(topicNames),
       request7.forgottenTopics(topicNames),
       topicIds
@@ -503,6 +518,7 @@ class FetchSessionTest {
         request8.version,
         request8.metadata,
         request8.isFromFollower,
+        evictor,
         request8.fetchData(topicNames),
         request8.forgottenTopics(topicNames),
         topicIds
@@ -547,6 +563,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -579,6 +596,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -634,6 +652,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNamesOnlyBar),
       request1.forgottenTopics(topicNamesOnlyBar),
       topicIdsOnlyBar
@@ -676,6 +695,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -702,6 +722,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -734,6 +755,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -759,6 +781,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -791,6 +814,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -820,6 +844,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -853,6 +878,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -885,6 +911,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNamesFooChanged),
       request2.forgottenTopics(topicNamesFooChanged),
       topicIdsFooChanged
@@ -927,6 +954,7 @@ class FetchSessionTest {
       session1request1.version,
       session1request1.metadata,
       session1request1.isFromFollower,
+      evictor,
       session1request1.fetchData(topicNames),
       session1request1.forgottenTopics(topicNames),
       topicIds
@@ -963,6 +991,7 @@ class FetchSessionTest {
       session2request1.version,
       session2request1.metadata,
       session2request1.isFromFollower,
+      evictor,
       session2request1.fetchData(topicNames),
       session2request1.forgottenTopics(topicNames),
       topicIds
@@ -999,6 +1028,7 @@ class FetchSessionTest {
       session1request2.version,
       session1request2.metadata,
       session1request2.isFromFollower,
+      evictor,
       session1request2.fetchData(topicNames),
       session1request2.forgottenTopics(topicNames),
       topicIds
@@ -1021,6 +1051,7 @@ class FetchSessionTest {
       session3request1.version,
       session3request1.metadata,
       session3request1.isFromFollower,
+      evictor,
       session3request1.fetchData(topicNames),
       session3request1.forgottenTopics(topicNames),
       topicIds
@@ -1068,6 +1099,7 @@ class FetchSessionTest {
       session1request.version,
       session1request.metadata,
       session1request.isFromFollower,
+      evictor,
       session1request.fetchData(topicNames),
       session1request.forgottenTopics(topicNames),
       topicIds
@@ -1104,6 +1136,7 @@ class FetchSessionTest {
       session2request.version,
       session2request.metadata,
       session2request.isFromFollower,
+      evictor,
       session2request.fetchData(topicNames),
       session2request.forgottenTopics(topicNames),
       topicIds
@@ -1144,6 +1177,7 @@ class FetchSessionTest {
       session3request.version,
       session3request.metadata,
       session3request.isFromFollower,
+      evictor,
       session3request.fetchData(topicNames),
       session3request.forgottenTopics(topicNames),
       topicIds
@@ -1187,6 +1221,7 @@ class FetchSessionTest {
       session4request.version,
       session4request.metadata,
       session4request.isFromFollower,
+      evictor,
       session4request.fetchData(topicNames),
       session4request.forgottenTopics(topicNames),
       topicIds
@@ -1235,6 +1270,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -1267,6 +1303,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -1299,6 +1336,7 @@ class FetchSessionTest {
       request1.version,
       request1.metadata,
       request1.isFromFollower,
+      evictor,
       request1.fetchData(topicNames),
       request1.forgottenTopics(topicNames),
       topicIds
@@ -1329,6 +1367,7 @@ class FetchSessionTest {
       request2.version,
       request2.metadata,
       request2.isFromFollower,
+      evictor,
       request2.fetchData(topicNames),
       request2.forgottenTopics(topicNames),
       topicIds
@@ -1382,7 +1421,7 @@ class FetchSessionTest {
 
     // Full fetch context returns all partitions in the response
     val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false,
-     reqData, Collections.emptyList(), topicIds)
+      evictor, reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[FullFetchContext], context1.getClass)
 
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
@@ -1410,7 +1449,7 @@ class FetchSessionTest {
     // Incremental fetch context returns partitions with changes but only deprioritizes
     // the partitions with records
     val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), false,
-      reqData, Collections.emptyList(), topicIds)
+      evictor, reqData, Collections.emptyList(), topicIds)
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
 
     // Partitions are ordered in the session as per last response

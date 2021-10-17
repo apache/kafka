@@ -387,7 +387,8 @@ class FullFetchContext(private val time: Time,
                        private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
                        private val usesTopicIds: Boolean,
                        private val topicIds: util.Map[String, Uuid],
-                       private val isFromFollower: Boolean) extends FetchContext {
+                       private val isFromFollower: Boolean,
+                       private val evictor: String) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -417,7 +418,7 @@ class FullFetchContext(private val time: Time,
       }
       (cachedPartitions, sessionTopicIds)
     }
-    val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
+    val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower, evictor,
         updates.size, usesTopicIds, () => createNewSession)
     if (hasInconsistentTopicIds) {
       FetchResponse.of(Errors.INCONSISTENT_TOPIC_ID, 0, responseSessionId, new FetchSession.RESP_MAP, Collections.emptyMap())
@@ -651,13 +652,14 @@ class FetchSessionCache(private val maxEntries: Int,
     */
   def maybeCreateSession(now: Long,
                          privileged: Boolean,
+                         evictor: String,
                          size: Int,
                          usesTopicIds: Boolean,
                          createPartitions: () => (FetchSession.CACHE_MAP, FetchSession.TOPIC_ID_MAP)): Int =
   synchronized {
     // If there is room, create a new session entry.
     if ((sessions.size < maxEntries) ||
-        tryEvict(privileged, EvictableKey(privileged, size, 0), now)) {
+        tryEvict(privileged, EvictableKey(privileged, size, 0), now, evictor)) {
       val (partitionMap, topicIds) = createPartitions()
       val session = new FetchSession(newSessionId(), privileged, partitionMap, usesTopicIds, topicIds,
           now, now, JFetchMetadata.nextEpoch(INITIAL_EPOCH))
@@ -684,7 +686,7 @@ class FetchSessionCache(private val maxEntries: Int,
     * @param now        The current time in milliseconds.
     * @return           True if an entry was evicted; false otherwise.
     */
-  def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
+  def tryEvict(privileged: Boolean, key: EvictableKey, now: Long, evictor: String): Boolean = synchronized {
     // Try to evict an entry which is stale.
     val lastUsedEntry = lastUsed.firstEntry
     if (lastUsedEntry == null) {
@@ -692,7 +694,7 @@ class FetchSessionCache(private val maxEntries: Int,
       false
     } else if (now - lastUsedEntry.getKey.lastUsedMs > evictionMs) {
       val session = lastUsedEntry.getValue
-      trace(s"Evicting stale FetchSession ${session.id}.")
+      trace(s"Evicting stale FetchSession ${session.id} for $evictor.")
       remove(session)
       evictionsMeter.mark()
       true
@@ -708,7 +710,7 @@ class FetchSessionCache(private val maxEntries: Int,
         trace(s"Can't evict ${evictableEntry.getKey} with ${key.toString}")
         false
       } else {
-        trace(s"Evicting ${evictableEntry.getKey} with ${key.toString}.")
+        trace(s"Evicting ${evictableEntry.getKey} with ${key.toString} for $evictor")
         remove(evictableEntry.getValue)
         evictionsMeter.mark()
         true
@@ -782,6 +784,7 @@ class FetchManager(private val time: Time,
   def newContext(reqVersion: Short,
                  reqMetadata: JFetchMetadata,
                  isFollower: Boolean,
+                 evictor: String,
                  fetchData: FetchSession.REQ_MAP,
                  toForget: util.List[TopicPartition],
                  topicIds: util.Map[String, Uuid]): FetchContext = {
@@ -799,7 +802,7 @@ class FetchManager(private val time: Time,
         suffix = " Will not try to create a new session."
         new SessionlessFetchContext(fetchData, topicIds)
       } else {
-        new FullFetchContext(time, cache, reqMetadata, fetchData, reqVersion >= 13, topicIds, isFollower)
+        new FullFetchContext(time, cache, reqMetadata, fetchData, reqVersion >= 13, topicIds, isFollower, evictor)
       }
       debug(s"Created a new full FetchContext with ${partitionsToLogString(fetchData.keySet)}."+
         s"${removedFetchSessionStr}${suffix}")

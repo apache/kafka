@@ -692,6 +692,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.version,
       fetchRequest.metadata,
       fetchRequest.isFromFollower,
+      s"principal=${request.context.principal}",
       fetchData,
       forgottenTopics,
       topicIds)

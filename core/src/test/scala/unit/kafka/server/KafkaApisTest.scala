@@ -2406,11 +2406,12 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, metadataCache.topicNamesToIds(), false)
+      fetchMetadata, fetchData, false, metadataCache.topicNamesToIds(), false, "principal=my-client-id")
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
       anyObject[Boolean],
+      anyString,
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
       anyObject[util.List[TopicPartition]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
@@ -2973,11 +2974,12 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, true, metadataCache.topicNamesToIds(), true)
+      fetchMetadata, fetchData, true, metadataCache.topicNamesToIds(), true, "principal=my-client-id")
     expect(fetchManager.newContext(
       anyObject[Short],
       anyObject[JFetchMetadata],
       anyObject[Boolean],
+      anyString,
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
       anyObject[util.List[TopicPartition]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
