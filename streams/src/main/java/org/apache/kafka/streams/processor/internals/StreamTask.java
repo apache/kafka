@@ -386,42 +386,35 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
-        try {
-            switch (state()) {
-                case CREATED:
-                case RESTORING:
-                case RUNNING:
-                case SUSPENDED:
-                    // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
-                    // so it only indicates whether the record collector should be flushed or not, whereas the state
-                    // manager should always be flushed; either there is newly restored data or the flush will be a no-op
-                    if (commitNeeded) {
-                        // we need to flush the store caches before flushing the record collector since it may cause some
-                        // cached records to be processed and hence generate more records to be sent out
-                        //
-                        // TODO: this should be removed after we decouple caching with emitting
-                        stateMgr.flushCache();
-                        recordCollector.flush();
-                        hasPendingTxCommit = eosEnabled;
+        switch (state()) {
+            case CREATED:
+            case RESTORING:
+            case RUNNING:
+            case SUSPENDED:
+                // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
+                // so it only indicates whether the record collector should be flushed or not, whereas the state
+                // manager should always be flushed; either there is newly restored data or the flush will be a no-op
+                if (commitNeeded) {
+                    // we need to flush the store caches before flushing the record collector since it may cause some
+                    // cached records to be processed and hence generate more records to be sent out
+                    //
+                    // TODO: this should be removed after we decouple caching with emitting
+                    stateMgr.flushCache();
+                    recordCollector.flush();
+                    hasPendingTxCommit = eosEnabled;
 
-                        log.debug("Prepared {} task for committing", state());
-                        return committableOffsetsAndMetadata();
-                    } else {
-                        log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
-                        return Collections.emptyMap();
-                    }
+                    log.debug("Prepared {} task for committing", state());
+                    return committableOffsetsAndMetadata();
+                } else {
+                    log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
+                    return Collections.emptyMap();
+                }
 
-                case CLOSED:
-                    throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
+            case CLOSED:
+                throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
 
-                default:
-                    throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
-            }
-        } catch (final StreamsException e) {
-            e.setTaskId(id);
-            throw e;
-        } catch (final Exception e) {
-            throw new StreamsException(e, id);
+            default:
+                throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
     }
 
