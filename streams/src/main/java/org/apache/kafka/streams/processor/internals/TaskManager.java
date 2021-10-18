@@ -518,7 +518,7 @@ public class TaskManager {
         final Set<Task> revokedActiveTasks = new HashSet<>();
         final Set<Task> commitNeededActiveTasks = new HashSet<>();
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
-        final AtomicReference<StreamsException> firstException = new AtomicReference<>(null);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
@@ -569,7 +569,7 @@ public class TaskManager {
             closeDirtyAndRevive(dirtyTasks, false);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, new StreamsException(e));
+            firstException.compareAndSet(null, e);
             dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
         }
 
@@ -854,7 +854,7 @@ public class TaskManager {
             executeAndMaybeSwallow(
                 clean,
                 () -> tasks.closeAndRemoveTaskProducerIfNeeded(activeTask),
-                e -> firstException.compareAndSet(null, new StreamsException(e, activeTask.id())),
+                e -> firstException.compareAndSet(null, e),
                 e -> log.warn("Ignoring an exception while closing task " + activeTask.id() + " producer.", e)
             );
         }
@@ -889,6 +889,9 @@ public class TaskManager {
                 tasksToCloseClean.add(task);
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
+                tasksToCloseDirty.add(task);
+            } catch (final StreamsException e) {
+                firstException.compareAndSet(null, new StreamsException(e, task.id()));
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, new StreamsException(e, task.id()));
@@ -944,6 +947,11 @@ public class TaskManager {
             try {
                 task.suspend();
                 completeTaskCloseClean(task);
+            } catch (final StreamsException e) {
+                log.error("Exception caught while clean-closing task " + task.id(), e);
+                e.setTaskId(task.id());
+                firstException.compareAndSet(null, e);
+                tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while clean-closing task " + task.id(), e);
                 firstException.compareAndSet(null, new StreamsException(e, task.id()));

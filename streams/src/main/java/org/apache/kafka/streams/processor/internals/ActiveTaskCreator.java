@@ -296,7 +296,7 @@ class ActiveTaskCreator {
             try {
                 taskProducer.close();
             } catch (final RuntimeException e) {
-                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e);
+                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e, id);
             }
         }
     }
