@@ -208,7 +208,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _state = BrokerState.PENDING_CONTROLLED_SHUTDOWN
           // Send the next heartbeat immediately in order to let the controller
           // begin processing the controlled shutdown as soon as possible.
-          scheduleNextCommunication(0)
+          scheduleNextCommunicationImmediately()
 
         case _ =>
           info(s"Skipping controlled shutdown because we are in state ${_state}.")
@@ -284,8 +284,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
         setRack(rack.orNull)
-    if (isTraceEnabled) {
-      trace(s"Sending broker registration ${data}")
+    if (isDebugEnabled) {
+      debug(s"Sending broker registration ${data}")
     }
     _channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())
@@ -406,7 +406,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
                   scheduleNextCommunicationAfterSuccess()
                 }
               } else {
-                info(s"The controlled has asked us to exit controlled shutdown.")
+                info(s"The controller has asked us to exit controlled shutdown.")
                 beginShutdown()
               }
               gotControlledShutdownResponse = true

@@ -21,30 +21,36 @@ import org.apache.kafka.streams.KeyValue;
 import java.util.Objects;
 
 /**
- * Combines a key from a {@link KeyValue} with a boolean value referencing if the key is
+ * Combines a timestamped key from a {@link KeyValue} with a boolean value referencing if the key is
  * part of the left join (true) or right join (false). This class is only useful when a state
  * store needs to be shared between left and right processors, and each processor needs to
  * access the key of the other processor.
+ *
+ * Note that it might be cleaner to have two layers for such usages: first a KeyAndJoinSide, where the Key
+ * is in the form of a <timestamp, key>; but with the nested structure serdes would need extra byte array copies.
+ * Since it is only used in a single place today we decided to combine them into a single type / serde.
  */
-public class KeyAndJoinSide<K> {
+public class TimestampedKeyAndJoinSide<K> {
     private final K key;
+    private final long timestamp;
     private final boolean leftSide;
 
-    private KeyAndJoinSide(final boolean leftSide, final K key) {
+    private TimestampedKeyAndJoinSide(final boolean leftSide, final K key, final long timestamp) {
         this.key = Objects.requireNonNull(key, "key cannot be null");
         this.leftSide = leftSide;
+        this.timestamp = timestamp;
     }
 
     /**
-     * Create a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
+     * Create a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
      *
      * @param leftSide True if the key is part of the left join side; False if it is from the right join side
      * @param key      the key
      * @param <K>      the type of the key
-     * @return a new {@link KeyAndJoinSide} instance if the provide {@code key} is not {@code null}
+     * @return a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}
      */
-    public static <K> KeyAndJoinSide<K> make(final boolean leftSide, final K key) {
-        return new KeyAndJoinSide<>(leftSide, key);
+    public static <K> TimestampedKeyAndJoinSide<K> make(final boolean leftSide, final K key, final long timestamp) {
+        return new TimestampedKeyAndJoinSide<>(leftSide, key, timestamp);
     }
 
     public boolean isLeftSide() {
@@ -55,10 +61,14 @@ public class KeyAndJoinSide<K> {
         return key;
     }
 
+    public long getTimestamp() {
+        return timestamp;
+    }
+
     @Override
     public String toString() {
         final String joinSide = leftSide ? "left" : "right";
-        return "<" + joinSide + "," + key + ">";
+        return "<" + joinSide + "," + key + ":" + timestamp + ">";
     }
 
     @Override
@@ -69,13 +79,14 @@ public class KeyAndJoinSide<K> {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final KeyAndJoinSide<?> that = (KeyAndJoinSide<?>) o;
+        final TimestampedKeyAndJoinSide<?> that = (TimestampedKeyAndJoinSide<?>) o;
         return leftSide == that.leftSide &&
-            Objects.equals(key, that.key);
+            Objects.equals(key, that.key) &&
+            timestamp == that.timestamp;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leftSide, key);
+        return Objects.hash(leftSide, key, timestamp);
     }
 }

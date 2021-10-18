@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -208,7 +209,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 new MockClientSupplier(),
                 null,
                 null,
-                logContext),
+                logContext,
+                Time.SYSTEM),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics())
         ) {

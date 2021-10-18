@@ -1490,6 +1490,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
+        long commitStart = time.nanoseconds();
         try {
             maybeThrowInvalidGroupIdException();
             offsets.forEach(this::updateLastSeenEpochIfNewer);
@@ -1498,6 +1499,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         "committing offsets " + offsets);
             }
         } finally {
+            kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
             release();
         }
     }
@@ -1876,9 +1878,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions, final Duration timeout) {
         acquireAndEnsureOpen();
+        long start = time.nanoseconds();
         try {
             maybeThrowInvalidGroupIdException();
-            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
+            final Map<TopicPartition, OffsetAndMetadata> offsets;
+            offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                     "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
@@ -1888,6 +1892,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 return offsets;
             }
         } finally {
+            kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
             release();
         }
     }

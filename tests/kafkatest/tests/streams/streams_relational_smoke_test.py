@@ -85,11 +85,11 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
-            processing_guarantee=['exactly_once', 'exactly_once_beta'])
+            processing_guarantee=['exactly_once', 'exactly_once_v2'])
     def test_streams(self, crash, processing_guarantee):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
 
-        LOG_FILE = driver.LOG_FILE  # this is the same for all instaces of the service, so we can just declare a "constant"
+        LOG_FILE = driver.LOG_FILE  # this is the same for all instances of the service, so we can just declare a "constant"
 
         processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", processing_guarantee)
         processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", processing_guarantee)

@@ -209,7 +209,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request, requestLocal)
-        case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
+        case ApiKeys.ELECT_LEADERS => maybeForwardToController(request, handleElectLeaders)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForwardToController(request, handleIncrementalAlterConfigsRequest)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleListPartitionReassignmentsRequest)
@@ -1135,11 +1135,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def metadataResponseTopic(error: Errors,
                                     topic: String,
+                                    topicId: Uuid,
                                     isInternal: Boolean,
                                     partitionData: util.List[MetadataResponsePartition]): MetadataResponseTopic = {
     new MetadataResponseTopic()
       .setErrorCode(error.code)
       .setName(topic)
+      .setTopicId(topicId)
       .setIsInternal(isInternal)
       .setPartitions(partitionData)
   }
@@ -1176,6 +1178,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           metadataResponseTopic(
             error,
             topic,
+            metadataCache.getTopicId(topic),
             Topic.isInternal(topic),
             util.Collections.emptyList()
           )
@@ -1193,16 +1196,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Topic IDs are not supported for versions 10 and 11. Topic names can not be null in these versions.
     if (!metadataRequest.isAllTopics) {
       metadataRequest.data.topics.forEach{ topic =>
-        if (topic.name == null) {
+        if (topic.name == null && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic name can not be null for version ${metadataRequest.version}")
-        } else if (topic.topicId != Uuid.ZERO_UUID) {
+        } else if (topic.topicId != Uuid.ZERO_UUID && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic IDs are not supported in requests for version ${metadataRequest.version}")
         }
       }
     }
 
+    // Check if topicId is presented firstly.
+    val topicIds = metadataRequest.topicIds.asScala.toSet.filterNot(_ == Uuid.ZERO_UUID)
+    val useTopicId = topicIds.nonEmpty
+
+    // Only get topicIds and topicNames when supporting topicId
+    val unknownTopicIds = topicIds.filter(metadataCache.getTopicName(_).isEmpty)
+    val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
+
+    val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
+
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
+    else if (useTopicId)
+      knownTopicNames
     else
       metadataRequest.topics.asScala.toSet
 
@@ -1224,16 +1240,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
-      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, isInternal(topic), util.Collections.emptyList()))
+      // Set topicId to zero since we will never create topic which topicId
+      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal(topic), util.Collections.emptyList()))
 
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include topics unauthorized for Describe
       if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
         Set.empty[MetadataResponseTopic]
-      else
+      else if (useTopicId) {
+        // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
+      } else {
+        // We should not return topicId when on unauthorized error, so we return zero uuid.
+        unauthorizedForDescribeTopics.map(topic =>
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+      }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
     // while in higher versions we simply don't include the broker in the returned broker list
@@ -1269,7 +1292,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
+    val completeTopicMetadata =  unknownTopicIdsTopicMetadata ++
+      topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
@@ -2971,9 +2995,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       true
   }
 
-  def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
-
+  def handleElectLeaders(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldAlwaysForward(request))
     val electionRequest = request.body[ElectLeadersRequest]
 
     def sendResponseCallback(
@@ -2984,7 +3007,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
         val adjustedResults = if (electionRequest.data.topicPartitions == null) {
           /* When performing elections across all of the partitions we should only return
-           * partitions for which there was an eleciton or resulted in an error. In other
+           * partitions for which there was an election or resulted in an error. In other
            * words, partitions that didn't need election because they ready have the correct
            * leader are not returned to the client.
            */

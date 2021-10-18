@@ -25,12 +25,9 @@ trait MetadataPublisher {
   /**
    * Publish a new metadata image.
    *
-   * @param newHighestMetadataOffset  The highest metadata offset contained within the image.
-   * @param delta                     The delta between the old image and the new one.
-   * @param newImage                  The new image, which is the result of applying the
-   *                                  delta to the previous image.
+   * @param delta                  The delta between the old image and the new one.
+   * @param newImage               The new image, which is the result of applying the
+   *                               delta to the previous image.
    */
-  def publish(newHighestMetadataOffset: Long,
-              delta: MetadataDelta,
-              newImage: MetadataImage): Unit
+  def publish(delta: MetadataDelta, newImage: MetadataImage): Unit
 }

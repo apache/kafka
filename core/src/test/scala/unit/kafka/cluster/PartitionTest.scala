@@ -1614,7 +1614,13 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Expand ISR
-    partition.expandIsr(follower3)
+    partition.updateFollowerFetchState(
+      followerId = follower3,
+      followerFetchOffsetMetadata = LogOffsetMetadata(10),
+      followerStartOffset = 0L,
+      followerFetchTimeMs = time.milliseconds(),
+      leaderEndOffset = 10
+    )
     assertEquals(Set(brokerId, follower1, follower2), partition.isrState.isr)
     assertEquals(Set(brokerId, follower1, follower2, follower3), partition.isrState.maximalIsr)
 
@@ -1622,7 +1628,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterIsrManager.isrUpdates.size, 1)
 
     // Try to modify ISR again, should do nothing
-    partition.shrinkIsr(Set(follower3))
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
+    partition.maybeShrinkIsr()
     assertEquals(alterIsrManager.isrUpdates.size, 1)
   }
 
@@ -1677,7 +1684,13 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Expand ISR
-    partition.expandIsr(follower3)
+    partition.updateFollowerFetchState(
+      followerId = follower3,
+      followerFetchOffsetMetadata = LogOffsetMetadata(10),
+      followerStartOffset = 0L,
+      followerFetchTimeMs = time.milliseconds(),
+      leaderEndOffset = 10
+    )
 
     // Try avoiding a race
     TestUtils.waitUntilTrue(() => !partition.isrState.isInflight, "Expected ISR state to be committed", 100)
@@ -1686,13 +1699,6 @@ class PartitionTest extends AbstractPartitionTest {
       case committed: CommittedIsr => assertEquals(Set(brokerId, follower1, follower2, follower3), committed.isr)
       case _ => fail("Expected a committed ISR following Zk expansion")
     }
-
-    // Verify duplicate request. In-flight state should be reset even though version hasn't changed.
-    doAnswer(_ => (true, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(2), any())
-    partition.expandIsr(follower3)
-    TestUtils.waitUntilTrue(() => !partition.isrState.isInflight, "Expected ISR state to be committed", 100)
 
     scheduler.shutdown()
   }

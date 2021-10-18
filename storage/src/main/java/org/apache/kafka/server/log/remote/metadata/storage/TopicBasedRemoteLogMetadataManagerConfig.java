@@ -74,6 +74,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
     public static final String REMOTE_LOG_METADATA_CONSUMER_PREFIX = "remote.log.metadata.consumer.";
     public static final String BROKER_ID = "broker.id";
+    public static final String LOG_DIR = "log.dir";
 
     private static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
 
@@ -97,6 +98,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private final String clientIdPrefix;
     private final int metadataTopicPartitionsCount;
+    private final String logDir;
     private final long consumeWaitMs;
     private final long metadataTopicRetentionMs;
     private final short metadataTopicReplicationFactor;
@@ -110,6 +112,11 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         Objects.requireNonNull(props, "props can not be null");
 
         Map<String, Object> parsedConfigs = CONFIG.parse(props);
+
+        logDir = (String) props.get(LOG_DIR);
+        if (logDir == null || logDir.isEmpty()) {
+            throw new IllegalArgumentException(LOG_DIR + " config must not be null or empty.");
+        }
 
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         metadataTopicReplicationFactor = (short) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP);
@@ -177,6 +184,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public long initializationRetryIntervalMs() {
         return initializationRetryIntervalMs;
+    }
+
+    public String logDir() {
+        return logDir;
     }
 
     public Map<String, Object> consumerProperties() {

@@ -101,6 +101,10 @@ class Tasks {
         );
     }
 
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
+    }
+
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                      final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {
