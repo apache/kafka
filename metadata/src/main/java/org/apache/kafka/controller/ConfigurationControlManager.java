@@ -20,9 +20,9 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -49,6 +49,7 @@ import java.util.Optional;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
+import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 
 
 public class ConfigurationControlManager {
@@ -56,17 +57,20 @@ public class ConfigurationControlManager {
     private final SnapshotRegistry snapshotRegistry;
     private final Map<ConfigResource.Type, ConfigDef> configDefs;
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
+    private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
 
     ConfigurationControlManager(LogContext logContext,
                                 SnapshotRegistry snapshotRegistry,
                                 Map<ConfigResource.Type, ConfigDef> configDefs,
-                                Optional<AlterConfigPolicy> alterConfigPolicy) {
+                                Optional<AlterConfigPolicy> alterConfigPolicy,
+                                ConfigurationValidator validator) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configDefs = configDefs;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.alterConfigPolicy = alterConfigPolicy;
+        this.validator = validator;
     }
 
     /**
@@ -122,19 +126,13 @@ public class ConfigurationControlManager {
                     newValue = opValue;
                     break;
                 case DELETE:
-                    if (opValue != null) {
-                        outputResults.put(configResource, new ApiError(
-                            Errors.INVALID_REQUEST, "A DELETE op was given with a " +
-                            "non-null value."));
-                        return;
-                    }
                     newValue = null;
                     break;
                 case APPEND:
                 case SUBTRACT:
                     if (!isSplittable(configResource.type(), key)) {
                         outputResults.put(configResource, new ApiError(
-                            Errors.INVALID_CONFIG, "Can't " + opType + " to " +
+                            INVALID_CONFIG, "Can't " + opType + " to " +
                             "key " + key + " because its type is not LIST."));
                         return;
                     }
@@ -157,7 +155,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        error = checkAlterConfigPolicy(configResource, newRecords);
+        error = validateAlterConfig(configResource, newRecords);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
@@ -166,9 +164,8 @@ public class ConfigurationControlManager {
         outputResults.put(configResource, ApiError.NONE);
     }
 
-    private ApiError checkAlterConfigPolicy(ConfigResource configResource,
-                                            List<ApiMessageAndVersion> newRecords) {
-        if (!alterConfigPolicy.isPresent()) return ApiError.NONE;
+    private ApiError validateAlterConfig(ConfigResource configResource,
+                                         List<ApiMessageAndVersion> newRecords) {
         Map<String, String> newConfigs = new HashMap<>();
         TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
         if (existingConfigs != null) newConfigs.putAll(existingConfigs);
@@ -181,9 +178,14 @@ public class ConfigurationControlManager {
             }
         }
         try {
-            alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
-        } catch (PolicyViolationException e) {
-            return new ApiError(Errors.POLICY_VIOLATION, e.getMessage());
+            validator.validate(configResource, newConfigs);
+            if (alterConfigPolicy.isPresent()) {
+                alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
+            }
+        } catch (ConfigException e) {
+            return new ApiError(INVALID_CONFIG, e.getMessage());
+        } catch (Throwable e) {
+            return ApiError.fromThrowable(e);
         }
         return ApiError.NONE;
     }
@@ -246,7 +248,7 @@ public class ConfigurationControlManager {
                     setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        error = checkAlterConfigPolicy(configResource, newRecords);
+        error = validateAlterConfig(configResource, newRecords);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;

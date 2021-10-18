@@ -47,6 +47,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
+import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER_LOGGER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -93,7 +94,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty());
+                Optional.empty(), ConfigurationValidator.NO_OP);
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -152,17 +153,29 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty());
+                Optional.empty(), ConfigurationValidator.NO_OP);
+
+        ControllerResult<Map<ConfigResource, ApiError>> result = manager.
+            incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                entry("baz", entry(SUBTRACT, "abc")),
+                entry("quux", entry(SET, "abc")))),
+                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))));
+
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), (short) 0)),
-                toMap(entry(BROKER0, new ApiError(Errors.INVALID_REQUEST,
-                            "A DELETE op was given with a non-null value.")),
-                    entry(MYTOPIC, ApiError.NONE))),
-            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                    entry("foo.bar", entry(DELETE, "abc")),
-                    entry("quux", entry(SET, "abc")))),
-                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123")))))));
+                toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
+                            "Can't SUBTRACT to key baz because its type is not LIST.")),
+                    entry(MYTOPIC, ApiError.NONE))), result);
+
+        RecordTestUtils.replayAll(manager, result.records());
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                    setName("abc").setValue(null), (short) 0)),
+                toMap(entry(MYTOPIC, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
+                entry("abc", entry(DELETE, "xyz")))))));
     }
 
     private static class MockAlterConfigsPolicy implements AlterConfigPolicy {
@@ -206,7 +219,8 @@ public class ConfigurationControlManagerTest {
             new RequestMetadata(BROKER0, toMap(entry("foo.bar", "123"),
                 entry("quux", "456")))));
         ConfigurationControlManager manager = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, CONFIGS, Optional.of(policy));
+            new LogContext(), snapshotRegistry, CONFIGS, Optional.of(policy),
+            ConfigurationValidator.NO_OP);
 
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
@@ -231,7 +245,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty());
+                Optional.empty(), ConfigurationValidator.NO_OP);
         assertTrue(manager.isSplittable(BROKER, "foo.bar"));
         assertFalse(manager.isSplittable(BROKER, "baz"));
         assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
@@ -244,7 +258,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty());
+                Optional.empty(), ConfigurationValidator.NO_OP);
         assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
         assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
         assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
@@ -256,7 +270,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty());
+                Optional.empty(), ConfigurationValidator.NO_OP);
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").

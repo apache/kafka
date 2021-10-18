@@ -137,7 +137,8 @@ public class ReplicationControlManagerTest {
             logContext, time, snapshotRegistry, TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
             new StripedReplicaPlacer(random), metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty());
+            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty(),
+                (__, ___) -> { });
         final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
@@ -415,7 +416,7 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse3 = new CreateTopicsResponseData();
         expectedResponse3.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
-                setErrorMessage(Errors.TOPIC_ALREADY_EXISTS.exception().getMessage()));
+                setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse3, result3.response());
         Uuid fooId = result2.response().topics().find("foo").topicId();
         RecordTestUtils.assertBatchIteratorContains(asList(
