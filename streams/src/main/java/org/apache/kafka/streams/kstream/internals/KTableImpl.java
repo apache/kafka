@@ -726,8 +726,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             ((KTableImpl<?, ?, ?>) other).enableSendingOldValues(true);
         }
 
-        final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
-        final KTableKTableAbstractJoin<K, VR, VO, V> joinOther;
+        final KTableKTableAbstractJoin<K, V, VO, VR> joinThis;
+        final KTableKTableAbstractJoin<K, VO, V, VR> joinOther;
 
         if (!leftOuter) { // inner
             joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
