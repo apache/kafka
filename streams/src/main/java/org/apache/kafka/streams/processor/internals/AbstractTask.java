@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -167,15 +168,11 @@ public abstract class AbstractTask implements Task {
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 
-            final StreamsException exception;
             if (cause != null) {
-                exception = new StreamsException(errorMessage, cause);
+                throw new StreamsException(errorMessage, cause, id);
             } else {
-                exception = new StreamsException(errorMessage);
+                throw new StreamsException(new TimeoutException(errorMessage), id);
             }
-
-            exception.setTaskId(id);
-            throw exception;
         }
 
         if (cause != null) {
