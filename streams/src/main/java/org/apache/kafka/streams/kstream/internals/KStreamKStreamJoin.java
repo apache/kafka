@@ -135,7 +135,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     );
                 } else {
                     LOG.warn(
-                        "Skipping record due to null key. Topic, partition, and offset not known."
+                        "Skipping record due to null key or value. Topic, partition, and offset not known."
                     );
                 }
                 droppedRecordsSensor.record();
