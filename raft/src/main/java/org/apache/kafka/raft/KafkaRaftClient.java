@@ -2432,7 +2432,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return listener;
         }
 
-        private static enum Ops {
+        private enum Ops {
             REGISTER, UNREGISTER
         }
 
