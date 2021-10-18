@@ -140,6 +140,7 @@ public final class QuorumController implements Controller {
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
+        private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -215,6 +216,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setConfigurationValidator(ConfigurationValidator configurationValidator) {
+            this.configurationValidator = configurationValidator;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -237,7 +243,7 @@ public final class QuorumController implements Controller {
                     raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
-                    alterConfigPolicy);
+                    alterConfigPolicy, configurationValidator);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -1114,7 +1120,8 @@ public final class QuorumController implements Controller {
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics,
                              Optional<CreateTopicPolicy> createTopicPolicy,
-                             Optional<AlterConfigPolicy> alterConfigPolicy) {
+                             Optional<AlterConfigPolicy> alterConfigPolicy,
+                             ConfigurationValidator configurationValidator) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1124,7 +1131,7 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs, alterConfigPolicy);
+            snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
