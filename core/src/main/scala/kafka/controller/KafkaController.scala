@@ -448,7 +448,7 @@ class KafkaController(val config: KafkaConfig,
    * required to clean up internal controller data structures
    */
   private def onControllerResignation(): Unit = {
-    debug("Resigning")
+    info("Controller resigning")
     // de-register listeners
     zkClient.unregisterZNodeChildChangeHandler(isrChangeNotificationHandler.path)
     zkClient.unregisterZNodeChangeHandler(partitionReassignmentHandler.path)
@@ -485,7 +485,7 @@ class KafkaController(val config: KafkaConfig,
     controllerChannelManager.shutdown()
     controllerContext.resetContext()
 
-    info("Resigned")
+    info("Controller resigned")
   }
 
   /*
@@ -1498,32 +1498,42 @@ class KafkaController(val config: KafkaConfig,
 
   private def elect(): Unit = {
     activeControllerId = zkClient.getControllerId.getOrElse(-1)
-    /*
-     * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
-     * it's possible that the controller has already been elected when we get here. This check will prevent the following
-     * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
-     */
-    if (activeControllerId != -1) {
-      debug(s"Broker $activeControllerId has been elected as the controller, so stopping the election process.")
-      return
-    }
-
     try {
-      val (epoch, epochZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(config.brokerId)
-      controllerContext.epoch = epoch
-      controllerContext.epochZkVersion = epochZkVersion
-      activeControllerId = config.brokerId
+      if (activeControllerId == -1) {
+        debug(s"No controller already elected, kick off election")
+        val (epoch, epochZkVersion) = zkClient.registerControllerAndIncrementControllerEpoch(config.brokerId)
+        controllerContext.epoch = epoch
+        controllerContext.epochZkVersion = epochZkVersion
+        activeControllerId = config.brokerId
 
-      info(s"${config.brokerId} successfully elected as the controller. Epoch incremented to ${controllerContext.epoch} " +
-        s"and epoch zk version is now ${controllerContext.epochZkVersion}")
+        info(s"${config.brokerId} successfully elected as the controller. Epoch incremented to ${controllerContext.epoch} " +
+          s"and epoch zk version is now ${controllerContext.epochZkVersion}")
 
-      onControllerFailover()
+        onControllerFailover()
+      } else if (isActive) {
+        val (epoch, stat) = zkClient.getControllerEpoch.getOrElse(throw new IllegalStateException("Controller epoch missing"))
+
+        if (controllerContext.epoch == epoch && controllerContext.epochZkVersion == stat.getVersion) {
+          info(s"This broker was already elected, and is running the controller.")
+        } else {
+          // We can get here occasionally if the ZK leader restarted
+          info(s"This broker was already elected, but is not running the controller. Starting controller.")
+
+          controllerContext.epoch = epoch
+          controllerContext.epochZkVersion = stat.getVersion
+
+          onControllerFailover()
+        }
+      } else {
+        info(s"Broker $activeControllerId has been elected as the controller")
+      }
+
     } catch {
       case e: ControllerMovedException =>
         maybeResign()
 
         if (activeControllerId != -1)
-          debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
+          info(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
         else
           warn("A controller has been elected but just resigned, this will result in another round of election", e)
       case t: Throwable =>
