@@ -82,7 +82,7 @@ public class KTablePassThrough<KIn, VIn> implements KTableNewProcessorSupplier<K
         private TimestampedKeyValueStore<KIn, VIn> store;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);
         }
 

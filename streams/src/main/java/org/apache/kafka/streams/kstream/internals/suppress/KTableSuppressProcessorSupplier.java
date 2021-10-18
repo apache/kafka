@@ -71,7 +71,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessor
                     private TimeOrderedKeyValueBuffer<K, V> buffer;
 
                     @Override
-                    public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    public void init(final ProcessorContext<?, ?> context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
                         buffer = requireNonNull(context.getStateStore(storeName));

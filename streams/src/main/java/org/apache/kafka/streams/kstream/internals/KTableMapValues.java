@@ -155,7 +155,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableNewProcessorSupplier<KIn,
         }
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             parentGetter.init(context);
         }
 
