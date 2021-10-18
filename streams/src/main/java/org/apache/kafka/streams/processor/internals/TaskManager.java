@@ -622,17 +622,6 @@ public class TaskManager {
         }
     }
 
-    private void maybeWrapAndSetFirstException(final AtomicReference<RuntimeException> firstException,
-                                               final RuntimeException exception,
-                                               final TaskId taskId) {
-        if (exception instanceof StreamsException) {
-            ((StreamsException) exception).setTaskId(taskId);
-            firstException.compareAndSet(null, exception);
-        } else {
-            firstException.compareAndSet(null, new StreamsException(exception, taskId));
-        }
-    }
-
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
@@ -1437,6 +1426,17 @@ public class TaskManager {
 
     Set<TaskId> lockedTaskDirectories() {
         return Collections.unmodifiableSet(lockedTaskDirectories);
+    }
+
+    private void maybeWrapAndSetFirstException(final AtomicReference<RuntimeException> firstException,
+                                               final RuntimeException exception,
+                                               final TaskId taskId) {
+        if (exception instanceof StreamsException) {
+            ((StreamsException) exception).setTaskId(taskId);
+            firstException.compareAndSet(null, exception);
+        } else {
+            firstException.compareAndSet(null, new StreamsException(exception, taskId));
+        }
     }
 
     public static void executeAndMaybeSwallow(final boolean clean,
