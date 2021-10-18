@@ -324,15 +324,20 @@ public class TaskManager {
 
             for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
-                    if (entry.getValue() instanceof KafkaException) {
-                        throw new StreamsException(entry.getValue(), entry.getKey());
+                    final TaskId taskId = entry.getKey();
+                    final RuntimeException exception = entry.getValue();
+                    if (exception instanceof StreamsException) {
+                        ((StreamsException) exception).setTaskId(taskId);
+                        throw exception;
+                    } else if (exception instanceof KafkaException) {
+                        throw new StreamsException(exception, taskId);
                     } else {
                         throw new StreamsException(
                             "Unexpected failure to close " + taskCloseExceptions.size() +
                                 " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                                "First unexpected exception (for task " + entry.getKey() + ") follows.",
-                            entry.getValue(),
-                            entry.getKey()
+                                "First unexpected exception (for task " + taskId + ") follows.",
+                            exception,
+                            taskId
                         );
                     }
                 }
@@ -340,7 +345,7 @@ public class TaskManager {
 
             // If all exceptions are task-migrated, we would just throw the first one.
             final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
-            throw new StreamsException(first.getValue(), first.getKey());
+            throw first.getValue();
         }
 
         tasks.handleNewAssignmentAndCreateTasks(activeTasksToCreate, standbyTasksToCreate, activeTasks.keySet(), standbyTasks.keySet());
