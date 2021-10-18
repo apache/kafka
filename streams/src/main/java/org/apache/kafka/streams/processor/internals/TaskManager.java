@@ -1463,7 +1463,7 @@ public class TaskManager {
             runnable,
             e -> {
                 throw e;
-                },
+            },
             e -> log.debug("Ignoring error in unclean {}", name));
     }
 
