@@ -587,7 +587,7 @@ public class TaskManager {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
-                    firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                    maybeWrapAndSetFirstException(firstException, e, task.id());
                 }
             }
         }
@@ -602,7 +602,7 @@ public class TaskManager {
                         task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                        maybeWrapAndSetFirstException(firstException, e, task.id());
                     }
                 }
             }
@@ -613,12 +613,23 @@ public class TaskManager {
                 task.suspend();
             } catch (final RuntimeException e) {
                 log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
-                firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e, task.id()));
+                maybeWrapAndSetFirstException(firstException, e, task.id());
             }
         }
 
         if (firstException.get() != null) {
             throw firstException.get();
+        }
+    }
+
+    private void maybeWrapAndSetFirstException(final AtomicReference<RuntimeException> firstException,
+                                               final RuntimeException exception,
+                                               final TaskId taskId) {
+        if (exception instanceof StreamsException) {
+            ((StreamsException) exception).setTaskId(taskId);
+            firstException.compareAndSet(null, exception);
+        } else {
+            firstException.compareAndSet(null, new StreamsException(exception, taskId));
         }
     }
 
@@ -926,7 +937,7 @@ public class TaskManager {
                         task.postCommit(true);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                        maybeWrapAndSetFirstException(firstException, e, task.id());
                         tasksToCloseDirty.add(task);
                         tasksToCloseClean.remove(task);
                     }
@@ -996,7 +1007,7 @@ public class TaskManager {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                maybeWrapAndSetFirstException(firstException, e, task.id());
                 tasksToCloseDirty.add(task);
             }
         }
@@ -1350,6 +1361,10 @@ public class TaskManager {
                 log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
+            } catch (final StreamsException e) {
+                log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
+                e.setTaskId(task.id());
+                throw e;
             } catch (final KafkaException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
                 throw new StreamsException(e, task.id());
@@ -1443,8 +1458,12 @@ public class TaskManager {
                                               final Runnable runnable,
                                               final String name,
                                               final Logger log) {
-        executeAndMaybeSwallow(clean, runnable, e -> {
-            throw e; },
+        executeAndMaybeSwallow(
+            clean,
+            runnable,
+            e -> {
+                throw e;
+                },
             e -> log.debug("Ignoring error in unclean {}", name));
     }
 
