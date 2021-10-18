@@ -213,31 +213,32 @@ public class ReplicationControlManagerTest {
 
         registerBroker(0, ctx);
 
-        assertEquals(0, ctx.metrics.unfencedBrokerCount());
-        assertEquals(1, ctx.metrics.registeredBrokerCount());
+        assertEquals(1, ctx.metrics.fencedBrokerCount());
+        assertEquals(0, ctx.metrics.activeBrokerCount());
 
         unfenceBroker(0, ctx);
 
-        assertEquals(1, ctx.metrics.unfencedBrokerCount());
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
 
         registerBroker(1, ctx);
         unfenceBroker(1, ctx);
 
-        assertEquals(2, ctx.metrics.registeredBrokerCount());
+        assertEquals(2, ctx.metrics.activeBrokerCount());
 
         registerBroker(2, ctx);
         unfenceBroker(2, ctx);
 
-        assertEquals(3, ctx.metrics.registeredBrokerCount());
-        assertEquals(3, ctx.metrics.unfencedBrokerCount());
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(3, ctx.metrics.activeBrokerCount());
 
         ControllerResult<Void> result = replicationControl.unregisterBroker(0);
         ctx.replay(result.records());
         result = replicationControl.unregisterBroker(2);
         ctx.replay(result.records());
 
-        assertEquals(1, ctx.metrics.registeredBrokerCount());
-        assertEquals(1, ctx.metrics.unfencedBrokerCount());
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
     }
 
     @Test

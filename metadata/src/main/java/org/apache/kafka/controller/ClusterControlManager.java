@@ -247,6 +247,7 @@ public class ClusterControlManager {
         // If this registration record is for a broker incarnation that was already
         // registered, though, we preserve the existing fencing state.
         boolean fenced = true;
+        controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
         BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
         if (prevRegistration != null &&
                 prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -256,7 +257,6 @@ public class ClusterControlManager {
         brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
             record.brokerEpoch(), record.incarnationId(), listeners, features,
             Optional.ofNullable(record.rack()), fenced));
-        controllerMetrics.setRegisteredBrokerCount(brokerRegistrations.size());
 
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
@@ -278,9 +278,10 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.remove(brokerId);
-            controllerMetrics.setRegisteredBrokerCount(brokerRegistrations.size());
             if (!registration.fenced()) {
-                controllerMetrics.setUnfencedBrokerCount(controllerMetrics.unfencedBrokerCount() - 1);
+                controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() - 1);
+            } else {
+                controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() - 1);
             }
             log.info("Unregistered broker: {}", record);
         }
@@ -297,6 +298,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(true));
+            controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
             log.info("Fenced broker: {}", record);
         }
     }
@@ -312,7 +314,8 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(false));
-            controllerMetrics.setUnfencedBrokerCount(1 + controllerMetrics.unfencedBrokerCount());
+            controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() + 1);
+            controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() - 1);
             log.info("Unfenced broker: {}", record);
         }
         if (readyBrokersFuture.isPresent()) {

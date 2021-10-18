@@ -27,13 +27,13 @@ public interface ControllerMetrics {
 
     void updateEventQueueProcessingTime(long durationMs);
 
-    void setRegisteredBrokerCount(int brokerCount);
+    void setFencedBrokerCount(int brokerCount);
 
-    int registeredBrokerCount();
+    int fencedBrokerCount();
 
-    void setUnfencedBrokerCount(int brokerCount);
+    void setActiveBrokerCount(int brokerCount);
 
-    int unfencedBrokerCount();
+    int activeBrokerCount();
 
     void setGlobalTopicsCount(int topicCount);
 
