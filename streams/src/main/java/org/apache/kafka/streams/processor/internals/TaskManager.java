@@ -325,12 +325,14 @@ public class TaskManager {
             for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
                     if (entry.getValue() instanceof KafkaException) {
-                        throw entry.getValue();
+                        throw new StreamsException(entry.getValue(), entry.getKey());
                     } else {
-                        throw new RuntimeException(
+                        throw new StreamsException(
                             "Unexpected failure to close " + taskCloseExceptions.size() +
                                 " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                                "First unexpected exception (for task " + entry.getKey() + ") follows.", entry.getValue()
+                                "First unexpected exception (for task " + entry.getKey() + ") follows.",
+                            entry.getValue(),
+                            entry.getKey()
                         );
                     }
                 }
@@ -338,7 +340,7 @@ public class TaskManager {
 
             // If all exceptions are task-migrated, we would just throw the first one.
             final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
-            throw first.getValue();
+            throw new StreamsException(first.getValue(), first.getKey());
         }
 
         tasks.handleNewAssignmentAndCreateTasks(activeTasksToCreate, standbyTasksToCreate, activeTasks.keySet(), standbyTasks.keySet());
@@ -516,7 +518,7 @@ public class TaskManager {
         final Set<Task> revokedActiveTasks = new HashSet<>();
         final Set<Task> commitNeededActiveTasks = new HashSet<>();
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        final AtomicReference<StreamsException> firstException = new AtomicReference<>(null);
 
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
@@ -567,7 +569,7 @@ public class TaskManager {
             closeDirtyAndRevive(dirtyTasks, false);
         } catch (final RuntimeException e) {
             log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, e);
+            firstException.compareAndSet(null, new StreamsException(e));
             dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
         }
 
@@ -579,7 +581,7 @@ public class TaskManager {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
-                    firstException.compareAndSet(null, e);
+                    firstException.compareAndSet(null, new StreamsException(e, task.id()));
                 }
             }
         }
@@ -594,7 +596,7 @@ public class TaskManager {
                         task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, e);
+                        firstException.compareAndSet(null, new StreamsException(e, task.id()));
                     }
                 }
             }
@@ -605,7 +607,7 @@ public class TaskManager {
                 task.suspend();
             } catch (final RuntimeException e) {
                 log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
-                firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
+                firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e, task.id()));
             }
         }
 
@@ -719,8 +721,6 @@ public class TaskManager {
      * example unassigned tasks or those in the CREATED state when closed, since Task#close will not unlock them
      */
     private void releaseLockedDirectoriesForTasks(final Set<TaskId> tasksToUnlock) {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
@@ -729,11 +729,6 @@ public class TaskManager {
                 taskIdIterator.remove();
             }
         }
-
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw fatalException;
-        }
     }
 
     /**
@@ -741,8 +736,6 @@ public class TaskManager {
      * rebalance in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      */
     private void releaseLockedUnassignedTaskDirectories() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
@@ -750,11 +743,6 @@ public class TaskManager {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
-        }
-
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw fatalException;
         }
     }
 
@@ -771,7 +759,9 @@ public class TaskManager {
                 return Task.LATEST_OFFSET;
             } else if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
                 if (offset < 0) {
-                    throw new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry);
+                    throw new StreamsException(
+                        new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
+                        id);
                 }
                 offsetSum += offset;
                 if (offsetSum < 0) {
@@ -864,7 +854,7 @@ public class TaskManager {
             executeAndMaybeSwallow(
                 clean,
                 () -> tasks.closeAndRemoveTaskProducerIfNeeded(activeTask),
-                e -> firstException.compareAndSet(null, e),
+                e -> firstException.compareAndSet(null, new StreamsException(e, activeTask.id())),
                 e -> log.warn("Ignoring an exception while closing task " + activeTask.id() + " producer.", e)
             );
         }
@@ -901,7 +891,7 @@ public class TaskManager {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, e);
+                firstException.compareAndSet(null, new StreamsException(e, task.id()));
                 tasksToCloseDirty.add(task);
             }
         }
@@ -919,7 +909,7 @@ public class TaskManager {
                         task.postCommit(true);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, e);
+                        firstException.compareAndSet(null, new StreamsException(e, task.id()));
                         tasksToCloseDirty.add(task);
                         tasksToCloseClean.remove(task);
                     }
@@ -956,7 +946,7 @@ public class TaskManager {
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while clean-closing task " + task.id(), e);
-                firstException.compareAndSet(null, e);
+                firstException.compareAndSet(null, new StreamsException(e, task.id()));
                 tasksToCloseDirty.add(task);
             }
         }
@@ -984,7 +974,7 @@ public class TaskManager {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, e);
+                firstException.compareAndSet(null, new StreamsException(e, task.id()));
                 tasksToCloseDirty.add(task);
             }
         }
@@ -1303,9 +1293,7 @@ public class TaskManager {
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
-                final StreamsException exception = new StreamsException(e);
-                exception.setTaskId(task.id());
-                throw exception;
+                throw new StreamsException(e, task.id());
             } finally {
                 now = time.milliseconds();
                 totalProcessed += processed;
@@ -1342,7 +1330,7 @@ public class TaskManager {
                 throw e;
             } catch (final KafkaException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
-                throw e;
+                throw new StreamsException(e, task.id());
             }
         }
 

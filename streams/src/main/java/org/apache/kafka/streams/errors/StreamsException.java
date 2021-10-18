@@ -32,15 +32,30 @@ public class StreamsException extends KafkaException {
         super(message);
     }
 
+    public StreamsException(final String message, final TaskId taskId) {
+        super(message);
+        this.taskId = taskId;
+    }
+
     public StreamsException(final String message, final Throwable throwable) {
         super(message, throwable);
+    }
+
+    public StreamsException(final String message, final Throwable throwable, final TaskId taskId) {
+        super(message, throwable);
+        this.taskId = taskId;
     }
 
     public StreamsException(final Throwable throwable) {
         super(throwable);
     }
 
-    public TaskId topologyName() {
+    public StreamsException(final Throwable throwable, final TaskId taskId) {
+        super(throwable);
+        this.taskId = taskId;
+    }
+
+    public TaskId taskId() {
         return taskId;
     }
 
