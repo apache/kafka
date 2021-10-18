@@ -201,10 +201,10 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
+                final String repartitionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
                     repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
 
-                createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
+                createRepartitionSource(repartitionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
                 if (!parentNodes.containsKey(repartitionReqs)) {
                     final GraphNode repartitionNode = repartitionNodeBuilder.build();
