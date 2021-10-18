@@ -891,7 +891,8 @@ public class TaskManager {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final StreamsException e) {
-                firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                e.setTaskId(task.id());
+                firstException.compareAndSet(null, e);
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, new StreamsException(e, task.id()));

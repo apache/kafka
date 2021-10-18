@@ -169,7 +169,7 @@ public abstract class AbstractTask implements Task {
             );
 
             if (cause != null) {
-                throw new StreamsException(errorMessage, cause, id);
+                throw new StreamsException(new TimeoutException(errorMessage, cause), id);
             } else {
                 throw new StreamsException(new TimeoutException(errorMessage), id);
             }
