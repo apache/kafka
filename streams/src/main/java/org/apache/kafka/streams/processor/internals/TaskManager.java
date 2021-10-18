@@ -343,7 +343,8 @@ public class TaskManager {
                 }
             }
 
-            // If all exceptions are task-migrated, we would just throw the first one.
+            // If all exceptions are task-migrated, we would just throw the first one. No need to wrap with a
+            // StreamsException since TaskMigrated is handled explicitly by the StreamThread
             final Map.Entry<TaskId, RuntimeException> first = taskCloseExceptions.entrySet().iterator().next();
             throw first.getValue();
         }
