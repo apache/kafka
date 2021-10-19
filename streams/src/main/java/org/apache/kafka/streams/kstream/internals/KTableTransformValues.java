@@ -100,7 +100,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
         @Override
         public void init(final ProcessorContext<K, Change<VOut>> context) {
             super.init(context);
-            InternalProcessorContext<K, Change<VOut>> internalProcessorContext = (InternalProcessorContext<K, Change<VOut>>) context;
+            final InternalProcessorContext<K, Change<VOut>> internalProcessorContext = (InternalProcessorContext<K, Change<VOut>>) context;
             valueTransformer.init(new ForwardingDisabledProcessorContext(internalProcessorContext));
             if (queryableName != null) {
                 store = context.getStateStore(queryableName);
