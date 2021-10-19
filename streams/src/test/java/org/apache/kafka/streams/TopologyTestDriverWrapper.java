@@ -43,7 +43,7 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      * @return the processor context
      */
     @SuppressWarnings("unchecked")
-    public <K, V> org.apache.kafka.streams.processor.api.ProcessorContext<K, V> setCurrentNodeForProcessorContext(final String processorName) {
+    public <K, V> ProcessorContext<K, V> setCurrentNodeForProcessorContext(final String processorName) {
         final ProcessorContext<K, V> context = task.processorContext();
         ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
         return context;
