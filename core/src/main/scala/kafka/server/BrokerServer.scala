@@ -100,7 +100,7 @@ class BrokerServer(
   val awaitShutdownCond = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
-  var dataPlaneRequestProcessor: KafkaApis = null
+  @volatile var dataPlaneRequestProcessor: KafkaApis = null
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
@@ -119,7 +119,7 @@ class BrokerServer(
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
 
-  var groupCoordinator: GroupCoordinator = null
+  @volatile var groupCoordinator: GroupCoordinator = null
 
   var transactionCoordinator: TransactionCoordinator = null
 
@@ -133,7 +133,7 @@ class BrokerServer(
 
   var kafkaScheduler: KafkaScheduler = null
 
-  var metadataCache: KRaftMetadataCache = null
+  @volatile var metadataCache: KRaftMetadataCache = null
 
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
@@ -442,7 +442,7 @@ class BrokerServer(
     }
   }
 
-  def shutdown(): Unit = {
+  override def shutdown(): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
       info("shutting down")
@@ -555,6 +555,6 @@ class BrokerServer(
     }
   }
 
-  def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
+  override def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
 }
