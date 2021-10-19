@@ -953,15 +953,9 @@ public class StreamThread extends Thread {
             pollRecordsSensor.record(numRecords, now);
         }
 
-        bufferSize += polledRecordsSize;
-
-        if (bufferSize > maxBufferSizeBytes) {
-            log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
-            mainConsumer.pause(records.partitions());
-        } else {
-            if (!records.isEmpty()) {
-                taskManager.addRecordsToTasks(records);
-            }
+        if (!records.isEmpty()) {
+            pollRecordsSensor.record(numRecords, now);
+            taskManager.addRecordsToTasks(records);
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {

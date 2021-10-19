@@ -388,7 +388,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
-    /** {@code statestore.cache.max.bytes} */
+    /** {@statestore.cache.max.bytes} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
     private static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";

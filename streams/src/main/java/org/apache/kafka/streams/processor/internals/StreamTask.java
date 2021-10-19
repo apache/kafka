@@ -721,9 +721,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 mainConsumer.resume(singleton(partition));
             }
 
-            bytesConsumed += (record.key() != null ? record.serializedKeySize() : 0) +
-                    (record.value() != null ? record.serializedValueSize() : 0);
-
             record = null;
         } catch (final TimeoutException timeoutException) {
             if (!eosEnabled) {
