@@ -162,7 +162,7 @@ public class KTableTransformValuesTest {
         final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
-        context.forward("Key", new Change<>("Key->newValue!", null));
+        context.forward(new Record<>("Key", new Change<>("Key->newValue!", null), 0));
         expectLastCall();
         replay(context);
 
@@ -183,7 +183,7 @@ public class KTableTransformValuesTest {
         final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
-        context.forward("Key", new Change<>("Key->newValue!", "Key->oldValue!"));
+        context.forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0));
         expectLastCall();
         replay(context);
 
