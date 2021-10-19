@@ -2144,7 +2144,7 @@ object TestUtils extends Logging {
       KafkaProducer.NETWORK_THREAD_PREFIX,
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
-      ZooKeeperTestHarness.ZkClientEventThreadSuffix
+      QuorumTestHarness.ZkClientEventThreadSuffix
     )
 
     def unexpectedThreads: Set[String] = {

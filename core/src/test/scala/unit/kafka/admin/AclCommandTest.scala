@@ -23,7 +23,7 @@ import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
@@ -38,7 +38,7 @@ import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-class AclCommandTest extends ZooKeeperTestHarness with Logging {
+class AclCommandTest extends QuorumTestHarness with Logging {
 
   var servers: Seq[KafkaServer] = Seq()
 

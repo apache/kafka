@@ -20,14 +20,14 @@ package kafka.server
 import scala.collection.Seq
 
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
 import TestUtils._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 
-class ReplicaFetchTest extends ZooKeeperTestHarness  {
+class ReplicaFetchTest extends QuorumTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"

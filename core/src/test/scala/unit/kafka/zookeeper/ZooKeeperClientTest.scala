@@ -26,7 +26,7 @@ import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.server.KafkaConfig
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
-class ZooKeeperClientTest extends ZooKeeperTestHarness {
+class ZooKeeperClientTest extends QuorumTestHarness {
   private val mockPath = "/foo"
   private val time = Time.SYSTEM
 
@@ -88,9 +88,9 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   def testConnection(): Unit = {
     val client = newZooKeeperClient()
     try {
-      // Verify ZooKeeper event thread name. This is used in ZooKeeperTestHarness to verify that tests have closed ZK clients
+      // Verify ZooKeeper event thread name. This is used in QuorumTestHarness to verify that tests have closed ZK clients
       val threads = Thread.getAllStackTraces.keySet.asScala.map(_.getName)
-      assertTrue(threads.exists(_.contains(ZooKeeperTestHarness.ZkClientEventThreadSuffix)),
+      assertTrue(threads.exists(_.contains(QuorumTestHarness.ZkClientEventThreadSuffix)),
         s"ZooKeeperClient event thread not found, threads=$threads")
     } finally {
       client.close()

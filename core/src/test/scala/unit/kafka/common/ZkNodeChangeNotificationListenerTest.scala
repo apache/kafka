@@ -17,7 +17,8 @@
 package kafka.common
 
 import kafka.utils.TestUtils
-import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
+import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore}
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.GROUP
@@ -26,7 +27,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 
-class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
+class ZkNodeChangeNotificationListenerTest extends QuorumTestHarness {
 
   private val changeExpirationMs = 1000
   private var notificationListener: ZkNodeChangeNotificationListener = _

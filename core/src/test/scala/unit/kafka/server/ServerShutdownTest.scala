@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 
@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 @Timeout(60)
-class ServerShutdownTest extends ZooKeeperTestHarness {
+class ServerShutdownTest extends QuorumTestHarness {
   var config: KafkaConfig = null
   val host = "localhost"
   val topic = "test"

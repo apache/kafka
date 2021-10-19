@@ -24,7 +24,7 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createTopic
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
-class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
+class BrokerEpochIntegrationTest extends QuorumTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 

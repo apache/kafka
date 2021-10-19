@@ -21,7 +21,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicReference
 
 import kafka.utils.{CoreUtils, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
 import org.junit.jupiter.api.Assertions.{assertEquals}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -59,7 +59,7 @@ object KafkaMetricsReporterTest {
   }
 }
 
-class KafkaMetricsReporterTest extends ZooKeeperTestHarness {
+class KafkaMetricsReporterTest extends QuorumTestHarness {
   var server: KafkaServer = null
   var config: KafkaConfig = null
 

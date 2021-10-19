@@ -26,14 +26,14 @@ import ExecutionContext.Implicits._
 
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
-class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
+class ServerGenerateClusterIdTest extends QuorumTestHarness {
   var config1: KafkaConfig = null
   var config2: KafkaConfig = null
   var config3: KafkaConfig = null

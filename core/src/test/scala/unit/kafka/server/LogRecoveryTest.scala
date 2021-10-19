@@ -22,7 +22,7 @@ import scala.collection.Seq
 
 import kafka.utils.TestUtils
 import TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import java.io.File
 
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -32,7 +32,7 @@ import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerialize
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
-class LogRecoveryTest extends ZooKeeperTestHarness {
+class LogRecoveryTest extends QuorumTestHarness {
 
   val replicaLagTimeMaxMs = 5000L
   val replicaLagMaxMessages = 10L

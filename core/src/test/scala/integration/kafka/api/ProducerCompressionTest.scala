@@ -19,7 +19,7 @@ package kafka.api.test
 
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArraySerializer
@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import java.util.{Collections, Properties}
 import scala.jdk.CollectionConverters._
 
-class ProducerCompressionTest extends ZooKeeperTestHarness {
+class ProducerCompressionTest extends QuorumTestHarness {
 
   private val brokerId = 0
   private val topic = "topic"

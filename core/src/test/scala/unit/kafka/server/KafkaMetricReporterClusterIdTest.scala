@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
@@ -75,7 +75,7 @@ object KafkaMetricReporterClusterIdTest {
   }
 }
 
-class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
+class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
   var server: KafkaServer = null
   var config: KafkaConfig = null
 

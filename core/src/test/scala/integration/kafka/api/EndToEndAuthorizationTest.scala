@@ -54,14 +54,14 @@ import scala.jdk.CollectionConverters._
   * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
   * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
   * brokers, but first it initializes a ZooKeeper server and client, which happens
-  * in ZooKeeperTestHarness.
+  * in QuorumTestHarness.
   *
   * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
   * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
-  * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
-  * would end up with ZooKeeperTestHarness twice.
+  * SaslTestHarness here directly because it extends QuorumTestHarness, and we
+  * would end up with QuorumTestHarness twice.
   */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 3

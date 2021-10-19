@@ -20,7 +20,7 @@ import java.util.Properties
 
 import scala.collection.Seq
 
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -28,7 +28,7 @@ import java.io.File
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
+class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   var props1: Properties = null
   var config1: KafkaConfig = null
   var props2: Properties = null

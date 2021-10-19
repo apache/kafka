@@ -22,7 +22,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
-import kafka.server.{ConfigType, KafkaConfig}
+import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.network.ListenerName
@@ -56,7 +56,7 @@ import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class KafkaZkClientTest extends ZooKeeperTestHarness {
+class KafkaZkClientTest extends QuorumTestHarness {
 
   private val group = "my-group"
   private val topic1 = "topic1"

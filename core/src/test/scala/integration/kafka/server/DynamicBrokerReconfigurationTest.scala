@@ -35,9 +35,10 @@ import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
+import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.{ConfigEntityChangeNotificationZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
@@ -74,7 +75,7 @@ object DynamicBrokerReconfigurationTest {
   val SecureExternal = "EXTERNAL"
 }
 
-class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSetup {
+class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup {
 
   import DynamicBrokerReconfigurationTest._
 

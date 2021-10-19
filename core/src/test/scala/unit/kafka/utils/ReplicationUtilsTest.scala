@@ -19,12 +19,13 @@ package kafka.utils
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.server.QuorumTestHarness
 import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
-class ReplicationUtilsTest extends ZooKeeperTestHarness {
+class ReplicationUtilsTest extends QuorumTestHarness {
   private val zkVersion = 1
   private val topic = "my-topic-test"
   private val partition = 0

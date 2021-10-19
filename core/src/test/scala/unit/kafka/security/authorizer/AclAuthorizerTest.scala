@@ -25,9 +25,9 @@ import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 import kafka.Kafka
 import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
-import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
+import kafka.zk.ZkAclStore
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -49,7 +49,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
+class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)

@@ -23,10 +23,10 @@ import java.nio.file.{Files, StandardOpenOption}
 
 import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
-import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.{Exit, Logging, TestUtils}
-import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
+import kafka.zk.ReassignPartitionsZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -96,7 +96,7 @@ object ReplicationQuotasTestRig {
     val targetBytesPerBrokerMB: Long = msgsPerPartition.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
   }
 
-  class Experiment extends ZooKeeperTestHarness with Logging {
+  class Experiment extends QuorumTestHarness with Logging {
     val topicName = "my-topic"
     var experimentName = "unset"
     val partitionId = 0

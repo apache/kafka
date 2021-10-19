@@ -20,7 +20,7 @@ import java.util.concurrent.CompletionStage
 import java.{lang, util}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
@@ -29,7 +29,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
-class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
+class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private val interfaceDefaultAuthorizer = new DelegateAuthorizer
 

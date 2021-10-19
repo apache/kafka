@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutionException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
 
-class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
+class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 

@@ -25,10 +25,10 @@ import javax.security.auth.Subject
 import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.KafkaZkClient
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.acl.AclOperation.{READ, WRITE}
@@ -48,7 +48,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
+class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
 
   private val aclAuthorizer = new AclAuthorizer
   private val aclAuthorizer2 = new AclAuthorizer
