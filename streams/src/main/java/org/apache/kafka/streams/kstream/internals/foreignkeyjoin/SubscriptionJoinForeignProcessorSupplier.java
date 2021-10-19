@@ -51,7 +51,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     @Override
     public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> get() {
 
-        return new ContextualProcessor<CombinedKey<KO,K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>>() {
+        return new ContextualProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>>() {
 
             private KTableValueGetter<KO, VO> foreignValues;
 

@@ -138,8 +138,8 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                         //and LEFT join.
                     }
                     context().forward(
-                       record.withKey(newForeignKey)
-                           .withValue(new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, record.key())));
+                        record.withKey(newForeignKey)
+                            .withValue(new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, record.key())));
                 } else {
                     //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
                     context().forward(

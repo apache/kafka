@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -102,7 +103,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
     private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
         private final KTableValueGetter<K, V> parentGetter;
-        private ProcessorContext<?, ?> context;
+        private InternalProcessorContext<?, ?> context;
 
         KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
@@ -110,7 +111,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            this.context = context;
+            this.context = (InternalProcessorContext<?, ?>) context;
             parentGetter.init(context);
         }
 
@@ -119,7 +120,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
             return ValueAndTimestamp.make(
                 mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? 0L : valueAndTimestamp.timestamp()
+                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
             );
         }
 

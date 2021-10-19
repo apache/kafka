@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,11 +68,19 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends ContextualProcessor<
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
-        if (mappedKey == null || record.key() == null) {
-//            LOG.warn(
-//                    "Skipping record due to null join key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    key, value, context().topic(), context().partition(), context().offset()
-//            );
+        if (mappedKey == null || record.value() == null) {
+            if (context().recordMetadata().isPresent()) {
+                final RecordMetadata recordMetadata = context().recordMetadata().get();
+                LOG.warn(
+                    "Skipping record due to null join key or value. "
+                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                );
+            } else {
+                LOG.warn(
+                    "Skipping record due to null join key or value. Topic, partition, and offset not known."
+                );
+            }
             droppedRecordsSensor.record();
         } else {
             final V2 value2 = getValueOrNull(valueGetter.get(mappedKey));

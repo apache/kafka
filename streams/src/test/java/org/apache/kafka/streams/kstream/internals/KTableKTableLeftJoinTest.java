@@ -528,11 +528,11 @@ public class KTableKTableLeftJoinTest {
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableLeftJoin.class)) {
-            join.process(new Record<>(null, new Change<>("new", "old"), -3));
+            join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
+                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
             );
         }
     }

@@ -55,14 +55,14 @@ public class KTableKTableRightJoinTest {
         join.init(context);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableKTableRightJoin.class)) {
-            join.process(new Record<>(null, new Change<>("new", "old"), -3));
+            join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
             assertThat(
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
                     .collect(Collectors.toList()),
-                hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]")
+                hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
             );
         }
     }

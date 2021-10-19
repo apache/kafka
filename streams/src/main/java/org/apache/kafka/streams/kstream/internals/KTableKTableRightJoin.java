@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -85,10 +86,18 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         public void process(final Record<K, Change<V1>> record) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             if (record.key() == null) {
-//                LOG.warn(
-//                    "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
-//                    change, context().topic(), context().partition(), context().offset()
-//                );
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
+                    LOG.warn(
+                        "Skipping record due to null key. "
+                            + "topic=[{}] partition=[{}] offset=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    );
+                } else {
+                    LOG.warn(
+                        "Skipping record due to null key. Topic, partition, and offset not known."
+                    );
+                }
                 droppedRecordsSensor.record();
                 return;
             }
