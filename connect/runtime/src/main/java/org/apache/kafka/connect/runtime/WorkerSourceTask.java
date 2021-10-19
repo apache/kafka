@@ -514,9 +514,11 @@ class WorkerSourceTask extends WorkerTask {
                     // If the task has been cancelled, no more records will be sent from the producer; in that case, if any outstanding messages remain,
                     // we can stop flushing immediately
                     if (isCancelled() || timeoutMs <= 0) {
-                        log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
+                        log.error("{} Failed to flush, task is cancelled, or timed out while waiting for producer " +
+                            "to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
-                        recordCommitFailure(time.milliseconds() - started, null);
+                        recordCommitFailure(time.milliseconds() - started,
+                            new TimeoutException("Task is cancelled or timed out while waiting for flushing messages"));
                         return false;
                     }
                     this.wait(timeoutMs);
@@ -526,7 +528,7 @@ class WorkerSourceTask extends WorkerTask {
                     // to stop immediately
                     log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
                     finishFailedFlush();
-                    recordCommitFailure(time.milliseconds() - started, null);
+                    recordCommitFailure(time.milliseconds() - started, e);
                     return false;
                 }
             }
@@ -550,16 +552,16 @@ class WorkerSourceTask extends WorkerTask {
         // Now we can actually flush the offsets to user storage.
         Future<Void> flushFuture = offsetWriter.doFlush((error, result) -> {
             if (error != null) {
+                // Very rare case: offsets were unserializable, and unable to store any data
                 log.error("{} Failed to flush offsets to storage: ", WorkerSourceTask.this, error);
+                finishFailedFlush();
+                recordCommitFailure(time.milliseconds() - started, error);
             } else {
                 log.trace("{} Finished flushing offsets to storage", WorkerSourceTask.this);
             }
         });
-        // Very rare case: offsets were unserializable and we finished immediately, unable to store
-        // any data
+        // failed on doFlush, return false immediately
         if (flushFuture == null) {
-            finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
             return false;
         }
         try {
@@ -581,7 +583,7 @@ class WorkerSourceTask extends WorkerTask {
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage", this);
             finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started, e);
             return false;
         }
 
