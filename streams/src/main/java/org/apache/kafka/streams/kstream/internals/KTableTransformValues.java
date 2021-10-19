@@ -34,7 +34,7 @@ import java.util.Objects;
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableTransformValues<K, V, VOut> implements KTableNewProcessorSupplier<K, V, K, VOut> {
+class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V, K, VOut> {
     private final KTableImpl<K, ?, V> parent;
     private final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier;
     private final String queryableName;

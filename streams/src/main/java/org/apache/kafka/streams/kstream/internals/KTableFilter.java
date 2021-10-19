@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn, VIn> {
+class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final KTableImpl<KIn, ?, VIn> parent;
     private final Predicate<? super KIn, ? super VIn> predicate;
     private final boolean filterNot;

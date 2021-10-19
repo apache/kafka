@@ -27,15 +27,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KTableKTableJoinMerger<K, V> implements KTableNewProcessorSupplier<K, V, K, V> {
+public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
-    private final KTableNewProcessorSupplier<K, ?, K, V> parent1;
-    private final KTableNewProcessorSupplier<K, ?, K, V> parent2;
+    private final KTableProcessorSupplier<K, ?, K, V> parent1;
+    private final KTableProcessorSupplier<K, ?, K, V> parent2;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableKTableJoinMerger(final KTableNewProcessorSupplier<K, ?, K, V> parent1,
-                           final KTableNewProcessorSupplier<K, ?, K, V> parent2,
+    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                           final KTableProcessorSupplier<K, ?, K, V> parent2,
                            final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
@@ -86,13 +86,13 @@ public class KTableKTableJoinMerger<K, V> implements KTableNewProcessorSupplier<
         return true;
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableNewProcessorSupplier<K, ?, K, V> parent1,
-                                                         final KTableNewProcessorSupplier<K, ?, K, V> parent2) {
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2) {
         return of(parent1, parent2, null);
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableNewProcessorSupplier<K, ?, K, V> parent1,
-                                                         final KTableNewProcessorSupplier<K, ?, K, V> parent2,
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2,
                                                          final String queryableName) {
         return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
     }

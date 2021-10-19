@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
-import org.apache.kafka.streams.kstream.internals.KTableNewProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
@@ -69,9 +69,9 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     }
 
     @SuppressWarnings("unchecked")
-    <KR, VR> KTableNewProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
+    <KR, VR> KTableProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
         // This cast always works because KTableProcessorSupplier hasn't been converted yet.
-        return (KTableNewProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier;
+        return (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier;
     }
 
     @SuppressWarnings("unchecked")

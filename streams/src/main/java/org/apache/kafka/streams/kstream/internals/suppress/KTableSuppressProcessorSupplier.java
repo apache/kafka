@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.kstream.internals.KTableNewProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
@@ -39,7 +39,8 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static java.util.Objects.requireNonNull;
 
-public class KTableSuppressProcessorSupplier<K, V> implements KTableNewProcessorSupplier<K, V, K, V> {
+public class KTableSuppressProcessorSupplier<K, V> implements
+    KTableProcessorSupplier<K, V, K, V> {
     private final SuppressedInternal<K> suppress;
     private final String storeName;
     private final KTableImpl<K, ?, V> parentKTable;

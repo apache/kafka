@@ -18,7 +18,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
-abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements KTableNewProcessorSupplier<K, V1, K, VOut> {
+abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
+    KTableProcessorSupplier<K, V1, K, VOut> {
 
     private final KTableImpl<K, ?, V1> table1;
     private final KTableImpl<K, ?, V2> table2;

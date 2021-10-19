@@ -27,7 +27,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KTableAggregate<KIn, VIn, VAgg> implements KTableNewProcessorSupplier<KIn, VIn, KIn, VAgg> {
+public class KTableAggregate<KIn, VIn, VAgg> implements
+    KTableProcessorSupplier<KIn, VIn, KIn, VAgg> {
 
     private final String storeName;
     private final Initializer<VAgg> initializer;
