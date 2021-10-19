@@ -26,24 +26,24 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public final class QuorumControllerMetrics implements ControllerMetrics {
-    private final static MetricName ACTIVE_CONTROLLER_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "ActiveControllerCount", null);
-    private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
-    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
-        "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
-    private final static MetricName FENCED_BROKER_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "FencedBrokerCount", null);
-    private final static MetricName ACTIVE_BROKER_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "ActiveBrokerCount", null);
-    private final static MetricName GLOBAL_TOPIC_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "GlobalTopicCount", null);
-    private final static MetricName GLOBAL_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "GlobalPartitionCount", null);
-    private final static MetricName OFFLINE_PARTITION_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "OfflinePartitionCount", null);
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = new MetricName(
-        "kafka.controller", "KafkaController", "PreferredReplicaImbalanceCount", null);
+    private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
+        "KafkaController", "ActiveControllerCount");
+    private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
+        "ControllerEventManager", "EventQueueTimeMs");
+    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
+        "ControllerEventManager", "EventQueueProcessingTimeMs");
+    private final static MetricName FENCED_BROKER_COUNT = getMetricName(
+        "KafkaController", "FencedBrokerCount");
+    private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
+        "KafkaController", "ActiveBrokerCount");
+    private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
+        "KafkaController", "GlobalTopicCount");
+    private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
+        "KafkaController", "GlobalPartitionCount");
+    private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
+        "KafkaController", "OfflinePartitionsCount");
+    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
+        "KafkaController", "PreferredReplicaImbalanceCount");
     
     private final MetricsRegistry registry;
     private volatile boolean active;
