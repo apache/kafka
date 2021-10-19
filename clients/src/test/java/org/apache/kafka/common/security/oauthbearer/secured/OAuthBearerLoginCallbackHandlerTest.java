@@ -123,7 +123,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = () -> "foo";
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.configure(accessTokenRetriever, accessTokenValidator);
+        handler.init(accessTokenRetriever, accessTokenValidator);
 
         try {
             Callback unsupportedCallback = new Callback() { };
@@ -162,7 +162,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testNotConfigured() {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call configure method");
+        assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call the configure or init method");
     }
 
     @Test
@@ -218,7 +218,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.configure(accessTokenRetriever, accessTokenValidator);
+        handler.init(accessTokenRetriever, accessTokenValidator);
         return handler;
     }
 
