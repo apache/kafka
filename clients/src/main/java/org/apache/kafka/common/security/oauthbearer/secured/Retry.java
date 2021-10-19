@@ -65,6 +65,8 @@ public class Retry<R> {
             try {
                 return retryable.call();
             } catch (IOException e) {
+                log.warn("Error during OAuth attempt {}", currAttempt, e);
+
                 if (error == null)
                     error = e;
 

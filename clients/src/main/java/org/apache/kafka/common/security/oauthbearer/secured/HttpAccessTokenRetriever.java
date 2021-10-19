@@ -232,7 +232,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         try (InputStream is = con.getInputStream()) {
             ByteArrayOutputStream os = new ByteArrayOutputStream();
-            log.debug("handleOutput - preparing to read request body to {}", con.getURL());
+            log.debug("handleOutput - preparing to read response body from {}", con.getURL());
             copy(is, os);
             responseBody = os.toString(StandardCharsets.UTF_8.name());
         } catch (Exception e) {

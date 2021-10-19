@@ -39,16 +39,16 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private AccessTokenValidator accessTokenValidator;
 
-    private boolean isConfigured = false;
+    private boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, saslMechanism);
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
-        configure(verificationKeyResolver, accessTokenValidator);
+        init(verificationKeyResolver, accessTokenValidator);
     }
 
-    public void configure(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
+    public void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.accessTokenValidator = accessTokenValidator;
 
@@ -58,7 +58,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             throw new KafkaException("The OAuth validator configuration encountered an error when initializing the VerificationKeyResolver", e);
         }
 
-        isConfigured = true;
+        isInitialized = true;
     }
 
     @Override
@@ -74,11 +74,11 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkConfigured();
+        checkInitialized();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerValidatorCallback) {
-                handle((OAuthBearerValidatorCallback) callback);
+                handleValidatorCallback((OAuthBearerValidatorCallback) callback);
             } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
                 OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
                 extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.valid(extensionName));
@@ -88,8 +88,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         }
     }
 
-    private void handle(OAuthBearerValidatorCallback callback) {
-        checkConfigured();
+    private void handleValidatorCallback(OAuthBearerValidatorCallback callback) {
+        checkInitialized();
 
         OAuthBearerToken token;
 
@@ -104,9 +104,9 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         }
     }
 
-    private void checkConfigured() {
-        if (!isConfigured)
-            throw new IllegalStateException(String.format("To use %s, first call configure method", getClass().getSimpleName()));
+    private void checkInitialized() {
+        if (!isInitialized)
+            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
     }
 
 }

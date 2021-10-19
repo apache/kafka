@@ -42,7 +42,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
 
         assertThrowsWithMessage(
-            KafkaException.class, () -> handler.configure(accessTokenRetriever, accessTokenValidator), "encountered an error when initializing");
+            KafkaException.class, () -> handler.init(accessTokenRetriever, accessTokenValidator), "encountered an error when initializing");
     }
 
     @Test
@@ -61,7 +61,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
 
         Map<String, ?> configs = getSaslConfigs();
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.configure(accessTokenRetriever, accessTokenValidator);
+        handler.init(accessTokenRetriever, accessTokenValidator);
 
         // Basically asserting this doesn't throw an exception :(
         handler.close();
@@ -70,7 +70,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
     private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.configure(accessTokenRetriever, accessTokenValidator);
+        handler.init(accessTokenRetriever, accessTokenValidator);
         return handler;
     }
 

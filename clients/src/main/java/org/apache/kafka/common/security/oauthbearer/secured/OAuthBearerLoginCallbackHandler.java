@@ -76,7 +76,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private AccessTokenValidator accessTokenValidator;
 
-    private boolean isConfigured = false;
+    private boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -89,10 +89,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         moduleOptions = Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
         AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
-        configure(accessTokenRetriever, accessTokenValidator);
+        init(accessTokenRetriever, accessTokenValidator);
     }
 
-    public void configure(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
+    public void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
         this.accessTokenRetriever = accessTokenRetriever;
         this.accessTokenValidator = accessTokenValidator;
 
@@ -102,7 +102,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
             throw new KafkaException("The OAuth login configuration encountered an error when initializing the AccessTokenRetriever", e);
         }
 
-        isConfigured = true;
+        isInitialized = true;
     }
 
     @Override
@@ -118,21 +118,21 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-        checkConfigured();
+        checkInitialized();
 
         for (Callback callback : callbacks) {
             if (callback instanceof OAuthBearerTokenCallback) {
-                handle((OAuthBearerTokenCallback) callback);
+                handleTokenCallback((OAuthBearerTokenCallback) callback);
             } else if (callback instanceof SaslExtensionsCallback) {
-                handle((SaslExtensionsCallback) callback);
+                handleExtensionsCallback((SaslExtensionsCallback) callback);
             } else {
                 throw new UnsupportedCallbackException(callback);
             }
         }
     }
 
-    void handle(OAuthBearerTokenCallback callback) throws IOException {
-        checkConfigured();
+    void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
+        checkInitialized();
 
         String accessToken = accessTokenRetriever.retrieve();
         log.debug("handle - accessToken: {}", accessToken);
@@ -147,8 +147,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
     }
 
-    void handle(SaslExtensionsCallback callback) {
-        checkConfigured();
+    void handleExtensionsCallback(SaslExtensionsCallback callback) {
+        checkInitialized();
 
         Map<String, String> extensions = new HashMap<>();
 
@@ -180,9 +180,9 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         callback.extensions(saslExtensions);
     }
 
-    private void checkConfigured() {
-        if (!isConfigured)
-            throw new IllegalStateException(String.format("To use %s, first call configure method", getClass().getSimpleName()));
+    private void checkInitialized() {
+        if (!isInitialized)
+            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
     }
 
 }
