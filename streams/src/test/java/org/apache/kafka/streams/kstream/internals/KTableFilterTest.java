@@ -59,7 +59,7 @@ public class KTableFilterTest {
     @Before
     public void setUp() {
         // disable caching at the config level
-        props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
+        props.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
     }
 
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;

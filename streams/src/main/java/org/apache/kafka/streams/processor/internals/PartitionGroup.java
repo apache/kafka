@@ -273,8 +273,7 @@ public class PartitionGroup {
                 totalBytesBuffered -= (record.key() != null ? record.serializedKeySize() : 0) +
                         (record.value() != null ? record.serializedValueSize() : 0);
 
-                totalBytesSensor.record(totalBuffered);
-
+                totalBytesSensor.record(totalBytesBuffered);
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
                     allBuffered = false;
@@ -373,6 +372,10 @@ public class PartitionGroup {
 
     int numBuffered() {
         return totalBuffered;
+    }
+
+    long totalBytesBuffered() {
+        return totalBytesBuffered;
     }
 
     boolean allPartitionsBufferedLocally() {

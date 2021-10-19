@@ -86,7 +86,6 @@ public class PartitionGroupTest {
 
     private final Metrics metrics = new Metrics();
     private final Sensor enforcedProcessingSensor = metrics.sensor(UUID.randomUUID().toString());
-
     private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
     private final MetricName totalBytesValue = new MetricName("total-bytes-last-value", "", "", mkMap());
 

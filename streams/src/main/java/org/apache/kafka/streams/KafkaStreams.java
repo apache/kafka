@@ -1101,10 +1101,16 @@ public class KafkaStreams implements AutoCloseable {
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
      * <p>
+<<<<<<< HEAD
      * Since the number of stream threads decreases, the sizes of the caches and buffer bytes in the remaining stream
      * threads are adapted so that the sum of the cache sizes and buffer bytes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG} and
      * {@link StreamsConfig#INPUT_BUFFER_MAX_BYTES_CONFIG} respectively.
+=======
+     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
+     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
+     * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
+>>>>>>> 34f50e2e5c (Adding more tests)
      *
      * @param timeout The length of time to wait for the thread to shutdown
      * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
