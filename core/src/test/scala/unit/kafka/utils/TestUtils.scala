@@ -370,12 +370,10 @@ object TestUtils extends Logging {
   def createAdminClient[B <: KafkaBroker](
       brokers: Seq[B],
       adminConfig: Properties): Admin = {
-    val adminClientProperties = if (adminConfig.isEmpty) {
-      val newConfig = new Properties()
-      newConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
-      newConfig
-    } else {
-      adminConfig
+    val adminClientProperties = new Properties(adminConfig)
+    if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+      adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
+        getBrokerListStrFromServers(brokers))
     }
     Admin.create(adminClientProperties)
   }
@@ -395,10 +393,9 @@ object TestUtils extends Logging {
         adminClient.createTopics(Collections.singletonList(new NewTopic(
           topic, numPartitions, replicationFactor.toShort).configs(configsMap))).all().get()
       } catch {
-        case e: ExecutionException => if (e.getCause != null &&
-          e.getCause.isInstanceOf[TopicExistsException] &&
-          topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic, numPartitions, replicationFactor)) {
-        } else {
+        case e: ExecutionException => if (!(e.getCause != null &&
+            e.getCause.isInstanceOf[TopicExistsException] &&
+            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic, numPartitions, replicationFactor))) {
           throw e
         }
       }
@@ -1800,6 +1797,9 @@ object TestUtils extends Logging {
     }, s"Timed out waiting for brokerId $brokerId to come online")
   }
 
+  /**
+   * Get the replica assignment for some topics. Topics which don't exist will be ignored.
+   */
   def getReplicaAssignmentForTopics[B <: KafkaBroker](
       topicNames: Seq[String],
       brokers: Seq[B],
