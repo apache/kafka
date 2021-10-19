@@ -71,7 +71,7 @@ public class SessionWindowedKStreamImplTest {
 
     @Test
     public void shouldCountSessionWindowedWithCachingDisabled() {
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         shouldCountSessionWindowed();
     }
 

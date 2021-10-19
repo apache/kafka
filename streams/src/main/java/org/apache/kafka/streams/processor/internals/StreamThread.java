@@ -946,7 +946,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private long pollPhase() {
+    long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -997,19 +997,17 @@ public class StreamThread extends Thread {
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty()) {
-            pollRecordsSensor.record(numRecords, now);
-        }
-
         bufferSize += polledRecordsSize;
 
+        // Pausing partitions as the buffer size now exceeds max buffer size
         if (bufferSize > maxBufferSizeBytes) {
             log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
             mainConsumer.pause(records.partitions());
-        } else {
-            if (!records.isEmpty()) {
-                taskManager.addRecordsToTasks(records);
-            }
+        }
+
+        if (!records.isEmpty()) {
+            pollRecordsSensor.record(numRecords, now);
+            taskManager.addRecordsToTasks(records);
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
