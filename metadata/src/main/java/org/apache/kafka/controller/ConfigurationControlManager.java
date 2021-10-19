@@ -22,12 +22,15 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.policy.AlterConfigPolicy;
+import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
@@ -42,23 +45,28 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 
 
 public class ConfigurationControlManager {
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
     private final Map<ConfigResource.Type, ConfigDef> configDefs;
+    private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
 
     ConfigurationControlManager(LogContext logContext,
                                 SnapshotRegistry snapshotRegistry,
-                                Map<ConfigResource.Type, ConfigDef> configDefs) {
+                                Map<ConfigResource.Type, ConfigDef> configDefs,
+                                Optional<AlterConfigPolicy> alterConfigPolicy) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configDefs = configDefs;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.alterConfigPolicy = alterConfigPolicy;
     }
 
     /**
@@ -146,11 +154,38 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
+        }
+        error = checkAlterConfigPolicy(configResource, newRecords);
+        if (error.isFailure()) {
+            outputResults.put(configResource, error);
+            return;
         }
         outputRecords.addAll(newRecords);
         outputResults.put(configResource, ApiError.NONE);
+    }
+
+    private ApiError checkAlterConfigPolicy(ConfigResource configResource,
+                                            List<ApiMessageAndVersion> newRecords) {
+        if (!alterConfigPolicy.isPresent()) return ApiError.NONE;
+        Map<String, String> newConfigs = new HashMap<>();
+        TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
+        if (existingConfigs != null) newConfigs.putAll(existingConfigs);
+        for (ApiMessageAndVersion newRecord : newRecords) {
+            ConfigRecord configRecord = (ConfigRecord) newRecord.message();
+            if (configRecord.value() == null) {
+                newConfigs.remove(configRecord.name());
+            } else {
+                newConfigs.put(configRecord.name(), configRecord.value());
+            }
+        }
+        try {
+            alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
+        } catch (PolicyViolationException e) {
+            return new ApiError(Errors.POLICY_VIOLATION, e.getMessage());
+        }
+        return ApiError.NONE;
     }
 
     /**
@@ -199,7 +234,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), (short) 0));
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
         for (String key : currentConfigs.keySet()) {
@@ -208,8 +243,13 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(null), (short) 0));
+                    setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
+        }
+        error = checkAlterConfigPolicy(configResource, newRecords);
+        if (error.isFailure()) {
+            outputResults.put(configResource, error);
+            return;
         }
         outputRecords.addAll(newRecords);
         outputResults.put(configResource, ApiError.NONE);
@@ -403,7 +443,7 @@ public class ConfigurationControlManager {
                     setResourceName(resource.name()).
                     setResourceType(resource.type().id()).
                     setName(configEntry.getKey()).
-                    setValue(configEntry.getValue()), (short) 0));
+                    setValue(configEntry.getValue()), CONFIG_RECORD.highestSupportedVersion()));
             }
             return records;
         }

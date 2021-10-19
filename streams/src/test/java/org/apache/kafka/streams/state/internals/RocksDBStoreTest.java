@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -32,12 +33,16 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
@@ -47,6 +52,7 @@ import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -62,11 +68,13 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.easymock.EasyMock.eq;
@@ -87,7 +95,8 @@ import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
-public class RocksDBStoreTest {
+@SuppressWarnings("unchecked")
+public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
     final static String METRICS_SCOPE = "metrics-scope";
@@ -107,7 +116,7 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             dir,
             Serdes.String(),
             Serdes.String(),
@@ -119,6 +128,18 @@ public class RocksDBStoreTest {
     @After
     public void tearDown() {
         rocksDBStore.close();
+    }
+
+    @Override
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("my-store"),
+            (Serde<K>) context.keySerde(),
+            (Serde<V>) context.valueSerde());
+
+        final KeyValueStore<K, V> store = storeBuilder.build();
+        store.init(context, store);
+        return store;
     }
 
     RocksDBStore getRocksDBStore() {
@@ -388,19 +409,20 @@ public class RocksDBStoreTest {
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("prefix", stringSerializer);
-        final List<String> valuesWithPrefix = new ArrayList<>();
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("prefix", stringSerializer)) {
+            final List<String> valuesWithPrefix = new ArrayList<>();
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
+            assertThat(numberOfKeysReturned, is(3));
+            assertThat(valuesWithPrefix.get(0), is("f"));
+            assertThat(valuesWithPrefix.get(1), is("d"));
+            assertThat(valuesWithPrefix.get(2), is("b"));
         }
-        assertThat(numberOfKeysReturned, is(3));
-        assertThat(valuesWithPrefix.get(0), is("f"));
-        assertThat(valuesWithPrefix.get(1), is("d"));
-        assertThat(valuesWithPrefix.get(2), is("b"));
     }
 
     @Test
@@ -422,15 +444,16 @@ public class RocksDBStoreTest {
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = rocksDBStore.prefixScan("abcd", stringSerializer);
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = rocksDBStore.prefixScan("abcd", stringSerializer)) {
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefixAsabcd.hasNext()) {
-            keysWithPrefixAsabcd.next().key.get();
-            numberOfKeysReturned++;
+            while (keysWithPrefixAsabcd.hasNext()) {
+                keysWithPrefixAsabcd.next().key.get();
+                numberOfKeysReturned++;
+            }
+
+            assertThat(numberOfKeysReturned, is(1));
         }
-
-        assertThat(numberOfKeysReturned, is(1));
     }
 
     @Test
@@ -453,21 +476,22 @@ public class RocksDBStoreTest {
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer);
-        final List<String> valuesWithPrefix = new ArrayList<>();
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer)) {
+            final List<String> valuesWithPrefix = new ArrayList<>();
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
-        }
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
 
-        assertThat(numberOfKeysReturned, is(numMatches));
-        if (numMatches == 2) {
-            assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
-        } else {
-            assertThat(valuesWithPrefix.get(0), is("a"));
+            assertThat(numberOfKeysReturned, is(numMatches));
+            if (numMatches == 2) {
+                assertThat(valuesWithPrefix.get(0), either(is("a")).or(is("b")));
+            } else {
+                assertThat(valuesWithPrefix.get(0), is("a"));
+            }
         }
     }
 
@@ -487,14 +511,15 @@ public class RocksDBStoreTest {
         rocksDBStore.putAll(entries);
         rocksDBStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("d", stringSerializer);
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("d", stringSerializer)) {
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            keysWithPrefix.next();
-            numberOfKeysReturned++;
+            while (keysWithPrefix.hasNext()) {
+                keysWithPrefix.next();
+                numberOfKeysReturned++;
+            }
+            assertThat(numberOfKeysReturned, is(0));
         }
-        assertThat(numberOfKeysReturned, is(0));
     }
 
     @Test
@@ -543,14 +568,15 @@ public class RocksDBStoreTest {
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
-        final Set<String> keys = new HashSet<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
+            final Set<String> keys = new HashSet<>();
 
-        while (iterator.hasNext()) {
-            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            while (iterator.hasNext()) {
+                keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            }
+
+            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
         }
-
-        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
     }
 
     @Test
@@ -567,30 +593,31 @@ public class RocksDBStoreTest {
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
-        final Set<String> keys = new HashSet<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
+            final Set<String> keys = new HashSet<>();
 
-        while (iterator.hasNext()) {
-            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            while (iterator.hasNext()) {
+                keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            }
+
+            assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
+
+            assertEquals(
+                "restored",
+                stringDeserializer.deserialize(
+                    null,
+                    rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
+            assertEquals(
+                "b",
+                stringDeserializer.deserialize(
+                    null,
+                    rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
+            assertEquals(
+                "c",
+                stringDeserializer.deserialize(
+                    null,
+                    rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
         }
-
-        assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
-
-        assertEquals(
-            "restored",
-            stringDeserializer.deserialize(
-                null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
-        assertEquals(
-            "b",
-            stringDeserializer.deserialize(
-                null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
-        assertEquals(
-            "c",
-            stringDeserializer.deserialize(
-                null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
     }
 
     @Test
@@ -625,14 +652,15 @@ public class RocksDBStoreTest {
 
         context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
-        final Set<String> keys = new HashSet<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
+            final Set<String> keys = new HashSet<>();
 
-        while (iterator.hasNext()) {
-            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            while (iterator.hasNext()) {
+                keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
+            }
+
+            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
         }
-
-        assertThat(keys, equalTo(Utils.mkSet("2", "3")));
     }
 
     @Test
@@ -668,11 +696,24 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRange() {
+    public void shouldReturnValueOnRange() {
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-        assertThrows(
-            NullPointerException.class,
-            () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
+
+        final KeyValue<String, String> kv0 = new KeyValue<>("0", "zero");
+        final KeyValue<String, String> kv1 = new KeyValue<>("1", "one");
+        final KeyValue<String, String> kv2 = new KeyValue<>("2", "two");
+
+        rocksDBStore.put(new Bytes(kv0.key.getBytes(UTF_8)), kv0.value.getBytes(UTF_8));
+        rocksDBStore.put(new Bytes(kv1.key.getBytes(UTF_8)), kv1.value.getBytes(UTF_8));
+        rocksDBStore.put(new Bytes(kv2.key.getBytes(UTF_8)), kv2.value.getBytes(UTF_8));
+
+        final LinkedList<KeyValue<String, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(kv0);
+        expectedContents.add(kv1);
+
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "1")))) {
+            assertEquals(expectedContents, getDeserializedList(iterator));
+        }
     }
 
     @Test
@@ -848,6 +889,50 @@ public class RocksDBStoreTest {
         }
     }
 
+    @Test
+    public void shouldPerformRangeQueriesWithCachingDisabled() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        try (final KeyValueIterator<Integer, String> range = store.range(1, 2)) {
+            assertEquals("hi", range.next().value);
+            assertEquals("goodbye", range.next().value);
+            assertFalse(range.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldPerformAllQueriesWithCachingDisabled() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        try (final KeyValueIterator<Integer, String> range = store.all()) {
+            assertEquals("hi", range.next().value);
+            assertEquals("goodbye", range.next().value);
+            assertFalse(range.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        try (final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
+             final KeyValueIterator<Integer, String> iteratorTwo = store.range(1, 4)) {
+
+            assertTrue(iteratorOne.hasNext());
+            assertTrue(iteratorTwo.hasNext());
+
+            store.close();
+
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.hasNext());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.next());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.hasNext());
+            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
+        }
+    }
+        
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
         static boolean bloomFiltersSet;
@@ -888,6 +973,12 @@ public class RocksDBStoreTest {
         entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
         entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
         return entries;
+    }
+
+    private List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {
+        final List<KeyValue<Bytes, byte[]>> bytes = Utils.toList(iter);
+        final List<KeyValue<String, String>> result = bytes.stream().map(kv -> new KeyValue<String, String>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
+        return result;
     }
 
 }

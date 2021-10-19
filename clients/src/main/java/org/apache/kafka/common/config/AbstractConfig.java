@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A convenient base class for configurations to extend.
@@ -42,8 +43,12 @@ public class AbstractConfig {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    /* configs for which values have been requested, used to detect unused configs */
-    private final Set<String> used;
+    /**
+     * Configs for which values have been requested, used to detect unused configs.
+     * This set must be concurrent modifiable and iterable. It will be modified
+     * when directly accessed or as a result of RecordingMap access.
+     */
+    private final Set<String> used = ConcurrentHashMap.newKeySet();
 
     /* the original values passed in by the user */
     private final Map<String, ?> originals;
@@ -106,7 +111,6 @@ public class AbstractConfig {
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
         this.values = definition.parse(this.originals);
-        this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
             this.values.put(update.getKey(), update.getValue());
@@ -557,7 +561,7 @@ public class AbstractConfig {
         Map<String, String> providerMap = new HashMap<>();
 
         for (String provider: configProviders.split(",")) {
-            String providerClass = CONFIG_PROVIDERS_CONFIG + "." + provider + ".class";
+            String providerClass = providerClassProperty(provider);
             if (indirectConfigs.containsKey(providerClass))
                 providerMap.put(provider, indirectConfigs.get(providerClass));
 
@@ -572,12 +576,16 @@ public class AbstractConfig {
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
-                log.error("ClassNotFoundException exception occurred: " + entry.getValue());
-                throw new ConfigException("Invalid config:" + entry.getValue() + " ClassNotFoundException exception occurred", e);
+                log.error("Could not load config provider class " + entry.getValue(), e);
+                throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
             }
         }
 
         return configProviderInstances;
+    }
+
+    private static String providerClassProperty(String providerName) {
+        return String.format("%s.%s.class", CONFIG_PROVIDERS_CONFIG, providerName);
     }
 
     @Override

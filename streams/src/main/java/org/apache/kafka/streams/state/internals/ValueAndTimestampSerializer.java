@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
@@ -124,9 +125,9 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
     }
 
     @Override
-    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
+    public void setIfUnset(final SerdeGetter getter) {
         // ValueAndTimestampSerializer never wraps a null serializer (or configure would throw),
         // but it may wrap a serializer that itself wraps a null serializer.
-        initNullableSerializer(valueSerializer, defaultKeySerializer, defaultValueSerializer);
+        initNullableSerializer(valueSerializer, getter);
     }
 }

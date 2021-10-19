@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -73,8 +73,7 @@ class MetadataCacheControllerNodeProvider(
 ) extends ControllerNodeProvider {
   override def get(): Option[Node] = {
     metadataCache.getControllerId
-      .flatMap(metadataCache.getAliveBroker)
-      .map(_.endpoints(listenerName.value))
+      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName))
   }
 }
 

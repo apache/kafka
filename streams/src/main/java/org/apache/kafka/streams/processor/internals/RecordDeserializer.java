@@ -31,11 +31,11 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXC
 
 class RecordDeserializer {
     private final Logger log;
-    private final SourceNode<?, ?, ?, ?> sourceNode;
+    private final SourceNode<?, ?> sourceNode;
     private final Sensor droppedRecordsSensor;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    RecordDeserializer(final SourceNode<?, ?, ?, ?> sourceNode,
+    RecordDeserializer(final SourceNode<?, ?> sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
                        final Sensor droppedRecordsSensor) {
@@ -50,7 +50,6 @@ class RecordDeserializer {
      *                          {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL}
      *                          or throws an exception itself
      */
-    @SuppressWarnings("deprecation")
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
                                                final ConsumerRecord<byte[], byte[]> rawRecord) {
 
@@ -100,7 +99,7 @@ class RecordDeserializer {
         }
     }
 
-    SourceNode<?, ?, ?, ?> sourceNode() {
+    SourceNode<?, ?> sourceNode() {
         return sourceNode;
     }
 }

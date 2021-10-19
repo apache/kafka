@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
@@ -57,16 +56,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             .build();
     }
 
-    @Override
-    String getMetricsScope() {
-        return new InMemoryWindowBytesStoreSupplier(null, 0, 0, false).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
-    }
-
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
         // should be empty initially
@@ -85,13 +75,14 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             serdes.rawValue("three")));
 
         context.restore(STORE_NAME, restorableEntries);
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
-            .fetchAll(0L, 2 * WINDOW_SIZE);
+        try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
+            .fetchAll(0L, 2 * WINDOW_SIZE)) {
 
-        assertEquals(windowedPair(1, "one", 0L), iterator.next());
-        assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
-        assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
-        assertFalse(iterator.hasNext());
+            assertEquals(windowedPair(1, "one", 0L), iterator.next());
+            assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
+            assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test

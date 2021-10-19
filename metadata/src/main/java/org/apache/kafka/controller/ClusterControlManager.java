@@ -33,11 +33,11 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
@@ -50,7 +50,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
 
 
 /**
@@ -166,6 +170,14 @@ public class ClusterControlManager {
         return brokerRegistrations;
     }
 
+    Set<Integer> fencedBrokerIds() {
+        return brokerRegistrations.values()
+            .stream()
+            .filter(BrokerRegistration::fenced)
+            .map(BrokerRegistration::id)
+            .collect(Collectors.toSet());
+    }
+
     /**
      * Process an incoming broker registration request.
      */
@@ -226,7 +238,8 @@ public class ClusterControlManager {
         }
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(record, (short) 0));
+        records.add(new ApiMessageAndVersion(record,
+            REGISTER_BROKER_RECORD.highestSupportedVersion()));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -243,21 +256,15 @@ public class ClusterControlManager {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
-        // Normally, all newly registered brokers start off in the fenced state.
-        // If this registration record is for a broker incarnation that was already
-        // registered, though, we preserve the existing fencing state.
-        boolean fenced = true;
-        controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
-        BrokerRegistration prevRegistration = brokerRegistrations.get(brokerId);
-        if (prevRegistration != null &&
-                prevRegistration.incarnationId().equals(record.incarnationId())) {
-            fenced = prevRegistration.fenced();
+       
+        if (record.fenced()) {
+            controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
         }
         // Update broker registrations.
-        brokerRegistrations.put(brokerId, new BrokerRegistration(brokerId,
-            record.brokerEpoch(), record.incarnationId(), listeners, features,
-            Optional.ofNullable(record.rack()), fenced));
-
+        BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
+                new BrokerRegistration(brokerId, record.brokerEpoch(),
+                    record.incarnationId(), listeners, features,
+                    Optional.ofNullable(record.rack()), record.fenced()));
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -407,12 +414,9 @@ public class ClusterControlManager {
                 setBrokerEpoch(registration.epoch()).
                 setEndPoints(endpoints).
                 setFeatures(features).
-                setRack(registration.rack().orElse(null)), (short) 0));
-            if (!registration.fenced()) {
-                batch.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-                    setId(brokerId).
-                    setEpoch(registration.epoch()), (short) 0));
-            }
+                setRack(registration.rack().orElse(null)).
+                setFenced(registration.fenced()),
+                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
             return batch;
         }
     }

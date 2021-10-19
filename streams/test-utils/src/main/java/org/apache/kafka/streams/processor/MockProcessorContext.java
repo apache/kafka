@@ -56,6 +56,7 @@ import java.util.Properties;
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
+@SuppressWarnings("deprecation") // not deprecating old PAPI Context, since it is still in use by Transformers.
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
@@ -124,9 +125,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public static class CapturedForward {
         private final String childName;
         private final long timestamp;
+        private final Headers headers;
         private final KeyValue keyValue;
 
-        private CapturedForward(final To to, final KeyValue keyValue) {
+        private CapturedForward(final KeyValue keyValue, final To to, final Headers headers) {
             if (keyValue == null) {
                 throw new IllegalArgumentException();
             }
@@ -134,6 +136,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             this.childName = to.childName;
             this.timestamp = to.timestamp;
             this.keyValue = keyValue;
+            this.headers = headers;
         }
 
         /**
@@ -173,6 +176,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 ", timestamp=" + timestamp +
                 ", keyValue=" + keyValue +
                 '}';
+        }
+
+        public Headers headers() {
+            return this.headers;
         }
     }
 
@@ -237,7 +244,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             Time.SYSTEM
         );
-        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), metrics);
+        TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }
 
     @Override
@@ -423,6 +430,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return offset;
     }
 
+    /**
+     * Returns the headers of the current input record; could be {@code null} if it is not
+     * available.
+     *
+     * <p> Note, that headers should never be {@code null} in the actual Kafka Streams runtime,
+     * even if they could be empty. However, this mock does not guarantee non-{@code null} headers.
+     * Thus, you either need to add a {@code null} check to your production code to use this mock
+     * for testing or you always need to set headers manually via {@link #setHeaders(Headers)} to
+     * avoid a {@link NullPointerException} from your {@link Processor} implementation.
+     *
+     * @return the headers
+     */
     @Override
     public Headers headers() {
         return headers;
@@ -485,8 +504,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public <K, V> void forward(final K key, final V value, final To to) {
         capturedForwards.add(
             new CapturedForward(
+                new KeyValue<>(key, value),
                 to.timestamp == -1 ? to.withTimestamp(recordTimestamp == null ? -1 : recordTimestamp) : to,
-                new KeyValue<>(key, value)
+                headers
             )
         );
     }

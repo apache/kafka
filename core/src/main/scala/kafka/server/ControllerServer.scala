@@ -27,6 +27,7 @@ import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsColle
 import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
+import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.ConfigResource
@@ -42,8 +43,11 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
+import scala.compat.java8.OptionConverters._
 
 /**
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
@@ -69,6 +73,8 @@ class ControllerServer(
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
+  var createTopicPolicy: Option[CreateTopicPolicy] = None
+  var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
   val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
@@ -137,12 +143,23 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
       socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
-      socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
-        config.controllerListeners.head.listenerName))
+
+      if (config.controllerListeners.nonEmpty) {
+        socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
+          config.controllerListeners.head.listenerName))
+      } else {
+        throw new ConfigException("No controller.listener.names defined for controller");
+      }
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+
+      createTopicPolicy = Option(config.
+        getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+      alterConfigPolicy = Option(config.
+        getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+
       controller = new QuorumController.Builder(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
@@ -152,9 +169,11 @@ class ControllerServer(
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
           TimeUnit.MILLISECONDS)).
+        setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+        setCreateTopicPolicy(createTopicPolicy.asJava).
+        setAlterConfigPolicy(alterConfigPolicy.asJava).
         build()
-
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
@@ -198,10 +217,14 @@ class ControllerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (controllerApisHandlerPool != null)
         CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
+      if (controllerApis != null)
+        CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
         controller.close()
+      createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
+      alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
     } catch {
       case e: Throwable =>

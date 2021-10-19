@@ -21,6 +21,8 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -302,6 +304,11 @@ public class MockController implements Controller {
     }
 
     @Override
+    public CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(AllocateProducerIdsRequestData request) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     synchronized public CompletableFuture<List<CreatePartitionsTopicResult>>
             createPartitions(long deadlineNs, List<CreatePartitionsTopic> topicList) {
         if (!active) {
@@ -339,7 +346,7 @@ public class MockController implements Controller {
     }
 
     @Override
-    public long curClaimEpoch() {
+    public int curClaimEpoch() {
         return active ? 1 : -1;
     }
 

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -31,7 +32,6 @@ import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -52,17 +52,20 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
         this.lookupStrategy = new PartitionLeaderStrategy(logContext);
     }
 
+    public static AdminApiFuture.SimpleAdminApiFuture<TopicPartition, Void> newFuture(
+        Set<TopicPartition> topicPartitions
+    ) {
+        return AdminApiFuture.forKeys(topicPartitions);
+    }
+
     @Override
     public String apiName() {
         return "abortTransaction";
     }
 
     @Override
-    public Keys<TopicPartition> initializeKeys() {
-        return Keys.dynamicMapped(
-            Collections.singleton(abortSpec.topicPartition()),
-            lookupStrategy
-        );
+    public AdminApiLookupStrategy<TopicPartition> lookupStrategy() {
+        return lookupStrategy;
     }
 
     @Override
@@ -91,7 +94,7 @@ public class AbortTransactionHandler implements AdminApiHandler<TopicPartition, 
 
     @Override
     public ApiResult<TopicPartition, Void> handleResponse(
-        int brokerId,
+        Node broker,
         Set<TopicPartition> topicPartitions,
         AbstractResponse abstractResponse
     ) {

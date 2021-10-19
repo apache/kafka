@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
@@ -224,6 +226,15 @@ public interface Controller extends AutoCloseable {
     );
 
     /**
+     * Allocate a block of producer IDs for transactional and idempotent producers
+     * @param request   The allocate producer IDs request
+     * @return          A future which yields a new producer ID block as a response
+     */
+    CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
+        AllocateProducerIdsRequestData request
+    );
+
+    /**
      * Begin writing a controller snapshot.  If there was already an ongoing snapshot, it
      * simply returns information about that snapshot rather than starting a new one.
      *
@@ -252,7 +263,7 @@ public interface Controller extends AutoCloseable {
      * If this controller is active, this is the non-negative controller epoch.
      * Otherwise, this is -1.
      */
-    long curClaimEpoch();
+    int curClaimEpoch();
 
     /**
      * Returns true if this controller is currently active.

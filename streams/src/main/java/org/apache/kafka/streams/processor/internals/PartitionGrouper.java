@@ -36,7 +36,7 @@ import java.util.Set;
 /**
  * Groups partitions by the partition id.
  *
- * Join operations requires that topics of the joining entities are copartitoned, i.e., being partitioned by the same key and having the same
+ * Join operations requires that topics of the joining entities are copartitioned, i.e., being partitioned by the same key and having the same
  * number of partitions. Copartitioning is ensured by having the same number of partitions on
  * joined topics, and by using the serialization and Producer's default partitioner.
  */

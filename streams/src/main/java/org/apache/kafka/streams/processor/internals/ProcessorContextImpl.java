@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
-public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
@@ -263,7 +263,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         streamTask.requestCommit();
     }
 
-    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,

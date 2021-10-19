@@ -131,6 +131,58 @@ class ConsoleConsumerTest {
   }
 
   @Test
+  def shouldParseIncludeArgument(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--include", "includeTest*",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("includeTest*", config.includedTopicsArg)
+    assertEquals(true, config.fromBeginning)
+  }
+
+  @Test
+  def shouldParseWhitelistArgument(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--whitelist", "whitelistTest*",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("whitelistTest*", config.includedTopicsArg)
+    assertEquals(true, config.fromBeginning)
+  }
+
+  @Test
+  def shouldIgnoreWhitelistArgumentIfIncludeSpecified(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--include", "includeTest*",
+      "--whitelist", "whitelistTest*",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("includeTest*", config.includedTopicsArg)
+    assertEquals(true, config.fromBeginning)
+  }
+
+  @Test
   def shouldParseValidSimpleConsumerValidConfigWithNumericOffset(): Unit = {
     //Given
     val args: Array[String] = Array(
@@ -516,4 +568,73 @@ class ConsoleConsumerTest {
     assertEquals("", out.toString)
   }
 
+  @Test
+  def shouldExitIfNoTopicOrFilterSpecified(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092")
+
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def shouldExitIfTopicAndIncludeSpecified(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--include", "includeTest*")
+
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def shouldExitIfTopicAndWhitelistSpecified(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--whitelist", "whitelistTest*")
+
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning",
+      "--consumer-property", "client.id=consumer-1")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
+
+    //Then
+    assertEquals("consumer-1", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
+
+    //Then
+    assertEquals("console-consumer", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
 }

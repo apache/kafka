@@ -17,13 +17,14 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.Log
-import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
+import kafka.log.{UnifiedLog, LogConfig}
+import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -73,7 +74,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
-    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get)
+    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
+      enableTransactionalIdExpiration = true)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -456,8 +458,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
+    val logMock: UnifiedLog =  EasyMock.mock(classOf[UnifiedLog])
+    EasyMock.expect(logMock.config).andStubReturn(new LogConfig(Collections.emptyMap()))
 
-    val logMock: Log =  EasyMock.mock(classOf[Log])
     val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
@@ -509,7 +512,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
-      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback)
+      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback,
+        RequestLocal.withThreadConfinedCaching)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
@@ -526,7 +530,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerId,
             txnMetadata.producerEpoch,
             partitions,
-            resultCallback)
+            resultCallback,
+            RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }
     }
@@ -544,7 +549,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          resultCallback)
+          resultCallback,
+          RequestLocal.withThreadConfinedCaching)
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {

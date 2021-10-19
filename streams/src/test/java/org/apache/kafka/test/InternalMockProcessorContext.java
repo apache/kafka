@@ -59,8 +59,8 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<KOut, VOut>
+    extends AbstractProcessorContext<KOut, VOut>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -202,8 +202,20 @@ public class InternalMockProcessorContext
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache,
                                         final Time time) {
+        this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsMetricsImpl metrics,
+                                        final StreamsConfig config,
+                                        final RecordCollector.Supplier collectorSupplier,
+                                        final ThreadCache cache,
+                                        final Time time,
+                                        final TaskId taskId) {
         super(
-            new TaskId(0, 0),
+            taskId,
             config,
             metrics,
             cache
@@ -290,13 +302,13 @@ public class InternalMockProcessorContext
     public void commit() {}
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
         forward(record, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
         if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
             setTime(record.timestamp());
         }

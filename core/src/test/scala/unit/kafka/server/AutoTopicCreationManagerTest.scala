@@ -26,8 +26,8 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.createBroker
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsRequestData}
@@ -73,11 +73,11 @@ class AutoTopicCreationManagerTest {
     props.setProperty(KafkaConfig.TransactionsTopicPartitionsProp, internalTopicReplicationFactor.toString)
 
     config = KafkaConfig.fromProps(props)
-    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
+    val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
 
     Mockito.reset(metadataCache, controller, brokerToController, groupCoordinator, transactionCoordinator)
 
-    Mockito.when(metadataCache.getAliveBrokers).thenReturn(aliveBrokers)
+    Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }
 
   @Test

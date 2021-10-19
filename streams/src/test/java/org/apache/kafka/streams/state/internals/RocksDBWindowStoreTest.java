@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -44,7 +43,6 @@ import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
-@SuppressWarnings("PointlessArithmeticExpression")
 public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
@@ -70,16 +68,6 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
             .build();
     }
 
-    @Override
-    String getMetricsScope() {
-        return new RocksDbWindowBytesStoreSupplier(null, 0, 0, 0, false, false).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
-    }
-
     @Test
     public void shouldOnlyIterateOpenSegments() {
         long currentTime = 0;
@@ -91,16 +79,17 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(1, "three", currentTime);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime)) {
 
-        // roll to the next segment that will close the first
-        currentTime = currentTime + SEGMENT_INTERVAL;
-        windowStore.put(1, "four", currentTime);
+            // roll to the next segment that will close the first
+            currentTime = currentTime + SEGMENT_INTERVAL;
+            windowStore.put(1, "four", currentTime);
 
-        // should only have 2 values as the first segment is no longer open
-        assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
-        assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
-        assertFalse(iterator.hasNext());
+            // should only have 2 values as the first segment is no longer open
+            assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
+            assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -491,6 +480,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         );
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRestore() throws Exception {
         final long startTime = SEGMENT_INTERVAL * 2;

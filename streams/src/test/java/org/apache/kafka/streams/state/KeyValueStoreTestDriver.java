@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -187,6 +188,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final InternalMockProcessorContext context;
     private final StateSerdes<K, V> stateSerdes;
 
+    @SuppressWarnings("unchecked")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
@@ -207,7 +209,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 new MockClientSupplier(),
                 null,
                 null,
-                logContext),
+                logContext,
+                Time.SYSTEM),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics())
         ) {

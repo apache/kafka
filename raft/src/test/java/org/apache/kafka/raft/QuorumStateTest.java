@@ -24,11 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,7 +44,7 @@ public class QuorumStateTest {
     private final MockTime time = new MockTime();
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
-    private final Random random = Mockito.spy(new Random(1));
+    private final MockableRandom random = new MockableRandom(1L);
 
     private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
 
@@ -91,7 +91,7 @@ public class QuorumStateTest {
         store.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        random.mockNextInt(jitterMs);
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, 0));
@@ -131,7 +131,7 @@ public class QuorumStateTest {
         store.writeElectionState(ElectionState.withVotedCandidate(epoch, node1, voters));
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        random.mockNextInt(jitterMs);
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -155,7 +155,7 @@ public class QuorumStateTest {
         store.writeElectionState(election);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        random.mockNextInt(jitterMs);
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -187,7 +187,7 @@ public class QuorumStateTest {
 
         // The election timeout should be reset after we become a candidate again
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        random.mockNextInt(jitterMs);
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -233,7 +233,7 @@ public class QuorumStateTest {
 
         // The election timeout should be reset after we become a candidate again
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        random.mockNextInt(jitterMs);
 
         state.transitionToCandidate();
         assertTrue(state.isCandidate());
@@ -508,7 +508,7 @@ public class QuorumStateTest {
         state.transitionToUnattached(5);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToVoted(5, otherNodeId);
 
         VotedState votedState = state.votedStateOrThrow();
@@ -545,7 +545,7 @@ public class QuorumStateTest {
         state.transitionToUnattached(5);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToCandidate();
 
         assertTrue(state.isCandidate());
@@ -643,7 +643,7 @@ public class QuorumStateTest {
         state.transitionToVoted(5, node1);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToCandidate();
         assertTrue(state.isCandidate());
         CandidateState candidateState = state.candidateStateOrThrow();
@@ -797,7 +797,7 @@ public class QuorumStateTest {
         state.transitionToFollower(8, node2);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToCandidate();
         assertTrue(state.isCandidate());
         CandidateState candidateState = state.candidateStateOrThrow();
@@ -827,7 +827,7 @@ public class QuorumStateTest {
         state.transitionToFollower(8, node2);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToUnattached(9);
         assertTrue(state.isUnattached());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
@@ -860,7 +860,7 @@ public class QuorumStateTest {
         state.transitionToFollower(8, node2);
 
         int jitterMs = 2500;
-        Mockito.doReturn(jitterMs).when(random).nextInt(electionTimeoutMs);
+        random.mockNextInt(electionTimeoutMs, jitterMs);
         state.transitionToVoted(9, node1);
         assertTrue(state.isVoted());
         VotedState votedState = state.votedStateOrThrow();
@@ -945,9 +945,10 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeWithCorruptedStore() throws IOException {
+    public void testInitializeWithCorruptedStore() {
         QuorumStateStore stateStore = Mockito.mock(QuorumStateStore.class);
-        Mockito.doThrow(IOException.class).when(stateStore).readElectionState();
+        Mockito.doThrow(UncheckedIOException.class).when(stateStore).readElectionState();
+
         QuorumState state = buildQuorumState(Utils.mkSet(localId));
 
         int epoch = 2;
@@ -1069,5 +1070,4 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         return state;
     }
-
 }

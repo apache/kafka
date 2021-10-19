@@ -304,7 +304,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.offsetSyncsTopicAdminConfig());
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
@@ -399,7 +399,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return adminClient.describeTopics(topics).all().get().values();
+        return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
 
     static Map<String, String> configToMap(Config config) {
@@ -471,7 +471,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
+        return (topicFilter.shouldReplicateTopic(topic) || replicationPolicy.isHeartbeatsTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
@@ -492,13 +492,13 @@ public class MirrorSourceConnector extends SourceConnector {
         } else if (source.equals(sourceAndTarget.target())) {
             return true;
         } else {
-            return isCycle(replicationPolicy.upstreamTopic(topic));
+            String upstreamTopic = replicationPolicy.upstreamTopic(topic);
+            if (upstreamTopic.equals(topic)) {
+                // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
+                return false;
+            }
+            return isCycle(upstreamTopic);
         }
-    }
-
-    // e.g. heartbeats, us-west.heartbeats
-    boolean isHeartbeatTopic(String topic) {
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     String formatRemoteTopic(String topic) {

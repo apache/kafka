@@ -108,7 +108,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     LeaderAndEpoch waitForLeader() throws InterruptedException {
         AtomicReference<LeaderAndEpoch> value = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             LeaderAndEpoch result = null;
             for (LocalLogManager logManager : logManagers) {
                 LeaderAndEpoch leader = logManager.leaderAndEpoch();
@@ -131,6 +131,22 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     public List<LocalLogManager> logManagers() {
         return logManagers;
+    }
+
+    public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
+        return shared.waitForSnapshot(committedOffset);
+    }
+
+    public RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
+        return shared.waitForLatestSnapshot();
+    }
+
+    public long appendedBytes() {
+        return shared.appendedBytes();
+    }
+
+    public LeaderAndEpoch leaderAndEpoch() {
+        return shared.leaderAndEpoch();
     }
 
     @Override

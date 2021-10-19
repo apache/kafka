@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
@@ -153,7 +154,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true, false);
 
         taskOne = createStreamsTask(
             streamsConfig,
@@ -423,7 +424,8 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             streamsConfig.defaultProductionExceptionHandler(),
             new MockStreamsMetrics(metrics));

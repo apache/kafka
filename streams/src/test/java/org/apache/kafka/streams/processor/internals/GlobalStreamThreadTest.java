@@ -23,16 +23,19 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
-import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -89,6 +92,13 @@ public class GlobalStreamThreadTest {
                 "store-"
             );
 
+        final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
+            new ContextualProcessor<Object, Object, Void, Void>() {
+                @Override
+                public void process(final Record<Object, Object> record) {
+                }
+            };
+
         builder.addGlobalStore(
             new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
@@ -97,19 +107,21 @@ public class GlobalStreamThreadTest {
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            () -> ProcessorAdapter.adapt(new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME).get()));
+            processorSupplier);
 
         baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
         properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(
             builder.rewriteTopology(config).buildGlobalStateTopology(),
             config,
             mockConsumer,
-            new StateDirectory(config, time, true),
+            new StateDirectory(config, time, true, false),
             0,
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
             time,
@@ -148,7 +160,7 @@ public class GlobalStreamThreadTest {
             builder.buildGlobalStateTopology(),
             config,
             mockConsumer,
-            new StateDirectory(config, time, true),
+            new StateDirectory(config, time, true, false),
             0,
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
             time,

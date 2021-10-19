@@ -44,7 +44,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-public class NoOpProcessorContext extends AbstractProcessorContext {
+public class NoOpProcessorContext extends AbstractProcessorContext<Object, Object> {
     public boolean initialized;
     @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();
@@ -147,6 +147,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public String changelogFor(final String storeName) {
-        return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
+        return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName, taskId().topologyName());
     }
 }

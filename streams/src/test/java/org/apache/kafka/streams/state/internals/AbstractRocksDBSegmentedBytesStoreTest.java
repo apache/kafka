@@ -109,7 +109,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             // expire it.
             nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
         }
-        if (schema instanceof WindowKeySchema || schema instanceof TimeOrderedKeySchema) {
+        if (schema instanceof WindowKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
@@ -124,7 +124,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDir,
             Serdes.String(),
             Serdes.Long(),
@@ -145,19 +145,142 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     @Test
     public void shouldPutAndFetch() {
-        final String key = "a";
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
+        final String keyA = "a";
+        final String keyB = "b";
+        final String keyC = "c";
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), serializeValue(10));
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[1])), serializeValue(50));
+        bytesStore.put(serializeKey(new Windowed<>(keyB, windows[2])), serializeValue(100));
+        bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
-        final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500);
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(values));
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            null, null, 0, windows[3].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldPutAndBackwardFetch() {
+        final String keyA = "a";
+        final String keyB = "b";
+        final String keyC = "c";
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), serializeValue(10));
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[1])), serializeValue(50));
+        bytesStore.put(serializeKey(new Windowed<>(keyB, windows[2])), serializeValue(100));
+        bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L),
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            null, null, 0, windows[3].start())) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(keyC, windows[3]), 200L),
+                KeyValue.pair(new Windowed<>(keyB, windows[2]), 100L),
+                KeyValue.pair(new Windowed<>(keyA, windows[1]), 50L),
+                KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
     }
 
     @Test
@@ -166,13 +289,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
-        final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999);
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-            KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
-        );
+        try (final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+            );
 
-        assertEquals(expected, toList(results));
+            assertEquals(expected, toList(results));
+        }
     }
 
     @Test
@@ -181,8 +305,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
 
         bytesStore.remove(serializeKey(new Windowed<>("a", windows[0])));
-        final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100);
-        assertFalse(value.hasNext());
+        try (final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100)) {
+            assertFalse(value.hasNext());
+        }
     }
 
     @Test
@@ -397,18 +522,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
-    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_0100_TO_24);
-    }
-
-    private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
+    public void shouldLogAndMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
-        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -435,49 +550,25 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String threadId = Thread.currentThread().getName();
         final Metric dropTotal;
         final Metric dropRate;
-        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            dropTotal = metrics.get(new MetricName(
-                "expired-window-record-drop-total",
-                "stream-metrics-scope-metrics",
-                "The total number of dropped records due to an expired window",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("metrics-scope-state-id", "bytes-store")
-                )
-            ));
+        dropTotal = metrics.get(new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
 
-            dropRate = metrics.get(new MetricName(
-                "expired-window-record-drop-rate",
-                "stream-metrics-scope-metrics",
-                "The average number of dropped records due to an expired window per second.",
-                mkMap(
-                    mkEntry("client-id", threadId),
-                    mkEntry("task-id", "0_0"),
-                    mkEntry("metrics-scope-state-id", "bytes-store")
-                )
-            ));
-        } else {
-            dropTotal = metrics.get(new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-
-            dropRate = metrics.get(new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "",
-                mkMap(
-                    mkEntry("thread-id", threadId),
-                    mkEntry("task-id", "0_0")
-                )
-            ));
-        }
+        dropRate = metrics.get(new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        ));
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
 
@@ -494,10 +585,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
             return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
-        } else if (schema instanceof TimeOrderedKeySchema) {
-            return TimeOrderedKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
-        } else {
+        } else if (schema instanceof WindowKeySchema) {
             return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+        } else {
+            throw new IllegalStateException("Unrecognized serde schema");
         }
     }
 
@@ -521,23 +612,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
-            } else if (schema instanceof TimeOrderedKeySchema) {
-                final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                    TimeOrderedKeySchema.fromStoreKey(
-                        next.key.get(),
-                        windowSizeForTimeWindow,
-                        stateSerdes.keyDeserializer(),
-                        stateSerdes.topic()
-                    ),
-                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
-                );
-                results.add(deserialized);
-            } else {
+            } else if (schema instanceof SessionKeySchema) {
                 final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
                     SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);
+            } else {
+                throw new IllegalStateException("Unrecognized serde schema");
             }
         }
         return results;

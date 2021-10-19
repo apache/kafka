@@ -113,7 +113,7 @@ public class InternalTopicManagerTest {
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
             put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
             put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), 100);
-            put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 50);
+            put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 10);
         }
     };
 
@@ -632,17 +632,17 @@ public class InternalTopicManagerTest {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic1)).values().get(topic1).get());
+        }), mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get());
         assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).values().get(topic2).get());
+        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get());
         assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
+        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
 
         final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1);
         final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
@@ -822,9 +822,7 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionLeaderNotAvailableFuture)))
             .once();
-        // return empty set for 1st time
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
+        // we would not need to call create-topics for the first time
         EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)))
@@ -868,8 +866,6 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionFailFuture)))
             .once();
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
         EasyMock.expect(admin.describeTopics(Collections.singleton(topic1)))
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionSuccessFuture)))
@@ -901,8 +897,6 @@ public class InternalTopicManagerTest {
             .andReturn(new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionFailFuture)))
             .anyTimes();
-        EasyMock.expect(admin.createTopics(Collections.emptySet()))
-            .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).anyTimes();
 
         EasyMock.replay(admin);
 
@@ -1732,13 +1726,13 @@ public class InternalTopicManagerTest {
 
     private static class MockDeleteTopicsResult extends DeleteTopicsResult {
         MockDeleteTopicsResult(final Map<String, KafkaFuture<Void>> futures) {
-            super(futures);
+            super(null, futures);
         }
     }
 
     private static class MockDescribeTopicsResult extends DescribeTopicsResult {
         MockDescribeTopicsResult(final Map<String, KafkaFuture<TopicDescription>> futures) {
-            super(futures);
+            super(null, futures);
         }
     }
 

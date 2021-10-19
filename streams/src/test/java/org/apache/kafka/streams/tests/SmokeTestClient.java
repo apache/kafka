@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 
+@SuppressWarnings("deprecation")
 public class SmokeTestClient extends SmokeTestUtil {
 
     private final String name;
@@ -126,13 +127,14 @@ public class SmokeTestClient extends SmokeTestUtil {
         try {
             if (!countDownLatch.await(1, TimeUnit.MINUTES)) {
                 System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't start in one minute");
+            } else {
+                System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
+                System.out.println(name + " started at " + Instant.now());
             }
         } catch (final InterruptedException e) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: " + e);
             e.printStackTrace(System.out);
         }
-        System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
-        System.out.println(name + " started at " + Instant.now());
     }
 
     public void closeAsync() {
@@ -145,7 +147,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         if (wasClosed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
         } else if (wasClosed) {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Got an uncaught exception");
         } else {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
         }
@@ -156,10 +158,12 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
+        fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         fullProps.putAll(props);
         return fullProps;
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     public Topology getTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
