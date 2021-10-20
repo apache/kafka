@@ -27,9 +27,9 @@ import java.util.Map;
  * <p>The {@link #contextLabels()} map provides following information:
  * <dl>
  *   <dt>in all components</dt>
- *   <dd>a <code>_namespace</node> field indicating the component exposing metrics
+ *   <dd>a {@code _namespace} field indicating the component exposing metrics
  *   e.g. kafka.server, kafka.consumer.
- *   The {@link JmxReporter} uses this as prefix for MBean names</ul>
+ *   The {@link JmxReporter} uses this as prefix for MBean names</dd>
  *
  *   <dt>for clients and streams libraries</dt>
  *   <dd>any freeform fields passed in via
