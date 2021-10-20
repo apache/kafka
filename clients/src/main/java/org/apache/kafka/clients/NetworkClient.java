@@ -1080,8 +1080,13 @@ public class NetworkClient implements KafkaClient {
                 .collect(Collectors.toList());
             if (!missingListenerPartitions.isEmpty()) {
                 int count = missingListenerPartitions.size();
-                log.warn("{} partitions have leader brokers without a matching listener, including {}",
-                        count, missingListenerPartitions.subList(0, Math.min(10, count)));
+                if (count == 1) {
+                    log.warn("{} partition has a leader broker without a matching listener, which is {}",
+                            count, missingListenerPartitions.get(0));
+                } else {
+                    log.warn("{} partitions have leader brokers without a matching listener, including {}",
+                            count, missingListenerPartitions.subList(0, Math.min(10, count)));
+                }
             }
 
             // Check if any topic's metadata failed to get updated
