@@ -28,32 +28,32 @@ public class StreamsException extends KafkaException {
 
     private final static long serialVersionUID = 1L;
 
-    private TaskId taskId = null;
+    private TaskId taskId;
 
     public StreamsException(final String message) {
-        super(message);
+        this(message, (TaskId) null);
     }
 
     public StreamsException(final String message, final TaskId taskId) {
-        this(message);
+        super(message);
         this.taskId = taskId;
     }
 
     public StreamsException(final String message, final Throwable throwable) {
-        super(message, throwable);
+        this(message, throwable, null);
     }
 
     public StreamsException(final String message, final Throwable throwable, final TaskId taskId) {
-        this(message, throwable);
+        super(message, throwable);
         this.taskId = taskId;
     }
 
     public StreamsException(final Throwable throwable) {
-        super(throwable);
+        this(throwable, null);
     }
 
     public StreamsException(final Throwable throwable, final TaskId taskId) {
-        this(throwable);
+        super(throwable);
         this.taskId = taskId;
     }
 
