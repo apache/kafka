@@ -44,7 +44,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -70,8 +70,8 @@ class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   override def authorizer: Authorizer = aclAuthorizer
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Increase maxUpdateRetries to avoid transient failures
     aclAuthorizer.maxUpdateRetries = Int.MaxValue

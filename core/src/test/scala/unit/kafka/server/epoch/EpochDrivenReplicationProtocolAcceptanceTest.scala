@@ -33,7 +33,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
@@ -59,8 +59,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
   }
 
   @AfterEach

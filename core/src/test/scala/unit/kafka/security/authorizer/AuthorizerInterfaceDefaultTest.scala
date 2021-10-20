@@ -27,7 +27,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthorizerTest {
 
@@ -36,8 +36,8 @@ class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthoriz
   override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Increase maxUpdateRetries to avoid transient failures
     interfaceDefaultAuthorizer.authorizer.maxUpdateRetries = Int.MaxValue

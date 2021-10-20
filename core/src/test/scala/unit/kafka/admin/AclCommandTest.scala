@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 class AclCommandTest extends QuorumTestHarness with Logging {
 
@@ -102,8 +102,8 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   private var adminArgs: Array[String] = _
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)

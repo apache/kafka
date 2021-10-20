@@ -62,7 +62,7 @@ import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 
 import scala.annotation.nowarn
 import scala.collection._
@@ -102,9 +102,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism)))
-    super.setUp()
+    super.setUp(testInfo)
 
     clearLeftOverProcessorMetrics() // clear metrics left over from other tests so that new ones can be tested
 

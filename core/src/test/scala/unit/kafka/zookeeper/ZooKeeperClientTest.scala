@@ -35,7 +35,7 @@ import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -46,10 +46,10 @@ class ZooKeeperClientTest extends QuorumTestHarness {
   private var zooKeeperClient: ZooKeeperClient = _
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     TestUtils.verifyNoUnexpectedThreads("@BeforeEach")
     cleanMetricsRegistry()
-    super.setUp()
+    super.setUp(testInfo)
     zooKeeperClient = newZooKeeperClient()
   }
 

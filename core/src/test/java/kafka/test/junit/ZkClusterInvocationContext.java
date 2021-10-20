@@ -23,6 +23,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
@@ -252,7 +253,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public void start() {
             if (started.compareAndSet(false, true)) {
-                clusterReference.get().setUp();
+                clusterReference.get().setUp(new EmptyTestInfo());
             }
         }
 

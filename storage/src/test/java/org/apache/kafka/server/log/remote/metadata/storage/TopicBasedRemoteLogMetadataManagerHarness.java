@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import kafka.api.IntegrationTestHarness;
+import kafka.utils.EmptyTestInfo;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -60,7 +61,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
     public void initialize(Set<TopicIdPartition> topicIdPartitions,
                            boolean startConsumerThread) {
         // Call setup to start the cluster.
-        super.setUp();
+        super.setUp(new EmptyTestInfo());
 
         initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread);
     }

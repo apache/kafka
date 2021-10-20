@@ -30,10 +30,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.Exit
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
 
 @deprecated(message = "Use the Connect-based MirrorMaker instead (aka MM2).", since = "3.0")
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
@@ -44,9 +42,9 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
   val exited = new AtomicBoolean(false)
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     Exit.setExitProcedure((_, _) => exited.set(true))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @AfterEach

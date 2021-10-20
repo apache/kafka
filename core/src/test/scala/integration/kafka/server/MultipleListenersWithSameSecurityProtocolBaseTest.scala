@@ -34,7 +34,7 @@ import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -67,9 +67,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
   protected def dynamicJaasSections: Properties
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(staticJaasSections)
-    super.setUp()
+    super.setUp(testInfo)
     // 2 brokers so that we can test that the data propagates correctly via UpdateMetadadaRequest
     val numServers = 2
 

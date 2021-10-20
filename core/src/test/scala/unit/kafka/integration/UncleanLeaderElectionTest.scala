@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.util.Random
 import scala.jdk.CollectionConverters._
@@ -63,8 +63,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     configProps1 = createBrokerConfig(brokerId1, zkConnect)
     configProps2 = createBrokerConfig(brokerId2, zkConnect)

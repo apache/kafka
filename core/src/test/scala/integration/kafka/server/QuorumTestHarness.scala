@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
 import kafka.tools.StorageTool
-import kafka.utils.{CoreUtils, EmptyTestInfo, Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -159,10 +159,6 @@ abstract class QuorumTestHarness extends Logging {
   def zkConnectOrNull: String = if (isKRaftTest()) null else s"127.0.0.1:$zkPort"
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
-
-  def setUp(): Unit = {
-    setUp(new EmptyTestInfo())
-  }
 
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {

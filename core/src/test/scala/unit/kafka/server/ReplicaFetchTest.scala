@@ -19,7 +19,7 @@ package kafka.server
 
 import scala.collection.Seq
 
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
 import TestUtils._
@@ -33,8 +33,8 @@ class ReplicaFetchTest extends QuorumTestHarness  {
   val topic2 = "bar"
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = createBrokerConfigs(2, zkConnect)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }

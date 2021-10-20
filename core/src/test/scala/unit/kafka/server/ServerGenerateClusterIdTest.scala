@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import kafka.server.QuorumTestHarness
 
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
@@ -41,8 +41,8 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   val brokerMetaPropsFile = "meta.properties"
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
     config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
     config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))

@@ -40,7 +40,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -55,8 +55,8 @@ class ServerShutdownTest extends QuorumTestHarness {
   val sent2 = List("more", "messages")
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     config = KafkaConfig.fromProps(props)
   }

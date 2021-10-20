@@ -20,7 +20,7 @@ package kafka.api
 import java.time.Duration
 
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import kafka.utils.{EmptyTestInfo, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import java.util.Properties
 
@@ -105,10 +105,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     doSetup(testInfo, createOffsetsTopic = true)
-  }
-
-  def doSetup(createOffsetsTopic: Boolean): Unit = {
-    doSetup(new EmptyTestInfo(), createOffsetsTopic)
   }
 
   def doSetup(testInfo: TestInfo,

@@ -28,7 +28,7 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -43,8 +43,8 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
   }
 
   @Test

@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -47,8 +47,8 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val configs = Seq(
       TestUtils.createBrokerConfig(brokerId1, zkConnect),
       TestUtils.createBrokerConfig(brokerId2, zkConnect))

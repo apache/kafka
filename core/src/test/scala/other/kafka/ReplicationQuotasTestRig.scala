@@ -25,7 +25,7 @@ import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness, QuotaType}
 import kafka.utils.TestUtils._
-import kafka.utils.{Exit, Logging, TestUtils}
+import kafka.utils.{EmptyTestInfo, Exit, Logging, TestUtils}
 import kafka.zk.ReassignPartitionsZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -80,7 +80,7 @@ object ReplicationQuotasTestRig {
   def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
     val experiment = new Experiment()
     try {
-      experiment.setUp()
+      experiment.setUp(new EmptyTestInfo())
       experiment.run(config, journal, displayChartsOnScreen)
       journal.footer()
     }

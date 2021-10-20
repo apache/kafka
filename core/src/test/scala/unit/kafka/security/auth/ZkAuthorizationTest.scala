@@ -26,7 +26,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
@@ -46,11 +46,11 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
   val authProvider = "zookeeper.authProvider.1"
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @AfterEach
