@@ -97,19 +97,22 @@ final class ClusterConnectionStates {
 
     /**
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
-     * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
-     * connections.
+     * disconnected, this respects the reconnect backoff time. When connecting, return a delay based on the connection timeout.
+     * When connected, wait indefinitely (i.e. until a wakeup).
      * @param id the connection to check
      * @param now the current time in ms
      */
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
-        if (state.state.isDisconnected()) {
+
+        if (state.state == ConnectionState.CONNECTING) {
+            return connectionSetupTimeoutMs(id);
+        } else if (state.state.isDisconnected()) {
             long timeWaited = now - state.lastConnectAttemptMs;
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
-            // When connecting or connected, we should be able to delay indefinitely since other events (connection or
+            // When connected, we should be able to delay indefinitely since other events (connection or
             // data acked) will cause a wakeup once data can be sent.
             return Long.MAX_VALUE;
         }

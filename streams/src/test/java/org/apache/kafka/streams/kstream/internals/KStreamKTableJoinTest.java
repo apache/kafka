@@ -66,6 +66,7 @@ public class KStreamKTableJoinTest {
     private StreamsBuilder builder;
     private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setUp() {
         builder = new StreamsBuilder();

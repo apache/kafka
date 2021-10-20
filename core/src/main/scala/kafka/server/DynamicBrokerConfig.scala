@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.network.SocketServer
@@ -36,6 +35,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -621,6 +621,7 @@ trait BrokerReconfigurable {
 object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
   // is supported on all brokers in the cluster.
+  @nowarn("cat=deprecation")
   val ExcludedConfigs = Set(KafkaConfig.LogMessageFormatVersionProp)
 
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
@@ -652,9 +653,9 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    val currentLogConfig = logManager.currentDefaultConfig
-    val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
-    val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
+    val originalLogConfig = logManager.currentDefaultConfig
+    val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
+    val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
     newConfig.valuesFromThisConfig.forEach { (k, v) =>
       if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
@@ -670,7 +671,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     updateLogsConfig(newBrokerDefaults.asScala)
 
-    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
+    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !originalUncleanLeaderElectionEnable) {
       server match {
         case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableDefaultUncleanLeaderElection()
         case _ =>

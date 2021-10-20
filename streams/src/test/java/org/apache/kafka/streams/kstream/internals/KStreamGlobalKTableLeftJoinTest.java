@@ -55,6 +55,7 @@ public class KStreamGlobalKTableLeftJoinTest {
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setUp() {
 

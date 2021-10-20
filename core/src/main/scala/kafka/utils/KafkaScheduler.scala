@@ -21,6 +21,8 @@ import java.util.concurrent._
 import atomic._
 import org.apache.kafka.common.utils.KafkaThread
 
+import java.util.concurrent.TimeUnit.NANOSECONDS
+
 /**
  * A scheduler for running jobs
  * 
@@ -107,21 +109,25 @@ class KafkaScheduler(val threads: Int,
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
-      ensureRunning()
-      val runnable: Runnable = () => {
-        try {
-          trace("Beginning execution of scheduled task '%s'.".format(name))
-          fun()
-        } catch {
-          case t: Throwable => error(s"Uncaught exception in scheduled task '$name'", t)
-        } finally {
-          trace("Completed execution of scheduled task '%s'.".format(name))
+      if (isStarted) {
+        val runnable: Runnable = () => {
+          try {
+            trace("Beginning execution of scheduled task '%s'.".format(name))
+            fun()
+          } catch {
+            case t: Throwable => error(s"Uncaught exception in scheduled task '$name'", t)
+          } finally {
+            trace("Completed execution of scheduled task '%s'.".format(name))
+          }
         }
+        if (period >= 0)
+          executor.scheduleAtFixedRate(runnable, delay, period, unit)
+        else
+          executor.schedule(runnable, delay, unit)
+      } else {
+        info("Kafka scheduler is not running at the time task '%s' is scheduled. The task is ignored.".format(name))
+        new NoOpScheduledFutureTask
       }
-      if (period >= 0)
-        executor.scheduleAtFixedRate(runnable, delay, period, unit)
-      else
-        executor.schedule(runnable, delay, unit)
     }
   }
 
@@ -141,9 +147,19 @@ class KafkaScheduler(val threads: Int,
       executor != null
     }
   }
-  
-  private def ensureRunning(): Unit = {
-    if (!isStarted)
-      throw new IllegalStateException("Kafka scheduler is not running.")
+}
+
+private class NoOpScheduledFutureTask() extends ScheduledFuture[Unit] {
+  override def cancel(mayInterruptIfRunning: Boolean): Boolean = true
+  override def isCancelled: Boolean = true
+  override def isDone: Boolean = true
+  override def get(): Unit = {}
+  override def get(timeout: Long, unit: TimeUnit): Unit = {}
+  override def getDelay(unit: TimeUnit): Long = 0
+  override def compareTo(o: Delayed): Int = {
+    val diff = getDelay(NANOSECONDS) - o.getDelay(NANOSECONDS)
+    if (diff < 0) -1
+    else if (diff > 0) 1
+    else 0
   }
 }

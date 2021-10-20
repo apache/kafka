@@ -280,6 +280,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     SnapshottableHashTable(SnapshotRegistry snapshotRegistry, int expectedSize) {
         super(expectedSize);
         this.snapshotRegistry = snapshotRegistry;
+        snapshotRegistry.register(this);
     }
 
     int snapshottableSize(long epoch) {
@@ -450,6 +451,15 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                 }
                 out.clear();
             }
+        }
+    }
+
+    @Override
+    public void reset() {
+        Iterator<T> iter = snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
+        while (iter.hasNext()) {
+            iter.next();
+            iter.remove();
         }
     }
 }

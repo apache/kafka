@@ -24,10 +24,9 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
-import kafka.server.metadata.CachedConfigRepository
+import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
 
@@ -35,7 +34,7 @@ class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
-  val configRepository = new CachedConfigRepository()
+  val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
@@ -63,10 +62,16 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler,
-      logManagers.head, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager,
-      configRepository)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManagers.head,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      logDirFailureChannel = logDirFailureChannels.head,
+      alterIsrManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -113,9 +118,16 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, None,
-      scheduler, logManagers.head, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager, configRepository)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = scheduler,
+      logManager = logManagers.head,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      logDirFailureChannel = logDirFailureChannels.head,
+      alterIsrManager = alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

@@ -75,11 +75,12 @@ public class ClientMetricsTest {
         final String name = "topology-description";
         final String description = "The description of the topology executed in the Kafka Streams client";
         final String topologyDescription = "thisIsATopologyDescription";
-        setUpAndVerifyImmutableMetric(
+        final Gauge<String> topologyDescriptionProvider = (c, n) -> topologyDescription;
+        setUpAndVerifyMutableMetric(
             name,
             description,
-            topologyDescription,
-            () -> ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, topologyDescription)
+            topologyDescriptionProvider,
+            () -> ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, topologyDescriptionProvider)
         );
     }
 

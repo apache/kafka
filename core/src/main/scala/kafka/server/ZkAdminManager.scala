@@ -118,7 +118,7 @@ class ZkAdminManager(val config: KafkaConfig,
     metadataAndConfigs.get(topicName).foreach { result =>
       val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
       val createEntry = configHelper.createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
-      val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
+      val topicConfigs = configHelper.allConfigs(logConfig).map { case (k, v) =>
         val entry = createEntry(k, v)
         new CreatableTopicConfigs()
           .setName(k)
@@ -152,7 +152,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
+    val brokers = metadataCache.getAliveBrokers()
     val metadata = toCreate.values.map(topic =>
       try {
         if (metadataCache.contains(topic.name))

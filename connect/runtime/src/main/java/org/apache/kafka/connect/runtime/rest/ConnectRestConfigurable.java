@@ -81,7 +81,7 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
     }
 
     @Override
-    public ResourceConfig register(Object component, Class... contracts) {
+    public ResourceConfig register(Object component, Class<?>... contracts) {
         if (allowedToRegister(component)) {
             resourceConfig.register(component, contracts);
         }

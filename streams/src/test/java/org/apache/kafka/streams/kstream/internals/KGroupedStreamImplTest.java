@@ -61,7 +61,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
-
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KGroupedStreamImplTest {
 
     private static final String TOPIC = "topic";
@@ -590,7 +590,7 @@ public class KGroupedStreamImplTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
                     + "offset=[6]")
             );
         }
@@ -640,7 +640,7 @@ public class KGroupedStreamImplTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] "
+                hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] "
                     + "offset=[6]")
             );
         }

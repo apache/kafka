@@ -23,7 +23,7 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile int partitions;
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
-
+    private volatile boolean closed = false;
 
     public MockControllerMetrics() {
         this.active = false;
@@ -91,5 +91,14 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+    }
+
+    public boolean isClosed() {
+        return this.closed;
     }
 }

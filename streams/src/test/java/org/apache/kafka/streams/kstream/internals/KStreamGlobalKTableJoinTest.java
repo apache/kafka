@@ -55,6 +55,7 @@ public class KStreamGlobalKTableJoinTest {
     private MockProcessor<Integer, String> processor;
     private StreamsBuilder builder;
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setUp() {
 
