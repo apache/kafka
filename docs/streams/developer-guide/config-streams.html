@@ -682,7 +682,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.
               <dl class="docutils">
                 <dt>Recommendation:</dt>
-                <dd>Increase the number of standbys to 1 to get instant fail-over, ie, high-availability.
+                <dd>Increase the number of standbys to 1 to get instant fail-over, i.e., high-availability.
                   Note that you will require more client side storage space as well (twice as much with 1 standby).</dd>
               </dl>
               <dl class="docutils">
@@ -1041,7 +1041,7 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
             <div>See the <a class="reference internal" href="#streams-developer-guide-standby-replicas"><span class="std std-ref">description here</span></a>.</div></blockquote>
         </div>
         <pre class="line-numbers"><code class="language-java">Properties streamsSettings = new Properties();
-// for broker version is 2.3. or older
+// for broker version 2.3 or older
 //streamsSettings.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
 streamsSettings.put(StreamsConfig.topicPrefix(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG), 2);
 streamsSettings.put(StreamsConfig.producerPrefix(ProducerConfig.ACKS_CONFIG), "all");
