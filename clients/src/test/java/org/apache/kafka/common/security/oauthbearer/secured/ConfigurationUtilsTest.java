@@ -17,139 +17,89 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 
-    private final static String URI_CONFIG_NAME = "uri";
+    private final static String URL_CONFIG_NAME = "url";
 
     @Test
-    public void testSSLClientConfig() {
-        Map<String, Object> configs = new HashMap<>();
-        String sslKeystore = "test.keystore.jks";
-        String sslTruststore = "test.truststore.jks";
-        String url = "https://www.example.com";
+    public void testUrl() {
+        testUrl("http://www.example.com");
+    }
 
-        configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, sslKeystore);
-        configs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "$3cr3+");
-        configs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststore);
-        configs.put(URI_CONFIG_NAME, url);
+    @Test
+    public void testUrlWithSuperfluousWhitespace() {
+        testUrl(String.format("  %s  ", "http://www.example.com"));
+    }
 
+    @Test
+    public void testUrlCaseInsensitivity() {
+        testUrl("HTTPS://WWW.EXAMPLE.COM");
+    }
+
+    @Test
+    public void testUrlFile() {
+        testUrl("file:///tmp/foo.txt");
+    }
+
+    @Test
+    public void testUrlFullPath() {
+        testUrl("https://myidp.example.com/oauth2/default/v1/token");
+    }
+
+    @Test
+    public void testUrlMissingProtocol() {
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("www.example.com"), "no protocol");
+    }
+
+    @Test
+    public void testUrlInvalidProtocol() {
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("ftp://ftp.example.com"), "invalid protocol");
+    }
+
+    @Test
+    public void testUrlNull() {
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "must be non-null");
+    }
+
+    @Test
+    public void testUrlEmptyString() {
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "must not contain only whitespace");
+    }
+
+    @Test
+    public void testUrlWhitespace() {
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "must not contain only whitespace");
+    }
+
+    private void testUrl(String value) {
+        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        Map<String, ?> sslClientConfig = cu.getSslClientConfig(URI_CONFIG_NAME);
-        assertNotNull(sslClientConfig);
-        assertEquals(sslKeystore, sslClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
-        assertEquals(sslTruststore, sslClientConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfig.get(SslConfigs.SSL_PROTOCOL_CONFIG));
-    }
-
-    @Test
-    public void testSSLClientConfigUriEmptyNullAndWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> getSslClientConfig(""), "required");
-        assertThrowsWithMessage(ConfigException.class, () -> getSslClientConfig(null), "required");
-        assertThrowsWithMessage(ConfigException.class, () -> getSslClientConfig("  "), "required");
-    }
-
-    @Test
-    public void testSSLClientConfigUriMalformed() {
-        assertThrowsWithMessage(ConfigException.class, () -> getSslClientConfig("not.a.valid.url.com"), "not a valid");
-    }
-
-    @Test
-    public void testSSLClientConfigUriNotHttps() {
-        Map<String, ?> sslClientConfig = getSslClientConfig("http://example.com");
-        assertNull(sslClientConfig);
-    }
-
-    private Map<String, ?> getSslClientConfig(String uri) {
-        Map<String, String> configs = Collections.singletonMap(URI_CONFIG_NAME, uri);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        return cu.getSslClientConfig(URI_CONFIG_NAME);
-    }
-
-    @Test
-    public void testUri() {
-        testUri("http://www.example.com");
-    }
-
-    @Test
-    public void testUriWithSuperfluousWhitespace() {
-        testUri(String.format("  %s  ", "http://www.example.com"));
-    }
-
-    @Test
-    public void testUriCaseInsensitivity() {
-        testUri("HTTPS://WWW.EXAMPLE.COM");
-    }
-
-    @Test
-    public void testUriFile() {
-        testUri("file:///tmp/foo.txt");
-    }
-
-    @Test
-    public void testUriFullPath() {
-        testUri("https://myidp.example.com/oauth2/default/v1/token");
-    }
-
-    @Test
-    public void testUriMissingScheme() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUri("www.example.com"), "missing the scheme");
-    }
-
-    @Test
-    public void testUriInvalidScheme() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUri("ftp://ftp.example.com"), "invalid scheme");
-    }
-
-    @Test
-    public void testUriNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUri(null), "must be non-null");
-    }
-
-    @Test
-    public void testUriEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUri(""), "must not contain only whitespace");
-    }
-
-    @Test
-    public void testUriWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUri("    "), "must not contain only whitespace");
-    }
-
-    private void testUri(String value) {
-        Map<String, Object> configs = Collections.singletonMap(URI_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateUri(URI_CONFIG_NAME);
+        cu.validateUrl(URL_CONFIG_NAME);
     }
 
     @Test
     public void testFile() throws IOException {
         File file = TestUtils.tempFile("some contents!");
-        testFile(file.toURI().toString());
+        testFile(file.toURI().toURL().toString());
     }
 
     @Test
     public void testFileWithSuperfluousWhitespace() throws IOException {
         File file = TestUtils.tempFile();
-        testFile(String.format("  %s  ", file.toURI()));
+        testFile(String.format("  %s  ", file.toURI().toURL()));
     }
 
     @Test
     public void testFileDoesNotExist() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(new File("/tmp/not/a/real/file.txt").toURI().toString()), "that doesn't exist");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(new File("/tmp/not/a/real/file.txt").toURI().toURL().toString()), "that doesn't exist");
     }
 
     @Test
@@ -159,7 +109,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         if (!file.setReadable(false))
             throw new IllegalStateException(String.format("Can't test file permissions as test couldn't programmatically make temp file %s un-readable", file.getAbsolutePath()));
 
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(file.toURI().toString()), "that doesn't have read permission");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(file.toURI().toURL().toString()), "that doesn't have read permission");
     }
 
     @Test
@@ -178,9 +128,9 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     }
 
     protected void testFile(String value) {
-        Map<String, Object> configs = Collections.singletonMap(URI_CONFIG_NAME, value);
+        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateFile(URI_CONFIG_NAME);
+        cu.validateFile(URL_CONFIG_NAME);
     }
 
 }

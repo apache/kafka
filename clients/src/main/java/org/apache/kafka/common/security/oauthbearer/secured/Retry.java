@@ -39,19 +39,23 @@ public class Retry<R> {
 
     private final long retryBackoffMaxMs;
 
+    public Retry(long retryBackoffMs, long retryBackoffMaxMs) {
+        this(Time.SYSTEM, retryBackoffMs, retryBackoffMaxMs);
+    }
+
     public Retry(Time time, long retryBackoffMs, long retryBackoffMaxMs) {
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
 
         if (this.retryBackoffMs < 0)
-            throw new IllegalArgumentException(String.format("retryBackoffMs value %s must be non-negative", retryBackoffMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMs value (%s) must be non-negative", retryBackoffMs));
 
         if (this.retryBackoffMaxMs < 0)
-            throw new IllegalArgumentException(String.format("retryBackoffMaxMs %s value must be non-negative", retryBackoffMaxMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%s) must be non-negative", retryBackoffMaxMs));
 
         if (this.retryBackoffMaxMs < this.retryBackoffMs)
-            throw new IllegalArgumentException(String.format("retryBackoffMaxMs %s is less than retryBackoffMs %s", retryBackoffMaxMs, retryBackoffMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%s) is less than retryBackoffMs value (%s)", retryBackoffMaxMs, retryBackoffMs));
     }
 
     public R execute(Retryable<R> retryable) throws IOException {

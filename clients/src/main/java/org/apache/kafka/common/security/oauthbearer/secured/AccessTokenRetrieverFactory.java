@@ -21,12 +21,12 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIME
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
-import java.net.URI;
+import java.net.URL;
 import java.util.Locale;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
@@ -49,29 +49,36 @@ public class AccessTokenRetrieverFactory  {
         return create(configs, null, jaasConfig);
     }
 
-    public static AccessTokenRetriever create(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
+    public static AccessTokenRetriever create(Map<String, ?> configs,
+        String saslMechanism,
+        Map<String, Object> jaasConfig) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URI tokenEndpointUri = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);
+        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
-            return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI));
+        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+            return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
         } else {
             ConfigurationUtils jaasCu = new ConfigurationUtils(jaasConfig);
             String clientId = jaasCu.validateString(CLIENT_ID_CONFIG);
             String clientSecret = jaasCu.validateString(CLIENT_SECRET_CONFIG);
             String scope = jaasCu.get(SCOPE_CONFIG);
 
-            SSLSocketFactory sslSocketFactory = cu.createSSLSocketFactory(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);
+            SSLSocketFactory sslSocketFactory = null;
+
+            if (JaasOptionsUtils.shouldUseSslClientConfig(tokenEndpointUrl)) {
+                JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+                sslSocketFactory = jou.createSSLSocketFactory();
+            }
 
             return new HttpAccessTokenRetriever(clientId,
                 clientSecret,
                 scope,
                 sslSocketFactory,
-                tokenEndpointUri.toString(),
+                tokenEndpointUrl.toString(),
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS),
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
-                cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false, null),
-                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false, null));
+                cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
+                cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false));
         }
     }
 

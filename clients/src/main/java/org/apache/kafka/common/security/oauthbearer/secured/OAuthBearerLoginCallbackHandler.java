@@ -17,14 +17,12 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -35,7 +33,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
@@ -64,7 +61,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         "clientcredentials grant type.";
 
     public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
-        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI + ") may need to specify an " +
+        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
         "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
         "include with the login request.";
 
@@ -80,13 +77,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
-            throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
-
-        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
-            throw new IllegalArgumentException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
-
-        moduleOptions = Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
+        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
         AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
         init(accessTokenRetriever, accessTokenValidator);
@@ -131,7 +122,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
     }
 
-    void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
+    private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         checkInitialized();
 
         String accessToken = accessTokenRetriever.retrieve();
@@ -147,7 +138,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
     }
 
-    void handleExtensionsCallback(SaslExtensionsCallback callback) {
+    private void handleExtensionsCallback(SaslExtensionsCallback callback) {
         checkInitialized();
 
         Map<String, String> extensions = new HashMap<>();

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,7 +71,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testHandleSaslExtensionsCallback() throws Exception {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI, "http://www.example.com");
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
         Map<String, Object> jaasConfig = new HashMap<>();
         jaasConfig.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfig.put(CLIENT_SECRET_CONFIG, "a secret");
@@ -100,7 +100,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         String illegalKey = "extension_" + OAuthBearerClientInitialResponse.AUTH_KEY;
 
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI, "http://www.example.com");
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
         Map<String, Object> jaasConfig = new HashMap<>();
         jaasConfig.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfig.put(CLIENT_SECRET_CONFIG, "a secret");
@@ -173,7 +173,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
 
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI, accessTokenFile.toURI().toString());
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
     }
@@ -181,7 +181,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testConfigureWithAccessClientCredentials() {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI, "http://www.example.com");
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "http://www.example.com");
         Map<String, Object> jaasConfigs = new HashMap<>();
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
