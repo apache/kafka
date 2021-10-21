@@ -54,7 +54,7 @@ import org.slf4j.LoggerFactory;
  *         <code>iat</code> claims
  *     </li>
  *     <li>
- *         Signature matching validation against the <code>kid</code> and those provided b
+ *         Signature matching validation against the <code>kid</code> and those provided by
  *         the OAuth/OIDC provider's JWKS
  *     </li>
  * </ol>
@@ -84,16 +84,20 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      *                                The JWT will be inspected for the standard OAuth
      *                                <code>aud</code> claim and if this value is set, the
      *                                broker will match the value from JWT's <code>aud</code>
-     *                                claim to see if there is an exact match. If there is no
+     *                                claim to see if there is an <b>exact</b> match. If there is no
      *                                match, the broker will reject the JWT and authentication
-     *                                will fail. May be <code>null</code> to not perform an
+     *                                will fail. May be <code>null</code> to not perform any
+     *                                check to verify the JWT's <code>aud</code> claim matches any
+     *                                fixed set of known/expected audiences.
      * @param expectedIssuer          The (optional) value for the broker to use to verify that
      *                                the JWT was created by the expected issuer. The JWT will
      *                                be inspected for the standard OAuth <code>iss</code> claim
-     *                                and if this value is set, the broker will match it exactly
-     *                                against what is in the JWT's <code>iss</code> claim.
-     *                                If there is no match, the broker will reject the JWT and
-     *                                authentication will fail.
+     *                                and if this value is set, the broker will match it
+     *                                <b>exactly</b> against what is in the JWT's <code>iss</code>
+     *                                claim. If there is no match, the broker will reject the JWT
+     *                                and authentication will fail. May be <code>null</code> to not
+     *                                perform any check to verify the JWT's <code>iss</code> claim
+     *                                matches a specific issuer.
      * @param verificationKeyResolver jose4j-based {@link VerificationKeyResolver} that is used
      *                                to validate the signature matches the contents of the header
      *                                and payload

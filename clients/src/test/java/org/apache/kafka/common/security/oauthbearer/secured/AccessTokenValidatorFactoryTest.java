@@ -67,11 +67,4 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
         handler.close();
     }
 
-    private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.init(accessTokenRetriever, accessTokenValidator);
-        return handler;
-    }
-
 }

@@ -18,9 +18,9 @@
 package org.apache.kafka.common.security.oauthbearer.secured;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URI;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
-import java.net.URI;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -41,21 +41,30 @@ public class VerificationKeyResolverFactory {
      *
      * @return Non-<code>null</code> {@link CloseableVerificationKeyResolver}
      */
-    public static CloseableVerificationKeyResolver create(Map<String, ?> configs) {
-        return create(configs, null);
+    public static CloseableVerificationKeyResolver create(Map<String, ?> configs,
+        Map<String, Object> jaasConfig) {
+        return create(configs, null, jaasConfig);
     }
 
-    public static CloseableVerificationKeyResolver create(Map<String, ?> configs, String saslMechanism) {
+    public static CloseableVerificationKeyResolver create(Map<String, ?> configs,
+        String saslMechanism,
+        Map<String, Object> jaasConfig) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URI jwksEndpointUri = cu.validateUri(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
+        URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-        if (jwksEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
-            Path p = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
+        if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+            Path p = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
             return new JwksFileVerificationKeyResolver(p);
         } else {
             long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-            SSLSocketFactory sslSocketFactory = cu.createSSLSocketFactory(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
-            return new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUri.toString(), refreshIntervalMs, sslSocketFactory);
+            SSLSocketFactory sslSocketFactory = null;
+
+            if (JaasOptionsUtils.shouldUseSslClientConfig(jwksEndpointUrl)) {
+                JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+                sslSocketFactory = jou.createSSLSocketFactory();
+            }
+
+            return new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUrl.toString(), refreshIntervalMs, sslSocketFactory);
         }
     }
 

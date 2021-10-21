@@ -38,7 +38,6 @@ import java.util.Set;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,13 +47,13 @@ import org.slf4j.LoggerFactory;
  * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
  * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL
- * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI}).
+ * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  *
  * @see AccessTokenRetriever
  * @see OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG
  * @see OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG
  * @see OAuthBearerLoginCallbackHandler#SCOPE_CONFIG
- * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI
+ * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
  */
 
 public class HttpAccessTokenRetriever implements AccessTokenRetriever {
@@ -98,7 +97,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private final SSLSocketFactory sslSocketFactory;
 
-    private final String tokenEndpointUri;
+    private final String tokenEndpointUrl;
 
     private final long loginRetryBackoffMs;
 
@@ -112,7 +111,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         String clientSecret,
         String scope,
         SSLSocketFactory sslSocketFactory,
-        String tokenEndpointUri,
+        String tokenEndpointUrl,
         long loginRetryBackoffMs,
         long loginRetryBackoffMaxMs,
         Integer loginConnectTimeoutMs,
@@ -121,7 +120,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         this.clientSecret = Objects.requireNonNull(clientSecret);
         this.scope = scope;
         this.sslSocketFactory = sslSocketFactory;
-        this.tokenEndpointUri = Objects.requireNonNull(tokenEndpointUri);
+        this.tokenEndpointUrl = Objects.requireNonNull(tokenEndpointUrl);
         this.loginRetryBackoffMs = loginRetryBackoffMs;
         this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
         this.loginConnectTimeoutMs = loginConnectTimeoutMs;
@@ -147,15 +146,11 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     public String retrieve() throws IOException {
         String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret);
         String requestBody = formatRequestBody(scope);
-
-        Retry<String> retry = new Retry<>(Time.SYSTEM,
-            loginRetryBackoffMs,
-            loginRetryBackoffMaxMs);
-
+        Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
         String responseBody = retry.execute(() -> {
-            HttpURLConnection con = (HttpURLConnection) new URL(tokenEndpointUri).openConnection();
+            HttpURLConnection con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
 
             if (sslSocketFactory != null && con instanceof HttpsURLConnection)
                 ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
@@ -166,7 +161,6 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
                 con.disconnect();
             }
         });
-        log.debug("retrieve - responseBody: {}", responseBody);
 
         return parseAccessToken(responseBody);
     }
@@ -216,8 +210,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         if (requestBody != null) {
             try (OutputStream os = con.getOutputStream()) {
-                ByteArrayInputStream is = new ByteArrayInputStream(requestBody.getBytes(
-                    StandardCharsets.UTF_8));
+                ByteArrayInputStream is = new ByteArrayInputStream(requestBody.getBytes(StandardCharsets.UTF_8));
                 log.debug("handleInput - preparing to write request body to {}", con.getURL());
                 copy(is, os);
             }
@@ -240,10 +233,10 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         }
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
+            log.debug("handleOutput - responseCode: {}, response: {}", responseCode, responseBody);
+
             if (responseBody == null || responseBody.isEmpty())
                 throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %s from %s", responseCode, con.getURL()));
-
-            log.debug("handleOutput - responseCode: {}, response: {}", responseCode, responseBody);
 
             return responseBody;
         } else {
@@ -270,19 +263,31 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String parseAccessToken(String responseBody) throws IOException {
+        log.debug("parseAccessToken - responseBody: {}", responseBody);
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(responseBody);
         JsonNode accessTokenNode = rootNode.at("/access_token");
 
-        if (accessTokenNode == null)
-            throw new IOException("The token endpoint response did not contain an access_token value");
+        if (accessTokenNode == null) {
+            // Only grab the first N characters so that if the response is huge, we don't blow up.
+            int trimmedLength = 1000;
+            String responseToInclude = responseBody;
 
-        return sanitizeString("The token endpoint response access_token", accessTokenNode.textValue());
+            if (responseToInclude.length() > trimmedLength) {
+                int actualLength = responseBody.length();
+                String snippet = responseBody.substring(0, trimmedLength);
+                responseToInclude = String.format("%s (trimmed to first %s characters out of %s total)", snippet, trimmedLength, actualLength);
+            }
+
+            throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", responseToInclude));
+        }
+
+        return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
     }
 
-    static String formatAuthorizationHeader(String clientId, String clientSecret) throws IOException {
-        clientId = sanitizeString("The token endpoint request clientId", clientId);
-        clientSecret = sanitizeString("The token endpoint request clientId", clientSecret);
+    static String formatAuthorizationHeader(String clientId, String clientSecret) {
+        clientId = sanitizeString("the token endpoint request client ID parameter ", clientId);
+        clientSecret = sanitizeString("the token endpoint request client secret paramemter", clientSecret);
 
         String s = String.format("%s:%s", clientId, clientSecret);
         String encoded = Base64.getUrlEncoder().encodeToString(Utils.utf8(s));
@@ -307,17 +312,17 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         }
     }
 
-    private static String sanitizeString(String name, String value) throws IOException {
+    private static String sanitizeString(String name, String value) {
         if (value == null)
-            throw new IOException(String.format("%s value must be non-null", name));
+            throw new IllegalArgumentException(String.format("The value for %s must be non-null", name));
 
         if (value.isEmpty())
-            throw new IOException(String.format("%s value must be non-empty", name));
+            throw new IllegalArgumentException(String.format("The value for %s must be non-empty", name));
 
         value = value.trim();
 
         if (value.isEmpty())
-            throw new IOException(String.format("%s value must not contain only whitespace", name));
+            throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
 
         return value;
     }

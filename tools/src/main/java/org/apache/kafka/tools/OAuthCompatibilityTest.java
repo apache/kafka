@@ -33,14 +33,14 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URI;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URI_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_ID_DOC;
 import static org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
@@ -114,12 +114,12 @@ public class OAuthCompatibilityTest {
         parser.addArgument("--sub-claim-name")
             .dest("subClaimName")
             .help(SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC);
-        parser.addArgument("--token-endpoint-uri")
-            .dest("tokenEndpointUri")
-            .help(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI_DOC);
-        parser.addArgument("--jwks-endpoint-uri")
-            .dest("jwksEndpointUri")
-            .help(SASL_OAUTHBEARER_JWKS_ENDPOINT_URI_DOC);
+        parser.addArgument("--token-endpoint-url")
+            .dest("tokenEndpointUrl")
+            .help(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC);
+        parser.addArgument("--jwks-endpoint-url")
+            .dest("jwksEndpointUrl")
+            .help(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC);
         parser.addArgument("--jwks-endpoint-refresh-ms")
             .type(Long.class)
             .dest("jwksEndpointRefreshMs")
@@ -178,7 +178,7 @@ public class OAuthCompatibilityTest {
 
             {
                 // Broker side...
-                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs)) {
+                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, jaasConfigs)) {
                     vkr.init();
                     AccessTokenValidator atv = AccessTokenValidatorFactory.create(configs, vkr);
                     System.out.println("PASSED 4/5: broker configuration");
@@ -211,8 +211,8 @@ public class OAuthCompatibilityTest {
         maybeAddLong(namespace, "retryBackoffMax", c, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         maybeAddString(namespace, "scopeClaimName", c, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         maybeAddString(namespace, "subClaimName", c, SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-        maybeAddString(namespace, "tokenEndpointUri", c, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URI);
-        maybeAddString(namespace, "jwksEndpointUri", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_URI);
+        maybeAddString(namespace, "tokenEndpointUrl", c, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        maybeAddString(namespace, "jwksEndpointUrl", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         maybeAddLong(namespace, "jwksEndpdointRefreshMs", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
         maybeAddInt(namespace, "clockSkewSeconds", c, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS);
         maybeAddStringList(namespace, "expectedAudience", c, SASL_OAUTHBEARER_EXPECTED_AUDIENCE);

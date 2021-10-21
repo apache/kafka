@@ -97,7 +97,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", "");
 
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
@@ -106,7 +106,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         ObjectNode node = mapper.createObjectNode();
         node.put("sub", "jdoe");
 
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
     }
 
     @Test
@@ -124,15 +124,15 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret"));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret"));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", ""));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", ""));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret"));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  "));
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  "));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret"));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret"));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", ""));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", ""));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret"));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  "));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  "));
     }
 
     @Test

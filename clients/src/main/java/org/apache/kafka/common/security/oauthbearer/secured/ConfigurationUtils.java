@@ -18,23 +18,14 @@
 package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.URI;
+import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
-import javax.net.ssl.SSLSocketFactory;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
-import org.apache.kafka.common.security.ssl.SslFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
@@ -42,8 +33,6 @@ import org.slf4j.LoggerFactory;
  */
 
 public class ConfigurationUtils {
-
-    private static final Logger log = LoggerFactory.getLogger(ConfigurationUtils.class);
 
     private final Map<String, ?> configs;
 
@@ -62,46 +51,6 @@ public class ConfigurationUtils {
             this.prefix = null;
     }
 
-    public Map<String, ?> getSslClientConfig(String uriConfigName) {
-        String urlConfigValue = get(uriConfigName);
-
-        if (urlConfigValue == null || urlConfigValue.trim().isEmpty())
-            throw new ConfigException(String.format("The OAuth configuration option %s is required", uriConfigName));
-
-        URL url;
-
-        try {
-            url = new URL(urlConfigValue);
-        } catch (IOException e) {
-            throw new ConfigException(String.format("The OAuth configuration option %s was not a valid URL (%s)", uriConfigName, urlConfigValue));
-        }
-
-        if (!url.getProtocol().equalsIgnoreCase("https")) {
-            log.warn("Not creating SSL socket factory as URL for {} ({}) is not SSL-/TLS-based", uriConfigName, url);
-            return null;
-        }
-
-        ConfigDef sslConfigDef = new ConfigDef();
-        sslConfigDef.withClientSslSupport();
-        AbstractConfig sslClientConfig = new AbstractConfig(sslConfigDef, configs);
-        return sslClientConfig.values();
-    }
-
-    public SSLSocketFactory createSSLSocketFactory(String uriConfigName) {
-        Map<String, ?> sslClientConfig = getSslClientConfig(uriConfigName);
-
-        if (sslClientConfig == null) {
-            log.warn("Requesting SSL client socket factory but SSL configs were null");
-            return null;
-        }
-
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
-        sslFactory.configure(sslClientConfig);
-        SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
-        log.debug("Created SSLSocketFactory: {}", sslClientConfig);
-        return socketFactory;
-    }
-
     /**
      * Validates that, if a value is supplied, is a file that:
      *
@@ -116,8 +65,14 @@ public class ConfigurationUtils {
      */
 
     public Path validateFile(String name) {
-        URI uri = validateUri(name);
-        File file = new File(uri.getRawPath()).getAbsoluteFile();
+        URL url = validateUrl(name);
+        File file;
+
+        try {
+            file = new File(url.toURI().getRawPath()).getAbsoluteFile();
+        } catch (URISyntaxException e) {
+            throw new ConfigException(name, url.toString(), String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
+        }
 
         if (!file.exists())
             throw new ConfigException(name, file, String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
@@ -204,7 +159,7 @@ public class ConfigurationUtils {
     }
 
     /**
-     * Validates that the configured URI that:
+     * Validates that the configured URL that:
      *
      * <li>
      *     <ul>is well-formed</ul>
@@ -212,30 +167,30 @@ public class ConfigurationUtils {
      *     <ul>uses either HTTP, HTTPS, or file protocols</ul>
      * </li>
      *
-     * No effort is made to contact the URL in the validation step.
+     * No effort is made to connect to the URL in the validation step.
      */
 
-    public URI validateUri(String name) {
+    public URL validateUrl(String name) {
         String value = validateString(name);
-        URI uri;
+        URL url;
 
         try {
-            uri = new URI(value.trim());
-        } catch (URISyntaxException e) {
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URI (%s) that is malformed: %s", name, value, e.getMessage()));
+            url = new URL(value);
+        } catch (MalformedURLException e) {
+            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
         }
 
-        String scheme = uri.getScheme();
+        String protocol = url.getProtocol();
 
-        if (scheme == null || scheme.trim().isEmpty())
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URI (%s) that is missing the scheme", name, value));
+        if (protocol == null || protocol.trim().isEmpty())
+            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
 
-        scheme = scheme.toLowerCase(Locale.ROOT);
+        protocol = protocol.toLowerCase(Locale.ROOT);
 
-        if (!(scheme.equals("http") || scheme.equals("https") || scheme.equals("file")))
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URI (%s) that contains an invalid scheme (%s); only \"http\", \"https\", and \"file\" schemes are supported", name, value, scheme));
+        if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
+            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
 
-        return uri;
+        return url;
     }
 
     public String validateString(String name) throws ValidateException {
