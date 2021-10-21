@@ -370,6 +370,14 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
+    Set<TopicPartition> getNonEmptyTopicPartitions() {
+        final Set<TopicPartition> nonEmptyTopicPartitions = new HashSet<>();
+        for (final RecordQueue recordQueue : nonEmptyQueuesByTime) {
+            nonEmptyTopicPartitions.add(recordQueue.partition());
+        }
+        return nonEmptyTopicPartitions;
+    }
+
     int numBuffered() {
         return totalBuffered;
     }

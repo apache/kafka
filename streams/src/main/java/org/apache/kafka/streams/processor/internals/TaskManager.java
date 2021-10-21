@@ -1070,6 +1070,17 @@ public class TaskManager {
     }
 
     /**
+     *  Fetch all non-empty partitions for pausing
+     */
+    Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
+        for (final Task task : activeTaskIterable()) {
+            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+        }
+        return nonEmptyPartitions;
+    }
+
+    /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @throws TimeoutException if task.timeout.ms has been exceeded (non-EOS)
@@ -1281,13 +1292,13 @@ public class TaskManager {
         }
     }
 
-    static class ProcessData {
+    static class RecordsProcessedMetadata {
 
         int totalProcessed;
 
         long totalBytesConsumed;
 
-        ProcessData(int totalProcessed, long totalBytesConsumed) {
+        RecordsProcessedMetadata(final int totalProcessed, final long totalBytesConsumed) {
             this.totalProcessed = totalProcessed;
             this.totalBytesConsumed = totalBytesConsumed;
         }
@@ -1297,7 +1308,7 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException      if any task threw an exception while processing
      */
-    ProcessData process(final int maxNumRecords, final Time time) {
+    RecordsProcessedMetadata process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
         long totalBytesConsumed = 0L;
 
@@ -1340,7 +1351,7 @@ public class TaskManager {
             }
         }
 
-        return new ProcessData(totalProcessed, totalBytesConsumed);
+        return new RecordsProcessedMetadata(totalProcessed, totalBytesConsumed);
     }
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {

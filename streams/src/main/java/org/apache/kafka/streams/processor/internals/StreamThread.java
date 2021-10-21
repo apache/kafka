@@ -316,6 +316,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicLong maxBufferResizeSize = new AtomicLong(-1L);
     private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -623,6 +624,10 @@ public class StreamThread extends Thread {
                 if (size != -1L) {
                     cacheResizer.accept(size);
                 }
+                final long bufferBytesSize = maxBufferResizeSize.getAndSet(-1L);
+                if (size != -1) {
+                    maxBufferSizeBytes = bufferBytesSize;
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -747,6 +752,10 @@ public class StreamThread extends Thread {
         cacheResizeSize.set(size);
     }
 
+    public void resize(final long size) {
+        cacheResizeSize.set(size);
+    }
+
     /**
      * One iteration of a thread includes the following steps:
      *
@@ -791,7 +800,6 @@ public class StreamThread extends Thread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
-        long totalBytesConsumed = 0L;
         if (state == State.RUNNING) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -804,7 +812,7 @@ public class StreamThread extends Thread {
              */
             do {
                 log.debug("Processing tasks with {} iterations.", numIterations);
-                final TaskManager.ProcessData processedData = taskManager.process(numIterations, time);
+                final TaskManager.RecordsProcessedMetadata processedData = taskManager.process(numIterations, time);
                 final int processed = processedData.totalProcessed;
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
@@ -820,13 +828,11 @@ public class StreamThread extends Thread {
                     processLatencySensor.record(processLatency / (double) processed, now);
 
                     totalProcessed += processed;
-                    totalBytesConsumed += processedData.totalBytesConsumed;
                     totalRecordsProcessedSinceLastSummary += processed;
-                }
-
-                if (bufferSize > maxBufferSizeBytes && bufferSize - totalBytesConsumed <= maxBufferSizeBytes) {
-                    bufferSize -= totalBytesConsumed;
-                    mainConsumer.resume(mainConsumer.paused());
+                    if (bufferSize > maxBufferSizeBytes && bufferSize - processedData.totalBytesConsumed <= maxBufferSizeBytes) {
+                        mainConsumer.resume(mainConsumer.paused());
+                    }
+                    bufferSize -= processedData.totalBytesConsumed;
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -1002,7 +1008,7 @@ public class StreamThread extends Thread {
         // Pausing partitions as the buffer size now exceeds max buffer size
         if (bufferSize > maxBufferSizeBytes) {
             log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
-            mainConsumer.pause(records.partitions());
+            mainConsumer.pause(taskManager.nonEmptyPartitions());
         }
 
         if (!records.isEmpty()) {
@@ -1347,6 +1353,10 @@ public class StreamThread extends Thread {
 
     int currentNumIterations() {
         return numIterations;
+    }
+
+    long bufferSize() {
+        return bufferSize;
     }
 
     ConsumerRebalanceListener rebalanceListener() {

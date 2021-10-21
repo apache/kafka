@@ -247,8 +247,14 @@ public interface Task {
      */
     Optional<Long> timeCurrentIdlingStarted();
 
+    /**
+     * @return This returns the total bytes consumed
+     */
     long getBytesConsumed();
 
+    /**
+     * Set the bytes consumed to bytesConsumed
+     */
     void setBytesConsumed(long bytesConsumed);
 
 }

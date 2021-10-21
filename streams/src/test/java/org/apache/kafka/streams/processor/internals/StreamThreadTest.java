@@ -118,6 +118,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -2626,7 +2627,9 @@ public class StreamThreadTest {
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
 
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        consumer.assign(assignedPartitions);
         records.put(t1p1, Collections.singletonList(new ConsumerRecord<>(
                 t1p1.topic(),
                 t1p1.partition(),
@@ -2639,8 +2642,7 @@ public class StreamThreadTest {
                 new byte[6],
                 new RecordHeaders(),
                 Optional.empty())));
-        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records));
-
+        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records)).anyTimes();
         EasyMock.replay(consumer, consumerGroupMetadata);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
@@ -2684,17 +2686,138 @@ public class StreamThreadTest {
         );
         thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
-        List<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
-        consumer.assign(assignedPartitions);
         thread.pollPhase();
-        EasyMock.reset(consumer);
-        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records));
-        EasyMock.replay(consumer);
+        assertEquals(8L, thread.bufferSize());
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
         thread.pollPhase();
+        assertEquals(16L, thread.bufferSize());
         EasyMock.reset(consumer);
         consumer.pause(anyObject());
         // Consumer.pause should be called only once, when we added the second record.
+        EasyMock.expectLastCall().times(1);
+    }
+
+    @Test
+    public void shouldResumePartitionsAfterConsumptionWhenTotalBufferSizeIsLTEMaxBufferSize() {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        final ChangelogReader changelogReader = EasyMock.createNiceMock(ChangelogReader.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        changelogReader.restore(anyObject());
+        expectLastCall().andVoid();
+
+        final Task task1 = mock(Task.class);
+        final Task task2 = mock(Task.class);
+
+        final TaskId taskId1 = new TaskId(0, 1);
+        final TaskId taskId2 = new TaskId(0, 2);
+
+        expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(task1.id()).andReturn(taskId1).anyTimes();
+        expect(task1.inputPartitions()).andReturn(mkSet(t1p1)).anyTimes();
+        expect(task1.committedOffsets()).andReturn(new HashMap<>()).anyTimes();
+        expect(task1.highWaterMark()).andReturn(new HashMap<>()).anyTimes();
+        expect(task1.timeCurrentIdlingStarted()).andReturn(Optional.empty()).anyTimes();
+
+        expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(task2.id()).andReturn(taskId2).anyTimes();
+        expect(task2.inputPartitions()).andReturn(mkSet(t1p2)).anyTimes();
+        expect(task2.committedOffsets()).andReturn(new HashMap<>()).anyTimes();
+        expect(task2.highWaterMark()).andReturn(new HashMap<>()).anyTimes();
+        expect(task2.timeCurrentIdlingStarted()).andReturn(Optional.empty()).anyTimes();
+        EasyMock.replay(task1, task2);
+
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        records.put(t1p1, Collections.singletonList(new ConsumerRecord<>(
+                t1p1.topic(),
+                t1p1.partition(),
+                1,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty())));
+        records.put(t1p2, Collections.singletonList(new ConsumerRecord<>(
+                t1p2.topic(),
+                t1p2.partition(),
+                1,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty())));
+
+        final List<TopicPartition> assignedPartitions = Arrays.asList(t1p1, t1p2);
+        consumer.assign(assignedPartitions);
+        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records));
+        EasyMock.replay(consumer, consumerGroupMetadata);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final Metric testMetric = new KafkaMetric(
+                new Object(),
+                testMetricName,
+                (Measurable) (config, now) -> 0,
+                null,
+                new MockTime());
+        final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
+        expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
+        expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
+        expect(taskManager.activeTaskMap()).andReturn(mkMap(
+                mkEntry(taskId1, task1),
+                mkEntry(taskId2, task2)
+                ));
+        expect(taskManager.tasks()).andStubReturn(mkMap(
+                mkEntry(taskId1, task1),
+                mkEntry(taskId2, task2)
+        ));
+        expect(taskManager.standbyTaskMap()).andReturn(new HashMap<>());
+        expect(taskManager.commit(anyObject())).andReturn(0);
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(1, 8L));
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(1, 8L));
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(0, 0L));
+
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics =
+                new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final StreamThread thread = new StreamThread(
+                mockTime,
+                new StreamsConfig(configProps(true)),
+                null,
+                consumer,
+                consumer,
+                changelogReader,
+                null,
+                taskManager,
+                streamsMetrics,
+                new TopologyMetadata(internalTopologyBuilder, config),
+                CLIENT_ID,
+                new LogContext(""),
+                new AtomicInteger(),
+                new AtomicLong(Long.MAX_VALUE),
+                null,
+                HANDLER,
+                null,
+                6
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
+        thread.setState(StreamThread.State.RUNNING);
+
+        thread.runOnce();
+        assertEquals(0L, thread.bufferSize());
+        EasyMock.reset(consumer);
+        consumer.resume(anyObject());
+        // Consumer.resume should be called only once, when we added the second record.
         EasyMock.expectLastCall().times(1);
     }
 

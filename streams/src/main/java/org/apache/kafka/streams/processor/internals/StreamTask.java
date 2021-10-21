@@ -61,7 +61,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -1241,6 +1240,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    Set<TopicPartition> getNonEmptyTopicPartitions() {
+        return this.partitionGroup.getNonEmptyTopicPartitions();
     }
 
     // below are visible for testing only
