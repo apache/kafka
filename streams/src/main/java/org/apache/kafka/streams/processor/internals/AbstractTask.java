@@ -207,7 +207,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public void setBytesConsumed(long bytesConsumed) {
+    public void setBytesConsumed(final long bytesConsumed) {
         this.bytesConsumed = bytesConsumed;
     }
 

@@ -1067,6 +1067,17 @@ public class TaskManager {
     }
 
     /**
+     *  Fetch all non-empty partitions for pausing
+     */
+    Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
+        for (final Task task : activeTaskIterable()) {
+            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+        }
+        return nonEmptyPartitions;
+    }
+
+    /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @throws TimeoutException if task.timeout.ms has been exceeded (non-EOS)

@@ -863,60 +863,6 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldPauseAndResumeBasedOnBufferedRecords() {
-        task = createStatelessTask(createConfig("100"));
-
-        task.addRecords(partition1, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 20)
-        ));
-
-        task.addRecords(partition2, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition2, 35),
-            getConsumerRecordWithOffsetAsTimestamp(partition2, 45),
-            getConsumerRecordWithOffsetAsTimestamp(partition2, 55),
-            getConsumerRecordWithOffsetAsTimestamp(partition2, 65)
-        ));
-
-        assertTrue(task.process(0L));
-        assertEquals(1, source1.numReceived);
-        assertEquals(0, source2.numReceived);
-
-        assertEquals(1, consumer.paused().size());
-        assertTrue(consumer.paused().contains(partition2));
-
-        task.addRecords(partition1, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 30),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 40),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 50)
-        ));
-
-        assertEquals(2, consumer.paused().size());
-        assertTrue(consumer.paused().contains(partition1));
-        assertTrue(consumer.paused().contains(partition2));
-
-        assertTrue(task.process(0L));
-        assertEquals(2, source1.numReceived);
-        assertEquals(0, source2.numReceived);
-
-        assertEquals(1, consumer.paused().size());
-        assertTrue(consumer.paused().contains(partition2));
-
-        assertTrue(task.process(0L));
-        assertEquals(3, source1.numReceived);
-        assertEquals(0, source2.numReceived);
-
-        assertEquals(1, consumer.paused().size());
-        assertTrue(consumer.paused().contains(partition2));
-
-        assertTrue(task.process(0L));
-        assertEquals(3, source1.numReceived);
-        assertEquals(1, source2.numReceived);
-
-        assertEquals(0, consumer.paused().size());
-    }
-
-    @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();

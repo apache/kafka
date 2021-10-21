@@ -1065,7 +1065,7 @@ public class KafkaStreams implements AutoCloseable {
                     threads.remove(streamThread);
                     final long cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads());
                     final long maxBufferSizePerThread = getBufferSizePerThread(getNumLiveStreamThreads());
-                    log.info("Resizing thread cache again since new thread can not be started, final cache size per thread is {}", cacheSizePerThread);
+                    log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
                     resizeThreadCache(cacheSizePerThread);
                     log.info("Resizing max buffer size due to terminating added thread, new buffer size per thread is {}", maxBufferSizePerThread);
                     resizeMaxBufferSize(maxBufferSizePerThread);
@@ -1102,15 +1102,21 @@ public class KafkaStreams implements AutoCloseable {
      * thread is shut down.
      * <p>
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 0bf168a34a (Adding test cases and fixing check style issues)
      * Since the number of stream threads decreases, the sizes of the caches and buffer bytes in the remaining stream
      * threads are adapted so that the sum of the cache sizes and buffer bytes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG} and
      * {@link StreamsConfig#INPUT_BUFFER_MAX_BYTES_CONFIG} respectively.
+<<<<<<< HEAD
 =======
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
 >>>>>>> 34f50e2e5c (Adding more tests)
+=======
+>>>>>>> 0bf168a34a (Adding test cases and fixing check style issues)
      *
      * @param timeout The length of time to wait for the thread to shutdown
      * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
