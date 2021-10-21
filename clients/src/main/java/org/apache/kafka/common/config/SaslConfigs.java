@@ -112,22 +112,18 @@ public class SaslConfigs {
     public static final String SASL_LOGIN_READ_TIMEOUT_MS_DOC = "The (optional) value in milliseconds for the external authentication provider read timeout."
             + OAUTHBEARER_NOTE;
 
-    // These are only specified here outside their normal groupings so that they can be
-    // forward referencing.
-    public static final String SASL_LOGIN_RETRY_BACKOFF_MS = "sasl.login.retry.backoff.ms";
-    public static final String SASL_LOGIN_RETRY_BACKOFF_MAX_MS = "sasl.login.retry.backoff.max.ms";
-
     private static final String EXPONENTIAL_BACKOFF_NOTE = " Login uses an exponential backoff algorithm with an initial wait based on the"
-            + " " + SASL_LOGIN_RETRY_BACKOFF_MS
-            + " setting and will double in wait length between attempts up to a maximum wait length specified by the"
-            + " " + SASL_LOGIN_RETRY_BACKOFF_MAX_MS
-            + " setting.";
+            + " sasl.login.retry.backoff.ms setting and will double in wait length between attempts up to a maximum wait length specified by the"
+            + " sasl.login.retry.backoff.max.ms setting."
+            + OAUTHBEARER_NOTE;
 
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MAX_MS = "sasl.login.retry.backoff.max.ms";
     public static final long DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS = 10000;
     public static final String SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC = "The (optional) value in milliseconds for the maximum wait between login attempts to the"
             + " external authentication provider."
             + EXPONENTIAL_BACKOFF_NOTE;
 
+    public static final String SASL_LOGIN_RETRY_BACKOFF_MS = "sasl.login.retry.backoff.ms";
     public static final long DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS = 100;
     public static final String SASL_LOGIN_RETRY_BACKOFF_MS_DOC = "The (optional) value in milliseconds for the initial wait between login attempts to the external"
             + " authentication provider."
@@ -150,20 +146,17 @@ public class SaslConfigs {
             + " endpoint URL to which requests will be made to login based on the configuration in " + SASL_JAAS_CONFIG + ". If the URL is file-based, it"
             + " specifies a file containing an access token (in JWT serialized form) issued by the OAuth/OIDC identity provider to use for authorization.";
 
-    // These are only specified here outside their normal groupings so that they can be
-    // forward referencing.
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL = "sasl.oauthbearer.jwks.endpoint.url";
-    public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS = "sasl.oauthbearer.jwks.endpoint.refresh.ms";
-
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC = "The OAuth/OIDC provider URL from which the provider's"
             + " <a href=\"https://datatracker.ietf.org/doc/html/rfc7517#section-5\">JWKS (JSON Web Key Set)</a> can be retrieved. The URL can be HTTP(S)-based or file-based."
             + " If the URL is HTTP(S)-based, the JWKS data will be retrieved from the OAuth/OIDC provider via the configured URL on broker startup. All then-current"
             + " keys will be cached on the broker for incoming requests. If an authentication request is received for a JWT that includes a \"kid\" header claim value that"
-            + " isn't yet in the cache, the JWKS endpoint will be queried again on demand. However, the broker polls the URL every " + SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS
+            + " isn't yet in the cache, the JWKS endpoint will be queried again on demand. However, the broker polls the URL every sasl.oauthbearer.jwks.endpoint.refresh.ms"
             + " milliseconds to refresh the cache with any forthcoming keys before any JWT requests that include them are received."
             + " If the URL is file-based, the broker will load the JWKS file from a configured location on startup. In the event that the JWT includes a \"kid\" header"
             + " value that isn't in the JWKS file, the broker will reject the JWT and authentication will fail.";
 
+    public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS = "sasl.oauthbearer.jwks.endpoint.refresh.ms";
     public static final long DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS = 60 * 60 * 1000;
     public static final String SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC = "The (optional) value in milliseconds for the broker to wait between refreshing its JWKS (JSON Web Key Set)"
             + " cache that contains the keys to verify the signature of the JWT.";
