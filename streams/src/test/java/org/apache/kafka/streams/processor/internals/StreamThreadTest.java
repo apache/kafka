@@ -127,6 +127,7 @@ import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1215,13 +1216,13 @@ public class StreamThreadTest {
             null
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class, thread::run);
+        final StreamsException thrown = assertThrows(StreamsException.class, thread::run);
 
         verify(taskManager);
 
+        assertThat(thrown.getCause(), isA(IllegalStateException.class));
         // The Mock consumer shall throw as the assignment has been wiped out, but records are assigned.
-        assertEquals("No current assignment for partition topic1-1", thrown.getMessage());
+        assertEquals("No current assignment for partition topic1-1", thrown.getCause().getMessage());
         assertFalse(consumer.shouldRebalance());
     }
 

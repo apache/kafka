@@ -111,6 +111,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -2202,10 +2203,12 @@ public class StreamTaskTest {
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
 
-        assertThrows(
-            TimeoutException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
+
+        assertThat(thrown.getCause(), isA(TimeoutException.class));
     }
 
     @Test

@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -67,6 +68,7 @@ import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.isA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -569,10 +571,13 @@ public class StandbyTaskTest {
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
 
-        assertThrows(
-            TimeoutException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
+
+        assertThat(thrown.getCause(), isA(TimeoutException.class));
+
     }
 
     @Test

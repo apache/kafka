@@ -634,8 +634,12 @@ public class StreamThread extends Thread {
                           StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(e);
+                this.streamsUncaughtExceptionHandler.accept(new StreamsException(e));
                 return false;
+            } catch (final StreamsException e) {
+                throw e;
+            } catch (final Exception e) {
+                throw new StreamsException(e);
             }
         }
         return true;
