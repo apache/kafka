@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -42,7 +41,13 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.hamcrest.Matchers;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.OptionalLong;
+import java.util.UUID;
+import java.util.Collections;
+import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -838,7 +843,7 @@ public class PartitionGroupTest {
         assertEquals(record.timestamp, 3L);
     }
 
-    private long getBytesBufferedForRawRecords(List<ConsumerRecord<byte[], byte[]>> rawRecords) {
+    private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             rawRecordsSizeInBytes += (rawRecord.key() != null ? rawRecord.serializedKeySize() : 0)
