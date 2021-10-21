@@ -2635,7 +2635,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPropagateRuntimeExceptionsInProcessActiveTasks() {
+    public void shouldWrapRuntimeExceptionsInProcessActiveTasksAndSetTaskId() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public boolean process(final long wallClockTime) {
@@ -2657,8 +2657,10 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, time));
-        assertThat(exception.getMessage(), is("oops"));
+        final StreamsException exception = assertThrows(StreamsException.class, () -> taskManager.process(1, time));
+        assertThat(exception.taskId().isPresent(), is(true));
+        assertThat(exception.taskId().get(), is(taskId00));
+        assertThat(exception.getCause().getMessage(), is("oops"));
     }
 
     @Test
@@ -2875,15 +2877,16 @@ public class TaskManagerTest {
         taskManager.addTask(migratedTask01);
         taskManager.addTask(migratedTask02);
 
-        final KafkaException thrown = assertThrows(
-            KafkaException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
-        // Expecting the original Kafka exception instead of a wrapped one.
-        assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
+        assertThat(thrown.taskId().isPresent(), is(true));
+        assertThat(thrown.taskId().get(), is(taskId02));
 
-        assertThat(thrown.getCause().getMessage(), equalTo(null));
+        // Expecting the original Kafka exception wrapped in the StreamsException.
+        assertThat(thrown.getCause().getMessage(), equalTo("Kaboom for t2!"));
     }
 
     @Test
