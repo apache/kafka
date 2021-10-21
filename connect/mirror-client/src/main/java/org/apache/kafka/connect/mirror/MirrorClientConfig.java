@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SecurityConfig;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -99,6 +100,11 @@ public class MirrorClientConfig extends AbstractConfig {
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         // security support
+        .define(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
+            Type.STRING,
+            null,
+            Importance.LOW,
+            SecurityConfig.SECURITY_PROVIDERS_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
             CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,

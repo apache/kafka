@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorMakerConfigTest {
 
@@ -73,9 +72,7 @@ public class MirrorMakerConfigTest {
             "target.cluster.bootstrap.servers is set");
         assertEquals("SASL", connectorProps.get("security.protocol"),
             "top-level security properties should be passed through to connector config");
-        // 1. The documentation states that cluster-level client props, 'us-west.consumer.isolation.level = read_committed' or 'us-east.producer.buffer.memory = 32768' are allowed.
-        // Also, the Javadoc of MirrorMakerConfig states that replication-level client props like 'A->B.producer.client.id = "A-B-producer"' are allowed.
-        // It does not explicitly state the preference but, the replication-level props are more specific than the cluster-level ones so they override, like the following:
+
         assertEquals("SSL", connectorProps.get("source.cluster.security.protocol"), "cluster-level client props should be passed through to cluster config");
         assertEquals("SSL", connectorProps.get("source.producer.security.protocol"), "cluster-level client props should be passed through to client config");
         assertEquals("SSL", connectorProps.get("source.consumer.security.protocol"), "cluster-level client props should be passed through to client config");
@@ -84,29 +81,18 @@ public class MirrorMakerConfigTest {
         assertEquals("SASL", connectorProps.get("target.producer.security.protocol"), "top-level client props should be passed through to client config");
         assertEquals("SASL", connectorProps.get("target.consumer.security.protocol"), "top-level client props should be passed through to client config");
         assertEquals("SASL", connectorProps.get("target.admin.security.protocol"), "top-level client props should be passed through to client config");
-        // However, as you can see here, in replication-level props only the common properties like CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-        // ssl, and sasl are counted now. (see MirrorClientConfig.CLIENT_CONFIG_DEF).
+
         assertEquals("custom_security", connectorProps.get("source.consumer.security.providers"),
             "cluster-level client props should be passed through to client config");    // cluster-level consumer prop is working.
         assertEquals("zstd", connectorProps.get("target.producer.compression.type"),
             "cluster-level client props should be passed through to client config");    // cluster-level producer prop is working.
-        assertNotEquals("a-b-consumer", connectorProps.get("source.consumer.client.id"),
-            "replication-level client props should be passed through to producer config");  // should be equal; replication-level consumer prop is not working.
-        assertNotEquals("all", connectorProps.get("target.producer.acks"),
-            "replication-level client props should be passed through to producer config");  // should be equal; replication-level producer prop is not working.
-        // As of present, those non-common client props defined in replication-level are stored without '[source, target].{client-type}' prefix; this behavior causes three problems:
-        // A. Since the methods like MirrorConnectorConfig#targetProducerConfig prefers the prefixed ones, the cluster-level client properties like 'a.consumer.client.id' or
-        //   'b.producer.acks' may override the replication-level properties like 'a->b.consumer.client.id' or 'a->b.producer.acks'. It contradicts with the behavior described above, the
-        //   'security.protocol' case.
-        // B. If there are no cluster-level props like 'a.producer.acks', the value of 'a->b.producer.acks' will also be applied to the to-source producer, like an offset-syncs topic producer; since
-        //    'a->b.producer.acks' is not overridden.
-        // C. MirrorSourceConnector uses two admin clients, to control the topics in both clusters; However, the behavior of replication-level admin client props is problematic:
-        //   a. If cluster-level props override override the replication ones (like as of present), it contradicts with the behavior described above, the 'security.protocol' case.
-        //   b. If replication-level props override the cluster-level ones, it applies to both of two different admin clients.
-        // Since it seems like disallowing non-common client props in replication level may be confusing, it would be better to fix problems A and B, and explicitly define a policy in problem C.
-        assertEquals("a-b-consumer", connectorProps.get("consumer.client.id"), "replication-level client props should be passed through to producer config");
-        assertEquals("all", connectorProps.get("producer.acks"), "replication-level client props should be passed through to producer config");
-        assertEquals("150", connectorProps.get("admin.retry.backoff.ms"), "replication-level client props should be passed through to producer config");
+        // replication-level producer, admin configs are applied to target; consumer config is applied to source.
+        assertEquals("a-b-consumer", connectorProps.get("source.consumer.client.id"),
+            "replication-level client props should be passed through to producer config");  // replication-level consumer prop is working.
+        assertEquals("all", connectorProps.get("target.producer.acks"),
+            "replication-level client props should be passed through to producer config");  // replication-level producer prop is working.
+        assertEquals("150", connectorProps.get("target.admin.retry.backoff.ms"),
+            "replication-level client props should be passed through to producer config");  // replication-level producer prop is working.
 
         // 2. Since all of MirrorMaker2 Connectors (MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector) are source connectors, they use producer created by Worker#producerConfigs
         // to publish the messages, dislike to the other clients for consuming messages, producing offset-sync, etc.
@@ -124,11 +110,10 @@ public class MirrorMakerConfigTest {
 
         // 3. MirrorMaker2 requires to define the 'bootstrap.servers' of the clusters in cluster-level, like 'a.bootstrap.servers' or 'b.bootstrap.servers'.
         // However, it also allows to override the 'bootstrap.servers' in client configuration, like 'a.consumer.bootstrap.servers' or 'a->b.producer.bootstrap.servers'.
-        // As of present, replication-level client's bootstrap.servers are stored in 'consumer.bootstrap.servers' or 'producer.bootstrap.servers'; although they do no harm by being overridden by
+        // As of present, replication-level client's bootstrap.servers are stored in 'source.consumer.bootstrap.servers' or 'target.producer.bootstrap.servers'; although they do no harm by being overridden by
         // '[source,target].cluster.bootstrap.servers' but, it would be better to ignore it and give a warning.
-        assertNull(connectorProps.get("consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // cluster-level client overriding is ignored.
-        assertNotNull(connectorProps.get("producer.bootstrap.servers"),
-            "non-cluster level bootstrap.servers override should be ignored");  // replication-level client overriding is not ignored; better to be null.
+        assertNotEquals("servers-two", connectorProps.get("target.consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // should be assertEquals; cluster-level client overriding should be ignored.
+        assertNotEquals("servers-two", connectorProps.get("target.producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // should be assertEquals; replication-level client overriding should be ignored.
         // only the connector overridden client props, cluster-level client props, and replication-level client props are allowed.
         assertNotEquals("8192", connectorProps.get("producer.batch.size"),
             "top-level client props are only supported in MirrorClient; should be ignored in connector configs.");

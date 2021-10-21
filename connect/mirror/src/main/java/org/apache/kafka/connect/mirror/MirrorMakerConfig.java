@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.AbstractMap;
 import java.util.Map.Entry;
+
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -206,24 +211,41 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
         props.putAll(stringsWithPrefix("replication.policy"));
 
+        // top-level common client props
+        props.putAll(commonClientConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, originalsStrings()));
+        props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, originalsStrings()));
+        props.putAll(commonClientConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, originalsStrings()));
+        props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, originalsStrings()));
+        props.putAll(commonClientConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, originalsStrings()));
+        props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, originalsStrings()));
+
         Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
-        // attrs non prefixed with producer|consumer|admin
+        // cluster-level non-client props (source)
         props.putAll(clusterConfigsWithPrefix(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
-        // attrs prefixed with producer|consumer|admin
-        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, sourceClusterProps));
+        // cluster-level client props (source)
+        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, stringsWithPrefixStripped(sourceAndTarget.source() + ".")));
 
         Map<String, String> targetClusterProps = clusterProps(sourceAndTarget.target());
+        // cluster-level non-client props (target)
         props.putAll(clusterConfigsWithPrefix(TARGET_CLUSTER_PREFIX, targetClusterProps));
-        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, targetClusterProps));
+        // cluster-level client props (target)
+        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, stringsWithPrefixStripped(sourceAndTarget.target() + ".")));
 
         props.putIfAbsent(NAME, connectorClass.getSimpleName());
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
         props.putIfAbsent(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
         props.putIfAbsent(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
 
-        // override with connector-level properties
-        props.putAll(stringsWithPrefixStripped(sourceAndTarget.source() + "->"
-            + sourceAndTarget.target() + "."));
+        Map<String, String> replicationProps = stringsWithPrefixStripped(sourceAndTarget + ".");
+        // replication-level non-client props
+        props.putAll(clusterConfigsWithPrefix("", replicationProps));
+        // replication-level client props: consumer applies to source cluster and producer, admin apply to target cluster.
+        props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, replicationProps));
+        props.putAll(producerConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, replicationProps));
+        props.putAll(commonClientConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, replicationProps));
+        props.putAll(consumerConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, replicationProps));
+        props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, replicationProps));
+        props.putAll(adminConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, replicationProps));
 
         // disabled by default
         props.putIfAbsent(MirrorConnectorConfig.ENABLED, "false");
@@ -285,8 +307,53 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
+        Map<String, String> ret = new HashMap<>();
+        ret.putAll(commonClientConfigsWithPrefix(prefix + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, props));
+        ret.putAll(producerConfigsWithPrefix(prefix + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, props));
+        ret.putAll(commonClientConfigsWithPrefix(prefix + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, props));
+        ret.putAll(consumerConfigsWithPrefix(prefix + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, props));
+        ret.putAll(commonClientConfigsWithPrefix(prefix + MirrorClientConfig.ADMIN_CLIENT_PREFIX, props));
+        ret.putAll(adminConfigsWithPrefix(prefix + MirrorClientConfig.ADMIN_CLIENT_PREFIX, props));
+        return ret;
+    }
+
+    static Map<String, String> commonClientConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
-                .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
-                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+            // filter valid common client properties only
+            .filter(e -> MirrorClientConfig.CLIENT_CONFIG_DEF.names().contains(e.getKey()))
+            .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+    }
+
+    static Map<String, String> producerConfigsWithPrefix(String prefix, Map<String, String> props) {
+        return props.entrySet().stream()
+            // filter 'producer' prefixed only
+            .filter(e -> e.getKey().startsWith(MirrorClientConfig.PRODUCER_CLIENT_PREFIX))
+            // remove prefix
+            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey().substring(MirrorClientConfig.PRODUCER_CLIENT_PREFIX.length()), e.getValue()))
+            // filter valid producer properties only
+            .filter(e -> ProducerConfig.configNames().contains(e.getKey()))
+            .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+    }
+
+    static Map<String, String> consumerConfigsWithPrefix(String prefix, Map<String, String> props) {
+        return props.entrySet().stream()
+            // filter 'consumer' prefixed only
+            .filter(e -> e.getKey().startsWith(MirrorClientConfig.CONSUMER_CLIENT_PREFIX))
+            // remove prefix
+            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey().substring(MirrorClientConfig.CONSUMER_CLIENT_PREFIX.length()), e.getValue()))
+            // filter valid consumer properties only
+            .filter(e -> ConsumerConfig.configNames().contains(e.getKey()))
+            .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+    }
+
+    static Map<String, String> adminConfigsWithPrefix(String prefix, Map<String, String> props) {
+        return props.entrySet().stream()
+            // filter 'admin' prefixed only
+            .filter(e -> e.getKey().startsWith(MirrorClientConfig.ADMIN_CLIENT_PREFIX))
+            // remove prefix
+            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey().substring(MirrorClientConfig.ADMIN_CLIENT_PREFIX.length()), e.getValue()))
+            // filter valid admin properties only
+            .filter(e -> AdminClientConfig.configNames().contains(e.getKey()))
+            .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 }
