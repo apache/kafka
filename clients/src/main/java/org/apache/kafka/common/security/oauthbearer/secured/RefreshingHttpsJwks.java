@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,9 +78,11 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
     private List<JsonWebKey> jsonWebKeys;
 
-    private boolean isInited;
+    private boolean isInitialized;
 
     /**
+     * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
+     * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
      *
      * @param location  HTTP/HTTPS endpoint from which to retrieve the JWKS based on
      *                  the OAuth/OIDC standard
@@ -120,7 +123,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
             try {
                 refreshLock.writeLock().lock();
-                this.jsonWebKeys = localJWKs;
+                this.jsonWebKeys = Collections.unmodifiableList(localJWKs);
             } finally {
                 refreshLock.writeLock().unlock();
             }
@@ -132,7 +135,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
             log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
         } finally {
-            isInited = true;
+            isInitialized = true;
 
             log.debug("init completed");
         }
@@ -161,7 +164,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
     @Override
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
-        if (!isInited)
+        if (!isInitialized)
             throw new IllegalStateException("Please call init() first");
 
         try {
@@ -184,13 +187,15 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
             // Call the *actual* refresh implementation.
             refresh();
 
-            List<JsonWebKey> jwks = getJsonWebKeys();
+            List<JsonWebKey> localJWKs = super.getJsonWebKeys();
 
             try {
                 refreshLock.writeLock().lock();
 
-                for (JsonWebKey jwk : jwks)
+                for (JsonWebKey jwk : localJWKs)
                     missingKeyIds.remove(jwk.getKeyId());
+
+                jsonWebKeys = Collections.unmodifiableList(localJWKs);
             } finally {
                 refreshLock.writeLock().unlock();
             }
@@ -217,14 +222,14 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
             try {
                 refreshLock.writeLock().lock();
 
-                // If there's no entry in the missing key ID cache for the incoming key ID,
-                // or it has expired, schedule a refresh.
-                Long lastCheckTime = missingKeyIds.get(keyId);
+                Long nextCheckTime = missingKeyIds.get(keyId);
                 long currTime = System.currentTimeMillis();
 
-                if (lastCheckTime == null || lastCheckTime < currTime) {
-                    lastCheckTime = currTime + MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
-                    missingKeyIds.put(keyId, lastCheckTime);
+                if (nextCheckTime == null || nextCheckTime < currTime) {
+                    // If there's no entry in the missing key ID cache for the incoming key ID,
+                    // or it has expired, schedule a refresh.
+                    nextCheckTime = currTime + MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
+                    missingKeyIds.put(keyId, nextCheckTime);
                     executorService.schedule(this::refreshInternal, 0, TimeUnit.MILLISECONDS);
                     return true;
                 } else {

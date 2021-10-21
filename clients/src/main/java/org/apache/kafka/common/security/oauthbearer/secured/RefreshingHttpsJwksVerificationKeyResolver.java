@@ -52,7 +52,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private final VerificationJwkSelector verificationJwkSelector;
 
-    private boolean isInited;
+    private boolean isInitialized;
 
     public RefreshingHttpsJwksVerificationKeyResolver(String location, long refreshMs, SSLSocketFactory sslSocketFactory) {
         this.httpsJwks = new RefreshingHttpsJwks(location, refreshMs);
@@ -73,7 +73,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
             httpsJwks.init();
         } finally {
-            isInited = true;
+            isInitialized = true;
 
             log.debug("init completed");
         }
@@ -92,7 +92,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        if (!isInited)
+        if (!isInitialized)
             throw new IllegalStateException("Please call init() first");
 
         try {
