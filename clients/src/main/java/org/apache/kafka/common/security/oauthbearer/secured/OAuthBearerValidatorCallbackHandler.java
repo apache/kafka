@@ -31,6 +31,70 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * <p>
+ * <code>OAuthBearerValidatorCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
+ * accepts {@link OAuthBearerValidatorCallback} and {@link OAuthBearerExtensionsValidatorCallback}
+ * callbacks to implement OAuth/OIDC validation. This callback handler is intended only to be used
+ * on the Kafka broker side as it will receive a {@link OAuthBearerValidatorCallback} that includes
+ * the JWT provided by the Kafka client. That JWT is validated in terms of format, expiration,
+ * signature, and audience and issuer (if desired). This callback handler is the broker side of the
+ * OAuth functionality, whereas {@link OAuthBearerLoginCallbackHandler} is used by clients.
+ * </p>
+ *
+ * <p>
+ * This {@link AuthenticateCallbackHandler} is enabled in the broker configuration by setting the
+ * {@link org.apache.kafka.common.config.internals.BrokerSecurityConfigs#SASL_SERVER_CALLBACK_HANDLER_CLASS}
+ * like so:
+ *
+ * <code>
+ * listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler
+ * </code>
+ * </p>
+ *
+ * <p>
+ * The JAAS configuration for OAuth is also needed. If using OAuth for inter-broker communication,
+ * the options are those specified in {@link OAuthBearerLoginCallbackHandler}. If <b>not</b> using
+ * OAuth for inter-broker communication, but using it for validation, a dummy JAAS option named
+ * <code>unsecuredLoginStringClaim_sub</code> is needed:
+ *
+ * <code>
+ * listener.name.<listener name>.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+ *   unsecuredLoginStringClaim_sub="unused" ;
+ * </code>
+ * </p>
+ *
+ * <p>
+ * The configuration option
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}
+ * is also required in order to contact the OAuth/OIDC provider to retrieve the JWKS for use in
+ * JWT signature validation. For example:
+ *
+ * <code>
+ * listener.name.<listener name>.oauthbearer.sasl.oauthbearer.jwks.endpoint.url=https://example.com/oauth2/v1/keys
+ * </code>
+ *
+ * Please see the OAuth/OIDC providers documentation for the JWKS endpoint URL.
+ * </p>
+ *
+ * <p>
+ * The following is a list of all the configuration options that are available for the broker
+ * validation callback handler:
+ *
+ * <ul>
+ *   <li>{@link org.apache.kafka.common.config.internals.BrokerSecurityConfigs#SASL_SERVER_CALLBACK_HANDLER_CLASS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_JAAS_CONFIG}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_AUDIENCE}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_ISSUER}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SCOPE_CLAIM_NAME}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SUB_CLAIM_NAME}</li>
+ * </ul>
+ * </p>
+ */
+
 public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallbackHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
@@ -49,7 +113,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         init(verificationKeyResolver, accessTokenValidator);
     }
 
-    public void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
+    void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.accessTokenValidator = accessTokenValidator;
 
@@ -81,8 +145,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             if (callback instanceof OAuthBearerValidatorCallback) {
                 handleValidatorCallback((OAuthBearerValidatorCallback) callback);
             } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
-                OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
-                extensionsCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsCallback.valid(extensionName));
+                handleExtensionsValidatorCallback((OAuthBearerExtensionsValidatorCallback) callback);
             } else {
                 throw new UnsupportedCallbackException(callback);
             }
@@ -102,6 +165,12 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
             log.warn(e.getMessage(), e);
             callback.error("invalid_token", null, null);
         }
+    }
+
+    private void handleExtensionsValidatorCallback(OAuthBearerExtensionsValidatorCallback extensionsValidatorCallback) {
+        checkInitialized();
+
+        extensionsValidatorCallback.inputExtensions().map().forEach((extensionName, v) -> extensionsValidatorCallback.valid(extensionName));
     }
 
     private void checkInitialized() {

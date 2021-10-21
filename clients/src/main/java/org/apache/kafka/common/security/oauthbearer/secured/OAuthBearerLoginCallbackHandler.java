@@ -29,6 +29,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
@@ -38,6 +39,110 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+/**
+ * <p>
+ * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
+ * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
+ * perform the steps to request a JWT from an OAuth/OIDC provider using the
+ * <code>clientcredentials</code>. This grant type is commonly used for non-interactive
+ * "service accounts" where there is no user available to interactively supply credentials.
+ * </p>
+ *
+ * <p>
+ * The <code>OAuthBearerLoginCallbackHandler</code> is used on the client side to retrieve a JWT
+ * and the {@link OAuthBearerValidatorCallbackHandler} is used on the broker to validate the JWT
+ * that was sent to it by the client to allow access. Both the brokers and clients will need to
+ * be configured with their appropriate callback handlers and respective configuration for OAuth
+ * functionality to work.
+ * </p>
+ *
+ * <p>
+ * Note that while this callback handler class must be specified for a Kafka client that wants to
+ * use OAuth functionality, in the case of OAuth-based inter-broker communication, the callback
+ * handler must be used on the Kafka broker side as well.
+ * {@link }
+ * </p>
+ *
+ * <p>
+ * This {@link AuthenticateCallbackHandler} is enabled by specifying its class name in the Kafka
+ * configuration. For client use, specify the class name in the
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}
+ * configuration like so:
+ *
+ * <code>
+ * sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler
+ * </code>
+ * </p>
+ *
+ * <p>
+ * If using OAuth login on the broker side (for inter-broker communication), the callback handler
+ * class will be specified with a listener-based property:
+ * <code>listener.name.<listener name>.oauthbearer.sasl.login.callback.handler.class</code> like so:
+ *
+ * <code>
+ * listener.name.<listener name>.oauthbearer.sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler
+ * </code>
+ * </p>
+ *
+ * <p>
+ * The Kafka configuration must also include JAAS configuration which includes the following
+ * OAuth-specific options:
+ *
+ * <ul>
+ *     <li><code>clientId</code>OAuth client ID (required)</li>
+ *     <li><code>clientSecret</code>OAuth client secret (required)</li>
+ *     <li><code>scope</code>OAuth scope (optional)</li>
+ * </ul>
+ * </p>
+ *
+ * <p>
+ * The JAAS configuration can also include any SSL options that are needed. The configuration
+ * options are the same as those specified by the configuration in
+ * {@link org.apache.kafka.common.config.SslConfigs#addClientSslSupport(ConfigDef)}.
+ * </p>
+ *
+ * <p>
+ * Here's an example of the JAAS configuration for a Kafka client:
+ *
+ * <code>
+ * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+ *   clientId="foo" \
+ *   clientSecret="bar" \
+ *   scope="baz" \
+ *   ssl.protocol="SSL" ;
+ * </code>
+ * </p>
+ *
+ * <p>
+ * The configuration option
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}
+ * is also required in order for the client to contact the OAuth/OIDC provider. For example:
+ *
+ * <code>
+ * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
+ * </code>
+ *
+ * Please see the OAuth/OIDC providers documentation for the token endpoint URL.
+ * </p>
+ *
+ * <p>
+ * The following is a list of all the configuration options that are available for the login
+ * callback handler:
+ *
+ * <ul>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CONNECT_TIMEOUT_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_READ_TIMEOUT_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_RETRY_BACKOFF_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_RETRY_BACKOFF_MAX_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_JAAS_CONFIG}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SCOPE_CLAIM_NAME}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SUB_CLAIM_NAME}</li>
+ * </ul>
+ * </p>
+ */
 
 public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler {
 
@@ -83,7 +188,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         init(accessTokenRetriever, accessTokenValidator);
     }
 
-    public void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
+    void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
         this.accessTokenRetriever = accessTokenRetriever;
         this.accessTokenValidator = accessTokenValidator;
 
