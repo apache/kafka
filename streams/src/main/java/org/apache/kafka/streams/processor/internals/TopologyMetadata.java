@@ -398,6 +398,10 @@ public class TopologyMetadata {
         return sourceTopics;
     }
 
+    public Set<TopicPartition> allSourceTopicPartitionsForTopology(final String topologyName) {
+        return lookupBuilderForNamedTopology(topologyName).allSourceTopicPartitions();
+    }
+
     public Map<Subtopology, TopicsInfo> topicGroups() {
         final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
         applyToEachBuilder(b -> topicGroups.putAll(b.topicGroups()));

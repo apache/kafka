@@ -362,7 +362,7 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        streams.removeNamedTopology("topology-2");
+        streams.removeNamedTopology("topology-2", false);
 
         produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(DELAYED_INPUT_STREAM_2, STANDARD_INPUT_DATA);
@@ -383,7 +383,7 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1");
+        streams.removeNamedTopology("topology-1", false);
         streams.cleanUpNamedTopology("topology-1");
 
         // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
@@ -438,7 +438,7 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1");
+        streams.removeNamedTopology("topology-1", false);
         streams.cleanUpNamedTopology("topology-1");
 
         final KStream<String, Long> inputStream2 = topology1Builder2.stream(INPUT_STREAM_1);
