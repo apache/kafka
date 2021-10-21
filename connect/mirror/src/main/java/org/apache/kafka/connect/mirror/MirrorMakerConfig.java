@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -246,6 +247,16 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(consumerConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, replicationProps));
         props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, replicationProps));
         props.putAll(adminConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.ADMIN_CLIENT_PREFIX, replicationProps));
+
+        // Replicate 'target.producer.{property-name}' to 'producer.override.{property-name}'
+        Map<String, String> producerOverrideProps = props.entrySet().stream()
+            // filter 'target.producer' prefixed only
+            .filter(x -> x.getKey().startsWith(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX))
+            // remove prefix
+            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey().substring((TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX).length()), e.getValue()))
+            // prefix with 'producer.override'
+            .collect(Collectors.toMap(x -> ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + x.getKey(), Entry::getValue));
+        props.putAll(producerOverrideProps);
 
         // disabled by default
         props.putIfAbsent(MirrorConnectorConfig.ENABLED, "false");

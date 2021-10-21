@@ -33,7 +33,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class MirrorMakerConfigTest {
 
@@ -94,19 +93,10 @@ public class MirrorMakerConfigTest {
         assertEquals("150", connectorProps.get("target.admin.retry.backoff.ms"),
             "replication-level client props should be passed through to producer config");  // replication-level producer prop is working.
 
-        // 2. Since all of MirrorMaker2 Connectors (MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector) are source connectors, they use producer created by Worker#producerConfigs
-        // to publish the messages, dislike to the other clients for consuming messages, producing offset-sync, etc.
-        // However, as of present, it has three problems like the following:
-        // A. In standalone mode, the configurations in 'target.producer.{property-name}' are not applied to 'producer.override.{property-name}'; For this reason, the message-producing producer is actually
-        //    not configurable.
-        assertNotEquals("zstd", connectorProps.get("producer.override.compression.type"),
-            "target producer props should be passed to 'producer.override.' config");   // should be equal
-        assertNotEquals("all", connectorProps.get("producer.override.acks"),
-            "target producer props should be passed to 'producer.override.' config");   // should be equal
-        // B. In connector mode, 'target.producer.{property-name}' can't be automatically applied to 'producer.override.{property-name}' so the user has to configure them by themself. This behavior should be
-        //    clearly stated in the documentation.
-        // C. The documentation does not mention how traditional Kafka Connect client configurations are matched with MirrorMaker2 configurations; For the beginners, it would explicitly explain the
-        //    relationships between '{src}->{dst}.producer.{property-name}' in standalone mode, 'target.producer.{property-name}' in connector mode and the traditional, 'producer.override.{property-name}'.
+        // to acknowledge the Herder about the producer configuration, replicate the 'target.producer.' prefixed props into 'producer.override.' prefixed props.
+        assertEquals("SASL", connectorProps.get("producer.override.security.protocol"), "target producer props should be passed to 'producer.override.' config");
+        assertEquals("zstd", connectorProps.get("producer.override.compression.type"), "target producer props should be passed to 'producer.override.' config");
+        assertEquals("all", connectorProps.get("producer.override.acks"), "target producer props should be passed to 'producer.override.' config");
 
         // 3. MirrorMaker2 requires to define the 'bootstrap.servers' of the clusters in cluster-level, like 'a.bootstrap.servers' or 'b.bootstrap.servers'.
         // However, it also allows to override the 'bootstrap.servers' in client configuration, like 'a.consumer.bootstrap.servers' or 'a->b.producer.bootstrap.servers'.
