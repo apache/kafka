@@ -38,6 +38,44 @@ import org.slf4j.LoggerFactory;
  * {@link VerificationKeyResolver} implementation that will periodically refresh the
  * JWKS using its {@link HttpsJwks} instance.
  *
+ * A <a href="https://datatracker.ietf.org/doc/html/rfc7517#section-5">JWKS (JSON Web Key Set)</a>
+ * is a JSON document provided by the OAuth/OIDC provider that lists the keys used to sign the JWTs
+ * it issues.
+ *
+ * Here is a sample JWKS JSON document:
+ *
+ * <pre>
+ * {
+ *   "keys": [
+ *     {
+ *       "kty": "RSA",
+ *       "alg": "RS256",
+ *       "kid": "abc123",
+ *       "use": "sig",
+ *       "e": "AQAB",
+ *       "n": "..."
+ *     },
+ *     {
+ *       "kty": "RSA",
+ *       "alg": "RS256",
+ *       "kid": "def456",
+ *       "use": "sig",
+ *       "e": "AQAB",
+ *       "n": "..."
+ *     }
+ *   ]
+ * }
+ * </pre>
+ *
+ * Without going into too much detail, the array of keys enumerates the key data that the provider
+ * is using to sign the JWT. The key ID (<code>kid</code>) is referenced by the JWT's header in
+ * order to match up the JWT's signing key with the key in the JWKS. During the validation step of
+ * the broker, the jose4j OAuth library will use the contents of the appropriate key in the JWKS
+ * to validate the signature.
+ *
+ * Given that the JWKS is referenced by the JWT, the JWKS must be made available by the
+ * OAuth/OIDC provider so that a JWT can be validated.
+ *
  * @see CloseableVerificationKeyResolver
  * @see VerificationKeyResolver
  * @see RefreshingHttpsJwks
