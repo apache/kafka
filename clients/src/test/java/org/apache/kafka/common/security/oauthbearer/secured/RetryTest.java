@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
 public class RetryTest extends OAuthBearerTest {
 
     @Test
-    public void test() throws IOException {
+    public void test() throws ExecutionException {
         Exception[] attempts = new Exception[] {
             new IOException("pretend connect error"),
             new IOException("pretend timeout error"),
@@ -66,7 +67,7 @@ public class RetryTest extends OAuthBearerTest {
         assertEquals(0L, time.milliseconds());
         Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
-        assertThrows(IOException.class, () -> r.execute(call));
+        assertThrows(ExecutionException.class, () -> r.execute(call));
 
         assertEquals(maxWaitMs, time.milliseconds());
     }
@@ -127,7 +128,7 @@ public class RetryTest extends OAuthBearerTest {
         assertEquals(0L, time.milliseconds());
         Retry<String> r = new Retry<>(time, retryWaitMs, maxWaitMs);
 
-        assertThrows(IOException.class, () -> r.execute(call));
+        assertThrows(ExecutionException.class, () -> r.execute(call));
 
         assertEquals(maxWaitMs, time.milliseconds());
     }

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Simple interface to abstract out the call that is made so that it can be retried.
@@ -25,6 +25,7 @@ import java.io.IOException;
  * @param <R> Result type
  *
  * @see Retry
+ * @see UnretryableException
  */
 
 public interface Retryable<R> {
@@ -34,11 +35,11 @@ public interface Retryable<R> {
      *
      * @return Return response data, formatted in the given data type
      *
-     * @throws IOException          Thrown on errors connecting, writing, reading, timeouts, etc.
+     * @throws ExecutionException   Thrown on errors connecting, writing, reading, timeouts, etc.
      *                              that can likely be tried again
      * @throws UnretryableException Thrown on errors that we can determine should not be tried again
      */
 
-    R call() throws IOException, UnretryableException;
+    R call() throws ExecutionException, UnretryableException;
 
 }

@@ -36,7 +36,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -132,7 +132,7 @@ public abstract class OAuthBearerTest {
                 return "success!";
             } else {
                 if (e instanceof IOException)
-                    throw (IOException) e;
+                    throw new ExecutionException(e);
                 else if (e instanceof RuntimeException)
                     throw (RuntimeException) e;
                 else
@@ -148,10 +148,6 @@ public abstract class OAuthBearerTest {
         when(mockedCon.getOutputStream()).thenReturn(new ByteArrayOutputStream());
         when(mockedCon.getInputStream()).thenReturn(new ByteArrayInputStream(Utils.utf8(response)));
         return mockedCon;
-    }
-
-    protected File createTempPemDir() throws IOException {
-        return createTempDir(String.format("my-pem-dir-%d", Math.abs(new Random().nextInt())));
     }
 
     protected File createTempDir(String directory) throws IOException {

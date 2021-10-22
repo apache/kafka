@@ -23,13 +23,15 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.apache.kafka.common.utils.Time;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.lang.JoseException;
@@ -56,6 +58,8 @@ import org.slf4j.LoggerFactory;
 
 public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Closeable {
 
+    private static final long RETRY_BACKOFF_MS = 2000;
+
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
     private static final int MISSING_KEY_ID_CACHE_MAX_ENTRIES = 16;
@@ -70,6 +74,10 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
 
     private final ScheduledExecutorService executorService;
 
+    private ScheduledFuture<?> refreshFuture;
+
+    private final Time time;
+
     private final long refreshMs;
 
     private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
@@ -79,6 +87,49 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
     private List<JsonWebKey> jsonWebKeys;
 
     private boolean isInitialized;
+
+    private final Retryable<List<JsonWebKey>> jwksRetryable = () -> {
+        try {
+            log.debug("JWKS validation key calling refresh of {} starting", getLocation());
+            // Call the *actual* refresh implementation.
+            refresh();
+            List<JsonWebKey> jwks = super.getJsonWebKeys();
+            log.debug("JWKS validation key refresh of {} complete", getLocation());
+            return jwks;
+        } catch (Exception e) {
+            throw new ExecutionException(e);
+        }
+    };
+
+    /**
+     * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
+     * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
+     *
+     * @param time      {@link Time} instance
+     * @param location  HTTP/HTTPS endpoint from which to retrieve the JWKS based on
+     *                  the OAuth/OIDC standard
+     * @param refreshMs The number of milliseconds between refresh passes to connect
+     *                  to the OAuth/OIDC JWKS endpoint to retrieve the latest set
+     */
+
+    public RefreshingHttpsJwks(Time time, String location, long refreshMs) {
+        super(location);
+
+        if (refreshMs <= 0)
+            throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
+
+        setDefaultCacheDuration(refreshMs);
+
+        this.time = time;
+        this.refreshMs = refreshMs;
+        this.executorService = Executors.newSingleThreadScheduledExecutor();
+        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
+            }
+        };
+    }
 
     /**
      * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
@@ -91,21 +142,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
      */
 
     public RefreshingHttpsJwks(String location, long refreshMs) {
-        super(location);
-
-        if (refreshMs <= 0)
-            throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
-
-        setDefaultCacheDuration(refreshMs);
-
-        this.refreshMs = refreshMs;
-        this.executorService = Executors.newSingleThreadScheduledExecutor();
-        this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
-                return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
-            }
-        };
+        this(Time.SYSTEM, location, refreshMs);
     }
 
     @Override
@@ -128,7 +165,7 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
                 refreshLock.writeLock().unlock();
             }
 
-            executorService.scheduleAtFixedRate(this::refreshInternal,
+            refreshFuture = executorService.scheduleAtFixedRate(this::refreshInternal,
                 0,
                 refreshMs,
                 TimeUnit.MILLISECONDS);
@@ -162,6 +199,18 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
         }
     }
 
+    /**
+     * Overrides the base implementation because the base implementation has a case that performs
+     * a blocking call to refresh(), which we want to avoid in the authentication validation path.
+     *
+     * The list may be stale up to refreshMs.
+     *
+     * @return {@link List} of {@link JsonWebKey} instances
+     *
+     * @throws JoseException Thrown if a problem is encountered parsing the JSON content into JWKs
+     * @throws IOException Thrown f a problem is encountered making the HTTP request
+     */
+
     @Override
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
         if (!isInitialized)
@@ -181,13 +230,24 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
      */
 
     private void refreshInternal() {
+        // How much time (in milliseconds) do we have before the next refresh is scheduled to
+        // occur? This value will [0..refreshMs]. Every time a scheduled refresh occurs, the
+        // value of refreshFuture is reset to refreshMs and works down to 0.
+        long timeBeforeNextRefresh = refreshFuture.getDelay(TimeUnit.MILLISECONDS);
+
+        // If the time left before the next scheduled refresh is less than the amount of time we
+        // have set aside for retries, log the fact and return. Don't worry, refreshInternal will
+        // be called again within a few seconds :)
+        if (timeBeforeNextRefresh < RETRY_BACKOFF_MS) {
+            log.info("OAuth JWKS refresh does not have enough time before next scheduled refresh");
+            return;
+        }
+
         try {
-            log.info("JWKS validation key refresh of {} starting", getLocation());
+            log.info("OAuth JWKS refresh of {} starting", getLocation());
 
-            // Call the *actual* refresh implementation.
-            refresh();
-
-            List<JsonWebKey> localJWKs = super.getJsonWebKeys();
+            Retry<List<JsonWebKey>> retry = new Retry<>(RETRY_BACKOFF_MS, timeBeforeNextRefresh);
+            List<JsonWebKey> localJWKs = retry.execute(jwksRetryable);
 
             try {
                 refreshLock.writeLock().lock();
@@ -200,30 +260,26 @@ public final class RefreshingHttpsJwks extends HttpsJwks implements Initable, Cl
                 refreshLock.writeLock().unlock();
             }
 
-            log.info("JWKS validation key refresh of {} complete", getLocation());
-        } catch (JoseException | IOException e) {
-            // Let's wait a random, but short amount of time before trying again.
-            long waitMs = ThreadLocalRandom.current().nextLong(1000, 10000);
-
-            String message = String.format("JWKS validation key refresh of %s encountered an error; waiting %s ms before trying again",
-                getLocation(),
-                waitMs);
-            log.warn(message, e);
-
-            executorService.schedule(this::refreshInternal, waitMs, TimeUnit.MILLISECONDS);
+            log.info("OAuth JWKS refresh of {} complete", getLocation());
+        } catch (ExecutionException e) {
+            log.warn("OAuth JWKS refresh of {} encountered an error; not updating local JWKS cache", getLocation(), e);
         }
     }
 
     public boolean maybeScheduleRefreshForMissingKeyId(String keyId) {
         if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
-            log.warn("Key ID starting with {} with length {} was too long to cache", keyId.substring(0, 16), keyId.length());
+            // Only grab the first N characters so that if the key ID is huge, we don't blow up.
+            int actualLength = keyId.length();
+            String s = keyId.substring(0, MISSING_KEY_ID_MAX_KEY_LENGTH);
+            String snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MISSING_KEY_ID_MAX_KEY_LENGTH, actualLength);
+            log.warn("Key ID {} was too long to cache", snippet);
             return false;
         } else {
             try {
                 refreshLock.writeLock().lock();
 
                 Long nextCheckTime = missingKeyIds.get(keyId);
-                long currTime = System.currentTimeMillis();
+                long currTime = time.milliseconds();
 
                 if (nextCheckTime == null || nextCheckTime < currTime) {
                     // If there's no entry in the missing key ID cache for the incoming key ID,

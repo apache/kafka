@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.secured;
 
-import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,24 +58,31 @@ public class Retry<R> {
             throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%s) is less than retryBackoffMs value (%s)", retryBackoffMaxMs, retryBackoffMs));
     }
 
-    public R execute(Retryable<R> retryable) throws IOException {
+    public R execute(Retryable<R> retryable) throws ExecutionException {
+        long endMs = time.milliseconds() + retryBackoffMaxMs;
         int currAttempt = 0;
-        long end = time.milliseconds() + retryBackoffMaxMs;
-        IOException error = null;
+        ExecutionException error = null;
 
-        while (time.milliseconds() <= end) {
+        while (time.milliseconds() <= endMs) {
             currAttempt++;
 
             try {
                 return retryable.call();
-            } catch (IOException e) {
-                log.warn("Error during OAuth attempt {}", currAttempt, e);
+            } catch (UnretryableException e) {
+                // We've deemed this error to not be worth retrying, so collect the error and
+                // fail immediately.
+                if (error == null)
+                    error = new ExecutionException(e);
+
+                break;
+            } catch (ExecutionException e) {
+                log.warn("Error during retry attempt {}", currAttempt, e);
 
                 if (error == null)
                     error = e;
 
                 long waitMs = retryBackoffMs * (long) Math.pow(2, currAttempt - 1);
-                long diff = end - time.milliseconds();
+                long diff = endMs - time.milliseconds();
                 waitMs = Math.min(waitMs, diff);
 
                 if (waitMs <= 0)
@@ -86,23 +93,12 @@ public class Retry<R> {
                 log.warn(message, e);
 
                 time.sleep(waitMs);
-            } catch (UnretryableException e) {
-                // We've deemed this error to not be worth retrying, so collect the error and
-                // fail immediately.
-                if (error == null) {
-                    if (e.getCause() instanceof IOException)
-                        error = (IOException) e.getCause();
-                    else
-                        error = new IOException(e.getCause());
-                }
-
-                break;
             }
         }
 
         if (error == null)
             // Really shouldn't ever get to here, but...
-            error = new IOException("Exhausted all retry attempts but no attempt returned value or encountered exception");
+            error = new ExecutionException(new IllegalStateException("Exhausted all retry attempts but no attempt returned value or encountered exception"));
 
         throw error;
     }

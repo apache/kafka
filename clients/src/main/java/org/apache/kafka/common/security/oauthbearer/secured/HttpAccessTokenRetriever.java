@@ -35,8 +35,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -61,6 +63,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     private static final Logger log = LoggerFactory.getLogger(HttpAccessTokenRetriever.class);
 
     private static final Set<Integer> UNRETRYABLE_HTTP_CODES;
+
+    private static final int MAX_RESPONSE_BODY_LENGTH = 1000;
 
     public static final String AUTHORIZATION_HEADER = "Authorization";
 
@@ -149,18 +153,32 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
 
-        String responseBody = retry.execute(() -> {
-            HttpURLConnection con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
+        String responseBody;
 
-            if (sslSocketFactory != null && con instanceof HttpsURLConnection)
-                ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+        try {
+            responseBody = retry.execute(() -> {
+                HttpURLConnection con = null;
 
-            try {
-                return post(con, headers, requestBody, loginConnectTimeoutMs, loginReadTimeoutMs);
-            } finally {
-                con.disconnect();
-            }
-        });
+                try {
+                    con = (HttpURLConnection) new URL(tokenEndpointUrl).openConnection();
+
+                    if (sslSocketFactory != null && con instanceof HttpsURLConnection)
+                        ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory);
+
+                    return post(con, headers, requestBody, loginConnectTimeoutMs, loginReadTimeoutMs);
+                } catch (IOException e) {
+                    throw new ExecutionException(e);
+                } finally {
+                    if (con != null)
+                        con.disconnect();
+                }
+            });
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException)
+                throw (IOException) e.getCause();
+            else
+                throw new KafkaException(e.getCause());
+        }
 
         return parseAccessToken(responseBody);
     }
@@ -269,17 +287,17 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         JsonNode accessTokenNode = rootNode.at("/access_token");
 
         if (accessTokenNode == null) {
-            // Only grab the first N characters so that if the response is huge, we don't blow up.
-            int trimmedLength = 1000;
-            String responseToInclude = responseBody;
+            // Only grab the first N characters so that if the response body is huge, we don't
+            // blow up.
+            String snippet = responseBody;
 
-            if (responseToInclude.length() > trimmedLength) {
+            if (snippet.length() > MAX_RESPONSE_BODY_LENGTH) {
                 int actualLength = responseBody.length();
-                String snippet = responseBody.substring(0, trimmedLength);
-                responseToInclude = String.format("%s (trimmed to first %s characters out of %s total)", snippet, trimmedLength, actualLength);
+                String s = responseBody.substring(0, MAX_RESPONSE_BODY_LENGTH);
+                snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
             }
 
-            throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", responseToInclude));
+            throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
         }
 
         return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
