@@ -80,7 +80,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val responseData = resp.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion())
     assertEquals(Errors.NONE.code, resp.error().code())
     assertEquals(1, responseData.size())
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData.get(tidp0).errorCode)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData.get(tp0).errorCode)
   }
 
   @Test
@@ -93,7 +93,6 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicIds = Map("topic1" -> Uuid.randomUuid())
     val topicNames = topicIds.map(_.swap)
     val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
-    val tidp0Result = new TopicIdPartition(Uuid.ZERO_UUID, tp0)
 
     val leadersMap = createTopic(topic1, replicaAssignment)
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, 12)
@@ -102,7 +101,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     assertEquals(Errors.NONE, resp.error())
 
     val responseData = resp.responseData(topicNames.asJava, 12)
-    assertEquals(Errors.NONE.code, responseData.get(tidp0Result).errorCode);
+    assertEquals(Errors.NONE.code, responseData.get(tp0).errorCode);
   }
 
   @Test
@@ -153,10 +152,10 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   }
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicIdPartition],
-                                 offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData] = {
-    val partitionMap = new LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
+                                 offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+    val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp.topicPartition, 0), 0L, maxPartitionBytes,
+      partitionMap.put(tp.topicPartition, new FetchRequest.PartitionData(tp.topicId, offsetMap.getOrElse(tp.topicPartition, 0), 0L, maxPartitionBytes,
         Optional.empty()))
     }
     partitionMap

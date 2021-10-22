@@ -73,7 +73,7 @@ public class FetchResponse extends AbstractResponse {
 
     private final FetchResponseData data;
     // we build responseData when needed.
-    private volatile LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = null;
+    private volatile LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = null;
 
     @Override
     public FetchResponseData data() {
@@ -97,7 +97,7 @@ public class FetchResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
+    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
@@ -109,9 +109,10 @@ public class FetchResponse extends AbstractResponse {
                         } else {
                             name = topicNames.get(topicResponse.topicId());
                         }
-                        topicResponse.partitions().forEach(partition ->
-                                responseData.put(new TopicIdPartition(topicResponse.topicId(), new TopicPartition(name, partition.partitionIndex())), partition));
-
+                        if (name != null) {
+                            topicResponse.partitions().forEach(partition ->
+                                responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                        }
                     });
                 }
             }

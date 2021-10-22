@@ -29,7 +29,7 @@ import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException, UnknownTopicIdException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -151,7 +151,7 @@ class AbstractFetcherThreadTest {
     class ErrorMockFetcherThread(fetchBackOffMs: Int)
       extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
 
-      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicIdPartition, FetchData] = {
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
          throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
       }
     }
@@ -676,7 +676,7 @@ class AbstractFetcherThreadTest {
 
     val fetcher = new MockFetcherThread {
       var fetchedOnce = false
-      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicIdPartition, FetchData] = {
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         val fetchedData = super.fetchFromLeader(fetchRequest)
         if (!fetchedOnce) {
           val records = fetchedData.head._2.records.asInstanceOf[MemoryRecords]
@@ -1088,7 +1088,7 @@ class AbstractFetcherThreadTest {
     }
 
     override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
-      val fetchData = mutable.Map.empty[TopicIdPartition, FetchRequest.PartitionData]
+      val fetchData = mutable.Map.empty[TopicPartition, FetchRequest.PartitionData]
       partitionMap.foreach { case (partition, state) => 0
         .equals(0)
         if (state.isReadyForFetch) {
@@ -1097,8 +1097,8 @@ class AbstractFetcherThreadTest {
             state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
           else
             Optional.empty[Integer]
-          fetchData.put(new TopicIdPartition(state.topicId.getOrElse(Uuid.ZERO_UUID),partition),
-            new FetchRequest.PartitionData(state.fetchOffset, replicaState.logStartOffset,
+          fetchData.put(partition,
+            new FetchRequest.PartitionData(state.topicId.getOrElse(Uuid.ZERO_UUID), state.fetchOffset, replicaState.logStartOffset,
             1024 * 1024, Optional.of[Integer](state.currentLeaderEpoch), lastFetchedEpoch))
         }
       }
@@ -1233,11 +1233,11 @@ class AbstractFetcherThreadTest {
 
     override protected val isTruncationOnFetchSupported: Boolean = truncateOnFetch
 
-    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicIdPartition, FetchData] = {
+    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
-        val leaderState = leaderPartitionState(partition.topicPartition)
+        val leaderState = leaderPartitionState(partition)
         val epochCheckError = checkExpectedLeaderEpoch(fetchData.currentLeaderEpoch, leaderState)
-        val divergingEpoch = divergingEpochAndOffset(partition.topicPartition, fetchData.lastFetchedEpoch, fetchData.fetchOffset, leaderState)
+        val divergingEpoch = divergingEpochAndOffset(partition, fetchData.lastFetchedEpoch, fetchData.fetchOffset, leaderState)
 
         val (error, records) = if (epochCheckError.isDefined) {
           (epochCheckError.get, MemoryRecords.EMPTY)
@@ -1261,7 +1261,7 @@ class AbstractFetcherThreadTest {
           (Errors.NONE, records)
         }
         val partitionData = new FetchData()
-          .setPartitionIndex(partition.topicPartition.partition)
+          .setPartitionIndex(partition.partition)
           .setErrorCode(error.code)
           .setHighWatermark(leaderState.highWatermark)
           .setLastStableOffset(leaderState.highWatermark)

@@ -200,6 +200,7 @@ class ReplicaManagerConcurrencyTest {
 
     override def doWork(): Unit = {
       val partitionData = new FetchRequest.PartitionData(
+        topicIdPartition.topicId,
         fetchOffset,
         -1,
         65536,

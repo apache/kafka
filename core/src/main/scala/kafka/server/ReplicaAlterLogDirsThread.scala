@@ -71,8 +71,8 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
-  def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicIdPartition, FetchData] = {
-    var partitionData: Seq[(TopicIdPartition, FetchData)] = null
+  def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+    var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
     // We can build the map from the request since it contains topic IDs and names.
@@ -87,7 +87,7 @@ class ReplicaAlterLogDirsThread(name: String,
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new FetchResponseData.PartitionData()
+        tp.topicPartition -> new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
@@ -264,7 +264,7 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
-    val requestMap = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
+    val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     try {
@@ -273,7 +273,8 @@ class ReplicaAlterLogDirsThread(name: String,
         fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
       else
         Optional.empty[Integer]
-      requestMap.put(new TopicIdPartition(fetchState.topicId.getOrElse(Uuid.ZERO_UUID), tp), new FetchRequest.PartitionData(fetchState.fetchOffset, logStartOffset,
+      val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)
+      requestMap.put(tp, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))
     } catch {
       case e: KafkaStorageException =>
