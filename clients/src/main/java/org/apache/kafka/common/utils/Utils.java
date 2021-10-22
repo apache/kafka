@@ -948,7 +948,7 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      *
-     * Note: We don't fsync directory on Windows OS because it'll throw AccessDeniedException (KAFKA-13391)
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
      */
