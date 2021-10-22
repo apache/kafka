@@ -33,6 +33,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorMakerConfigTest {
 
@@ -98,12 +99,10 @@ public class MirrorMakerConfigTest {
         assertEquals("zstd", connectorProps.get("producer.override.compression.type"), "target producer props should be passed to 'producer.override.' config");
         assertEquals("all", connectorProps.get("producer.override.acks"), "target producer props should be passed to 'producer.override.' config");
 
-        // 3. MirrorMaker2 requires to define the 'bootstrap.servers' of the clusters in cluster-level, like 'a.bootstrap.servers' or 'b.bootstrap.servers'.
-        // However, it also allows to override the 'bootstrap.servers' in client configuration, like 'a.consumer.bootstrap.servers' or 'a->b.producer.bootstrap.servers'.
-        // As of present, replication-level client's bootstrap.servers are stored in 'source.consumer.bootstrap.servers' or 'target.producer.bootstrap.servers'; although they do no harm by being overridden by
-        // '[source,target].cluster.bootstrap.servers' but, it would be better to ignore it and give a warning.
-        assertNotEquals("servers-two", connectorProps.get("target.consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // should be assertEquals; cluster-level client overriding should be ignored.
-        assertNotEquals("servers-two", connectorProps.get("target.producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // should be assertEquals; replication-level client overriding should be ignored.
+        assertNull(connectorProps.get("producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored"); // replication-level client overriding is ignored.
+        assertNull(connectorProps.get("consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored"); // cluster-level client overriding is ignored.
+        assertEquals("servers-two", connectorProps.get("target.consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // cluster-level client overriding is ignored.
+        assertEquals("servers-two", connectorProps.get("target.producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // replication-level client overriding is ignored.
         // only the connector overridden client props, cluster-level client props, and replication-level client props are allowed.
         assertNotEquals("8192", connectorProps.get("producer.batch.size"),
             "top-level client props are only supported in MirrorClient; should be ignored in connector configs.");

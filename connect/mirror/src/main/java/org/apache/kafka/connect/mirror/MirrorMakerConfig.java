@@ -34,6 +34,8 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -60,6 +62,8 @@ import java.util.stream.Collectors;
  *
  */
 public class MirrorMakerConfig extends AbstractConfig {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MirrorMakerConfig.class);
 
     public static final String CLUSTERS_CONFIG = "clusters";
     private static final String CLUSTERS_DOC = "List of cluster aliases.";
@@ -224,13 +228,17 @@ public class MirrorMakerConfig extends AbstractConfig {
         // cluster-level non-client props (source)
         props.putAll(clusterConfigsWithPrefix(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
         // cluster-level client props (source)
-        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, stringsWithPrefixStripped(sourceAndTarget.source() + ".")));
+        Map<String, String> sourceProps = stringsWithPrefixStripped(sourceAndTarget.source() + ".");
+        removeClientBootstrapServers(sourceAndTarget.source() + ".", sourceProps);
+        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, sourceProps));
 
         Map<String, String> targetClusterProps = clusterProps(sourceAndTarget.target());
         // cluster-level non-client props (target)
         props.putAll(clusterConfigsWithPrefix(TARGET_CLUSTER_PREFIX, targetClusterProps));
         // cluster-level client props (target)
-        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, stringsWithPrefixStripped(sourceAndTarget.target() + ".")));
+        Map<String, String> targetProps = stringsWithPrefixStripped(sourceAndTarget.target() + ".");
+        removeClientBootstrapServers(sourceAndTarget.target() + ".", targetProps);
+        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, targetProps));
 
         props.putIfAbsent(NAME, connectorClass.getSimpleName());
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
@@ -241,6 +249,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         // replication-level non-client props
         props.putAll(clusterConfigsWithPrefix("", replicationProps));
         // replication-level client props: consumer applies to source cluster and producer, admin apply to target cluster.
+        removeClientBootstrapServers(sourceAndTarget + ".", replicationProps);
         props.putAll(commonClientConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, replicationProps));
         props.putAll(producerConfigsWithPrefix(TARGET_PREFIX + MirrorClientConfig.PRODUCER_CLIENT_PREFIX, replicationProps));
         props.putAll(commonClientConfigsWithPrefix(SOURCE_PREFIX + MirrorClientConfig.CONSUMER_CLIENT_PREFIX, replicationProps));
@@ -315,6 +324,21 @@ public class MirrorMakerConfig extends AbstractConfig {
         return props.entrySet().stream()
                 .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
                 .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+    }
+
+    static void removeClientBootstrapServers(String prefix, Map<String, String> props) {
+        if (props.remove(MirrorClientConfig.PRODUCER_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) != null) {
+            LOGGER.warn("Overriding bootstrap.servers in client configuraion is disallowed. "
+                + prefix + MirrorClientConfig.PRODUCER_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " ignored.");
+        }
+        if (props.remove(MirrorClientConfig.CONSUMER_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) != null) {
+            LOGGER.warn("Overriding bootstrap.servers in client configuraion is disallowed. "
+                + prefix + MirrorClientConfig.CONSUMER_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " ignored.");
+        }
+        if (props.remove(MirrorClientConfig.ADMIN_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG) != null) {
+            LOGGER.warn("Overriding bootstrap.servers in client configuraion is disallowed. "
+                + prefix + MirrorClientConfig.ADMIN_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " ignored.");
+        }
     }
 
     static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
