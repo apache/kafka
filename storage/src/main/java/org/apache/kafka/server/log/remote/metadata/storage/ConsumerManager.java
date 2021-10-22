@@ -27,7 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -39,6 +41,8 @@ import java.util.concurrent.TimeoutException;
  */
 public class ConsumerManager implements Closeable {
 
+    public static final String COMMITTED_OFFSETS_FILE_NAME = "_rlmm_committed_offsets";
+
     private static final Logger log = LoggerFactory.getLogger(ConsumerManager.class);
     private static final long CONSUME_RECHECK_INTERVAL_MS = 50L;
 
@@ -49,14 +53,15 @@ public class ConsumerManager implements Closeable {
 
     public ConsumerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
-                           RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner,
+                           RemoteLogMetadataTopicPartitioner topicPartitioner,
                            Time time) {
         this.rlmmConfig = rlmmConfig;
         this.time = time;
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
-        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, rlmmTopicPartitioner);
+        Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
+        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, topicPartitioner, committedOffsetsPath, time, 60_000L);
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
@@ -64,6 +69,7 @@ public class ConsumerManager implements Closeable {
         try {
             // Start a thread to continuously consume records from topic partitions.
             consumerTaskThread.start();
+            log.info("RLMM Consumer task thread is started");
         } catch (Exception e) {
             throw new KafkaException("Error encountered while initializing and scheduling ConsumerTask thread", e);
         }

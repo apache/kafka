@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Collections;
 import java.util.List;
@@ -90,6 +91,24 @@ public final class TopicsImage {
     @Override
     public int hashCode() {
         return Objects.hash(topicsById, topicsByName);
+    }
+
+    /**
+     * Expose a view of this TopicsImage as a map from topic names to IDs.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<String, Uuid> topicNameToIdView() {
+        return new TranslatedValueMapView<>(topicsByName, image -> image.id());
+    }
+
+    /**
+     * Expose a view of this TopicsImage as a map from IDs to names.
+     *
+     * Like TopicsImage itself, this map is immutable.
+     */
+    public Map<Uuid, String> topicIdToNameView() {
+        return new TranslatedValueMapView<>(topicsById, image -> image.name());
     }
 
     @Override

@@ -162,7 +162,9 @@ public class BufferPool {
 
                         if (waitingTimeElapsed) {
                             this.metrics.sensor("buffer-exhausted-records").record();
-                            throw new BufferExhaustedException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                            throw new BufferExhaustedException("Failed to allocate " + size + " bytes within the configured max blocking time "
+                                + maxTimeToBlockMs + " ms. Total memory: " + totalMemory() + " bytes. Available memory: " + availableMemory()
+                                + " bytes. Poolable size: " + poolableSize() + " bytes");
                         }
 
                         remainingTimeToBlockNs -= timeNs;

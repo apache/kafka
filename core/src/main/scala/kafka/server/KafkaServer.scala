@@ -105,11 +105,11 @@ class KafkaServer(
   var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
 
-  var dataPlaneRequestProcessor: KafkaApis = null
+  @volatile var dataPlaneRequestProcessor: KafkaApis = null
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
-  var socketServer: SocketServer = null
+  @volatile var socketServer: SocketServer = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
@@ -125,7 +125,7 @@ class KafkaServer(
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
 
-  var groupCoordinator: GroupCoordinator = null
+  @volatile var groupCoordinator: GroupCoordinator = null
 
   var transactionCoordinator: TransactionCoordinator = null
 
@@ -141,7 +141,7 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = null
 
-  var metadataCache: ZkMetadataCache = null
+  @volatile var metadataCache: ZkMetadataCache = null
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
@@ -800,7 +800,7 @@ class KafkaServer(
 
   def getLogManager: LogManager = logManager
 
-  def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
+  override def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
   /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
   def advertisedListeners: Seq[EndPoint] = {
