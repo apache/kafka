@@ -2405,7 +2405,7 @@ class KafkaApisTest {
 
     val fetchData = Map(tidp -> new FetchRequest.PartitionData(0, 0, 1000,
       Optional.empty())).asJava
-    val fetchDataBuilder = Map(tidp -> new FetchRequest.PartitionData(0, 0, 1000,
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
@@ -2431,9 +2431,9 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[FetchResponse]
     val responseData = response.responseData(metadataCache.topicIdsToNames(), 9)
-    assertTrue(responseData.containsKey(tidp))
+    assertTrue(responseData.containsKey(tp))
 
-    val partitionData = responseData.get(tidp)
+    val partitionData = responseData.get(tp)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(hw, partitionData.highWatermark)
     assertEquals(-1, partitionData.lastStableOffset)
@@ -2956,7 +2956,7 @@ class KafkaApisTest {
     setupBasicMetadataCache(tp0.topic, numPartitions = 1, 1, topicId)
     val hw = 3
 
-    val fetchDataBuilder = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
+    val fetchDataBuilder = Collections.singletonMap(tp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchData = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchFromFollower = buildRequest(new FetchRequest.Builder(
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchDataBuilder).build())
@@ -3555,7 +3555,8 @@ class KafkaApisTest {
     val throttledPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("throttledData", 0))
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.iterator)
+      fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.asScala.map( entry =>
+      (new TopicIdPartition(Uuid.ZERO_UUID, entry.getKey), entry.getValue)).toMap.asJava.entrySet.iterator)
 
     val response = fetchResponse(throttledData ++ Map(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("nonThrottledData", 0)) -> "nonThrottledData"))
 

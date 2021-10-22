@@ -105,7 +105,7 @@ class CachedPartition(var topic: String,
     this(part.topic, id, part.partition, reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
       reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset, reqData.lastFetchedEpoch)
 
-  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
+  def reqData = new FetchRequest.PartitionData(topicId, fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
 
   def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
     // Update our cached request parameters.
@@ -830,12 +830,6 @@ class FetchManager(private val time: Time,
               debug(s"Session error for ${reqMetadata.sessionId}: expected epoch " +
                 s"${session.epoch}, but got ${reqMetadata.epoch} instead.")
               new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH, reqMetadata)
-            } else  if (reqMetadata.epoch == FINAL_EPOCH) {
-              debug(s"Session closing for ${reqMetadata.sessionId}  " +
-                s"${if (session.usesTopicIds) "to downgrade from " else "to upgrade to "}" +
-                s"topic IDS")
-              cache.remove(session)
-              new SessionlessFetchContext(fetchData)
             } else if (session.usesTopicIds && reqVersion < 13 || !session.usesTopicIds && reqVersion >= 13)  {
               debug(s"Session error for ${reqMetadata.sessionId}: expected  " +
                 s"${if (session.usesTopicIds) "to use topic IDs" else "to not use topic IDs"}" +

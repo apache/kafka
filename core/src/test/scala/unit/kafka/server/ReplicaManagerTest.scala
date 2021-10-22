@@ -733,7 +733,7 @@ class ReplicaManagerTest {
 
       // Next we receive an invalid request with a higher fetch offset, but a diverging epoch.
       // We expect that the replica state does not get updated.
-      val divergingFetchPartitionData = new FetchRequest.PartitionData(3L, 0L, maxFetchBytes,
+      val divergingFetchPartitionData = new FetchRequest.PartitionData(tidp.topicId, 3L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch), Optional.of(leaderEpoch - 1))
 
       replicaManager.fetchMessages(

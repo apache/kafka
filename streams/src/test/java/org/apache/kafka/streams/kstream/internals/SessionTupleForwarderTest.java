@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
 
@@ -57,25 +57,32 @@ public class SessionTupleForwarderTest {
 
     private void shouldForwardRecordsIfWrappedStateStoreDoesNotCache(final boolean sendOldValued) {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<Windowed<String>, Change<String>> context = mock(
+            ProcessorContext.class);
 
         expect(store.setFlushListener(null, sendOldValued)).andReturn(false);
         if (sendOldValued) {
             context.forward(
-                new Windowed<>("key", new SessionWindow(21L, 42L)),
-                new Change<>("value", "oldValue"),
-                To.all().withTimestamp(42L));
+                new Record<>(
+                    new Windowed<>("key", new SessionWindow(21L, 42L)),
+                    new Change<>("value", "oldValue"),
+                    42L));
         } else {
             context.forward(
-                new Windowed<>("key", new SessionWindow(21L, 42L)),
-                new Change<>("value", null),
-                To.all().withTimestamp(42L));
+                new Record<>(
+                    new Windowed<>("key", new SessionWindow(21L, 42L)),
+                    new Change<>("value", null),
+                    42L));
         }
         expectLastCall();
         replay(store, context);
 
-        new SessionTupleForwarder<>(store, context, null, sendOldValued)
-            .maybeForward(new Windowed<>("key", new SessionWindow(21L, 42L)), "value", "oldValue");
+        new SessionTupleForwarder<>(store, context, null,
+            sendOldValued)
+            .maybeForward(
+                new Windowed<>("key", new SessionWindow(21L, 42L)),
+                "value",
+                "oldValue");
 
         verify(store, context);
     }
@@ -83,7 +90,7 @@ public class SessionTupleForwarderTest {
     @Test
     public void shouldNotForwardRecordsIfWrappedStateStoreDoesCache() {
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final ProcessorContext<Windowed<String>, Change<String>> context = mock(ProcessorContext.class);
 
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);

@@ -20,7 +20,7 @@ package kafka.server
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
@@ -112,12 +112,11 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
 
   private def expectNextRecords(expected: IndexedSeq[Array[Byte]],
                                 fetchOffset: Long): Unit = {
-    val testTopicIdPartition = new TopicIdPartition(Uuid.ZERO_UUID, testTopicPartition)
     val response = sendFetchRequest(0,
       FetchRequest.Builder.forConsumer(3, Int.MaxValue, 0,
-        Map(testTopicIdPartition ->
+        Map(testTopicPartition ->
           new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
-    val records = FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, 3).get(testTopicIdPartition)).records()
+    val records = FetchResponse.recordsOrFail(response.responseData(getTopicNames().asJava, 3).get(testTopicPartition)).records()
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)

@@ -58,7 +58,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -170,7 +170,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }),
     // We may need to get the top level error if the topic does not exist in the response
     ApiKeys.FETCH -> ((resp: requests.FetchResponse) => Errors.forCode(resp.responseData(topicNames.asJava, version).asScala.find {
-      case (topicPartition, _) => topicPartition.topicPartition == tp}.map { case (_, data) => data.errorCode }.getOrElse(resp.error.code()))),
+      case (topicPartition, _) => topicPartition == tp}.map { case (_, data) => data.errorCode }.getOrElse(resp.error.code()))),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data
@@ -349,23 +349,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       .build()
 
   private def createFetchRequest = {
-    val partitionMap = new util.LinkedHashMap[TopicIdPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), tp),
-      new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
+      0, 0, 100, Optional.of(27)))
     requests.FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createFetchRequestWithUnknownTopic(id: Uuid, version: Short) = {
-    val partitionMap = new util.LinkedHashMap[TopicIdPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(new TopicIdPartition(id, tp),
-      new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp,
+      new requests.FetchRequest.PartitionData(id, 0, 0, 100, Optional.of(27)))
     requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createFetchFollowerRequest = {
-    val partitionMap = new util.LinkedHashMap[TopicIdPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), tp),
-      new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
+      0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
     requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }

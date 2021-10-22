@@ -19,7 +19,7 @@ package kafka.server
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
@@ -54,11 +54,11 @@ class BaseFetchRequestTest extends BaseRequestTest {
   }
 
   protected def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                   offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData] = {
-    val partitionMap = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
+                                   offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), tp),
-        new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+      partitionMap.put(tp,
+        new FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
         Optional.empty()))
     }
     partitionMap

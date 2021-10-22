@@ -31,7 +31,7 @@ import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsRequest, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util
@@ -405,9 +405,9 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     val fetcherBarrier = replicaBuffer.getFetcherBarrier()
     val verificationBarrier = replicaBuffer.getVerificationBarrier()
 
-    val requestMap = new util.LinkedHashMap[TopicIdPartition, JFetchRequest.PartitionData]
+    val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(new TopicIdPartition(topicIds.getOrElse(topicPartition.topic, Uuid.ZERO_UUID), topicPartition), new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(topicIds.getOrElse(topicPartition.topic, Uuid.ZERO_UUID), replicaBuffer.getOffset(topicPartition),
         0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
@@ -427,7 +427,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     if (fetchResponse != null) {
       fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion()).forEach { (tp, partitionData) =>
-        replicaBuffer.addFetchedData(tp.topicPartition, sourceBroker.id, partitionData)
+        replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
     } else {
       for (topicAndPartition <- topicPartitions)

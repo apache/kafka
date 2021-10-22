@@ -38,7 +38,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -111,7 +110,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -268,7 +266,8 @@ public class Fetcher<K, V> implements Closeable {
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
-                    .toForget(data.toForget())
+                    .removed(data.toForget())
+                    .replaced(data.toReplace())
                     .rackId(clientRackId);
 
             if (log.isDebugEnabled()) {
@@ -300,12 +299,12 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
 
-                            Map<TopicIdPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
-                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
+                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
-                                TopicIdPartition partition = entry.getKey();
+                            for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
+                                TopicPartition partition = entry.getKey();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                 if (requestData == null) {
                                     String message;
@@ -331,7 +330,7 @@ public class Fetcher<K, V> implements Closeable {
                                     Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
-                                    completedFetches.add(new CompletedFetch(partition.topicPartition(), partitionData,
+                                    completedFetches.add(new CompletedFetch(partition, partitionData,
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
                             }
@@ -1247,17 +1246,9 @@ public class Fetcher<K, V> implements Closeable {
                     builder = handler.newBuilder();
                     fetchable.put(node, builder);
                 }
-
-                // One option is to store this in the builder and only check on the creation of the builder
-                NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
-                if (nodeApiVersions == null) {
-                    client.tryConnect(node);
-                    return emptyMap();
-                }
-                Uuid topicId = hasUsableTopicIdFetchRequestVersion(nodeApiVersions) ? topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID) : Uuid.ZERO_UUID;
-
-                builder.add(new TopicIdPartition(topicId, partition), new FetchRequest.PartitionData(position.offset,
-                    FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                builder.add(partition, new FetchRequest.PartitionData(
+                    topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID),
+                    position.offset, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,

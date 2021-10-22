@@ -18,7 +18,6 @@
 package org.apache.kafka.jmh.common;
 
 import kafka.network.RequestConvertToJson;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.Send;
@@ -61,7 +60,7 @@ public class FetchRequestBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    Map<TopicIdPartition, FetchRequest.PartitionData> fetchData;
+    Map<TopicPartition, FetchRequest.PartitionData> fetchData;
 
     Map<Uuid, String> topicNames;
 
@@ -83,8 +82,8 @@ public class FetchRequestBenchmark {
             topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
-                    0, 0, 4096, Optional.empty());
-                fetchData.put(new TopicIdPartition(id, new TopicPartition(topic, partitionId)), partitionData);
+                    id, 0, 0, 4096, Optional.empty());
+                fetchData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
