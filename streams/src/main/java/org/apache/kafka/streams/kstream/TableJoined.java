@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import java.util.function.Function;
 
 /**
- * The {@code TableJoined} class represents optional params that can be passed to
+ * The {@code TableJoined} class represents optional parameters that can be passed to
  * {@link KTable#join(KTable, Function, ValueJoiner, TableJoined) KTable#join(KTable,Function,...)} and
  * {@link KTable#leftJoin(KTable, Function, ValueJoiner, TableJoined) KTable#leftJoin(KTable,Function,...)}
  * operations, for foreign key joins.
@@ -50,12 +50,20 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
      * Create an instance of {@code TableJoined} with partitioner and otherPartitioner {@link StreamPartitioner} instances.
      * {@code null} values are accepted and will result in the default partitioner being used.
      *
-     * @param partitioner      a {@link StreamPartitioner} that specifies the partitioning strategy for the left (primary)
-     *                         table of the foreign key join. The partitioning strategy must depend only on the message key
-     *                         and not the message value. If {@code null} the default partitioner will be used.
-     * @param otherPartitioner a {@link StreamPartitioner} that specifies the partitioning strategy for the right (foreign
-     *                         key) table of the foreign key join. The partitioning strategy must depend only on the message
-     *                         key and not the message value. If {@code null} the default partitioner will be used.
+     * @param partitioner      a {@link StreamPartitioner} that captures the partitioning strategy for the left (primary)
+     *                         table of the foreign key join. Specifying this option does not repartition or otherwise
+     *                         affect the source table; rather, this option informs the foreign key join on how internal
+     *                         topics should be partitioned in order to be co-partitioned with the left join table.
+     *                         The partitioning strategy must depend only on the message key and not the message value,
+     *                         else the source table is not supported with foreign key joins. This option may be left
+     *                         {@code null} if the source table uses the default partitioner.
+     * @param otherPartitioner a {@link StreamPartitioner} that captures the partitioning strategy for the right (foreign
+     *                         key) table of the foreign key join. Specifying this option does not repartition or otherwise
+     *                         affect the source table; rather, this option informs the foreign key join on how internal
+     *                         topics should be partitioned in order to be co-partitioned with the right join table.
+     *                         The partitioning strategy must depend only on the message key and not the message value,
+     *                         else the source table is not supported with foreign key joins. This option may be left
+     *                         {@code null} if the source table uses the default partitioner.
      * @param <K>              this key type ; key type for the left (primary) table
      * @param <KO>             other key type ; key type for the right (foreign key) table
      * @return new {@code TableJoined} instance with the provided partitioners
@@ -80,12 +88,16 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
     }
 
     /**
-     * Set the custom {@link StreamPartitioner} to be used. Null values are accepted and will result in the
-     * default partitioner being used.
+     * Set the custom {@link StreamPartitioner} to be used as part of computing the join. Null values
+     * are accepted and will result in the default partitioner being used.
      *
-     * @param partitioner the {@link StreamPartitioner} that specifies the partitioning strategy for the left (primary)
-     *                    table of the foreign key join. The partitioning strategy must depend only on the message key
-     *                    and not the message value. If {@code null} the default partitioner will be used.
+     * @param partitioner a {@link StreamPartitioner} that captures the partitioning strategy for the left (primary)
+     *                    table of the foreign key join. Specifying this option does not repartition or otherwise
+     *                    affect the source table; rather, this option informs the foreign key join on how internal
+     *                    topics should be partitioned in order to be co-partitioned with the left join table.
+     *                    The partitioning strategy must depend only on the message key and not the message value,
+     *                    else the source table is not supported with foreign key joins. This option may be left
+     *                    {@code null} if the source table uses the default partitioner.
      * @return new {@code TableJoined} instance configured with the {@code partitioner}
      */
     public TableJoined<K, KO> withPartitioner(final StreamPartitioner<K, Void> partitioner) {
@@ -93,12 +105,16 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
     }
 
     /**
-     * Set the custom other {@link StreamPartitioner} to be used. Null values are accepted and will result
-     * in the default partitioner being used.
+     * Set the custom other {@link StreamPartitioner} to be used as part of computing the join. Null values
+     * are accepted and will result in the default partitioner being used.
      *
-     * @param otherPartitioner the {@link StreamPartitioner} that specifies the partitioning strategy for the right (foreign
-     *                         key) table of the foreign key join. The partitioning strategy must depend only on the message
-     *                         key and not the message value. If {@code null} the default partitioner will be used.
+     * @param otherPartitioner a {@link StreamPartitioner} that captures the partitioning strategy for the right (foreign
+     *                         key) table of the foreign key join. Specifying this option does not repartition or otherwise
+     *                         affect the source table; rather, this option informs the foreign key join on how internal
+     *                         topics should be partitioned in order to be co-partitioned with the right join table.
+     *                         The partitioning strategy must depend only on the message key and not the message value,
+     *                         else the source table is not supported with foreign key joins. This option may be left
+     *                         {@code null} if the source table uses the default partitioner.
      * @return new {@code TableJoined} instance configured with the {@code otherPartitioner}
      */
     public TableJoined<K, KO> withOtherPartitioner(final StreamPartitioner<KO, Void> otherPartitioner) {
