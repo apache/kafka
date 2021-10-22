@@ -181,6 +181,16 @@ public class JaasContextTest {
     }
 
     @Test
+    public void testNumericWord() throws Exception {
+        checkInvalidConfiguration("test.testInvalidControlFlag required password=k3fka;");  // should be a valid config.
+    }
+
+    @Test
+    public void testSymbolicWord() throws Exception {
+        checkInvalidConfiguration("test.testInvalidControlFlag required password=kafk@;");  // should be a valid config.
+    }
+
+    @Test
     public void testNumericOptionWithQuotes() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "3");

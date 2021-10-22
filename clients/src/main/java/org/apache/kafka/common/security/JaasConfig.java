@@ -50,6 +50,12 @@ class JaasConfig extends Configuration {
     private final List<AppConfigurationEntry> configEntries;
 
     public JaasConfig(String loginContextName, String jaasConfigParams) {
+        // A-Z, a-z, -, _, $ are considered to be alphabetic.
+        // All bytes from 0 to ' ' {@code ' '} are considered to be whitespace.
+        // '/' {@code '/'} is a comment character. '//', '/*', '*/' are also allowed.
+        // Single quote {@code '\u005C''} and double quote {@code '"'} are considered to be quote.
+        // Numbered are parsed, but can't be a part of alphabetic string.
+        // Ends of lines are treated as white space, not as separate tokens.
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
         tokenizer.slashSlashComments(true);
         tokenizer.slashStarComments(true);
