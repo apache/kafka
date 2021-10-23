@@ -63,15 +63,6 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
     /**
      * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight
      * validation of the JWT.
-     */
-
-    public LoginAccessTokenValidator() {
-        this(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-    }
-
-    /**
-     * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight
-     * validation of the JWT.
      *
      * @param scopeClaimName Name of the scope claim to use; must be non-<code>null</code>
      * @param subClaimName   Name of the subject claim to use; must be non-<code>null</code>

@@ -176,6 +176,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
+        assertTrue(handler.getAccessTokenRetriever() instanceof FileTokenRetriever);
     }
 
     @Test
@@ -186,6 +187,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
         configureHandler(handler, configs, jaasConfigs);
+        assertTrue(handler.getAccessTokenRetriever() instanceof HttpAccessTokenRetriever);
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {

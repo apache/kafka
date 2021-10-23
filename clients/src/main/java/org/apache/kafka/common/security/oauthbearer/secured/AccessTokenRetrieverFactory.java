@@ -58,17 +58,15 @@ public class AccessTokenRetrieverFactory  {
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
             return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
         } else {
-            ConfigurationUtils jaasCu = new ConfigurationUtils(jaasConfig);
-            String clientId = jaasCu.validateString(CLIENT_ID_CONFIG);
-            String clientSecret = jaasCu.validateString(CLIENT_SECRET_CONFIG);
-            String scope = jaasCu.get(SCOPE_CONFIG);
+            JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+            String clientId = jou.validateString(CLIENT_ID_CONFIG);
+            String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
+            String scope = jou.validateString(SCOPE_CONFIG, false);
 
             SSLSocketFactory sslSocketFactory = null;
 
-            if (JaasOptionsUtils.shouldUseSslClientConfig(tokenEndpointUrl)) {
-                JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+            if (jou.shouldCreateSSLSocketFactory(tokenEndpointUrl))
                 sslSocketFactory = jou.createSSLSocketFactory();
-            }
 
             return new HttpAccessTokenRetriever(clientId,
                 clientSecret,

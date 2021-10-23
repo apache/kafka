@@ -26,6 +26,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
@@ -58,7 +59,7 @@ public class JaasOptionsUtils {
         return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
     }
 
-    public static boolean shouldUseSslClientConfig(URL url) {
+    public boolean shouldCreateSSLSocketFactory(URL url) {
         return url.getProtocol().equalsIgnoreCase("https");
     }
 
@@ -76,6 +77,32 @@ public class JaasOptionsUtils {
         SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
         log.debug("Created SSLSocketFactory: {}", sslClientConfig);
         return socketFactory;
+    }
+
+    public String validateString(String name) throws ValidateException {
+        return validateString(name, true);
+    }
+
+    public String validateString(String name, boolean isRequired) throws ValidateException {
+        String value = (String) options.get(name);
+
+        if (value == null) {
+            if (isRequired)
+                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+            else
+                return null;
+        }
+
+        value = value.trim();
+
+        if (value.isEmpty()) {
+            if (isRequired)
+                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
+            else
+                return null;
+        }
+
+        return value;
     }
 
 }

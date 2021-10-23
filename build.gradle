@@ -1201,7 +1201,7 @@ project(':clients') {
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
-    compileOnly libs.jose4j
+    compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
@@ -1608,7 +1608,7 @@ project(':tools') {
     implementation libs.slf4jApi
     implementation libs.log4j
 
-    implementation libs.jose4j
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')

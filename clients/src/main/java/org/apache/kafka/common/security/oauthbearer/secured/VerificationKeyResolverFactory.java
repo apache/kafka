@@ -25,6 +25,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
+import org.jose4j.http.Get;
+import org.jose4j.jwk.HttpsJwks;
 
 public class VerificationKeyResolverFactory {
 
@@ -57,14 +59,23 @@ public class VerificationKeyResolverFactory {
             return new JwksFileVerificationKeyResolver(p);
         } else {
             long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
+            JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
             SSLSocketFactory sslSocketFactory = null;
 
-            if (JaasOptionsUtils.shouldUseSslClientConfig(jwksEndpointUrl)) {
-                JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
+            if (jou.shouldCreateSSLSocketFactory(jwksEndpointUrl))
                 sslSocketFactory = jou.createSSLSocketFactory();
+
+            HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
+            httpsJwks.setDefaultCacheDuration(refreshIntervalMs);
+
+            if (sslSocketFactory != null) {
+                Get get = new Get();
+                get.setSslSocketFactory(sslSocketFactory);
+                httpsJwks.setSimpleHttpGet(get);
             }
 
-            return new RefreshingHttpsJwksVerificationKeyResolver(jwksEndpointUrl.toString(), refreshIntervalMs, sslSocketFactory);
+            RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(httpsJwks, refreshIntervalMs);
+            return new RefreshingHttpsJwksVerificationKeyResolver(refreshingHttpsJwks);
         }
     }
 

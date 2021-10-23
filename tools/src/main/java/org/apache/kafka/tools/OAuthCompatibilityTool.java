@@ -68,7 +68,7 @@ import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCall
 import org.apache.kafka.common.security.oauthbearer.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.Exit;
 
-public class OAuthCompatibilityTest {
+public class OAuthCompatibilityTool {
 
     public static void main(String[] args) {
         String description = String.format(
@@ -83,7 +83,7 @@ public class OAuthCompatibilityTest {
             "%n%n" +
             "    %s%n" +
             "    %s",
-            OAuthCompatibilityTest.class.getName(),
+            OAuthCompatibilityTool.class.getName(),
             SaslConfigs.class.getName(),
             OAuthBearerLoginCallbackHandler.class.getName());
 
@@ -93,11 +93,11 @@ public class OAuthCompatibilityTest {
             .description(description);
 
         parser.addArgument("--connect-timeout-ms")
-            .type(Long.class)
+            .type(Integer.class)
             .dest("connectTimeoutMs")
             .help(SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC);
         parser.addArgument("--read-timeout-ms")
-            .type(Long.class)
+            .type(Integer.class)
             .dest("readTimeoutMs")
             .help(SASL_LOGIN_READ_TIMEOUT_MS_DOC);
         parser.addArgument("--retry-backoff-ms")
@@ -205,8 +205,8 @@ public class OAuthCompatibilityTest {
 
     private static Map<String, ?> getConfigs(Namespace namespace) {
         Map<String, Object> c = new HashMap<>();
-        maybeAddLong(namespace, "connectTimeoutMs", c, SASL_LOGIN_CONNECT_TIMEOUT_MS);
-        maybeAddLong(namespace, "readTimeoutMs", c, SASL_LOGIN_READ_TIMEOUT_MS);
+        maybeAddInt(namespace, "connectTimeoutMs", c, SASL_LOGIN_CONNECT_TIMEOUT_MS);
+        maybeAddInt(namespace, "readTimeoutMs", c, SASL_LOGIN_READ_TIMEOUT_MS);
         maybeAddLong(namespace, "retryBackoffMs", c, SASL_LOGIN_RETRY_BACKOFF_MS);
         maybeAddLong(namespace, "retryBackoffMax", c, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         maybeAddString(namespace, "scopeClaimName", c, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);

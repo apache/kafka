@@ -98,15 +98,7 @@ public class ConfigurationUtils {
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
 
-    public Integer validateInteger(String name) {
-        return validateInteger(name, true);
-    }
-
     public Integer validateInteger(String name, boolean isRequired) {
-        return validateInteger(name, isRequired, null);
-    }
-
-    public Integer validateInteger(String name, boolean isRequired, Integer min) {
         Integer value = get(name);
 
         if (value == null) {
@@ -115,9 +107,6 @@ public class ConfigurationUtils {
             else
                 return null;
         }
-
-        if (min != null && value < min)
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s value must be at least %s", name, min));
 
         return value;
     }

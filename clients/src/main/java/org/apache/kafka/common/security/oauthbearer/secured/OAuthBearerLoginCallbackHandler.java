@@ -201,6 +201,14 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         isInitialized = true;
     }
 
+    AccessTokenRetriever getAccessTokenRetriever() {
+        return accessTokenRetriever;
+    }
+
+    AccessTokenValidator getAccessTokenValidator() {
+        return accessTokenValidator;
+    }
+
     @Override
     public void close() {
         if (accessTokenRetriever != null) {

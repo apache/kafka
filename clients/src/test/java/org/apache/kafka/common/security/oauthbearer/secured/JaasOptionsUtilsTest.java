@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URL;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.SslConfigs;
@@ -50,9 +51,10 @@ public class JaasOptionsUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testShouldUseSslClientConfig() throws Exception {
-        assertFalse(JaasOptionsUtils.shouldUseSslClientConfig(new URL("http://example.com")));
-        assertTrue(JaasOptionsUtils.shouldUseSslClientConfig(new URL("https://example.com")));
-        assertFalse(JaasOptionsUtils.shouldUseSslClientConfig(new URL("file:///tmp/test.txt")));
+        JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
+        assertFalse(jou.shouldCreateSSLSocketFactory(new URL("http://example.com")));
+        assertTrue(jou.shouldCreateSSLSocketFactory(new URL("https://example.com")));
+        assertFalse(jou.shouldCreateSSLSocketFactory(new URL("file:///tmp/test.txt")));
     }
 
 }

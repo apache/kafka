@@ -20,8 +20,6 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 import java.io.IOException;
 import java.security.Key;
 import java.util.List;
-import javax.net.ssl.SSLSocketFactory;
-import org.jose4j.http.Get;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -86,21 +84,14 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private final RefreshingHttpsJwks httpsJwks;
+    private final RefreshingHttpsJwks refreshingHttpsJwks;
 
     private final VerificationJwkSelector verificationJwkSelector;
 
     private boolean isInitialized;
 
-    public RefreshingHttpsJwksVerificationKeyResolver(String location, long refreshMs, SSLSocketFactory sslSocketFactory) {
-        this.httpsJwks = new RefreshingHttpsJwks(location, refreshMs);
-
-        if (sslSocketFactory != null) {
-            Get get = new Get();
-            get.setSslSocketFactory(sslSocketFactory);
-            this.httpsJwks.setSimpleHttpGet(get);
-        }
-
+    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks refreshingHttpsJwks) {
+        this.refreshingHttpsJwks = refreshingHttpsJwks;
         this.verificationJwkSelector = new VerificationJwkSelector();
     }
 
@@ -109,7 +100,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
         try {
             log.debug("init started");
 
-            httpsJwks.init();
+            refreshingHttpsJwks.init();
         } finally {
             isInitialized = true;
 
@@ -122,7 +113,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
         try {
             log.debug("close started");
 
-            httpsJwks.close();
+            refreshingHttpsJwks.close();
         } finally {
             log.debug("close completed");
         }
@@ -134,7 +125,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             throw new IllegalStateException("Please call init() first");
 
         try {
-            List<JsonWebKey> jwks = httpsJwks.getJsonWebKeys();
+            List<JsonWebKey> jwks = refreshingHttpsJwks.getJsonWebKeys();
             JsonWebKey jwk = verificationJwkSelector.select(jws, jwks);
 
             if (jwk != null)
@@ -142,17 +133,19 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
             String keyId = jws.getKeyIdHeaderValue();
 
-            if (httpsJwks.maybeScheduleRefreshForMissingKeyId(keyId))
-                log.debug("Refreshing JWKs from {} as no suitable verification key for JWS w/ header {} was found in {}", httpsJwks.getLocation(), jws.getHeaders().getFullHeaderAsJsonString(), jwks);
+            if (refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId))
+                log.debug("Refreshing JWKs from {} as no suitable verification key for JWS w/ header {} was found in {}", refreshingHttpsJwks.getLocation(), jws.getHeaders().getFullHeaderAsJsonString(), jwks);
 
             StringBuilder sb = new StringBuilder();
             sb.append("Unable to find a suitable verification key for JWS w/ header ").append(jws.getHeaders().getFullHeaderAsJsonString());
-            sb.append(" from JWKs ").append(jwks).append(" obtained from ").append(httpsJwks.getLocation());
+            sb.append(" from JWKs ").append(jwks).append(" obtained from ").append(
+                refreshingHttpsJwks.getLocation());
             throw new UnresolvableKeyException(sb.toString());
         } catch (JoseException | IOException e) {
             StringBuilder sb = new StringBuilder();
             sb.append("Unable to find a suitable verification key for JWS w/ header ").append(jws.getHeaders().getFullHeaderAsJsonString());
-            sb.append(" due to an unexpected exception (").append(e).append(") while obtaining or using keys from JWKS endpoint at ").append(httpsJwks.getLocation());
+            sb.append(" due to an unexpected exception (").append(e).append(") while obtaining or using keys from JWKS endpoint at ").append(
+                refreshingHttpsJwks.getLocation());
             throw new UnresolvableKeyException(sb.toString(), e);
         }
     }
