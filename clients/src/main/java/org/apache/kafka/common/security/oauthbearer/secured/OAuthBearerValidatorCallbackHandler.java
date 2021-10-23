@@ -54,14 +54,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * The JAAS configuration for OAuth is also needed. If using OAuth for inter-broker communication,
- * the options are those specified in {@link OAuthBearerLoginCallbackHandler}. If <b>not</b> using
- * OAuth for inter-broker communication, but using it for validation, a dummy JAAS option named
- * <code>unsecuredLoginStringClaim_sub</code> is needed:
- *
- * <code>
- * listener.name.<listener name>.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
- *   unsecuredLoginStringClaim_sub="unused" ;
- * </code>
+ * the options are those specified in {@link OAuthBearerLoginCallbackHandler}.
  * </p>
  *
  * <p>
