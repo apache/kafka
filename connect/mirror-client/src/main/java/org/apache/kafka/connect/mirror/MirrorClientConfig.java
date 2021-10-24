@@ -50,8 +50,7 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final Class<?> REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
     public static final String REPLICATION_POLICY_SEPARATOR = "replication.policy.separator";
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
-    public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
-        DefaultReplicationPolicy.SEPARATOR_DEFAULT;
+    public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT = ".";
     
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";

@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
+
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -59,6 +61,8 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String CLUSTERS_DOC = "List of cluster aliases.";
     public static final String CONFIG_PROVIDERS_CONFIG = WorkerConfig.CONFIG_PROVIDERS_CONFIG;
     private static final String CONFIG_PROVIDERS_DOC = "Names of ConfigProviders to use.";
+    private static final String REPLICATION_POLICY_SEPARATOR = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
+    private static final String REPLICATION_POLICY_SEPARATOR_DEFAULT = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
     private static final String NAME = "name";
     private static final String CONNECTOR_CLASS = "connector.class";
@@ -183,12 +187,18 @@ public class MirrorMakerConfig extends AbstractConfig {
 
         // fill in reasonable defaults
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
-        props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
-                + sourceAndTarget.source() + ".internal");
-        props.putIfAbsent(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "mm2-status."
-                + sourceAndTarget.source() + ".internal");
-        props.putIfAbsent(DistributedConfig.CONFIG_TOPIC_CONFIG, "mm2-configs."
-                + sourceAndTarget.source() + ".internal");
+
+        String separator = originalsStrings().getOrDefault(REPLICATION_POLICY_SEPARATOR, REPLICATION_POLICY_SEPARATOR_DEFAULT);
+        if (separator.equals("-")) {
+            throw new ConfigException("You should not use a single dash as a " + REPLICATION_POLICY_SEPARATOR);
+        }
+
+        props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets" + separator
+                + sourceAndTarget.source() + separator + "internal");
+        props.putIfAbsent(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "mm2-status" + separator
+                + sourceAndTarget.source() + separator + "internal");
+        props.putIfAbsent(DistributedConfig.CONFIG_TOPIC_CONFIG, "mm2-configs" + separator
+                + sourceAndTarget.source() + separator + "internal");
         props.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);

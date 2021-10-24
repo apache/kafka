@@ -31,7 +31,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     // In order to work with various metrics stores, we allow custom separators.
     public static final String SEPARATOR_CONFIG = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
-    public static final String SEPARATOR_DEFAULT = ".";
+    public static final String SEPARATOR_DEFAULT = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
     private String separator = SEPARATOR_DEFAULT;
     private Pattern separatorPattern = Pattern.compile(Pattern.quote(SEPARATOR_DEFAULT));
