@@ -172,7 +172,14 @@ public class JaasContextTest {
 
     @Test
     public void testNumericOptionWithoutQuotes() throws Exception {
-        checkInvalidConfiguration("test.testNumericOptionWithoutQuotes required option1=3;");
+        try {
+            Map<String, Object> options = new HashMap<>();
+            options.put("option", "3");
+            checkConfiguration("test.testNumericOptionWithoutQuotes required option=3;", "test.testNumericOptionWithoutQuotes", LoginModuleControlFlag.REQUIRED, options);
+            fail("Given Jaas config is parsed properly but sun.security.provider.ConfigFile$Spi.<init> throws a IOException wrapped with a SecurityException.");
+        } catch (SecurityException e) {
+            assertEquals(IOException.class, e.getCause().getClass());
+        }
     }
 
     @Test
@@ -182,12 +189,23 @@ public class JaasContextTest {
 
     @Test
     public void testNumericWord() throws Exception {
-        checkInvalidConfiguration("test.testInvalidControlFlag required password=k3fka;");  // should be a valid config.
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "k3fka");
+        checkConfiguration("test.testNumericWord required password=\"k3fka\";", "test.testNumericWord", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test
     public void testSymbolicWord() throws Exception {
-        checkInvalidConfiguration("test.testInvalidControlFlag required password=kafk@;");  // should be a valid config.
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "kafk@");
+        checkConfiguration("test.testSymbolicWord required password=\"kafk@\";", "test.testSymbolicWord", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testNumericCanBePartOfAWord() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("option1", "k2fk@");
+        checkConfiguration("test.testNumericCanBePartOfAWord required option1=\"k2fk@\";", "test.testNumericCanBePartOfAWord", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test
