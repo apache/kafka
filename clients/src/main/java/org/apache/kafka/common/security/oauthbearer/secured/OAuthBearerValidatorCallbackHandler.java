@@ -18,8 +18,12 @@
 package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.io.IOException;
+import java.security.Key;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -28,6 +32,9 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwx.JsonWebStructure;
+import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,6 +99,15 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
+    /**
+     * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
+     * HTTP(S) calls ({@link RefreshingHttpsJwksVerificationKeyResolver}), we only want to create
+     * a new instance for each particular set of configuration. Because each of set of configuration
+     * may have multiple instances, we want to reuse the single instance.
+     */
+
+    private static final Map<VkrKey, CloseableVerificationKeyResolver> VKR_CACHE = new HashMap<>();
+
     private CloseableVerificationKeyResolver verificationKeyResolver;
 
     private AccessTokenValidator accessTokenValidator;
@@ -101,10 +117,24 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions);
+        CloseableVerificationKeyResolver verificationKeyResolver;
+
+        // Here's the logic which keeps our VKRs down to a single instance.
+        synchronized (VKR_CACHE) {
+            VkrKey key = new VkrKey(configs, saslMechanism, moduleOptions);
+            verificationKeyResolver = VKR_CACHE.computeIfAbsent(key, k -> {
+                CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions);
+                return new RefCountingVkr(vkr);
+            });
+        }
+
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
         init(verificationKeyResolver, accessTokenValidator);
     }
+
+    /*
+     * Package-visible for testing.
+     */
 
     void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
@@ -169,6 +199,85 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     private void checkInitialized() {
         if (!isInitialized)
             throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+    }
+
+    /**
+     * <code>VkrKey</code> is a simple structure which encapsulates the criteria for different
+     * sets of configuration. This will allow us to use this object as a key in a {@link Map}
+     * to keep a single instance per key.
+     */
+
+    private static class VkrKey {
+
+        private final Map<String, ?> configs;
+
+        private final String saslMechanism;
+
+        private final Map<String, Object> moduleOptions;
+
+        public VkrKey(Map<String, ?> configs, String saslMechanism, Map<String, Object> moduleOptions) {
+            this.configs = configs;
+            this.saslMechanism = saslMechanism;
+            this.moduleOptions = moduleOptions;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            VkrKey that = (VkrKey) o;
+            return configs.equals(that.configs) &&
+                saslMechanism.equals(that.saslMechanism) &&
+                moduleOptions.equals(that.moduleOptions);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(configs, saslMechanism, moduleOptions);
+        }
+
+    }
+
+    /**
+     * <code>RefCountingVkr</code> allows us to share a single
+     * {@link CloseableVerificationKeyResolver} instance between multiple
+     * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
+     * appropriate number of times.
+     */
+
+    private static class RefCountingVkr implements CloseableVerificationKeyResolver {
+
+        private final CloseableVerificationKeyResolver delegate;
+
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        public RefCountingVkr(CloseableVerificationKeyResolver delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
+            return delegate.resolveKey(jws, nestingContext);
+        }
+
+        @Override
+        public void init() throws IOException {
+            if (count.incrementAndGet() == 1)
+                delegate.init();
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (count.decrementAndGet() == 0)
+                delegate.close();
+        }
+
     }
 
 }
