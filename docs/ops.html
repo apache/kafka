@@ -2892,6 +2892,21 @@ for built-in state stores, currently we have:
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
+      <td>memtable-flush-time-avg</td>
+      <td>The average duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-flush-time-min</td>
+      <td>The minimum duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-flush-time-max</td>
+      <td>The maximum duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
       <td>block-cache-data-hit-ratio</td>
       <td>The ratio of block cache hits for data blocks relative to all lookups for data blocks to the block cache.</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
@@ -2924,6 +2939,21 @@ for built-in state stores, currently we have:
     <tr>
       <td>bytes-written-compaction-rate</td>
       <td>The average number of bytes written per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-avg</td>
+      <td>The average duration of disc compactions in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-min</td>
+      <td>The minimum duration of disc compactions in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-max</td>
+      <td>The maximum duration of disc compactions in ms.</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
