@@ -80,7 +80,7 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
      * @param name the name used as the base for naming components of the join including internal topics
      * @param <K>  this key type ; key type for the left (primary) table
      * @param <KO> other key type ; key type for the right (foreign key) table
-     * @return new {@code TableJoined} instance configured with the name
+     * @return new {@code TableJoined} instance configured with the {@code name}
      *
      */
     public static <K, KO> TableJoined<K, KO> as(final String name) {
@@ -88,8 +88,8 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
     }
 
     /**
-     * Set the custom {@link StreamPartitioner} to be used as part of computing the join. Null values
-     * are accepted and will result in the default partitioner being used.
+     * Set the custom {@link StreamPartitioner} to be used as part of computing the join.
+     * {@code null} values are accepted and will result in the default partitioner being used.
      *
      * @param partitioner a {@link StreamPartitioner} that captures the partitioning strategy for the left (primary)
      *                    table of the foreign key join. Specifying this option does not repartition or otherwise
@@ -105,8 +105,8 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
     }
 
     /**
-     * Set the custom other {@link StreamPartitioner} to be used as part of computing the join. Null values
-     * are accepted and will result in the default partitioner being used.
+     * Set the custom other {@link StreamPartitioner} to be used as part of computing the join.
+     * {@code null} values are accepted and will result in the default partitioner being used.
      *
      * @param otherPartitioner a {@link StreamPartitioner} that captures the partitioning strategy for the right (foreign
      *                         key) table of the foreign key join. Specifying this option does not repartition or otherwise
