@@ -21,7 +21,6 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Collections
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
@@ -29,7 +28,7 @@ import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionConfig, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
@@ -132,7 +131,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
             .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(topicPartition.partition())
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("message".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(10000)

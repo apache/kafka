@@ -18,7 +18,7 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -57,7 +57,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
         MemoryPool memoryPool,
         Time time,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        CompressionConfig compressionConfig,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
@@ -71,7 +71,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
             maxBatchSize,
             memoryPool,
             time,
-            compressionType,
+            compressionConfig,
             serde
         );
     }
@@ -113,12 +113,11 @@ final public class SnapshotWriter<T> implements AutoCloseable {
      * Create an instance of this class and initialize
      * the underlying snapshot with {@link SnapshotHeaderRecord}
      *
-     * @param snapshot a lambda to create the low level snapshot writer
      * @param maxBatchSize the maximum size in byte for a batch
      * @param memoryPool the memory pool for buffer allocation
      * @param time the clock implementation
      * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
-     * @param compressionType the compression algorithm to use
+     * @param compressionConfig the compression configuration to use
      * @param serde the record serialization and deserialization implementation
      * @return {@link Optional}{@link SnapshotWriter}
      */
@@ -128,7 +127,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
         MemoryPool memoryPool,
         Time snapshotTime,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        CompressionConfig compressionConfig,
         RecordSerde<T> serde
     ) {
         Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
@@ -138,7 +137,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
                     memoryPool,
                     snapshotTime,
                     lastContainedLogTimestamp,
-                    CompressionType.NONE,
+                    compressionConfig,
                     serde);
         });
         writer.ifPresent(SnapshotWriter::initializeSnapshotWithHeader);

@@ -22,7 +22,6 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -1064,8 +1063,8 @@ class AbstractFetcherThreadTest {
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
-        sourceCodec = NoCompressionCodec,
-        targetCodec = NoCompressionCodec,
+        sourceType = CompressionType.NONE,
+        targetConfig = CompressionConfig.NONE,
         shallowCount = batches.size,
         validBytes = FetchResponse.recordsSize(partitionData),
         offsetsMonotonic = true,

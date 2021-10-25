@@ -19,6 +19,10 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+import org.apache.kafka.common.compress.GzipConfig;
+import org.apache.kafka.common.compress.LZ4Config;
+import org.apache.kafka.common.compress.SnappyConfig;
+import org.apache.kafka.common.compress.ZstdConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -26,6 +30,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.record.CompressionConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Collections;
@@ -188,6 +194,29 @@ public class ProducerConfig extends AbstractConfig {
                                                        + " values are <code>none</code>, <code>gzip</code>, <code>snappy</code>, <code>lz4</code>, or <code>zstd</code>. "
                                                        + "Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression).";
 
+    /** <code>compression.gzip.buffer</code> */
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = "compression.gzip.buffer";
+    private static final String COMPRESSION_GZIP_BUFFER_DOC = "The buffer size in which Gzip feeds input data into the Deflater. The greater the buffer size is, the more data is compressed at once."
+                                                            + "Available values are: [512, 2147483647]. Default: 8192 (=8KB).";
+
+    /** <code>compression.snappy.block</code> */
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = "compression.snappy.block";
+    private static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The frame size which Snappy divides an uncompressed message. The uncompressed content is read by this "
+                                                            + "amount. Available values are: [1024, 2147483647]. Default: 32768 (=32KB).";
+
+    /** <code>compression.lz4.block</code> */
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = "compression.lz4.block";
+    private static final String COMPRESSION_LZ4_BLOCK_DOC = "The frame size which LZ4 divides an uncompressed message. The uncompressed content is read by this amount. "
+                                                            + "Available values are: 4 (=64 KB, default), 5 (=256KB), 6 (=1MB), 7 (=4MB).";
+
+    /** <code>compression.zstd.window</code> */
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = "compression.zstd.window";
+    private static final String COMPRESSION_ZSTD_WINDOW_DOC = "The window size zstd uses. If 0 (default), zstd disables LDM (Long Distance Mode). If set to a value in "
+                                                              + "[10, 32], zstd enables LDM and compresses with a window whose size is 2^{compression.zstd.window} bytes. "
+                                                              + "(For Example, if set to 27 zstd uses 128MB window.)"
+                                                              + "<p>"
+                                                              + "Note: if set to greater than 27, some systems may fail to decompress the message due to lack of memory.";
+
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
@@ -312,6 +341,18 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
+                                .define(COMPRESSION_GZIP_BUFFER_CONFIG, Type.INT, GzipConfig.DEFAULT_BUFFER_SIZE, atLeast(GzipConfig.MIN_BUFFER_SIZE), Importance.MEDIUM, COMPRESSION_GZIP_BUFFER_DOC)
+                                .define(COMPRESSION_SNAPPY_BLOCK_CONFIG, Type.INT, SnappyConfig.DEFAULT_BLOCK_SIZE, atLeast(SnappyConfig.MIN_BLOCK_SIZE), Importance.MEDIUM, COMPRESSION_SNAPPY_BLOCK_DOC)
+                                .define(COMPRESSION_LZ4_BLOCK_CONFIG, Type.INT, LZ4Config.DEFAULT_BLOCK_SIZE, between(LZ4Config.MIN_BLOCK_SIZE, LZ4Config.MAX_BLOCK_SIZE), Importance.MEDIUM, COMPRESSION_LZ4_BLOCK_DOC)
+                                .define(COMPRESSION_ZSTD_WINDOW_CONFIG, Type.INT, ZstdConfig.DEFAULT_WINDOW_LOG, ConfigDef.LambdaValidator.with(
+                                    (name, value) -> {
+                                        int intValue = ((Integer) value).intValue();
+                                        if (!(intValue == ZstdConfig.DEFAULT_WINDOW_LOG || (ZstdConfig.MIN_WINDOW_LOG <= intValue && intValue <= ZstdConfig.MAX_WINDOW_LOG))) {
+                                            throw new ConfigException(name, value, "must be 0 or in [10, 32]");
+                                        }
+                                    },
+                                    () -> "The window size zstd uses"
+                                ), Importance.MEDIUM, COMPRESSION_ZSTD_WINDOW_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
@@ -521,6 +562,36 @@ public class ProducerConfig extends AbstractConfig {
         if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         return userConfiguredTransactions || idempotenceEnabled;
+    }
+
+    public CompressionConfig getCompressionConfig(CompressionType compressionType) {
+        switch (compressionType) {
+            case NONE:
+                return CompressionConfig.NONE;
+            case GZIP:
+                return CompressionConfig.gzip()
+                    .setBufferSize(getInt(ProducerConfig.COMPRESSION_GZIP_BUFFER_CONFIG))
+                    .build();
+            case SNAPPY:
+                return CompressionConfig.snappy()
+                    .setBlockSize(getInt(ProducerConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG))
+                    .build();
+            case LZ4:
+                return CompressionConfig.lz4()
+                    .setBlockSize(getInt(ProducerConfig.COMPRESSION_LZ4_BLOCK_CONFIG))
+                    .build();
+            case ZSTD:
+                return CompressionConfig.zstd()
+                    .setWindowLog(getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_CONFIG))
+                    .build();
+            default:
+                throw new IllegalArgumentException("Unknown compression type: " + compressionType.name);
+        }
+    }
+
+    public CompressionConfig getCompressionConfig() {
+        CompressionType compressionType = CompressionType.forName(getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+        return getCompressionConfig(compressionType);
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {

@@ -32,6 +32,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.compress.{GzipConfig, LZ4Config, SnappyConfig, ZstdConfig}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, SecurityConfig, SslClientAuth, SslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -226,6 +227,10 @@ object Defaults {
   val DeleteTopicEnable = true
 
   val CompressionType = "producer"
+  val CompressionGzipBuffer = GzipConfig.DEFAULT_BUFFER_SIZE
+  val CompressionSnappyBlock = SnappyConfig.DEFAULT_BLOCK_SIZE
+  val CompressionLZ4Block = LZ4Config.DEFAULT_BLOCK_SIZE
+  val CompressionZstdWindow = ZstdConfig.DEFAULT_WINDOW_LOG
 
   val MaxIdMapSnapshots = 2
   /** ********* Kafka Metrics Configuration ***********/
@@ -535,6 +540,10 @@ object KafkaConfig {
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
+  val CompressionGzipBufferProp = "compression.gzip.buffer"
+  val CompressionSnappyBlockProp = "compression.snappy.block"
+  val CompressionLZ4BlockProp = "compression.lz4.block"
+  val CompressionZstdWindowProp = "compression.zstd.window"
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
@@ -937,8 +946,19 @@ object KafkaConfig {
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
-  "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
-  "'producer' which means retain the original compression codec set by the producer."
+    "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
+    "'producer' which means retain the original compression codec set by the producer."
+  val CompressionGzipBufferDoc = "The buffer size in which Gzip feeds input data into the Deflater. The greater the buffer size is, the more data " +
+    " is compressed at once. Available values are: [512, 2147483647]. Default: 8192 (=8KB)."
+  val CompressionSnappyBlockDoc = "The frame size which Snappy divides an uncompressed message. The uncompressed content is read by this " +
+    "amount. Available values are: [1024, 2147483647]. Default: 32768 (=32KB)."
+  val CompressionLZ4BlockDoc = "The frame size which LZ4 divides an uncompressed message. The uncompressed content is read by this amount. " +
+    "Available values are: 4 (=64 KB, default), 5 (=256KB), 6 (=1MB), 7 (=4MB)."
+  val CompressionZstdWindowDoc = "The window size zstd uses. If 0 (default), zstd disables LDM (Long Distance Mode). If set to a value in " +
+    "[10, 32], zstd enables LDM and compresses with a window whose size is 2^{compression.zstd.window} bytes. " +
+    "(For Example, if set to 27 zstd uses 128MB window.)" +
+    "<p>" +
+    "Note: if set to greater than 27, some systems may fail to decompress the message due to lack of memory."
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricSampleWindowMsDoc = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC
@@ -1210,6 +1230,14 @@ object KafkaConfig {
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
+      .define(CompressionGzipBufferProp, INT, Defaults.CompressionGzipBuffer, atLeast(GzipConfig.MIN_BUFFER_SIZE), MEDIUM, CompressionGzipBufferDoc)
+      .define(CompressionSnappyBlockProp, INT, Defaults.CompressionSnappyBlock, atLeast(SnappyConfig.MIN_BLOCK_SIZE), MEDIUM, CompressionSnappyBlockDoc)
+      .define(CompressionLZ4BlockProp, INT, Defaults.CompressionLZ4Block, between(LZ4Config.MIN_BLOCK_SIZE, LZ4Config.MAX_BLOCK_SIZE), MEDIUM, CompressionLZ4BlockDoc)
+      .define(CompressionZstdWindowProp, INT, Defaults.CompressionZstdWindow, ConfigDef.LambdaValidator.`with`((name: String, value: Any) => {
+        val intValue = value.asInstanceOf[Integer].intValue
+        if (!(intValue == ZstdConfig.DEFAULT_WINDOW_LOG || (ZstdConfig.MIN_WINDOW_LOG <= intValue && intValue <= ZstdConfig.MAX_WINDOW_LOG)))
+          throw new ConfigException(name, value, "must be 0 or in [10, 32]")
+      }, () => "The window size zstd uses"), MEDIUM, CompressionZstdWindowDoc)
 
       /** ********* Transaction management configuration ***********/
       .define(TransactionalIdExpirationMsProp, INT, Defaults.TransactionalIdExpirationMs, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
@@ -1783,6 +1811,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
+  def compressionGzipBuffer = getInt(KafkaConfig.CompressionGzipBufferProp)
+  def compressionSnappyBlock = getInt(KafkaConfig.CompressionSnappyBlockProp)
+  def compressionLZ4Block = getInt(KafkaConfig.CompressionLZ4BlockProp)
+  def compressionZstdWindow = getInt(KafkaConfig.CompressionZstdWindowProp)
 
   /** ********* Raft Quorum Configuration *********/
   val quorumVoters = getList(RaftConfig.QUORUM_VOTERS_CONFIG)

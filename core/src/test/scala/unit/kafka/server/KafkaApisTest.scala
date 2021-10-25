@@ -1590,7 +1590,7 @@ class KafkaApisTest {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(5000))
@@ -2395,7 +2395,7 @@ class KafkaApisTest {
       def answer: Unit = {
         val callback = getCurrentArguments.apply(8)
           .asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
-        val records = MemoryRecords.withRecords(CompressionType.NONE,
+        val records = MemoryRecords.withRecords(CompressionConfig.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
         callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records,
           None, None, None, Option.empty, isReassignmentFetch = false)))
@@ -2957,7 +2957,7 @@ class KafkaApisTest {
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchData,
         metadataCache.topicNamesToIds()).build())
 
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(CompressionConfig.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
       anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[util.Map[String, Uuid]](), anyObject[ReplicaQuota],
@@ -3538,7 +3538,7 @@ class KafkaApisTest {
             .setHighWatermark(105)
             .setLastStableOffset(105)
             .setLogStartOffset(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
+            .setRecords(MemoryRecords.withRecords(CompressionConfig.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
       }.toMap.asJava)
 
       data.foreach{case (tp, _) =>

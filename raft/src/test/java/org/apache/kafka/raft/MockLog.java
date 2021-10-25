@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -661,7 +661,7 @@ public class MockLog implements ReplicatedLog {
             LogEntry first = first();
 
             MemoryRecordsBuilder builder = MemoryRecords.builder(
-                buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+                buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionConfig.NONE,
                 TimestampType.CREATE_TIME, first.offset, first.record.timestamp(),
                 RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
                 RecordBatch.NO_SEQUENCE, false,

@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.compress;
 
 import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
+
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.record.CompressionConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -32,21 +34,35 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-public class ZstdFactory {
+public final class ZstdConfig extends CompressionConfig {
+    public static final int MIN_WINDOW_LOG = 10;
+    public static final int MAX_WINDOW_LOG = 32;
+    public static final int DEFAULT_WINDOW_LOG = 0;
 
-    private ZstdFactory() { }
+    private final int windowLog;
 
-    public static OutputStream wrapForOutput(ByteBufferOutputStream buffer) {
+    private ZstdConfig(int windowLog) {
+        this.windowLog = windowLog;
+    }
+
+    public CompressionType getType() {
+        return CompressionType.ZSTD;
+    }
+
+    @Override
+    public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
         try {
+            ZstdOutputStreamNoFinalizer zstdOS = new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE);
+            zstdOS.setLong(this.windowLog);
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(buffer, RecyclingBufferPool.INSTANCE), 16 * 1024);
+            return new BufferedOutputStream(zstdOS, 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
     }
 
-    public static InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+    public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
             // implementation doesn't require locking or soft references.
@@ -68,6 +84,24 @@ public class ZstdFactory {
                 bufferPool), 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
+        }
+    }
+
+    public static class Builder extends CompressionConfig.Builder<ZstdConfig> {
+        private int windowLog = DEFAULT_WINDOW_LOG;
+
+        public Builder setWindowLog(int windowLog) {
+            if (!(windowLog == DEFAULT_WINDOW_LOG || (MIN_WINDOW_LOG <= windowLog && windowLog <= MAX_WINDOW_LOG))) {
+                throw new IllegalArgumentException("zstd doesn't support given windowLog: " + windowLog);
+            }
+
+            this.windowLog = windowLog;
+            return this;
+        }
+
+        @Override
+        public ZstdConfig build() {
+            return new ZstdConfig(this.windowLog);
         }
     }
 }

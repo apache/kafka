@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.CompressionConfig;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -343,7 +344,7 @@ public final class FileRawSnapshotTest {
 
     private static UnalignedMemoryRecords buildRecords(ByteBuffer... buffers) {
         MemoryRecords records =  MemoryRecords.withRecords(
-            CompressionType.NONE,
+            CompressionConfig.NONE,
             Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );
         return new UnalignedMemoryRecords(records.buffer());

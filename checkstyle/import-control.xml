@@ -77,6 +77,9 @@
       <allow pkg="net.jpountz.xxhash" />
       <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.xerial.snappy" />
+      <allow class="org.apache.kafka.common.record.CompressionConfig" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.CompressionType" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0" exact-match="true" />
     </subpackage>
 
     <subpackage name="message">

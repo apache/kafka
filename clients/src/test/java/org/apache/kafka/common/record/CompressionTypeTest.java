@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
 import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.compress.LZ4Config;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.junit.jupiter.api.Test;
@@ -29,16 +30,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CompressionTypeTest {
 
+    public static final LZ4Config LZ4_CONFIG = CompressionConfig.lz4().build();
+
     @Test
     public void testLZ4FramingMagicV0() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) CompressionType.LZ4.wrapForOutput(
+        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) LZ4_CONFIG.wrapForOutput(
                 new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
         assertTrue(out.useBrokenFlagDescriptorChecksum());
 
         buffer.rewind();
 
-        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
+        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) LZ4_CONFIG.wrapForInput(
                 buffer, RecordBatch.MAGIC_VALUE_V0, BufferSupplier.NO_CACHING);
         assertTrue(in.ignoreFlagDescriptorChecksum());
     }
@@ -46,13 +49,13 @@ public class CompressionTypeTest {
     @Test
     public void testLZ4FramingMagicV1() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) CompressionType.LZ4.wrapForOutput(
+        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) LZ4_CONFIG.wrapForOutput(
                 new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
         assertFalse(out.useBrokenFlagDescriptorChecksum());
 
         buffer.rewind();
 
-        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
+        KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) LZ4_CONFIG.wrapForInput(
                 buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
         assertFalse(in.ignoreFlagDescriptorChecksum());
     }
