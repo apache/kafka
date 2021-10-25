@@ -101,6 +101,18 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyBrokerAuthenticationMetrics(server)
   }
 
+  @Test
+  def testAllTopicsMetadataMetrics(): Unit = {
+    val adminClient = createAdminClient()
+    adminClient.listTopics().names().get()
+
+    val requestRateMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSec,request=MetadataAllTopics")
+    assertTrue("The MetadataAllTopics RequestsPerSec metric is not recorded", requestRateMeter.count() == 1)
+
+    val responseBytesHist = yammerHistogram("kafka.network:type=RequestMetrics,name=ResponseBytes,request=MetadataAllTopics")
+    assertTrue("The MetadataAllTopics ResponseBytes metric is not recorded", responseBytesHist.count() == 1)
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
       recordSize: Int, tp: TopicPartition) = {
     val bytes = new Array[Byte](recordSize)
@@ -288,6 +300,16 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
     metric match {
       case m: Histogram => m
+      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  private def yammerMeterWithPrefix(prefix: String): Meter = {
+    val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
+    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.startsWith(prefix) }
+      .getOrElse(fail(s"Unable to find broker metric with prefix $prefix: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+    metric match {
+      case m: Meter => m
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")
     }
   }

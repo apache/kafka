@@ -3048,6 +3048,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response = responseOpt match {
       case Some(response) =>
         val responseSend = request.context.buildResponse(response)
+        request.responseBytes = responseSend.size()
         val responseString =
           if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
           else None
