@@ -72,6 +72,20 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private static final TimeUnit SHUTDOWN_TIME_UNIT = TimeUnit.SECONDS;
 
+    /**
+     * {@link HttpsJwks} does the actual work of contacting the OAuth/OIDC endpoint to get the
+     * JWKS. In some cases, the call to {@link HttpsJwks#getJsonWebKeys()} will trigger a call
+     * to {@link HttpsJwks#refresh()} which will block the current thread in network I/O. We cache
+     * the JWKS ourselves (see {@link #jsonWebKeys}) to avoid the network I/O.
+     *
+     * We want to be very careful where we use the {@link HttpsJwks} instance so that we don't
+     * perform any operation (directly or indirectly) that could cause blocking. This is because
+     * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
+     * thread. It's OK to execute {@link HttpsJwks#getJsonWebKeys()} (which calls
+     * {@link HttpsJwks#refresh()}) from within {@link #init()} as that method is called only at
+     * startup, and we can afford the blocking hit there.
+     */
+
     private final HttpsJwks httpsJwks;
 
     private final ScheduledExecutorService executorService;
@@ -82,9 +96,19 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private final long refreshMs;
 
+    /**
+     * Protects {@link #missingKeyIds} and {@link #jsonWebKeys}.
+     */
+
     private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
 
     private final Map<String, Long> missingKeyIds;
+
+    /**
+     * As mentioned in the comments for {@link #httpsJwks}, we cache the JWKS ourselves so that
+     * we can return the list immediately without any network I/O. They are only cached within
+     * calls to {@link #refresh()}.
+     */
 
     private List<JsonWebKey> jsonWebKeys;
 
@@ -125,9 +149,6 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             List<JsonWebKey> localJWKs;
 
             try {
-                // This will trigger a call th HttpsJwks.refresh() and that will block the current
-                // thread. It's OK to do this in init() but we avoid blocking elsewhere as we're
-                // run in a network thread.
                 localJWKs = httpsJwks.getJsonWebKeys();
             } catch (JoseException e) {
                 throw new IOException("Could not refresh JWKS", e);
@@ -177,10 +198,11 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     }
 
     /**
-     * Overrides the base implementation because the base implementation has a case that performs
-     * a blocking call to refresh(), which we want to avoid in the authentication validation path.
+     * Our implementation avoids the blocking call within {@link HttpsJwks#refresh()} that is
+     * sometimes called internal to {@link HttpsJwks#getJsonWebKeys()}. We want to avoid any
+     * blocking I/O is this code is running in the authentication path on the Kafka network thread.
      *
-     * The list may be stale up to refreshMs.
+     * The list may be stale up to {@link #refreshMs}.
      *
      * @return {@link List} of {@link JsonWebKey} instances
      *
@@ -205,13 +227,15 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     }
 
     /**
-     * Internal method that will refresh the cache and if errors are encountered, re-queues
-     * the refresh attempt in a background thread.
+     * Internal method that will refresh the cache in a background thread.
+     *
+     * This method may be called as part of the <i>normally</i>-scheduled refresh call
+     * (via {@link #executorService}, but it may have
      */
 
     private void refresh() {
         // How much time (in milliseconds) do we have before the next refresh is scheduled to
-        // occur? This value will [0..refreshMs]. Every time a scheduled refresh occurs, the
+        // occur? This value will [..refreshMs]. Every time a scheduled refresh occurs, the
         // value of refreshFuture is reset to refreshMs and works down to 0.
         long timeBeforeNextRefresh = refreshFuture.getDelay(TimeUnit.MILLISECONDS);
         log.debug("timeBeforeNextRefresh: {}, RETRY_BACKOFF_MS: {}", timeBeforeNextRefresh, RETRY_BACKOFF_MS);
@@ -264,8 +288,14 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     public boolean maybeScheduleRefreshForMissingKeyId(String keyId) {
         if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
-            // Only grab the first N characters so that if the key ID is huge, we don't blow up
-            // our memory if we try to cache large key IDs.
+            // Although there's no limit on the length of the key ID, they're generally
+            // "reasonably" short. If we have a very long key ID length, we're going to assume
+            // the JWT is malformed and we will not actually try to resolve the key.
+            //
+            // In this case, let's prevent blowing out our memory in two ways:
+            //
+            //     1. Don't try to resolve the key as the large ID will sit in our cache
+            //     2. Report the issue in the logs but include only the first N characters
             int actualLength = keyId.length();
             String s = keyId.substring(0, MISSING_KEY_ID_MAX_KEY_LENGTH);
             String snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MISSING_KEY_ID_MAX_KEY_LENGTH, actualLength);
@@ -281,7 +311,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
                 if (nextCheckTime == null || nextCheckTime <= currTime) {
                     // If there's no entry in the missing key ID cache for the incoming key ID,
-                    // or it has expired, schedule a refresh.
+                    // or it has expired, schedule a refresh ASAP.
                     nextCheckTime = currTime + MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
                     missingKeyIds.put(keyId, nextCheckTime);
                     executorService.schedule(this::refresh, 0, TimeUnit.MILLISECONDS);
