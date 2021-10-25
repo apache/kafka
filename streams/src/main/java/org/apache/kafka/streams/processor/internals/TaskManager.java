@@ -298,6 +298,54 @@ public class TaskManager {
         }
     }
 
+    private void commitActiveTasks(final Map<TaskId, Set<TopicPartition>> activeTasks, final AtomicReference<RuntimeException> activeTasksCommitException) {
+        final Set<Task> activeTasksNeedCommit = new HashSet<>();
+        final Set<Task> activeTasksNeedRestore = new HashSet<>();
+        for (final Task task : tasks.allTasks()) {
+            if (activeTasks.containsKey(task.id()) && task.isActive() && task.commitNeeded()) {
+                activeTasksNeedCommit.add(task);
+            } else if (activeTasks.containsKey(task.id()) && task.isActive() && task.state() == State.RESTORING) {
+                activeTasksNeedRestore.add(task);
+            }
+        }
+
+        // If there are no active tasks to restore, then we don't need to commit any offsets or transactions.
+        if (activeTasksNeedRestore.size() == 0)
+            return;
+
+        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
+        prepareCommitAndAddOffsetsToMap(activeTasksNeedCommit, consumedOffsetsPerTask);
+
+        final Set<Task> dirtyTasks = new HashSet<>();
+        try {
+            commitOffsetsOrTransaction(consumedOffsetsPerTask);
+        } catch (final TaskCorruptedException e) {
+            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                    e.corruptedTasks());
+
+            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+            closeDirtyAndRevive(dirtyTasks, true);
+        } catch (final RuntimeException e) {
+            log.error("Exception caught while committing active tasks " + activeTasksNeedCommit, e);
+            activeTasksCommitException.compareAndSet(null, e);
+            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+        }
+
+        // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
+        // going to be closed we would checkpoint by then
+        for (final Task task : activeTasksNeedCommit) {
+            if (!dirtyTasks.contains(task)) {
+                try {
+                    task.postCommit(true);
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    maybeWrapAndSetFirstException(activeTasksCommitException, e, task.id());
+                }
+            }
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -312,6 +360,13 @@ public class TaskManager {
                      "\tExisting active tasks: {}\n" +
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
+
+        final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
+        commitActiveTasks(activeTasks, activeTasksCommitException);
+
+        if (activeTasksCommitException.get() != null) {
+            throw activeTasksCommitException.get();
+        }
 
         topologyMetadata.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),

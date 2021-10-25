@@ -134,6 +134,7 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.verify;
+import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -1599,6 +1600,126 @@ public class StreamThreadTest {
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertEquals(1, thread.readOnlyActiveTasks().size());
+    }
+
+    @Test
+    public void shouldCommitAnyOpenTxnInEOSV2ModeWhenAnyTaskNeedsCommitAfterRevoke() {
+        // only have source but no sink so that we would not get fenced in producer.send
+        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+
+        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+
+        consumer.updatePartitions(topic1, Arrays.asList(
+                new PartitionInfo(topic1, 1, null, null, null),
+                new PartitionInfo(topic1, 2, null, null, null)
+        ));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        // assign second partition now
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        final Task task1 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.commitNeeded()).andReturn(true);
+        final Task task2 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.state()).andReturn(Task.State.RESTORING);
+
+        final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
+
+        final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
+        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        replay(tasks);
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+        threadProducer.commitTransaction(anyObject(), anyObject());
+        EasyMock.expectLastCall().times(1);
+    }
+
+    @Test
+    public void shouldNotCommitAnyOpenTxnInEOSV2ModeWhenNoTasksNeedRestoring() {
+        // only have source but no sink so that we would not get fenced in producer.send
+        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+
+        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+
+        consumer.updatePartitions(topic1, Arrays.asList(
+                new PartitionInfo(topic1, 1, null, null, null),
+                new PartitionInfo(topic1, 2, null, null, null)
+        ));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        // assign second partition now
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        final Task task1 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.commitNeeded()).andReturn(true);
+        final Task task2 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.state()).andReturn(Task.State.RUNNING);
+
+        final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
+
+        final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
+        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        replay(tasks);
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+        threadProducer.commitTransaction(anyObject(), anyObject());
+        EasyMock.expectLastCall().andStubThrow(new AssertionError());
+    }
+
+    @Test
+    public void shouldNotCommitAnyOpenTxnInEOSV2ModeWhenNoTasksNeedCommit() {
+        // only have source but no sink so that we would not get fenced in producer.send
+        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+
+        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+
+        consumer.updatePartitions(topic1, Arrays.asList(
+                new PartitionInfo(topic1, 1, null, null, null),
+                new PartitionInfo(topic1, 2, null, null, null)
+        ));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        // assign second partition now
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        final Task task1 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.commitNeeded()).andReturn(false);
+        final Task task2 = EasyMock.createNiceMock(Task.class);
+        EasyMock.expect(task1.state()).andReturn(Task.State.RESTORING);
+
+        final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
+
+        final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
+        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        replay(tasks);
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+        threadProducer.commitTransaction(anyObject(), anyObject());
+        EasyMock.expectLastCall().andStubThrow(new AssertionError());
     }
 
     @Test
