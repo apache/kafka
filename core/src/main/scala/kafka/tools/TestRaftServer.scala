@@ -20,7 +20,7 @@ package kafka.tools
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.OptionException
-import kafka.network.SocketServer
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
@@ -113,8 +113,8 @@ class TestRaftServer(
       requestHandler,
       time,
       config.numIoThreads,
-      s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent",
-      SocketServer.DataPlaneThreadPrefix
+      s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
+      DataPlaneAcceptor.ThreadPrefix
     )
 
     workloadGenerator.start()
