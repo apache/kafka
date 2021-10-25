@@ -252,19 +252,28 @@ class ReassignPartitionsUnitTest {
   @Test
   def testParseGenerateAssignmentArgs(): Unit = {
     assertStartsWith("Broker list contains duplicate entries",
-      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
-          """{"topics": [{"topic": "foo"}], "version":1}""", "1,1,2"),
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"}], "version":1}""", "1,1,2")
+        ()
+      },
         () => "Expected to detect duplicate broker list entries").getMessage)
     assertStartsWith("Broker list contains duplicate entries",
-      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
-          """{"topics": [{"topic": "foo"}], "version":1}""", "5,2,3,4,5"),
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"}], "version":1}""", "5,2,3,4,5")
+        ()
+      },
         () => "Expected to detect duplicate broker list entries").getMessage)
     assertEquals((Seq(5,2,3,4),Seq("foo")),
       parseGenerateAssignmentArgs("""{"topics": [{"topic": "foo"}], "version":1}""",
         "5,2,3,4"))
     assertStartsWith("List of topics to reassign contains duplicate entries",
-      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
-          """{"topics": [{"topic": "foo"},{"topic": "foo"}], "version":1}""", "5,2,3,4"),
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"},{"topic": "foo"}], "version":1}""", "5,2,3,4")
+        ()
+      },
         () => "Expected to detect duplicate topic entries").getMessage)
     assertEquals((Seq(5,3,4),Seq("foo","bar")),
       parseGenerateAssignmentArgs(
@@ -279,7 +288,10 @@ class ReassignPartitionsUnitTest {
       addTopics(adminClient)
       assertStartsWith("Replication factor: 3 larger than available brokers: 2",
         assertThrows(classOf[InvalidReplicationFactorException],
-          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false),
+          () => {
+            generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false)
+            ()
+          },
           () => "Expected generateAssignment to fail").getMessage)
     } finally {
       adminClient.close()
@@ -293,7 +305,10 @@ class ReassignPartitionsUnitTest {
       addTopics(adminClient)
       assertStartsWith("Topic quux not found",
         assertThrows(classOf[ExecutionException],
-          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"quux"}]}""", "0,1", false),
+          () => {
+            generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"quux"}]}""", "0,1", false)
+            ()
+          },
           () => "Expected generateAssignment to fail").getCause.getMessage)
     } finally {
       adminClient.close()
@@ -315,7 +330,10 @@ class ReassignPartitionsUnitTest {
       addTopics(adminClient)
       assertStartsWith("Not all brokers have rack information.",
         assertThrows(classOf[AdminOperationException],
-          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true),
+          () => {
+            generateAssignment(adminClient, """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true)
+            ()
+          },
           () => "Expected generateAssignment to fail").getMessage)
       // It should succeed when --disable-rack-aware is used.
       val (_, current) = generateAssignment(adminClient,
@@ -450,26 +468,38 @@ class ReassignPartitionsUnitTest {
   def testParseExecuteAssignmentArgs(): Unit = {
     assertStartsWith("Partition reassignment list cannot be empty",
       assertThrows(classOf[AdminCommandFailedException],
-        () => parseExecuteAssignmentArgs("""{"version":1,"partitions":[]}"""),
+        () => {
+          parseExecuteAssignmentArgs("""{"version":1,"partitions":[]}""")
+          ()
+        },
         () => "Expected to detect empty partition reassignment list").getMessage)
     assertStartsWith("Partition reassignment contains duplicate topic partitions",
-      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseExecuteAssignmentArgs(
           """{"version":1,"partitions":""" +
             """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
             """{"topic":"foo","partition":0,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
-            """]}"""), () => "Expected to detect a partition list with duplicate entries").getMessage)
+            """]}""")
+        ()
+      }, () => "Expected to detect a partition list with duplicate entries").getMessage)
     assertStartsWith("Partition reassignment contains duplicate topic partitions",
-      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseExecuteAssignmentArgs(
           """{"version":1,"partitions":""" +
             """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["/abc","/def"]},""" +
             """{"topic":"foo","partition":0,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
-            """]}"""), () => "Expected to detect a partition replica list with duplicate entries").getMessage)
+            """]}""")
+        ()
+      }, () => "Expected to detect a partition replica list with duplicate entries").getMessage)
     assertStartsWith("Partition replica lists may not contain duplicate entries",
-      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+      assertThrows(classOf[AdminCommandFailedException], () => {
+        parseExecuteAssignmentArgs(
           """{"version":1,"partitions":""" +
             """[{"topic":"foo","partition":0,"replicas":[0,0],"log_dirs":["/abc","/def"]},""" +
             """{"topic":"foo","partition":1,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
-            """]}"""), () => "Expected to detect a partition replica list with duplicate entries").getMessage)
+            """]}""")
+        ()
+      }, () => "Expected to detect a partition replica list with duplicate entries").getMessage)
     assertEquals((Map(
         new TopicPartition("foo", 0) -> Seq(1, 2, 3),
         new TopicPartition("foo", 1) -> Seq(3, 4, 5),
