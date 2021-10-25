@@ -60,7 +60,7 @@ class IsrExpirationTest {
   @BeforeEach
   def setUp(): Unit = {
     val logManager: LogManager = mock(classOf[LogManager])
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(Seq.empty[File])
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")

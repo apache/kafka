@@ -306,7 +306,7 @@ class ReplicaManagerQuotasTest {
 
     //Return the same log for each partition as it doesn't matter
     when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Some(log))
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(Seq.empty[File])
 
     val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 

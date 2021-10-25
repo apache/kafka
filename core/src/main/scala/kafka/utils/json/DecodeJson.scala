@@ -85,13 +85,13 @@ object DecodeJson {
     else decodeJson.decodeEither(node).map(Some(_))
   }
 
-  implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = (node: JsonNode) => {
+  implicit def decodeSeq[E, S[E] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = (node: JsonNode) => {
     if (node.isArray)
       decodeIterator(node.elements.asScala)(decodeJson.decodeEither)
     else Left(s"Expected JSON array, received $node")
   }
 
-  implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = (node: JsonNode) => {
+  implicit def decodeMap[V, M[K, V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = (node: JsonNode) => {
     if (node.isObject)
       decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).map(v => (e.getKey, v)))
     else Left(s"Expected JSON object, received $node")
