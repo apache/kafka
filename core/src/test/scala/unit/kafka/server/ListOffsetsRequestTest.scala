@@ -210,7 +210,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     TestUtils.generateAndProduceMessages(servers, topic, 9)
     TestUtils.produceMessage(servers, topic, "test-10", System.currentTimeMillis() + 10L)
 
-    for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
+    for (version <- ApiKeys.LIST_OFFSETS.oldestVersion.toInt to ApiKeys.LIST_OFFSETS.latestVersion.toInt) {
       if (version == 0) {
         assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))

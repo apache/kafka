@@ -759,7 +759,7 @@ class ZkAdminManager(val config: KafkaConfig,
                 props.setProperty(op.key, value.toString)
               case ConfigDef.Type.LONG | ConfigDef.Type.INT =>
                 val epsilon = 1e-6
-                val intValue = if (key.`type` == ConfigDef.Type.LONG)
+                val intValue: Long = if (key.`type` == ConfigDef.Type.LONG)
                   (value + epsilon).toLong
                 else
                   (value + epsilon).toInt

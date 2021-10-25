@@ -2425,7 +2425,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def testDescribeClusterClusterAuthorizedOperationsWithoutDescribeCluster(quorum: String): Unit = {
     removeAllClientAcls()
 
-    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
+    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion.toInt to ApiKeys.DESCRIBE_CLUSTER.latestVersion.toInt) {
       testDescribeClusterClusterAuthorizedOperations(version.toShort, 0)
     }
   }
@@ -2445,7 +2445,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val expectedClusterAuthorizedOperations = Utils.to32BitField(
       acls.map(_.operation.code.asInstanceOf[JByte]).asJava)
 
-    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
+    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion.toInt to ApiKeys.DESCRIBE_CLUSTER.latestVersion.toInt) {
       testDescribeClusterClusterAuthorizedOperations(version.toShort, expectedClusterAuthorizedOperations)
     }
   }

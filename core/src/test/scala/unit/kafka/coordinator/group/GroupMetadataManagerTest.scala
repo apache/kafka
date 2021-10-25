@@ -2374,7 +2374,7 @@ class GroupMetadataManagerTest {
       minOneMessage = ArgumentMatchers.eq(true)))
       .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
     when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
-    when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some[Long](18))
+    when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some[Long](18L))
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     // Empty control batch should not have caused the load to fail

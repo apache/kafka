@@ -238,14 +238,14 @@ object ReassignPartitionsCommand extends Logging {
       executeAssignment(adminClient,
         opts.options.has(opts.additionalOpt),
         Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
-        opts.options.valueOf(opts.interBrokerThrottleOpt),
-        opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
-        opts.options.valueOf(opts.timeoutOpt))
+        opts.options.valueOf(opts.interBrokerThrottleOpt).longValue(),
+        opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt).longValue(),
+        opts.options.valueOf(opts.timeoutOpt).longValue())
     } else if (opts.options.has(opts.cancelOpt)) {
       cancelAssignment(adminClient,
         Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
         opts.options.has(opts.preserveThrottlesOpt),
-        opts.options.valueOf(opts.timeoutOpt))
+        opts.options.valueOf(opts.timeoutOpt).longValue())
     } else if (opts.options.has(opts.listOpt)) {
       listReassignments(adminClient)
     } else {
