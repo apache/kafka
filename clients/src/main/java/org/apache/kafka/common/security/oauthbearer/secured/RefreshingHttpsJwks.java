@@ -117,20 +117,6 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         };
     }
 
-    /**
-     * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
-     * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
-     *
-     * @param httpsJwks {@link HttpsJwks} instance from which to retrieve the JWKS based on
-     *                  the OAuth/OIDC standard
-     * @param refreshMs The number of milliseconds between refresh passes to connect
-     *                  to the OAuth/OIDC JWKS endpoint to retrieve the latest set
-     */
-
-    public RefreshingHttpsJwks(HttpsJwks httpsJwks, long refreshMs) {
-        this(Time.SYSTEM, httpsJwks, refreshMs);
-    }
-
     @Override
     public void init() throws IOException {
         try {
@@ -139,6 +125,9 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             List<JsonWebKey> localJWKs;
 
             try {
+                // This will trigger a call th HttpsJwks.refresh() and that will block the current
+                // thread. It's OK to do this in init() but we avoid blocking elsewhere as we're
+                // run in a network thread.
                 localJWKs = httpsJwks.getJsonWebKeys();
             } catch (JoseException e) {
                 throw new IOException("Could not refresh JWKS", e);
@@ -151,8 +140,10 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
                 refreshLock.writeLock().unlock();
             }
 
+            // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
+            // internally), we can delay our first invocation by refreshMs.
             refreshFuture = executorService.scheduleAtFixedRate(this::refresh,
-                0,
+                refreshMs,
                 refreshMs,
                 TimeUnit.MILLISECONDS);
 
@@ -226,8 +217,12 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         log.debug("timeBeforeNextRefresh: {}, RETRY_BACKOFF_MS: {}", timeBeforeNextRefresh, RETRY_BACKOFF_MS);
 
         // If the time left before the next scheduled refresh is less than the amount of time we
-        // have set aside for retries, log the fact and return. Don't worry, refreshInternal will
-        // be called again within a few seconds :)
+        // have set aside for retries, log the fact and return. Don't worry, this refresh method
+        // will still be called again within RETRY_BACKOFF_MS :)
+        //
+        // Note: timeBeforeNextRefresh is negative when we're in the midst of executing refresh
+        // in a scheduled fashion. ScheduledFuture.getDelay will reset *after* the method has
+        // completed.
         if (timeBeforeNextRefresh > 0 && timeBeforeNextRefresh < RETRY_BACKOFF_MS) {
             log.info("OAuth JWKS refresh does not have enough time before next scheduled refresh");
             return;
@@ -239,7 +234,8 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             List<JsonWebKey> localJWKs = retry.execute(() -> {
                 try {
                     log.debug("JWKS validation key calling refresh of {} starting", httpsJwks.getLocation());
-                    // Call the *actual* refresh implementation.
+                    // Call the *actual* refresh implementation that will more than likely issue
+                    // HTTP(S) calls over the network.
                     httpsJwks.refresh();
                     List<JsonWebKey> jwks = httpsJwks.getJsonWebKeys();
                     log.debug("JWKS validation key refresh of {} complete", httpsJwks.getLocation());
@@ -268,7 +264,8 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     public boolean maybeScheduleRefreshForMissingKeyId(String keyId) {
         if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
-            // Only grab the first N characters so that if the key ID is huge, we don't blow up.
+            // Only grab the first N characters so that if the key ID is huge, we don't blow up
+            // our memory if we try to cache large key IDs.
             int actualLength = keyId.length();
             String s = keyId.substring(0, MISSING_KEY_ID_MAX_KEY_LENGTH);
             String snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MISSING_KEY_ID_MAX_KEY_LENGTH, actualLength);

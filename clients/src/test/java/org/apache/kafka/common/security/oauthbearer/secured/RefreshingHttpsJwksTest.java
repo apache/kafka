@@ -22,37 +22,39 @@ import static org.apache.kafka.common.security.oauthbearer.secured.RefreshingHtt
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.jose4j.http.SimpleResponse;
 import org.jose4j.jwk.HttpsJwks;
-import org.jose4j.jwk.JsonWebKey;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
-    public static final int REFRESH_MS = 10000;
+    private static final int REFRESH_MS = 5000;
 
     /**
      * Test that a key not previously scheduled for refresh will be scheduled without a refresh.
      */
 
     @Test
-    public void test() throws Exception {
+    public void testBasicScheduleRefresh() throws Exception {
         String keyId = "abc123";
-        MockTime time = new MockTime();
-        HttpsJwks httpsJwks = mockHttpsJwks();
+        Time time = new MockTime();
+        HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
             refreshingHttpsJwks.init();
+            verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
-            verify(httpsJwks, times(0)).refresh();
+            verify(httpsJwks, times(1)).refresh();
         }
     }
 
@@ -64,8 +66,8 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
     @Test
     public void testScheduleRefreshForMissingKeyNoDelay() throws Exception {
         String keyId = "abc123";
-        MockTime time = new MockTime();
-        HttpsJwks httpsJwks = mockHttpsJwks();
+        Time time = new MockTime();
+        HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
             refreshingHttpsJwks.init();
@@ -86,26 +88,53 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         assertScheduleRefreshForMissingKeyWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS + 1, true);
     }
 
+    /**
+     * Test that a "long key" will not be looked up because the key ID is too long.
+     */
+
     @Test
     public void testLongKey() throws Exception {
         char[] keyIdChars = new char[MISSING_KEY_ID_MAX_KEY_LENGTH + 1];
         Arrays.fill(keyIdChars, '0');
         String keyId = new String(keyIdChars);
 
-        MockTime time = new MockTime();
-        HttpsJwks httpsJwks = mockHttpsJwks();
+        Time time = new MockTime();
+        HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
             refreshingHttpsJwks.init();
+            verify(httpsJwks, times(1)).refresh();
             assertFalse(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
-            verify(httpsJwks, times(0)).refresh();
+            verify(httpsJwks, times(1)).refresh();
+        }
+    }
+
+    /**
+     * Test that if we ask to load a missing key, and then we wait past the sleep time that it will
+     * call refresh to load the key.
+     */
+
+    @Test
+    public void testSecondaryRefreshAfterElapsedDelay() throws Exception {
+        String keyId = "abc123";
+        Time time = MockTime.SYSTEM;    // Unfortunately, we can't mock time here because the
+                                        // scheduled executor doesn't respect it.
+        HttpsJwks httpsJwks = spyHttpsJwks();
+
+        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+            refreshingHttpsJwks.init();
+            verify(httpsJwks, times(1)).refresh();
+            assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            time.sleep(REFRESH_MS + 1);
+            verify(httpsJwks, times(2)).refresh();
+            assertFalse(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
         }
     }
 
     private void assertScheduleRefreshForMissingKeyWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
         String keyId = "abc123";
-        MockTime time = new MockTime();
-        HttpsJwks httpsJwks = mockHttpsJwks();
+        Time time = new MockTime();
+        HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
             refreshingHttpsJwks.init();
@@ -115,21 +144,46 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
-    private HttpsJwks mockHttpsJwks() throws Exception {
-        return mockHttpsJwks(Collections.emptyList());
-    }
+    /**
+     * We *spy* (not *mock*) the {@link HttpsJwks} instance because we want to have it
+     * _partially mocked_ to determine if it's calling its internal refresh method. We want to
+     * make sure it *doesn't* do that when we call our getJsonWebKeys() method on
+     * {@link RefreshingHttpsJwks}.
+     */
 
-    private HttpsJwks mockHttpsJwks(List<JsonWebKey> objects) throws Exception {
-        HttpsJwks httpsJwks = mock(HttpsJwks.class);
-        when(httpsJwks.getJsonWebKeys()).thenReturn(objects);
-        when(httpsJwks.getLocation()).thenReturn("https://www.example.com");
-        return httpsJwks;
-    }
+    private HttpsJwks spyHttpsJwks() {
+        HttpsJwks httpsJwks = new HttpsJwks("https://www.example.com");
 
-    private JsonWebKey mockJsonWebKey(String keyId) {
-        JsonWebKey jwk = mock(JsonWebKey.class);
-        when(jwk.getKeyId()).thenReturn(keyId);
-        return jwk;
+        SimpleResponse simpleResponse = new SimpleResponse() {
+            @Override
+            public int getStatusCode() {
+                return 200;
+            }
+
+            @Override
+            public String getStatusMessage() {
+                return "OK";
+            }
+
+            @Override
+            public Collection<String> getHeaderNames() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public List<String> getHeaderValues(String name) {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public String getBody() {
+                return "{\"keys\": []}";
+            }
+        };
+
+        httpsJwks.setSimpleHttpGet(l -> simpleResponse);
+
+        return Mockito.spy(httpsJwks);
     }
 
 }
