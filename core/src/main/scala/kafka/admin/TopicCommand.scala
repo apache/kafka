@@ -22,7 +22,7 @@ import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
-import kafka.utils._
+import kafka.utils.{immutable=> _, _}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.CreatePartitionsOptions
 import org.apache.kafka.clients.admin.CreateTopicsOptions

@@ -25,13 +25,13 @@ class MockBrokerToControllerChannelManager(
   val client: MockClient,
   time: MockTime,
   controllerNodeProvider: ControllerNodeProvider,
-  controllerApiVersions: NodeApiVersions = NodeApiVersions.create(),
+  controllerApiVersionsParam: NodeApiVersions = NodeApiVersions.create(),
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
 ) extends BrokerToControllerChannelManager {
   private val unsentQueue = new java.util.ArrayDeque[BrokerToControllerQueueItem]()
 
-  client.setNodeApiVersions(controllerApiVersions)
+  client.setNodeApiVersions(controllerApiVersionsParam)
 
   override def start(): Unit = {}
 
@@ -49,7 +49,7 @@ class MockBrokerToControllerChannelManager(
   }
 
   override def controllerApiVersions(): Option[NodeApiVersions] = {
-    Some(controllerApiVersions)
+    Some(controllerApiVersionsParam)
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {

@@ -42,11 +42,11 @@ final class KafkaMetadataLog private (
   // Access to this object needs to be synchronized because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created. This object is also used to store any opened snapshot reader.
   snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
-  topicPartition: TopicPartition,
+  topicPartitionArg: TopicPartition,
   config: MetadataLogConfig
 ) extends ReplicatedLog with Logging {
 
-  this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=${config.nodeId}] "
+  this.logIdent = s"[MetadataLog partition=$topicPartitionArg, nodeId=${config.nodeId}] "
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -223,7 +223,7 @@ final class KafkaMetadataLog private (
    * Return the topic partition associated with the log.
    */
   override def topicPartition(): TopicPartition = {
-    topicPartition
+    topicPartitionArg
   }
 
   /**
