@@ -1210,7 +1210,6 @@ project(':clients') {
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testRuntimeOnly libs.jose4j
     testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
   }
@@ -1706,6 +1705,7 @@ project(':shell') {
     implementation project(':metadata')
     implementation project(':raft')
 
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
@@ -2382,6 +2382,7 @@ project(':connect:runtime') {
 
     implementation libs.slf4jApi
     implementation libs.log4j
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
