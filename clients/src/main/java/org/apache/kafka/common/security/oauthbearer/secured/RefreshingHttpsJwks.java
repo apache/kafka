@@ -290,7 +290,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
             // Although there's no limit on the length of the key ID, they're generally
             // "reasonably" short. If we have a very long key ID length, we're going to assume
-            // the JWT is malformed and we will not actually try to resolve the key.
+            // the JWT is malformed, and we will not actually try to resolve the key.
             //
             // In this case, let's prevent blowing out our memory in two ways:
             //

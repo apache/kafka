@@ -188,6 +188,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         init(accessTokenRetriever, accessTokenValidator);
     }
 
+    /*
+     * Package-visible for testing.
+     */
+
     void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
         this.accessTokenRetriever = accessTokenRetriever;
         this.accessTokenValidator = accessTokenValidator;
@@ -201,12 +205,12 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         isInitialized = true;
     }
 
+    /*
+     * Package-visible for testing.
+     */
+
     AccessTokenRetriever getAccessTokenRetriever() {
         return accessTokenRetriever;
-    }
-
-    AccessTokenValidator getAccessTokenValidator() {
-        return accessTokenValidator;
     }
 
     @Override

@@ -304,8 +304,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String formatAuthorizationHeader(String clientId, String clientSecret) {
-        clientId = sanitizeString("the token endpoint request client ID parameter ", clientId);
-        clientSecret = sanitizeString("the token endpoint request client secret paramemter", clientSecret);
+        clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
+        clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
 
         String s = String.format("%s:%s", clientId, clientSecret);
         String encoded = Base64.getUrlEncoder().encodeToString(Utils.utf8(s));
