@@ -156,7 +156,7 @@ abstract class QuorumTestHarness extends Logging {
 
   def zkConnect: String = s"127.0.0.1:$zkPort"
 
-  def zkConnectOrNull: String = if (isKRaftTest()) null else s"127.0.0.1:$zkPort"
+  def zkConnectOrNull: String = if (isKRaftTest()) null else zkConnect
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
 
@@ -191,7 +191,7 @@ abstract class QuorumTestHarness extends Logging {
     try {
       out = new PrintStream(stream)
       if (StorageTool.formatCommand(out, directories, metaProperties, false) != 0) {
-        throw new RuntimeException(out.toString())
+        throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")
     } finally {
@@ -248,9 +248,9 @@ abstract class QuorumTestHarness extends Logging {
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
           controllerQuorumVotersFuture.complete(Collections.singletonMap(1000,
-            new InetAddressSpec(new InetSocketAddress("localhost", port))));
+            new InetAddressSpec(new InetSocketAddress("localhost", port))))
         }
-      });
+      })
       controllerServer.startup()
       raftManager.startup()
       controllerServer.startup()

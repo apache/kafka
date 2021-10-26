@@ -30,17 +30,17 @@ class EmptyTestInfo extends TestInfo {
 }
 
 object TestInfoUtils {
-def isKRaft(testInfo: TestInfo): Boolean = {
-  if (testInfo.getDisplayName().contains("quorum=")) {
-    if (testInfo.getDisplayName().contains("quorum=kraft")) {
-      true
-    } else if (testInfo.getDisplayName().contains("quorum=zk")) {
-      false
+  def isKRaft(testInfo: TestInfo): Boolean = {
+    if (testInfo.getDisplayName().contains("quorum=")) {
+      if (testInfo.getDisplayName().contains("quorum=kraft")) {
+        true
+      } else if (testInfo.getDisplayName().contains("quorum=zk")) {
+        false
+      } else {
+        throw new RuntimeException(s"Unknown quorum value")
+      }
     } else {
-      throw new RuntimeException(s"Unknown quorum value")
+      false
     }
-  } else {
-    false
   }
-}
 }
