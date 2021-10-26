@@ -478,7 +478,7 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
-                "Number of partitions must be larger than 0.");
+                "Replication factor must be larger than 0.");
         } else if (topic.numPartitions() < -1 || topic.numPartitions() == 0) {
             return new ApiError(Errors.INVALID_PARTITIONS,
                 "Number of partitions was set to an invalid non-positive value.");
