@@ -292,8 +292,7 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
                             if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
-                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR
-                                        || response.error() == Errors.INCONSISTENT_TOPIC_ID) {
+                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
                                     metadata.requestUpdate();
                                 }
                                 return;
@@ -1363,6 +1362,9 @@ public class Fetcher<K, V> implements Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_ID) {
                 log.warn("Received unknown topic ID error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
+                log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);

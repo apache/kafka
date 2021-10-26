@@ -248,7 +248,6 @@ public class FetchResponse extends AbstractResponse {
                                                int sessionId,
                                                Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        boolean hasInconsistentTopicId = false;
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry = partIterator.next();
             FetchResponseData.PartitionData partitionData = entry.getValue();
@@ -256,9 +255,6 @@ public class FetchResponse extends AbstractResponse {
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
-            if (partitionData.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
-                hasInconsistentTopicId = true;
-            }
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
                 : topicResponseList.get(topicResponseList.size() - 1);
             if (matchingTopic(previousTopic, entry.getKey()))
@@ -273,11 +269,9 @@ public class FetchResponse extends AbstractResponse {
             }
         }
 
-        short errorCode = hasInconsistentTopicId ? Errors.INCONSISTENT_TOPIC_ID.code() : error.code();
-
         return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setErrorCode(errorCode)
+            .setErrorCode(error.code())
             .setSessionId(sessionId)
             .setResponses(topicResponseList);
     }

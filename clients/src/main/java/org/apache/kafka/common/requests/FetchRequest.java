@@ -361,7 +361,6 @@ public class FetchRequest extends AbstractRequest {
 
     // For versions < 13, builds the partitionData map using only the FetchRequestData.
     // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
-    // Throws UnknownTopicIdException for versions 13+ if the topic ID was unknown to the server.
     public Map<TopicIdPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         if (fetchData == null) {
             synchronized (this) {
@@ -394,7 +393,6 @@ public class FetchRequest extends AbstractRequest {
         return fetchData;
     }
 
-    // For versions 13+, throws UnknownTopicIdException if the topic ID was unknown to the server.
     public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
         if (toForget == null) {
             synchronized (this) {
@@ -406,9 +404,6 @@ public class FetchRequest extends AbstractRequest {
                             name = forgottenTopic.topic(); // can't be null
                         } else {
                             name = topicNames.get(forgottenTopic.topicId());
-                        }
-                        if (name == null) {
-                            throw new UnknownTopicIdException(String.format("Topic Id %s in FetchRequest was unknown to the server", forgottenTopic.topicId()));
                         }
                         forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
                     });

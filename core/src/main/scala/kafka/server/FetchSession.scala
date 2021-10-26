@@ -277,11 +277,6 @@ class FetchSession(val id: Int,
     val added = new TL
     val updated = new TL
     val removed = new TL
-    toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
-        removed.add(p)
-      }
-    }
     fetchData.forEach { (topicPart, reqData) =>
       val newCachedPart = new CachedPartition(topicPart.topicPartition, topicPart.topicId, reqData)
       val cachedPart = partitionMap.find(newCachedPart)
@@ -294,6 +289,11 @@ class FetchSession(val id: Int,
         // Update the topic name in place
           cachedPart.resolveUnknownName(topicPart.topicPartition.topic)
         updated.add(topicPart)
+      }
+    }
+    toForget.forEach { p =>
+      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
+        removed.add(p)
       }
     }
     (added, updated, removed)
@@ -414,14 +414,9 @@ class FullFetchContext(private val time: Time,
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
-    var hasInconsistentTopicIds = false
     def createNewSession: FetchSession.CACHE_MAP = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       updates.forEach { (part, respData) =>
-        if (respData.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
-          info(s"Session encountered an inconsistent topic ID for topicPartition $part.")
-          hasInconsistentTopicIds = true
-        }
         val reqData = fetchData.get(part)
         cachedPartitions.mustAdd(new CachedPartition(part.topicPartition, part.topicId, reqData, respData))
       }
@@ -429,13 +424,9 @@ class FullFetchContext(private val time: Time,
     }
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
         updates.size, usesTopicIds, () => createNewSession)
-    if (hasInconsistentTopicIds) {
-      FetchResponse.of(Errors.INCONSISTENT_TOPIC_ID, 0, responseSessionId, new FetchSession.RESP_MAP)
-    } else {
-      debug(s"Full fetch context with session id $responseSessionId returning " +
-        s"${partitionsToLogString(updates.keySet)}")
-      FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
-    }
+    debug(s"Full fetch context with session id $responseSessionId returning " +
+      s"${partitionsToLogString(updates.keySet)}")
+    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
   }
 }
 
@@ -528,24 +519,14 @@ class IncrementalFetchContext(private val time: Time,
           s"got ${session.epoch}.  Possible duplicate request.")
         FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP)
       } else {
-        var hasInconsistentTopicIds = false
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
-        // It will also set the top-level error to INCONSISTENT_TOPIC_ID if any partitions had this error.
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
         while (partitionIter.hasNext) {
-          val entry = partitionIter.next()
-          if (entry.getValue.errorCode() == Errors.INCONSISTENT_TOPIC_ID.code()) {
-            info(s"Incremental fetch session ${session.id} encountered an inconsistent topic ID for topicPartition ${entry.getKey}.")
-            hasInconsistentTopicIds = true
-          }
+          partitionIter.next()
         }
-        if (hasInconsistentTopicIds) {
-          FetchResponse.of(Errors.INCONSISTENT_TOPIC_ID, 0, session.id, new FetchSession.RESP_MAP)
-        } else {
-          debug(s"Incremental fetch context with session id ${session.id} returning " +
-            s"${partitionsToLogString(updates.keySet)}")
-          FetchResponse.of(Errors.NONE, 0, session.id, updates)
-        }
+        debug(s"Incremental fetch context with session id ${session.id} returning " +
+          s"${partitionsToLogString(updates.keySet)}")
+        FetchResponse.of(Errors.NONE, 0, session.id, updates)
       }
     }
   }
