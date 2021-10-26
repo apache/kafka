@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -151,6 +152,11 @@ public final class MetadataNodeManager implements AutoCloseable {
         return logListener;
     }
 
+    // VisibleForTesting
+    Data getData() {
+        return data;
+    }
+
     @Override
     public void close() throws Exception {
         queue.close();
@@ -182,7 +188,8 @@ public final class MetadataNodeManager implements AutoCloseable {
         });
     }
 
-    private void handleMessage(ApiMessage message) {
+    // VisibleForTesting
+    void handleMessage(ApiMessage message) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             handleCommitImpl(type, message);
@@ -291,6 +298,21 @@ public final class MetadataNodeManager implements AutoCloseable {
                 String name = topicsDirectory.file("name").contents();
                 data.root.rmrf("topics", name);
                 data.root.rmrf("topicIds", record.topicId().toString());
+                break;
+            }
+            case CLIENT_QUOTA_RECORD: {
+                ClientQuotaRecord record = (ClientQuotaRecord) message;
+                DirectoryNode configsDirectory =
+                    data.root.mkdirs("configs");
+                for (ClientQuotaRecord.EntityData entityData : record.entity()) {
+                    String entityType = entityData.entityType();
+                    String entityName = entityData.entityName();
+                    DirectoryNode entityDirectory = configsDirectory.mkdirs(entityType).mkdirs(entityName);
+                    if (record.remove())
+                        entityDirectory.rmrf(record.key());
+                    else
+                        entityDirectory.create(record.key()).setContents(record.value() + "");
+                }
                 break;
             }
             default:
