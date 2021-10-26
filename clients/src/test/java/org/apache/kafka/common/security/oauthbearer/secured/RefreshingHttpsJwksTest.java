@@ -40,6 +40,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
     private static final int REFRESH_MS = 5000;
 
+    private static final int RETRY_BACKOFF_MS = 50;
+
+    private static final int RETRY_BACKOFF_MAX_MS = 2000;
+
     /**
      * Test that a key not previously scheduled for refresh will be scheduled without a refresh.
      */
@@ -50,10 +54,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         Time time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
-            assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             verify(httpsJwks, times(1)).refresh();
         }
     }
@@ -64,15 +68,15 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      */
 
     @Test
-    public void testScheduleRefreshForMissingKeyNoDelay() throws Exception {
+    public void testMaybeExpediteRefreshNoDelay() throws Exception {
         String keyId = "abc123";
         Time time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
-            assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
-            assertFalse(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
         }
     }
 
@@ -82,10 +86,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      */
 
     @Test
-    public void testScheduleRefreshForMissingKeyDelays() throws Exception {
-        assertScheduleRefreshForMissingKeyWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS - 1, false);
-        assertScheduleRefreshForMissingKeyWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS, true);
-        assertScheduleRefreshForMissingKeyWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS + 1, true);
+    public void testMaybeExpediteRefreshDelays() throws Exception {
+        assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS - 1, false);
+        assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS, true);
+        assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS + 1, true);
     }
 
     /**
@@ -101,10 +105,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         Time time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
-            assertFalse(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             verify(httpsJwks, times(1)).refresh();
         }
     }
@@ -121,27 +125,31 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
                                         // scheduled executor doesn't respect it.
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
-            assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             time.sleep(REFRESH_MS + 1);
-            verify(httpsJwks, times(2)).refresh();
-            assertFalse(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            verify(httpsJwks, times(3)).refresh();
+            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
         }
     }
 
-    private void assertScheduleRefreshForMissingKeyWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
+    private void assertMaybeExpediteRefreshWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
         String keyId = "abc123";
         Time time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
-            assertTrue(refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             time.sleep(sleepDelay);
-            assertEquals(shouldBeScheduled, refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId));
+            assertEquals(shouldBeScheduled, refreshingHttpsJwks.maybeExpediteRefresh(keyId));
         }
+    }
+
+    private RefreshingHttpsJwks getRefreshingHttpsJwks(final Time time, final HttpsJwks httpsJwks) {
+        return new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS);
     }
 
     /**

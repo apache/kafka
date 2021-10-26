@@ -88,6 +88,8 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_AUDIENCE}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_ISSUER}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SCOPE_CLAIM_NAME}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_SUB_CLAIM_NAME}</li>
@@ -102,11 +104,11 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     /**
      * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
      * HTTP(S) calls ({@link RefreshingHttpsJwksVerificationKeyResolver}), we only want to create
-     * a new instance for each particular set of configuration. Because each of set of configuration
+     * a new instance for each particular set of configuration. Because each set of configuration
      * may have multiple instances, we want to reuse the single instance.
      */
 
-    private static final Map<VkrKey, CloseableVerificationKeyResolver> VKR_CACHE = new HashMap<>();
+    private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
     private CloseableVerificationKeyResolver verificationKeyResolver;
 
@@ -119,13 +121,11 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
         CloseableVerificationKeyResolver verificationKeyResolver;
 
-        // Here's the logic which keeps our VKRs down to a single instance.
-        synchronized (VKR_CACHE) {
-            VkrKey key = new VkrKey(configs, saslMechanism, moduleOptions);
-            verificationKeyResolver = VKR_CACHE.computeIfAbsent(key, k -> {
-                CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions);
-                return new RefCountingVkr(vkr);
-            });
+        // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
+        synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
+            VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, moduleOptions);
+            verificationKeyResolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(key, k ->
+                new RefCountingVerificationKeyResolve(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
@@ -207,17 +207,14 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
      * to keep a single instance per key.
      */
 
-    private static class VkrKey {
+    private static class VerificationKeyResolverKey {
 
         private final Map<String, ?> configs;
 
-        private final String saslMechanism;
-
         private final Map<String, Object> moduleOptions;
 
-        public VkrKey(Map<String, ?> configs, String saslMechanism, Map<String, Object> moduleOptions) {
+        public VerificationKeyResolverKey(Map<String, ?> configs, Map<String, Object> moduleOptions) {
             this.configs = configs;
-            this.saslMechanism = saslMechanism;
             this.moduleOptions = moduleOptions;
         }
 
@@ -231,33 +228,31 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 return false;
             }
 
-            VkrKey that = (VkrKey) o;
-            return configs.equals(that.configs) &&
-                saslMechanism.equals(that.saslMechanism) &&
-                moduleOptions.equals(that.moduleOptions);
+            VerificationKeyResolverKey that = (VerificationKeyResolverKey) o;
+            return configs.equals(that.configs) && moduleOptions.equals(that.moduleOptions);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(configs, saslMechanism, moduleOptions);
+            return Objects.hash(configs, moduleOptions);
         }
 
     }
 
     /**
-     * <code>RefCountingVkr</code> allows us to share a single
+     * <code>RefCountingVerificationKeyResolve</code> allows us to share a single
      * {@link CloseableVerificationKeyResolver} instance between multiple
      * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
      * appropriate number of times.
      */
 
-    private static class RefCountingVkr implements CloseableVerificationKeyResolver {
+    private static class RefCountingVerificationKeyResolve implements CloseableVerificationKeyResolver {
 
         private final CloseableVerificationKeyResolver delegate;
 
         private final AtomicInteger count = new AtomicInteger(0);
 
-        public RefCountingVkr(CloseableVerificationKeyResolver delegate) {
+        public RefCountingVerificationKeyResolve(CloseableVerificationKeyResolver delegate) {
             this.delegate = delegate;
         }
 

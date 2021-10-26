@@ -33,6 +33,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
@@ -100,13 +104,13 @@ public class OAuthCompatibilityTool {
             .type(Integer.class)
             .dest("readTimeoutMs")
             .help(SASL_LOGIN_READ_TIMEOUT_MS_DOC);
-        parser.addArgument("--retry-backoff-ms")
+        parser.addArgument("--login-retry-backoff-ms")
             .type(Long.class)
-            .dest("retryBackoffMs")
+            .dest("loginRetryBackoffMs")
             .help(SASL_LOGIN_RETRY_BACKOFF_MS_DOC);
-        parser.addArgument("--retry-backoff-max-ms")
+        parser.addArgument("--login-retry-backoff-max-ms")
             .type(Long.class)
-            .dest("retryBackoffMax")
+            .dest("loginRetryBackoffMax")
             .help(SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC);
         parser.addArgument("--scope-claim-name")
             .dest("scopeClaimName")
@@ -124,6 +128,14 @@ public class OAuthCompatibilityTool {
             .type(Long.class)
             .dest("jwksEndpointRefreshMs")
             .help(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC);
+        parser.addArgument("--jwks-endpoint-retry-backoff-max-ms")
+            .type(Long.class)
+            .dest("jwksEndpointRetryBackoffMaxMs")
+            .help(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC);
+        parser.addArgument("--jwks-endpoint-retry-backoff-ms")
+            .type(Long.class)
+            .dest("jwksEndpointRetryBackoffMs")
+            .help(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC);
         parser.addArgument("--clock-skew-seconds")
             .type(Integer.class)
             .dest("clockSkewSeconds")
@@ -207,13 +219,15 @@ public class OAuthCompatibilityTool {
         Map<String, Object> c = new HashMap<>();
         maybeAddInt(namespace, "connectTimeoutMs", c, SASL_LOGIN_CONNECT_TIMEOUT_MS);
         maybeAddInt(namespace, "readTimeoutMs", c, SASL_LOGIN_READ_TIMEOUT_MS);
-        maybeAddLong(namespace, "retryBackoffMs", c, SASL_LOGIN_RETRY_BACKOFF_MS);
-        maybeAddLong(namespace, "retryBackoffMax", c, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        maybeAddLong(namespace, "loginRetryBackoffMs", c, SASL_LOGIN_RETRY_BACKOFF_MS);
+        maybeAddLong(namespace, "loginRetryBackoffMax", c, SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         maybeAddString(namespace, "scopeClaimName", c, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         maybeAddString(namespace, "subClaimName", c, SASL_OAUTHBEARER_SUB_CLAIM_NAME);
         maybeAddString(namespace, "tokenEndpointUrl", c, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         maybeAddString(namespace, "jwksEndpointUrl", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         maybeAddLong(namespace, "jwksEndpdointRefreshMs", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
+        maybeAddLong(namespace, "jwksEndpdointRetryBackoffMaxMs", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
+        maybeAddLong(namespace, "jwksEndpdointRetryBackoffMs", c, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
         maybeAddInt(namespace, "clockSkewSeconds", c, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS);
         maybeAddStringList(namespace, "expectedAudience", c, SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
         maybeAddString(namespace, "expectedIssuer", c, SASL_OAUTHBEARER_EXPECTED_ISSUER);

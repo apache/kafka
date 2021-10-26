@@ -26,9 +26,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.kafka.common.utils.Time;
@@ -57,8 +57,6 @@ import org.slf4j.LoggerFactory;
  */
 
 public final class RefreshingHttpsJwks implements Initable, Closeable {
-
-    private static final long RETRY_BACKOFF_MS = 2000;
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -90,11 +88,13 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private final ScheduledExecutorService executorService;
 
-    private ScheduledFuture<?> refreshFuture;
-
     private final Time time;
 
     private final long refreshMs;
+
+    private final long refreshRetryBackoffMs;
+
+    private final long refreshRetryBackoffMaxMs;
 
     /**
      * Protects {@link #missingKeyIds} and {@link #jsonWebKeys}.
@@ -103,6 +103,12 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
 
     private final Map<String, Long> missingKeyIds;
+
+    /**
+     * Flag to prevent concurrent refresh invocations.
+     */
+
+    private final AtomicBoolean refreshInProgressFlag = new AtomicBoolean(false);
 
     /**
      * As mentioned in the comments for {@link #httpsJwks}, we cache the JWKS ourselves so that
@@ -118,20 +124,28 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
      * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
      *
-     * @param time      {@link Time} instance
-     * @param httpsJwks {@link HttpsJwks} instance from which to retrieve the JWKS based on
-     *                  the OAuth/OIDC standard
-     * @param refreshMs The number of milliseconds between refresh passes to connect
-     *                  to the OAuth/OIDC JWKS endpoint to retrieve the latest set
+     * @param time                     {@link Time} instance
+     * @param httpsJwks                {@link HttpsJwks} instance from which to retrieve the JWKS
+     *                                 based on the OAuth/OIDC standard
+     * @param refreshMs                The number of milliseconds between refresh passes to connect
+     *                                 to the OAuth/OIDC JWKS endpoint to retrieve the latest set
+     * @param refreshRetryBackoffMs    Time for delay after initial failed attempt to retrieve JWKS
+     * @param refreshRetryBackoffMaxMs Maximum time to retrieve JWKS
      */
 
-    public RefreshingHttpsJwks(Time time, HttpsJwks httpsJwks, long refreshMs) {
+    public RefreshingHttpsJwks(Time time,
+        HttpsJwks httpsJwks,
+        long refreshMs,
+        long refreshRetryBackoffMs,
+        long refreshRetryBackoffMaxMs) {
         if (refreshMs <= 0)
             throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
 
         this.httpsJwks = httpsJwks;
         this.time = time;
         this.refreshMs = refreshMs;
+        this.refreshRetryBackoffMs = refreshRetryBackoffMs;
+        this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
         this.executorService = Executors.newSingleThreadScheduledExecutor();
         this.missingKeyIds = new LinkedHashMap<String, Long>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
             @Override
@@ -163,7 +177,9 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
             // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
             // internally), we can delay our first invocation by refreshMs.
-            refreshFuture = executorService.scheduleAtFixedRate(this::refresh,
+            //
+            // Note: we refer to this as a _scheduled_ refresh.
+            executorService.scheduleAtFixedRate(this::refresh,
                 refreshMs,
                 refreshMs,
                 TimeUnit.MILLISECONDS);
@@ -200,7 +216,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     /**
      * Our implementation avoids the blocking call within {@link HttpsJwks#refresh()} that is
      * sometimes called internal to {@link HttpsJwks#getJsonWebKeys()}. We want to avoid any
-     * blocking I/O is this code is running in the authentication path on the Kafka network thread.
+     * blocking I/O as this code is running in the authentication path on the Kafka network thread.
      *
      * The list may be stale up to {@link #refreshMs}.
      *
@@ -227,34 +243,33 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     }
 
     /**
-     * Internal method that will refresh the cache in a background thread.
+     * <p>
+     * <code>refresh</code> is an internal method that will refresh the JWKS cache and is
+     * invoked in one of two ways:
      *
-     * This method may be called as part of the <i>normally</i>-scheduled refresh call
-     * (via {@link #executorService}, but it may have
+     * <ol>
+     *     <li>Scheduled</li>
+     *     <li>Expedited</li>
+     * </ol>
+     * </p>
+     *
+     * <p>
+     * The <i>scheduled</i> refresh is scheduled in {@link #init()} and runs every
+     * {@link #refreshMs} milliseconds. An <i>expedited</i> refresh is performed when an
+     * incoming JWT refers to a key ID that isn't in our JWKS cache ({@link #jsonWebKeys})
+     * and we try to perform a refresh sooner than the next scheduled refresh.
+     * </p>
      */
 
     private void refresh() {
-        // How much time (in milliseconds) do we have before the next refresh is scheduled to
-        // occur? This value will [..refreshMs]. Every time a scheduled refresh occurs, the
-        // value of refreshFuture is reset to refreshMs and works down to 0.
-        long timeBeforeNextRefresh = refreshFuture.getDelay(TimeUnit.MILLISECONDS);
-        log.debug("timeBeforeNextRefresh: {}, RETRY_BACKOFF_MS: {}", timeBeforeNextRefresh, RETRY_BACKOFF_MS);
-
-        // If the time left before the next scheduled refresh is less than the amount of time we
-        // have set aside for retries, log the fact and return. Don't worry, this refresh method
-        // will still be called again within RETRY_BACKOFF_MS :)
-        //
-        // Note: timeBeforeNextRefresh is negative when we're in the midst of executing refresh
-        // in a scheduled fashion. ScheduledFuture.getDelay will reset *after* the method has
-        // completed.
-        if (timeBeforeNextRefresh > 0 && timeBeforeNextRefresh < RETRY_BACKOFF_MS) {
-            log.info("OAuth JWKS refresh does not have enough time before next scheduled refresh");
+        if (!refreshInProgressFlag.compareAndSet(false, true)) {
+            log.debug("OAuth JWKS refresh is already in progress; ignoring concurrent refresh");
             return;
         }
 
         try {
             log.info("OAuth JWKS refresh of {} starting", httpsJwks.getLocation());
-            Retry<List<JsonWebKey>> retry = new Retry<>(RETRY_BACKOFF_MS, timeBeforeNextRefresh);
+            Retry<List<JsonWebKey>> retry = new Retry<>(refreshRetryBackoffMs, refreshRetryBackoffMaxMs);
             List<JsonWebKey> localJWKs = retry.execute(() -> {
                 try {
                     log.debug("JWKS validation key calling refresh of {} starting", httpsJwks.getLocation());
@@ -283,10 +298,31 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
             log.info("OAuth JWKS refresh of {} complete", httpsJwks.getLocation());
         } catch (ExecutionException e) {
             log.warn("OAuth JWKS refresh of {} encountered an error; not updating local JWKS cache", httpsJwks.getLocation(), e);
+        } finally {
+            refreshInProgressFlag.set(false);
         }
     }
 
-    public boolean maybeScheduleRefreshForMissingKeyId(String keyId) {
+    /**
+     * <p>
+     * <code>maybeExpediteRefresh</code> is a public method that will trigger a refresh of
+     * the JWKS cache if all of the following conditions are met:
+     *
+     * <ul>
+     *     <li>The given <code>keyId</code> parameter is &lte; the
+     *     {@link #MISSING_KEY_ID_MAX_KEY_LENGTH}</li>
+     *     <li>The key isn't in the process of being expedited already</li>
+     * </ul>
+     *
+     * <p>
+     * This <i>expedited</i> refresh is scheduled immediately.
+     * </p>
+     *
+     * @param keyId JWT key ID
+     * @return <code>true</code> if an expedited refresh was scheduled, <code>false</code> otherwise
+     */
+
+    public boolean maybeExpediteRefresh(String keyId) {
         if (keyId.length() > MISSING_KEY_ID_MAX_KEY_LENGTH) {
             // Although there's no limit on the length of the key ID, they're generally
             // "reasonably" short. If we have a very long key ID length, we're going to assume

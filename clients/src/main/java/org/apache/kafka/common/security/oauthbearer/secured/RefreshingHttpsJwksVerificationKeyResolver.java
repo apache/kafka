@@ -133,7 +133,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
             String keyId = jws.getKeyIdHeaderValue();
 
-            if (refreshingHttpsJwks.maybeScheduleRefreshForMissingKeyId(keyId))
+            if (refreshingHttpsJwks.maybeExpediteRefresh(keyId))
                 log.debug("Refreshing JWKs from {} as no suitable verification key for JWS w/ header {} was found in {}", refreshingHttpsJwks.getLocation(), jws.getHeaders().getFullHeaderAsJsonString(), jwks);
 
             StringBuilder sb = new StringBuilder();
