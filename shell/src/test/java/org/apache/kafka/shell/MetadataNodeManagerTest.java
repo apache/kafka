@@ -17,7 +17,6 @@
 
 package org.apache.kafka.shell;
 
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
@@ -40,6 +39,7 @@ import java.util.Arrays;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+
 
 public class MetadataNodeManagerTest {
 
@@ -264,16 +264,30 @@ public class MetadataNodeManagerTest {
         metadataNodeManager.handleMessage(record);
 
         assertEquals("1000.0",
-            metadataNodeManager.getData().root().directory("configs", "user", "kraft").file("producer_byte_rate").contents());
-        assertEquals("1000.0",
-            metadataNodeManager.getData().root().directory("configs", "client", "kstream").file("producer_byte_rate").contents());
+            metadataNodeManager.getData().root().directory("client-quotas",
+                "client", "kstream",
+                "user", "kraft").file("producer_byte_rate").contents());
 
         metadataNodeManager.handleMessage(record.setRemove(true));
 
         assertFalse(
-            metadataNodeManager.getData().root().directory("configs", "user", "kraft").children().containsKey("producer_byte_rate"));
-        assertFalse(
-            metadataNodeManager.getData().root().directory("configs", "client", "kstream").children().containsKey("producer_byte_rate"));
+            metadataNodeManager.getData().root().directory("client-quotas",
+                "client", "kstream",
+                "user", "kraft").children().containsKey("producer_byte_rate"));
 
+        record = new ClientQuotaRecord()
+            .setEntity(Arrays.asList(
+                new ClientQuotaRecord.EntityData()
+                    .setEntityType("user")
+                    .setEntityName(null)
+            ))
+            .setKey("producer_byte_rate")
+            .setValue(2000.0);
+
+        metadataNodeManager.handleMessage(record);
+
+        assertEquals("2000.0",
+            metadataNodeManager.getData().root().directory("client-quotas",
+                "user", "<default>").file("producer_byte_rate").contents());
     }
 }
