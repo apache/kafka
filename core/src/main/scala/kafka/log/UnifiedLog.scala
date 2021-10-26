@@ -1504,6 +1504,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Flush all local log segments
+   * We have to pass logEngOffset + 1 to the `def flush(offset: Long): Unit` function to flush empty
+   * active segments, which is important to make sure we don't lose logEndOffset during shutdown.
    */
   def flush(): Unit = flush(logEndOffset + 1)
 
