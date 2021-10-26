@@ -221,7 +221,7 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * The connection to the cluster is bootstrapped by specifying a list of one or more brokers to contact using the
- * configuration {@code >bootstrap.servers}. This list is just used to discover the rest of the brokers in the
+ * configuration {@code bootstrap.servers}. This list is just used to discover the rest of the brokers in the
  * cluster and need not be an exhaustive list of servers in the cluster (though you may want to specify more than one in
  * case there are servers down when the client is connecting).
  * <p>
