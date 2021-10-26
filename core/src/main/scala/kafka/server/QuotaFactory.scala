@@ -91,7 +91,8 @@ object QuotaFactory extends Logging {
   def clientConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds,
+      quotaValueMetricEnable = cfg.clientQuotaMetricValueEnable
     )
   }
 
