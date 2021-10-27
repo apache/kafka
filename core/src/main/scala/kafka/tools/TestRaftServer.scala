@@ -35,6 +35,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
+import org.apache.kafka.controller.MetadataVersions
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -78,7 +79,8 @@ class TestRaftServer(
 
     val metaProperties = MetaProperties(
       clusterId = Uuid.ZERO_UUID.toString,
-      nodeId = config.nodeId
+      nodeId = config.nodeId,
+      initialMetadataVersion = MetadataVersions.latest().version()
     )
 
     raftManager = new KafkaRaftManager[Array[Byte]](

@@ -44,9 +44,9 @@ public class FeaturesImageTest {
 
     static {
         Map<String, VersionRange> map1 = new HashMap<>();
-        map1.put("foo", new VersionRange((short) 1, (short) 2));
-        map1.put("bar", new VersionRange((short) 1, (short) 1));
-        map1.put("baz", new VersionRange((short) 1, (short) 8));
+        map1.put("foo", VersionRange.of((short) 1, (short) 2));
+        map1.put("bar", VersionRange.of((short) 1, (short) 1));
+        map1.put("baz", VersionRange.of((short) 1, (short) 8));
         IMAGE1 = new FeaturesImage(map1);
 
         DELTA1_RECORDS = new ArrayList<>();
@@ -62,7 +62,7 @@ public class FeaturesImageTest {
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<String, VersionRange> map2 = new HashMap<>();
-        map2.put("foo", new VersionRange((short) 1, (short) 3));
+        map2.put("foo", VersionRange.of((short) 1, (short) 3));
         IMAGE2 = new FeaturesImage(map2);
     }
 

@@ -17,10 +17,11 @@
 
 package kafka.server
 
+import kafka.api.KAFKA_3_1_IV1
+
 import java.util
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
@@ -36,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
+import org.apache.kafka.controller.{Controller, MetadataVersion, MetadataVersions, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.VersionRange
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -71,7 +72,9 @@ class ControllerServer(
   var socketServer: SocketServer = null
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var controller: Controller = null
-  val supportedFeatures: Map[String, VersionRange] = Map()
+  // TODO define this map elsewhere
+  val supportedFeatures: Map[String, VersionRange] = Map(
+    MetadataVersion.FEATURE_NAME -> VersionRange.of(MetadataVersions.V1.version(), MetadataVersions.latest().version()))
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -149,17 +152,30 @@ class ControllerServer(
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+
+      val initialMetadataVersion = config.interBrokerProtocolVersion match {
+        case KAFKA_3_1_IV1 =>
+          MetadataVersions.of(metaProperties.initialMetadataVersion)
+        case ibp if ibp < KAFKA_3_1_IV1 =>
+          MetadataVersions.UNSUPPORTED
+        case ibp if ibp > KAFKA_3_1_IV1 =>
+          throw new ConfigException("Cannot run KRaft mode with IBP greater than 3.1-IV1")
+        case _ => throw new IllegalStateException
+      }
+
       controller = new QuorumController.Builder(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
         setRaftClient(raftManager.client).
+        setSupportedFeatures(supportedFeatures.asJava).
         setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
           TimeUnit.MILLISECONDS)).
         setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
+        setInitialMetadataVersion(initialMetadataVersion).
         build()
 
 

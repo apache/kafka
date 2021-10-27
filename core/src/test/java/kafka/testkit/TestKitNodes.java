@@ -20,6 +20,7 @@ package kafka.testkit;
 import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.controller.MetadataVersions;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -132,11 +133,11 @@ public class TestKitNodes {
     }
 
     public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
+        return MetaProperties.apply(clusterId.toString(), id, MetadataVersions.latest().version());
     }
 
     public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
+        return MetaProperties.apply(clusterId.toString(), id, MetadataVersions.latest().version());
     }
 
     public ListenerName interBrokerListenerName() {

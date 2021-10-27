@@ -60,14 +60,14 @@ public class ClusterImageTest {
             1000,
             Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 3)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             true));
         map1.put(1, new BrokerRegistration(1,
             1001,
             Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 3)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             false));
         map1.put(2, new BrokerRegistration(2,
@@ -96,14 +96,14 @@ public class ClusterImageTest {
             1000,
             Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 3)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             false));
         map2.put(1, new BrokerRegistration(1,
             1001,
             Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", new VersionRange((short) 1, (short) 3)),
+            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
             true));
         IMAGE2 = new ClusterImage(map2);

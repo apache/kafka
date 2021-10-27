@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.controller.MetadataVersion;
 import org.apache.kafka.metadata.VersionRange;
 
 import java.util.HashMap;
@@ -35,12 +36,18 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<VersionRange>> changes = new HashMap<>();
 
+    private Optional<VersionRange> metadataVersionChange = Optional.empty();
+
     public FeaturesDelta(FeaturesImage image) {
         this.image = image;
     }
 
     public Map<String, Optional<VersionRange>> changes() {
         return changes;
+    }
+
+    public Optional<VersionRange> metadataVersionChange() {
+        return metadataVersionChange;
     }
 
     public void finishSnapshot() {
@@ -52,8 +59,11 @@ public final class FeaturesDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        changes.put(record.name(), Optional.of(
-            new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel())));
+        VersionRange versionRange = VersionRange.of(record.minFeatureLevel(), record.maxFeatureLevel());
+        changes.put(record.name(), Optional.of(versionRange));
+        if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+            metadataVersionChange = Optional.of(versionRange);
+        }
     }
 
     public void replay(RemoveFeatureLevelRecord record) {

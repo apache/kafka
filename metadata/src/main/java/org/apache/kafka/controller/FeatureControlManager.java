@@ -47,15 +47,21 @@ public class FeatureControlManager {
      */
     private final Map<String, VersionRange> supportedFeatures;
 
+    private final MetadataVersionProvider metadataVersionProvider;
     /**
      * Maps feature names to finalized version ranges.
      */
     private final TimelineHashMap<String, VersionRange> finalizedVersions;
 
+    private final Map<String, FeatureLevelListener> listeners;
+
     FeatureControlManager(Map<String, VersionRange> supportedFeatures,
-                          SnapshotRegistry snapshotRegistry) {
+                          SnapshotRegistry snapshotRegistry,
+                          MetadataVersionProvider metadataVersionProvider) {
         this.supportedFeatures = supportedFeatures;
+        this.metadataVersionProvider = metadataVersionProvider;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.listeners = new HashMap<>();
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -71,6 +77,15 @@ public class FeatureControlManager {
         return ControllerResult.atomicOf(records, results);
     }
 
+    void register(String listenerName, FeatureLevelListener listener) {
+        this.listeners.putIfAbsent(listenerName, listener);
+    }
+
+    boolean canSupportVersion(String featureName, VersionRange versionRange) {
+        VersionRange localRange = supportedFeatures.get(featureName);
+        return localRange != null && localRange.contains(versionRange);
+    }
+
     private ApiError updateFeature(String featureName,
                                    VersionRange newRange,
                                    boolean downgradeable,
@@ -84,13 +99,12 @@ public class FeatureControlManager {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The upper value for the new range cannot be less than 1.");
         }
-        VersionRange localRange = supportedFeatures.get(featureName);
-        if (localRange == null || !localRange.contains(newRange)) {
+
+        if (!canSupportVersion(featureName, newRange)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The controller does not support the given feature range.");
         }
-        for (Entry<Integer, Map<String, VersionRange>> brokerEntry :
-            brokerFeatures.entrySet()) {
+        for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokerFeatures.entrySet()) {
             VersionRange brokerRange = brokerEntry.getValue().get(featureName);
             if (brokerRange == null || !brokerRange.contains(newRange)) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -109,7 +123,7 @@ public class FeatureControlManager {
         records.add(new ApiMessageAndVersion(
             new FeatureLevelRecord().setName(featureName).
                 setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
-            FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+                metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
         return ApiError.NONE;
     }
 
@@ -123,7 +137,9 @@ public class FeatureControlManager {
 
     public void replay(FeatureLevelRecord record) {
         finalizedVersions.put(record.name(),
-            new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel()));
+                VersionRange.of(record.minFeatureLevel(), record.maxFeatureLevel()));
+        listeners.values().forEach(listener ->
+            listener.handle(record.name(), record.minFeatureLevel(), record.maxFeatureLevel()));
     }
 
     class FeatureControlIterator implements Iterator<List<ApiMessageAndVersion>> {

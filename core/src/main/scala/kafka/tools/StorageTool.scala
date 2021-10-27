@@ -19,13 +19,13 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-
 import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawMetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.controller.MetadataVersions
 
 import scala.collection.mutable
 
@@ -198,7 +198,7 @@ object StorageTool extends Logging {
         s"does not appear to be a valid UUID: ${e.getMessage}")
     }
     require(config.nodeId >= 0, s"The node.id must be set to a non-negative integer.")
-    new MetaProperties(effectiveClusterId.toString, config.nodeId)
+    new MetaProperties(effectiveClusterId.toString, config.nodeId, MetadataVersions.latest().version())
   }
 
   def formatCommand(stream: PrintStream,

@@ -31,7 +31,7 @@ public class VersionRangeTest {
         assertTrue(a >= Short.MIN_VALUE);
         assertTrue(b <= Short.MAX_VALUE);
         assertTrue(b >= Short.MIN_VALUE);
-        return new VersionRange((short) a, (short) b);
+        return VersionRange.of((short) a, (short) b);
     }
 
     @Test

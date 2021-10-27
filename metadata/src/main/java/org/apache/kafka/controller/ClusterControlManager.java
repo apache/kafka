@@ -111,6 +111,8 @@ public class ClusterControlManager {
      */
     private final ReplicaPlacer replicaPlacer;
 
+    private final MetadataVersionProvider metadataVersionProvider;
+
     /**
      * Maps broker IDs to broker registrations.
      */
@@ -131,12 +133,14 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacer replicaPlacer) {
+                          ReplicaPlacer replicaPlacer,
+                          MetadataVersionProvider metadataVersionProvider) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
         this.replicaPlacer = replicaPlacer;
+        this.metadataVersionProvider = metadataVersionProvider;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -212,7 +216,7 @@ public class ClusterControlManager {
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             Optional<VersionRange> finalized = finalizedFeatures.map().get(feature.name());
             if (finalized.isPresent()) {
-                if (!finalized.get().contains(new VersionRange(feature.minSupportedVersion(),
+                if (!finalized.get().intersects(VersionRange.of(feature.minSupportedVersion(),
                         feature.maxSupportedVersion()))) {
                     throw new UnsupportedVersionException("Unable to register because " +
                         "the broker has an unsupported version of " + feature.name());
@@ -232,7 +236,7 @@ public class ClusterControlManager {
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record,
-            REGISTER_BROKER_RECORD.highestSupportedVersion()));
+            metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -246,7 +250,7 @@ public class ClusterControlManager {
         }
         Map<String, VersionRange> features = new HashMap<>();
         for (BrokerFeature feature : record.features()) {
-            features.put(feature.name(), new VersionRange(
+            features.put(feature.name(), VersionRange.of(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
         // Update broker registrations.
@@ -397,7 +401,7 @@ public class ClusterControlManager {
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
                 setFenced(registration.fenced()),
-                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
+                    metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
             return batch;
         }
     }

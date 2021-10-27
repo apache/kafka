@@ -17,12 +17,13 @@
 
 package kafka.server
 
+import kafka.api.KAFKA_3_1_IV1
+
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 import java.net.InetAddress
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -32,8 +33,10 @@ import kafka.network.SocketServer
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, MetadataVersionManager, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.snapshot.SnapshotWriter
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
@@ -142,10 +145,6 @@ class BrokerServer(
 
   private var _brokerTopicStats: BrokerTopicStats = null
 
-  val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
-
-  val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
-
   val clusterId: String = metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
@@ -219,6 +218,18 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
+
+      val brokerFeatures: BrokerFeatures = config.interBrokerProtocolVersion match {
+        case KAFKA_3_1_IV1 =>
+          BrokerFeatures.createDefault()
+        case ibp if ibp < KAFKA_3_1_IV1 =>
+          BrokerFeatures.createEmpty()
+        case ibp if ibp > KAFKA_3_1_IV1 =>
+          throw new ConfigException("Cannot run KRaft mode with IBP greater than 3.1-IV1")
+        case _ => throw new IllegalStateException
+      }
+
+      val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
@@ -318,10 +329,16 @@ class BrokerServer(
           setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
           setSecurityProtocol(ep.securityProtocol.id))
       }
+
+      val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
+        case (k: String, v: SupportedVersionRange) =>
+          k -> VersionRange.of(v.min, v.max)
+      }.asJava
+
       lifecycleManager.start(() => metadataListener.highestMetadataOffset(),
         BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
           "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
-        metaProps.clusterId, networkListeners, supportedFeatures)
+        metaProps.clusterId, networkListeners, featuresRemapped)
 
       // Register a listener with the Raft layer to receive metadata event notifications
       raftManager.register(metadataListener)
@@ -382,10 +399,11 @@ class BrokerServer(
       // Block until we've caught up with the latest metadata from the controller quorum.
       lifecycleManager.initialCatchUpFuture.get()
 
+      val metadataVersion = new MetadataVersionManager()
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config, metadataCache,
         logManager, replicaManager, groupCoordinator, transactionCoordinator,
-        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap)
+        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap, metadataVersion)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

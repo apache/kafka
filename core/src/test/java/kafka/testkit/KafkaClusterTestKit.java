@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
+import org.apache.kafka.controller.MetadataVersions;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -168,7 +169,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("controller%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
@@ -220,7 +221,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),

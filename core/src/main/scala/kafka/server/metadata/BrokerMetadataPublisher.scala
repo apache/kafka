@@ -98,7 +98,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               featureCache: FinalizedFeatureCache,
-                              dynamicConfigHandlers: Map[String, ConfigHandler]) extends MetadataPublisher with Logging {
+                              dynamicConfigHandlers: Map[String, ConfigHandler],
+                              metadataVersion: MetadataVersionManager) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -133,6 +134,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, newHighestMetadataOffset)
+        metadataVersion.update(featuresDelta, newHighestMetadataOffset)
       }
 
       // Apply topic deltas.

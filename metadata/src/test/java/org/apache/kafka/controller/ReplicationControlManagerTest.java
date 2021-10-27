@@ -118,7 +118,7 @@ public class ReplicationControlManagerTest {
         final MockRandom random = new MockRandom();
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, BROKER_SESSION_TIMEOUT_MS,
-            new StripedReplicaPlacer(random));
+            new StripedReplicaPlacer(random), MetadataVersions::latest);
         final ControllerMetrics metrics = new MockControllerMetrics();
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap());

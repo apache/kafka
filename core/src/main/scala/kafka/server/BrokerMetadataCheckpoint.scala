@@ -20,11 +20,11 @@ package kafka.server
 import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
-
 import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.controller.MetadataVersions
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -34,6 +34,7 @@ object RawMetaProperties {
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
   val VersionKey = "version"
+  val InitialMetadataVersion = "init.metadata.version"
 }
 
 class RawMetaProperties(val props: Properties = new Properties()) {
@@ -70,6 +71,14 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     props.setProperty(VersionKey, ver.toString)
   }
 
+  def initialMetadataVersion: Short = {
+    intValue(InitialMetadataVersion).map(_.shortValue).getOrElse(MetadataVersions.latest().version())
+  }
+
+  def initialMetadataVersion_=(metaVer: Int): Unit = {
+    props.setProperty(InitialMetadataVersion, metaVer.toString)
+  }
+
   def requireVersion(expectedVersion: Int): Unit = {
     if (version != expectedVersion) {
       throw new RuntimeException(s"Expected version $expectedVersion, but got "+
@@ -98,7 +107,7 @@ object MetaProperties {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
-    new MetaProperties(clusterId, nodeId)
+    new MetaProperties(clusterId, nodeId, properties.initialMetadataVersion)
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -126,17 +135,19 @@ case class ZkMetaProperties(
 case class MetaProperties(
   clusterId: String,
   nodeId: Int,
+  initialMetadataVersion: Short = MetadataVersions.latest().version()
 ) {
   def toProperties: Properties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
+    properties.initialMetadataVersion = initialMetadataVersion
     properties.props
   }
 
   override def toString: String  = {
-    s"MetaProperties(clusterId=$clusterId, nodeId=$nodeId)"
+    s"MetaProperties(clusterId=$clusterId, nodeId=$nodeId, initialMetadataVersion=$initialMetadataVersion)"
   }
 }
 

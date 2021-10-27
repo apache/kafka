@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.controller.{MetadataVersion, MetadataVersions}
 
 import scala.jdk.CollectionConverters._
 
@@ -72,7 +72,14 @@ object BrokerFeatures extends Logging {
   def createDefault(): BrokerFeatures = {
     // The arguments are currently empty, but, in the future as we define features we should
     // populate the required values here.
-    new BrokerFeatures(emptySupportedFeatures)
+    val supportedFeatures = Features.supportedFeatures(
+      java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+        new SupportedVersionRange(MetadataVersions.V1.version(), MetadataVersions.latest().version())))
+    new BrokerFeatures(supportedFeatures)
+  }
+
+  def createEmpty(): BrokerFeatures = {
+    new BrokerFeatures(Features.emptySupportedFeatures())
   }
 
   /**
