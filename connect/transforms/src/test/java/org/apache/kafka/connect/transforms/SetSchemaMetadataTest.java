@@ -20,6 +20,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SetSchemaMetadataTest {
     private final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
@@ -46,6 +48,33 @@ public class SetSchemaMetadataTest {
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
         assertEquals("foo", updatedRecord.valueSchema().name());
+    }
+
+    @Test
+    public void schemaNameUpdateWithSchemaNamespaceAppend() {
+        final Map<String, String> props = new HashMap<>();
+        props.put("schema.namespace", "foo.bar");
+        props.put("schema.name", "baz");
+        xform.configure(props);
+        final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+        assertEquals("foo.bar.baz", updatedRecord.valueSchema().name());
+    }
+
+    @Test
+    public void schemaNamespaceAppend() {
+        xform.configure(Collections.singletonMap("schema.namespace", "foo.bar"));
+        Schema schema = SchemaBuilder.struct().name("baz").build();
+        final SinkRecord record = new SinkRecord("", 0, null, null, schema, null, 0);
+        final SinkRecord updatedRecord = xform.apply(record);
+        assertEquals("foo.bar.baz", updatedRecord.valueSchema().name());
+    }
+
+    @Test
+    public void schemaNamespaceAppendWithMissingSchemaName() {
+        xform.configure(Collections.singletonMap("schema.namespace", "foo.bar"));
+        final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
+        assertThrows(DataException.class, () -> xform.apply(record));
     }
 
     @Test
@@ -73,7 +102,24 @@ public class SetSchemaMetadataTest {
     }
 
     @Test
-    public void schemaNameAndVersionUpdateWithStruct() {
+    public void schemaNameWithNamespaceAndVersionUpdate() {
+        final Map<String, String> props = new HashMap<>();
+        props.put("schema.namespace", "foo.bar");
+        props.put("schema.name", "baz");
+        props.put("schema.version", "42");
+
+        xform.configure(props);
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
+
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo.bar.baz", updatedRecord.valueSchema().name());
+        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+    }
+
+    @Test
+    public void schemaNameWithNamespaceAndVersionUpdateWithStruct() {
         final String fieldName1 = "f1";
         final String fieldName2 = "f2";
         final String fieldValue1 = "value1";
@@ -86,7 +132,8 @@ public class SetSchemaMetadataTest {
         final Struct value = new Struct(schema).put(fieldName1, fieldValue1).put(fieldName2, fieldValue2);
 
         final Map<String, String> props = new HashMap<>();
-        props.put("schema.name", "foo");
+        props.put("schema.namespace", "foo.bar");
+        props.put("schema.name", "baz");
         props.put("schema.version", "42");
         xform.configure(props);
 
@@ -94,7 +141,7 @@ public class SetSchemaMetadataTest {
 
         final SinkRecord updatedRecord = xform.apply(record);
 
-        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals("foo.bar.baz", updatedRecord.valueSchema().name());
         assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
 
         // Make sure the struct's schema and fields all point to the new schema
@@ -131,6 +178,7 @@ public class SetSchemaMetadataTest {
         assertSame(value, updatedValue);
     }
 
+    @SuppressWarnings("ConstantConditions")
     @Test
     public void updateSchemaOfNull() {
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(null, Schema.INT32_SCHEMA);
