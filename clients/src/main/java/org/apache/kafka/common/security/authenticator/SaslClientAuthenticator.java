@@ -53,7 +53,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import javax.security.auth.callback.CallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient;
 
 import javax.security.auth.Subject;
@@ -220,13 +219,11 @@ public class SaslClientAuthenticator implements Authenticator {
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
                 SaslClient retvalSaslClient = null;
-                if("OAUTHBEARER".equalsIgnoreCase(mechanism))
-                {
-	                OAuthBearerSaslClient.OAuthBearerSaslClientFactory ofactory = new OAuthBearerSaslClient.OAuthBearerSaslClientFactory();
-	                retvalSaslClient = ofactory.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
-                }else
-                {              
-                	retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                if ("OAUTHBEARER".equalsIgnoreCase(mechanism)) {
+                    OAuthBearerSaslClient.OAuthBearerSaslClientFactory ofactory = new OAuthBearerSaslClient.OAuthBearerSaslClientFactory();
+                    retvalSaslClient = ofactory.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                } else {              
+                    retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
                 }
 
                 if (retvalSaslClient == null) {
