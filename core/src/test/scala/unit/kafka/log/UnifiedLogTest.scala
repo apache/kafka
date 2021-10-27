@@ -1630,6 +1630,20 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => LogTestUtils.readLog(log, 1026, 1000))
   }
 
+  @Test
+  def testFlushingEmptyActiveSegments(): Unit = {
+    /* create a multipart log with 100 messages */
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 100)
+    val log = createLog(logDir, logConfig)
+    val numMessages = 2
+    val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
+      timestamp = mockTime.milliseconds))
+    messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
+    log.roll()
+    log.flush()
+    assertEquals(numMessages + 1, logDir.listFiles(_.getName.endsWith(".log")).length)
+  }
+
   /**
    * Test that covers reads and writes on a multisegment log. This test appends a bunch of messages
    * and then reads them all back and checks that the message read and offset matches what was appended.
