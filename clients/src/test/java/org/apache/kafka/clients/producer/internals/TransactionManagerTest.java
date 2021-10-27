@@ -1661,6 +1661,10 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
 
+        assertThrows(KafkaException.class, commitResult::await);
+        assertFalse(commitResult.isSuccessful());
+        assertTrue(commitResult.isAcked());
+
         // make sure the exception was thrown directly from the follow-up calls.
         assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
         assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
@@ -3522,13 +3526,17 @@ public class TransactionManagerTest {
     }
 
     private void doInitTransactions(long producerId, short epoch) {
-        transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
+
+        result.await();
+        assertTrue(result.isSuccessful());
+        assertTrue(result.isAcked());
     }
 
     private void assertAbortableError(Class<? extends RuntimeException> cause) {

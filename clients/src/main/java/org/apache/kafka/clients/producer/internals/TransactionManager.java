@@ -241,6 +241,7 @@ public class TransactionManager {
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
 
+    private volatile State priorState = null;
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
@@ -1090,6 +1091,7 @@ public class TransactionManager {
         else
             log.debug("Transition from state {} to {}", currentState, target);
 
+        priorState = currentState;
         currentState = target;
     }
 
@@ -1184,15 +1186,19 @@ public class TransactionManager {
     }
 
     private TransactionalRequestResult handleCachedTransactionRequestResult(
-            Supplier<TransactionalRequestResult> transactionalRequestResultSupplier,
-            State targetState) {
+        Supplier<TransactionalRequestResult> transactionalRequestResultSupplier,
+        State transientState
+    ) {
         ensureTransactional();
 
-        if (pendingResult != null && currentState == targetState) {
+        if (pendingResult != null && !pendingResult.isAcked()) {
             TransactionalRequestResult result = pendingResult;
-            if (result.isCompleted())
+            if (result.isCompleted() && priorState == transientState) {
                 pendingResult = null;
-            return result;
+                return result;
+            } else if (currentState == transientState) {
+                return result;
+            }
         }
 
         pendingResult = transactionalRequestResultSupplier.get();

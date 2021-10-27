@@ -29,6 +29,7 @@ public final class TransactionalRequestResult {
     private final CountDownLatch latch;
     private volatile RuntimeException error = null;
     private final String operation;
+    private volatile boolean isAcked = false;
 
     public TransactionalRequestResult(String operation) {
         this(new CountDownLatch(1), operation);
@@ -60,6 +61,8 @@ public final class TransactionalRequestResult {
             }
         }
 
+        isAcked = true;
+
         if (!isSuccessful())
             throw error();
     }
@@ -68,10 +71,13 @@ public final class TransactionalRequestResult {
         try {
             boolean success = latch.await(timeout, unit);
             if (!isSuccessful()) {
+                isAcked = true;
                 throw error();
             }
             if (!success) {
                 throw new TimeoutException("Timeout expired after " + timeout + " " + unit.name().toLowerCase(Locale.ROOT) + " while awaiting " + operation);
+            } else {
+                isAcked = true;
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Received interrupt while awaiting " + operation, e);
@@ -88,6 +94,10 @@ public final class TransactionalRequestResult {
 
     public boolean isCompleted() {
         return latch.getCount() == 0L;
+    }
+
+    public boolean isAcked() {
+        return isAcked;
     }
 
 }
