@@ -408,8 +408,8 @@ public class RocksDBMetricsRecorderTest {
         memtableHitRatioSensor.record((double) 4 / (4 + 6), 0L);
         replay(memtableHitRatioSensor);
 
-        final HistogramData memtableFlushTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 10L, 2L, 3.0);
-        final HistogramData memtableFlushTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 8L, 4L, 10.0);
+        final HistogramData memtableFlushTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 2L, 10L, 3.0);
+        final HistogramData memtableFlushTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 4L, 8L, 10.0);
         expect(statisticsToAdd1.getHistogramData(HistogramType.FLUSH_TIME)).andReturn(memtableFlushTimeData1);
         expect(statisticsToAdd2.getHistogramData(HistogramType.FLUSH_TIME)).andReturn(memtableFlushTimeData2);
         memtableAvgFlushTimeSensor.record((double) (10 + 8) / (2 + 4), 0L);
@@ -455,8 +455,8 @@ public class RocksDBMetricsRecorderTest {
         bytesReadDuringCompactionSensor.record(5 + 6, 0L);
         replay(bytesReadDuringCompactionSensor);
 
-        final HistogramData compactionTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 8L, 2L, 6.0);
-        final HistogramData compactionTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 24.0, 8L, 2L, 4.0);
+        final HistogramData compactionTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 2L, 8L, 6.0);
+        final HistogramData compactionTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 24.0, 2L, 8L, 4.0);
         expect(statisticsToAdd1.getHistogramData(HistogramType.COMPACTION_TIME)).andReturn(compactionTimeData1);
         expect(statisticsToAdd2.getHistogramData(HistogramType.COMPACTION_TIME)).andReturn(compactionTimeData2);
         compactionTimeAvgSensor.record((double) (8 + 8) / (2 + 2), 0L);
@@ -559,6 +559,7 @@ public class RocksDBMetricsRecorderTest {
     public void shouldCorrectlyHandleHitRatioRecordingsWithZeroHitsAndMisses() {
         resetToNice(statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
         expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableHitRatioSensor.record(0, 0L);
@@ -583,6 +584,7 @@ public class RocksDBMetricsRecorderTest {
         resetToNice(statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
+        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableAvgFlushTimeSensor.record(0, 0L);
         compactionTimeAvgSensor.record(0, 0L);
