@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.MetadataVersions;
+
 @FunctionalInterface
 public interface MetadataVersionProvider {
     MetadataVersions activeVersion();

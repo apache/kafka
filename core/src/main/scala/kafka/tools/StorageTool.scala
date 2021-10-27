@@ -25,7 +25,7 @@ import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.controller.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
 

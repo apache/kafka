@@ -20,7 +20,7 @@ package kafka.testkit;
 import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.controller.MetadataVersions;
+import org.apache.kafka.metadata.MetadataVersions;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;

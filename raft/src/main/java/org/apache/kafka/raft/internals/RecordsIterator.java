@@ -217,10 +217,10 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
     private T readRecord(Readable input) {
         // Read size of body in bytes
-        int size = input.readVarint();
+        input.readVarint();
 
         // Read unused attributes
-        int attr = input.readByte();
+        input.readByte();
 
         long timestampDelta = input.readVarlong();
         if (timestampDelta != 0) {
@@ -228,7 +228,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         }
 
         // Read offset delta
-        int offset = input.readVarint();
+        input.readVarint();
 
         int keySize = input.readVarint();
         if (keySize != -1) {

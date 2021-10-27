@@ -24,7 +24,7 @@ import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.controller.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._

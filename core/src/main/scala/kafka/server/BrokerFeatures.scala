@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.controller.{MetadataVersion, MetadataVersions}
+import org.apache.kafka.metadata.{MetadataVersion, MetadataVersions}
 
 import scala.jdk.CollectionConverters._
 

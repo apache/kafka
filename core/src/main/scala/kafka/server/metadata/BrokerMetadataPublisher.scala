@@ -136,7 +136,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
-        metadataVersion.update(featuresDelta, newHighestMetadataOffset) // TODO fixme
+        metadataVersion.update(featuresDelta, highestOffsetAndEpoch.offset)
       }
 
       // Apply topic deltas.
