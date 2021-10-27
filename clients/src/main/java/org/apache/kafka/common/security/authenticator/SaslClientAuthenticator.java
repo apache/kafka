@@ -216,7 +216,16 @@ public class SaslClientAuthenticator implements Authenticator {
                 String[] mechs = {mechanism};
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
-                SaslClient retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                SaslClient retvalSaslClient = null;
+                if("OAUTHBEARER".equalsIgnoreCase(mechanism))
+                {
+	                OAuthBearerSaslClient.OAuthBearerSaslClientFactory ofactory = new OAuthBearerSaslClient.OAuthBearerSaslClientFactory();
+	                retvalSaslClient = ofactory.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                }else
+                {              
+                	retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                }
+
                 if (retvalSaslClient == null) {
                     throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism);
                 }
