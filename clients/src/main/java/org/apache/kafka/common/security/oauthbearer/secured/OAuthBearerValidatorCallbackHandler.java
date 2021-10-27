@@ -125,7 +125,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
             VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, moduleOptions);
             verificationKeyResolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(key, k ->
-                new RefCountingVerificationKeyResolve(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
+                new RefCountingVerificationKeyResolver(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
@@ -240,19 +240,19 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     /**
-     * <code>RefCountingVerificationKeyResolve</code> allows us to share a single
+     * <code>RefCountingVerificationKeyResolver</code> allows us to share a single
      * {@link CloseableVerificationKeyResolver} instance between multiple
      * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
      * appropriate number of times.
      */
 
-    private static class RefCountingVerificationKeyResolve implements CloseableVerificationKeyResolver {
+    private static class RefCountingVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
         private final CloseableVerificationKeyResolver delegate;
 
         private final AtomicInteger count = new AtomicInteger(0);
 
-        public RefCountingVerificationKeyResolve(CloseableVerificationKeyResolver delegate) {
+        public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate) {
             this.delegate = delegate;
         }
 
