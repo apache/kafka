@@ -75,6 +75,8 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.policy.AlterConfigPolicy;
+import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -136,6 +138,8 @@ public final class QuorumController implements Controller {
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
+        private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
+        private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private MetadataVersions initialMetadataVersion = null;
 
         public Builder(int nodeId) {
@@ -207,6 +211,16 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this.createTopicPolicy = createTopicPolicy;
+            return this;
+        }
+
+        public Builder setAlterConfigPolicy(Optional<AlterConfigPolicy> alterConfigPolicy) {
+            this.alterConfigPolicy = alterConfigPolicy;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -232,7 +246,8 @@ public final class QuorumController implements Controller {
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
-                    sessionTimeoutNs, controllerMetrics, initialMetadataVersion);
+                    sessionTimeoutNs, controllerMetrics, createTopicPolicy,
+                    alterConfigPolicy, initialMetadataVersion);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -1168,6 +1183,8 @@ public final class QuorumController implements Controller {
                              long snapshotMaxNewRecordBytes,
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics,
+                             Optional<CreateTopicPolicy> createTopicPolicy,
+                             Optional<AlterConfigPolicy> alterConfigPolicy,
                              MetadataVersions initialMetadataVersion) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
@@ -1179,16 +1196,16 @@ public final class QuorumController implements Controller {
         this.featureListener = new QuorumFeatureListener();
         this.purgatory = new ControllerPurgatory();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs);
+            snapshotRegistry, configDefs, alterConfigPolicy);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer, this::activeMetadataVersion);
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics, this::activeMetadataVersion);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry, this::activeMetadataVersion);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
-            configurationControl, clusterControl, controllerMetrics);
+            configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
         this.raftClient = raftClient;
         this.initialMetadataVersion = initialMetadataVersion;
         this.metaLogListener = new QuorumMetaLogListener();

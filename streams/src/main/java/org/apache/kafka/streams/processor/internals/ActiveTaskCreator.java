@@ -110,7 +110,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 null,
                 processId,
-                logContext);
+                logContext,
+                time);
             taskProducers = Collections.emptyMap();
         }
     }
@@ -243,7 +244,8 @@ class ActiveTaskCreator {
                 clientSupplier,
                 taskId,
                 null,
-                logContext);
+                logContext,
+                time);
             taskProducers.put(taskId, streamsProducer);
         } else {
             streamsProducer = threadProducer;
@@ -294,7 +296,7 @@ class ActiveTaskCreator {
             try {
                 taskProducer.close();
             } catch (final RuntimeException e) {
-                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e);
+                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e, id);
             }
         }
     }
@@ -326,4 +328,12 @@ class ActiveTaskCreator {
         return new LogContext(logPrefix);
     }
 
+    public double totalProducerBlockedTime() {
+        if (threadProducer != null) {
+            return threadProducer.totalBlockedTime();
+        }
+        return taskProducers.values().stream()
+            .mapToDouble(StreamsProducer::totalBlockedTime)
+            .sum();
+    }
 }

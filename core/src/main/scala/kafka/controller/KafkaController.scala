@@ -128,6 +128,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var replicasToDeleteCount = 0
   @volatile private var ineligibleTopicsToDeleteCount = 0
   @volatile private var ineligibleReplicasToDeleteCount = 0
+  @volatile private var activeBrokerCount = 0
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -142,6 +143,9 @@ class KafkaController(val config: KafkaConfig,
   newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
   newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
   newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
+  newGauge("ActiveBrokerCount", () => activeBrokerCount)
+  // FencedBrokerCount metric is always 0 in the ZK controller.
+  newGauge("FencedBrokerCount", () => 0)
 
   /**
    * Returns true if this broker is the current controller.
@@ -616,7 +620,7 @@ class KafkaController(val config: KafkaConfig,
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the newOfflineReplicas
     partitionStateMachine.handleStateChanges(partitionsWithOfflineLeader.toSeq, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
-    partitionStateMachine.triggerOnlinePartitionStateChange()
+    val onlineStateChangeResults = partitionStateMachine.triggerOnlinePartitionStateChange()
     // trigger OfflineReplica state change for those newly offline replicas
     replicaStateMachine.handleStateChanges(newOfflineReplicasNotForDeletion.toSeq, OfflineReplica)
 
@@ -628,9 +632,10 @@ class KafkaController(val config: KafkaConfig,
       topicDeletionManager.failReplicaDeletion(newOfflineReplicasForDeletion)
     }
 
-    // If replica failure did not require leader re-election, inform brokers of the offline brokers
-    // Note that during leader re-election, brokers update their metadata
-    if (partitionsWithOfflineLeader.isEmpty) {
+    // If no partition has changed leader or ISR, no UpdateMetadataRequest is sent through PartitionStateMachine
+    // and ReplicaStateMachine. In that case, we want to send an UpdateMetadataRequest explicitly to
+    // propagate the information about the new offline brokers.
+    if (newOfflineReplicasNotForDeletion.isEmpty && onlineStateChangeResults.values.forall(_.isLeft)) {
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
     }
   }
@@ -1459,6 +1464,8 @@ class KafkaController(val config: KafkaConfig,
         controllerContext.replicaState(replica) == ReplicaDeletionIneligible
       }
     }.sum
+
+    activeBrokerCount = if (isActive) controllerContext.liveOrShuttingDownBrokerIds.size else 0
   }
 
   // visible for testing

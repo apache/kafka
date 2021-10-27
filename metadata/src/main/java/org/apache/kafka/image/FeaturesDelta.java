@@ -93,4 +93,11 @@ public final class FeaturesDelta {
         }
         return new FeaturesImage(newFinalizedVersions);
     }
+
+    @Override
+    public String toString() {
+        return "FeaturesDelta(" +
+            "changes=" + changes +
+            ')';
+    }
 }

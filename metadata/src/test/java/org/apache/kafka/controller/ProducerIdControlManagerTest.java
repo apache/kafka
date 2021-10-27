@@ -54,7 +54,8 @@ public class ProducerIdControlManagerTest {
         snapshotRegistry = new SnapshotRegistry(logContext);
         clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(random), MetadataVersions::latest);
+            new StripedReplicaPlacer(random), new MockControllerMetrics(),
+            MetadataVersions::latest);
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {

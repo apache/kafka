@@ -19,24 +19,31 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.policy.AlterConfigPolicy;
+import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -70,7 +77,7 @@ public class ConfigurationControlManagerTest {
 
     @SuppressWarnings("unchecked")
     private static <A, B> Map<A, B> toMap(Entry... entries) {
-        Map<A, B> map = new HashMap<>();
+        Map<A, B> map = new LinkedHashMap<>();
         for (Entry<A, B> entry : entries) {
             map.put(entry.getKey(), entry.getValue());
         }
@@ -85,7 +92,8 @@ public class ConfigurationControlManagerTest {
     public void testReplay() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+                Optional.empty());
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -104,8 +112,8 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new ConfigRecord().
+        RecordTestUtils.assertBatchIteratorContains(asList(
+            asList(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("x,y,z"), (short) 0),
                 new ApiMessageAndVersion(new ConfigRecord().
@@ -143,7 +151,8 @@ public class ConfigurationControlManagerTest {
     public void testIncrementalAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+                Optional.empty());
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), (short) 0)),
@@ -156,11 +165,73 @@ public class ConfigurationControlManagerTest {
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123")))))));
     }
 
+    private static class MockAlterConfigsPolicy implements AlterConfigPolicy {
+        private final List<RequestMetadata> expecteds;
+        private final AtomicLong index = new AtomicLong(0);
+
+        MockAlterConfigsPolicy(List<RequestMetadata> expecteds) {
+            this.expecteds = expecteds;
+        }
+
+        @Override
+        public void validate(RequestMetadata actual) throws PolicyViolationException {
+            long curIndex = index.getAndIncrement();
+            if (curIndex >= expecteds.size()) {
+                throw new PolicyViolationException("Unexpected config alteration: index " +
+                    "out of range at " + curIndex);
+            }
+            RequestMetadata expected = expecteds.get((int) curIndex);
+            if (!expected.equals(actual)) {
+                throw new PolicyViolationException("Expected: " + expected +
+                    ". Got: " + actual);
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            // nothing to do
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // nothing to do
+        }
+    }
+
+    @Test
+    public void testIncrementalAlterConfigsWithPolicy() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
+            new RequestMetadata(MYTOPIC, Collections.emptyMap()),
+            new RequestMetadata(BROKER0, toMap(entry("foo.bar", "123"),
+                entry("quux", "456")))));
+        ConfigurationControlManager manager = new ConfigurationControlManager(
+            new LogContext(), snapshotRegistry, CONFIGS, Optional.of(policy));
+
+        assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                    setName("foo.bar").setValue("123"), (short) 0), new ApiMessageAndVersion(
+                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                    setName("quux").setValue("456"), (short) 0)),
+            toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
+                    "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
+                    "type=TOPIC, name='mytopic'), configs={}). Got: " +
+                    "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
+                    "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
+                entry(BROKER0, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
+                entry("foo.bar", entry(SET, "123")))),
+                entry(BROKER0, toMap(
+                entry("foo.bar", entry(SET, "123")),
+                entry("quux", entry(SET, "456")))))));
+    }
+
     @Test
     public void testIsSplittable() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+                Optional.empty());
         assertTrue(manager.isSplittable(BROKER, "foo.bar"));
         assertFalse(manager.isSplittable(BROKER, "baz"));
         assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
@@ -172,7 +243,8 @@ public class ConfigurationControlManagerTest {
     public void testGetConfigValueDefault() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+                Optional.empty());
         assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
         assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
         assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
@@ -183,8 +255,9 @@ public class ConfigurationControlManagerTest {
     public void testLegacyAlterConfigs() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
-            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
-        List<ApiMessageAndVersion> expectedRecords1 = Arrays.asList(
+            new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
+                Optional.empty());
+        List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("abc").setValue("456"), (short) 0),
@@ -205,7 +278,7 @@ public class ConfigurationControlManagerTest {
         }
         assertEquals(
             ControllerResult.atomicOf(
-                Arrays.asList(
+                asList(
                     new ApiMessageAndVersion(
                         new ConfigRecord()
                             .setResourceType(TOPIC.id())
