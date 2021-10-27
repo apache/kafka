@@ -53,6 +53,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import javax.security.auth.callback.CallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient;
+
 import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
