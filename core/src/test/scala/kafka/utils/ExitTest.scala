@@ -24,6 +24,15 @@ import org.junit.jupiter.api.Test
 
 class ExitTest {
   @Test
+  def exitWithoutSettingUpHooks(): Unit = {
+    try {
+      Exit.exit(1, None)
+    } catch {
+      case e: RuntimeException => assertEquals("Attempted to terminate the VM in a junit test.", e.getMessage)
+    }
+  }
+
+  @Test
   def shouldHaltImmediately(): Unit = {
     val array:Array[Any] = Array("a", "b")
     def haltProcedure(exitStatus: Int, message: Option[String]) : Nothing = {

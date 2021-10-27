@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Internal class that should be used instead of `Exit.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
@@ -30,9 +33,27 @@ public class Exit {
         void addShutdownHook(String name, Runnable runnable);
     }
 
+    private static final Set<String> JUNIT_CLASSS_NAMES = new HashSet<>();
+
+    static {
+        JUNIT_CLASSS_NAMES.add("org.junit.platform.commons.util.ReflectionUtils");
+        JUNIT_CLASSS_NAMES.add("org.gradle.api.internal.tasks.testing.junit.AbstractJUnitTestClassProcessor");
+    }
+
+    static void throwIfInJunitTest() {
+        for (StackTraceElement[] elements : Thread.getAllStackTraces().values()) {
+            for (StackTraceElement element : elements) {
+                if (JUNIT_CLASSS_NAMES.contains(element.getClassName())) {
+                    throw new RuntimeException("Attempted to terminate the VM in a junit test.");
+                }
+            }
+        }
+    }
+
     private static final Procedure DEFAULT_HALT_PROCEDURE = new Procedure() {
         @Override
         public void execute(int statusCode, String message) {
+            throwIfInJunitTest();
             Runtime.getRuntime().halt(statusCode);
         }
     };
@@ -40,6 +61,7 @@ public class Exit {
     private static final Procedure DEFAULT_EXIT_PROCEDURE = new Procedure() {
         @Override
         public void execute(int statusCode, String message) {
+            throwIfInJunitTest();
             System.exit(statusCode);
         }
     };
