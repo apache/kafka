@@ -142,6 +142,8 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
             return this;
         }
 
+        public abstract boolean isOptimizable();
+
         public abstract T build();
     }
 }

@@ -1326,7 +1326,7 @@ public class KStreamImplTest {
                 1 + // to
                 2 + // through
                 1 + // process
-                3 + // repartition
+                2 + // repartition
                 1, // process
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology().processors().size());
     }

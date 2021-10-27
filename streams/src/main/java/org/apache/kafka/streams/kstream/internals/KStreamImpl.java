@@ -1034,22 +1034,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             nullKeyFilterProcessorName = repartitionTopicName + "-filter";
         }
 
-        final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
-        final ProcessorParameters<K1, V1, ?, ?> processorParameters = new ProcessorParameters<>(
-            new KStreamFilter<>(notNullKeyPredicate, false),
-            nullKeyFilterProcessorName
-        );
-
         baseRepartitionNodeBuilder.withKeySerde(keySerde)
                                   .withValueSerde(valueSerde)
                                   .withSourceName(sourceName)
                                   .withRepartitionTopic(repartitionTopicName)
                                   .withSinkName(sinkName)
-                                  .withProcessorParameters(processorParameters)
                                   .withStreamPartitioner(streamPartitioner)
                                   // reusing the source name for the graph node name
                                   // adding explicit variable as it simplifies logic
                                   .withNodeName(sourceName);
+
+        if (baseRepartitionNodeBuilder.isOptimizable()) {
+            final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
+            final ProcessorParameters<K1, V1, ?, ?> processorParameters = new ProcessorParameters<>(
+                new KStreamFilter<>(notNullKeyPredicate, false),
+                nullKeyFilterProcessorName
+            );
+            baseRepartitionNodeBuilder.withProcessorParameters(processorParameters);
+        }
 
         return sourceName;
     }
