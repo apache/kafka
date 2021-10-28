@@ -573,6 +573,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.ENABLE_CLIENT_RESPONSE_LEAK_CHECK_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }
