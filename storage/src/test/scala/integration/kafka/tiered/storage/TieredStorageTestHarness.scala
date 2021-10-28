@@ -19,6 +19,7 @@ package kafka.tiered.storage
 
 import java.util.Properties
 import kafka.api.IntegrationTestHarness
+import kafka.log.remote.ClassLoaderAwareRemoteStorageManager
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.BrokerLocalStorage
 import kafka.utils.TestUtils
@@ -149,7 +150,8 @@ object TieredStorageTestHarness {
   private val storageWaitTimeoutSec = 35
 
   def getTieredStorages(brokers: Seq[KafkaServer]): Seq[LocalTieredStorage] = {
-    brokers.map(_.remoteLogManager.storageManager().asInstanceOf[LocalTieredStorage])
+    brokers.map(_.remoteLogManager.storageManager().asInstanceOf[ClassLoaderAwareRemoteStorageManager])
+      .map(_.delegate().asInstanceOf[LocalTieredStorage])
   }
 
   def getLocalStorages(brokers: Seq[KafkaServer]): Seq[BrokerLocalStorage] = {
