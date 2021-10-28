@@ -516,7 +516,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
-    val oldConfig = currentConfig
+
+    // We need a copy of the current config since `currentConfig` is initialized with `kafkaConfig`
+    // which means the call to `updateCurrentConfig` would end up mutating `oldConfig`.
+    val oldConfig = KafkaConfig(currentConfig.values, doLog = false)
+
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false)
     if (newConfig ne currentConfig) {
       currentConfig = newConfig
@@ -955,6 +959,3 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     listeners.map(e => (e.listenerName, e)).toMap
 
 }
-
-
-

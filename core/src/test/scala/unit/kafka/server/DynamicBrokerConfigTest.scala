@@ -20,6 +20,7 @@ package kafka.server
 import java.{lang, util}
 import java.util.Properties
 import java.util.concurrent.CompletionStage
+
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
@@ -30,6 +31,7 @@ import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -78,6 +80,27 @@ class DynamicBrokerConfigTest {
       assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.valuesFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     }
+  }
+
+  @Test
+  def testUpdateThreadPool(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    origProps.put(KafkaConfig.NumIoThreadsProp, "4")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaBroker])
+    val handlerPoolMock = Mockito.mock(classOf[KafkaRequestHandlerPool])
+    Mockito.when(serverMock.config).thenReturn(config)
+    Mockito.when(serverMock.dataPlaneRequestHandlerPool).thenReturn(handlerPoolMock)
+
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicThreadPool(serverMock))
+
+    val updateProps = new Properties()
+    updateProps.put(KafkaConfig.NumIoThreadsProp, "8")
+
+    config.dynamicConfig.updateDefaultConfig(updateProps)
+    assertEquals(8, config.numIoThreads)
+    Mockito.verify(handlerPoolMock).resizeThreadPool(8)
   }
 
   @nowarn("cat=deprecation")
