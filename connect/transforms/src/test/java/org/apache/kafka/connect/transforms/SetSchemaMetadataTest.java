@@ -140,12 +140,13 @@ public class SetSchemaMetadataTest {
         final SinkRecord record = new SinkRecord("", 0, null, null, schema, value, 0);
 
         final SinkRecord updatedRecord = xform.apply(record);
+        Struct newValue = (Struct) updatedRecord.value();
 
         assertEquals("foo.bar.baz", updatedRecord.valueSchema().name());
         assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
 
         // Make sure the struct's schema and fields all point to the new schema
-        assertMatchingSchema((Struct) updatedRecord.value(), updatedRecord.valueSchema());
+        assertMatchingSchema(newValue.schema(), updatedRecord.valueSchema());
     }
 
     @Test
@@ -168,7 +169,7 @@ public class SetSchemaMetadataTest {
                                       .build();
 
         Struct newValue = (Struct) SetSchemaMetadata.updateSchemaIn(value, newSchema);
-        assertMatchingSchema(newValue, newSchema);
+        assertMatchingSchema(newValue.schema(), newSchema);
     }
 
     @Test
@@ -185,14 +186,14 @@ public class SetSchemaMetadataTest {
         assertNull(updatedValue);
     }
 
-    protected void assertMatchingSchema(Struct value, Schema schema) {
-        assertSame(schema, value.schema());
-        assertEquals(schema.name(), value.schema().name());
-        for (Field field : schema.fields()) {
+    protected void assertMatchingSchema(Schema actual, Schema expected) {
+        assertSame(expected, actual);
+        assertEquals(expected.name(), actual.name());
+        for (Field field : expected.fields()) {
             String fieldName = field.name();
-            assertEquals(schema.field(fieldName).name(), value.schema().field(fieldName).name());
-            assertEquals(schema.field(fieldName).index(), value.schema().field(fieldName).index());
-            assertSame(schema.field(fieldName).schema(), value.schema().field(fieldName).schema());
+            assertEquals(expected.field(fieldName).name(), actual.field(fieldName).name());
+            assertEquals(expected.field(fieldName).index(), actual.field(fieldName).index());
+            assertSame(expected.field(fieldName).schema(), actual.field(fieldName).schema());
         }
     }
 }
