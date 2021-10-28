@@ -768,6 +768,20 @@ class KafkaConfigTest {
         case KafkaConfig.SaslLoginRefreshWindowJitterProp =>
         case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
         case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
+        case KafkaConfig.SaslLoginConnectTimeoutMsProp =>
+        case KafkaConfig.SaslLoginReadTimeoutMsProp =>
+        case KafkaConfig.SaslLoginRetryBackoffMaxMsProp =>
+        case KafkaConfig.SaslLoginRetryBackoffMsProp =>
+        case KafkaConfig.SaslOAuthBearerScopeClaimNameProp =>
+        case KafkaConfig.SaslOAuthBearerSubClaimNameProp =>
+        case KafkaConfig.SaslOAuthBearerTokenEndpointUrlProp =>
+        case KafkaConfig.SaslOAuthBearerJwksEndpointUrlProp =>
+        case KafkaConfig.SaslOAuthBearerJwksEndpointRefreshMsProp =>
+        case KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp =>
+        case KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp =>
+        case KafkaConfig.SaslOAuthBearerClockSkewSecondsProp =>
+        case KafkaConfig.SaslOAuthBearerExpectedAudienceProp =>
+        case KafkaConfig.SaslOAuthBearerExpectedIssuerProp =>
 
         // Security config
         case KafkaConfig.securityProviderClassProp =>
