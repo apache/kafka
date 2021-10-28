@@ -319,23 +319,29 @@ public class NetworkClient implements KafkaClient {
         if (connectionStates.isDisconnected(nodeId))
             return;
 
+        log.info("Client requested disconnect from node {} (invoking callbacks for in-flight requests)", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
-
         cancelInFlightRequests(nodeId, now, abortedSends);
-
         connectionStates.disconnected(nodeId, now);
-
-        if (log.isTraceEnabled()) {
-            log.trace("Manually disconnected from {}. Aborted in-flight requests: {}.", nodeId, inFlightRequests);
-        }
     }
 
     private void cancelInFlightRequests(String nodeId, long now, Collection<ClientResponse> responses) {
         Iterable<InFlightRequest> inFlightRequests = this.inFlightRequests.clearAll(nodeId);
         for (InFlightRequest request : inFlightRequests) {
-            log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
-                    request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
+            if (log.isDebugEnabled()) {
+                log.debug("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms): {}",
+                    request.header.apiKey(), request.header.correlationId(), nodeId,
+                    request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
+                    request.requestTimeoutMs, request.request);
+            } else {
+                log.info("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms)",
+                    request.header.apiKey(), request.header.correlationId(), nodeId,
+                    request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
+                    request.requestTimeoutMs);
+            }
 
             if (!request.isInternalRequest) {
                 if (responses != null)
@@ -355,6 +361,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void close(String nodeId) {
+        log.info("Client requested disconnect from node {} (not invoking callbacks for in-flight requests)", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null);
@@ -785,7 +792,7 @@ public class NetworkClient implements KafkaClient {
         for (String nodeId : nodeIds) {
             // close connection to the node
             this.selector.close(nodeId);
-            log.debug("Disconnecting from node {} due to request timeout.", nodeId);
+            log.info("Disconnecting from node {} due to request timeout.", nodeId);
             processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
         }
     }
@@ -807,7 +814,7 @@ public class NetworkClient implements KafkaClient {
         List<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
-            log.debug(
+            log.info(
                 "Disconnecting from node {} due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
@@ -923,7 +930,7 @@ public class NetworkClient implements KafkaClient {
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
-            log.debug("Node {} disconnected.", node);
+            log.info("Node {} disconnected.", node);
             processDisconnection(responses, node, now, entry.getValue());
         }
     }
@@ -1249,6 +1256,14 @@ public class NetworkClient implements KafkaClient {
             this.request = request;
             this.send = send;
             this.sendTimeMs = sendTimeMs;
+        }
+
+        public long timeElapsedSinceSendMs(long currentTimeMs) {
+            return Math.max(0, currentTimeMs - sendTimeMs);
+        }
+
+        public long timeElapsedSinceCreateMs(long currentTimeMs) {
+            return Math.max(0, currentTimeMs - createdTimeMs);
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {
