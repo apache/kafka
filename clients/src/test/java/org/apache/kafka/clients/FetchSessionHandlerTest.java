@@ -426,7 +426,7 @@ public class FetchSessionHandlerTest {
             builder2.add(new TopicPartition("foo", partition),
                     new FetchRequest.PartitionData(topicId, 10, 110, 210, Optional.empty()));
             FetchSessionHandler.FetchRequestData data2 = builder2.build();
-            // Should have the same session ID, and next epoch and can only use topic IDs if the partition was replaced.
+            // Should have the same session ID, and next epoch and can only use topic IDs if the partition was updated.
             boolean updated = partition == 0;
             // The receiving broker will handle closing the session.
             assertEquals(123, data2.metadata().sessionId(), "Did not use same session when " + testType);
@@ -470,8 +470,9 @@ public class FetchSessionHandlerTest {
         });
     }
 
-    @Test
-    public void testTopicIdReplaced() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testTopicIdReplaced(boolean fetchRequestUsesIds) {
         TopicPartition tp = new TopicPartition("foo", 0);
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
@@ -491,17 +492,28 @@ public class FetchSessionHandlerTest {
         // Try to add a new topic ID.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
         Uuid topicId2 = Uuid.randomUuid();
-        builder2.add(tp,
-                new FetchRequest.PartitionData(topicId2, 10, 110, 210, Optional.empty()));
+        // Use the same data besides the topic ID.
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId2, 0, 100, 200, Optional.empty());
+        builder2.add(tp, partitionData);
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
-        assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 10, 110, 210)),
+        // The old topic ID partition should be in toReplace, and the new one should be in toSend.
+        assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)),
                 data2.toSend(), data2.sessionPartitions());
-        // Should have the same session ID, and next epoch and can only use topic IDs if the partition was replaced.
-        // The receiving broker will handle closing the session.
         assertEquals(Collections.singletonList(new TopicIdPartition(topicId1, tp)), data2.toReplace());
+        // Should have the same session ID, and next epoch and can use topic IDs.
         assertEquals(123, data2.metadata().sessionId(), "Did not use same session");
         assertEquals(1, data2.metadata().epoch(), "Did not have correct epoch");
         assertTrue(data2.canUseTopicIds());
+
+        short version = fetchRequestUsesIds ? ApiKeys.FETCH.latestVersion() : 12;
+        FetchRequest fetchRequest = FetchRequest.Builder
+                .forReplica(version, 0, 1, 1, data2.toSend())
+                .removed(data2.toForget())
+                .replaced(data2.toReplace())
+                .metadata(data2.metadata()).build(version);
+
+        assertEquals(fetchRequestUsesIds, fetchRequest.data().forgottenTopicsData().size() > 0);
+        assertEquals(1, fetchRequest.data().topics().size());
     }
 
     @ParameterizedTest
