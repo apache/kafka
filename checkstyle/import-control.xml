@@ -139,6 +139,9 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
+        <subpackage name="secured">
+          <allow pkg="org.jose4j" />
+        </subpackage>
       </subpackage>
     </subpackage>
 
@@ -338,6 +341,7 @@
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
   </subpackage>
