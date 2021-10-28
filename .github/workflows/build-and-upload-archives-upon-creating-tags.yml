@@ -49,7 +49,7 @@ jobs:
           echo "Release version (tag name): ${{ env.RELEASE_VERSION }}"
       - name: Build with Gradle and run all tests
         # exclude the streams test and connect test
-        # Set maxTestRetries & maxTestRetryFailures for flaky tests.  This is the setup in upstream Jenkinsfile
+        # Set maxTestRetries for flaky tests.  This is the setup in upstream Jenkinsfile
         run: ./gradlew -PmaxTestRetries=3 cleanTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
       - name: Upload archive
         run: |

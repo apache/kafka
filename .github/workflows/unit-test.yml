@@ -51,4 +51,4 @@ jobs:
       - name: Run tests
         env:
           MODULE: ${{ matrix.module }}
-        run: ./gradlew cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew -PmaxTestRetries=3 cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
