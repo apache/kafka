@@ -555,7 +555,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                                               connectorType,
                                                               ConnectorClientConfigRequest.ClientType.PRODUCER,
                                                               connectorClientConfigOverridePolicy);
-                return mergeConfigInfos(connType, configInfos, producerConfigInfos);
+                return mergeConfigInfos(connType, configInfos, producerConfigInfos, headerConverterConfigInfos);
             } else {
                 consumerConfigInfos = validateClientOverrides(connName,
                                                               ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
