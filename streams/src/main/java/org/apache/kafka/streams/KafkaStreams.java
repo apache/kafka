@@ -1065,7 +1065,7 @@ public class KafkaStreams implements AutoCloseable {
                     threads.remove(streamThread);
                     final long cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads());
                     final long maxBufferSizePerThread = getBufferSizePerThread(getNumLiveStreamThreads());
-                    log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
+                    log.info("Resizing thread cache again since new thread can not be started, final cache size per thread is {}", cacheSizePerThread);
                     resizeThreadCache(cacheSizePerThread);
                     log.info("Resizing max buffer size due to terminating added thread, new buffer size per thread is {}", maxBufferSizePerThread);
                     resizeMaxBufferSize(maxBufferSizePerThread);
