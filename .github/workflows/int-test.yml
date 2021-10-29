@@ -45,13 +45,13 @@ jobs:
         run: ./gradlew cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   core:
     # Name the Job
-    name: core (${{ matrix.prefixes }})
+    name: core (${{ matrix.prefix }})
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
-        prefixes:
+        prefix:
           - A B C
           - D E F
           - G H I J K
@@ -73,10 +73,10 @@ jobs:
           java-version: '8'
       - name: Run tests
         env:
-          PREFIXES: ${{ matrix.prefixes }}
+          PREFIX: ${{ matrix.prefix }}
         # Use set -f to disable shell expansion on *
         run: >
           set -f
-          && ./gradlew -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIXES; do printf ' --tests %s*' $i; done`
+          && ./gradlew -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
           && set +f
 

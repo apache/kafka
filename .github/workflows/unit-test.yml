@@ -24,11 +24,17 @@ on:
     branches: ['2.4-li']
 
 jobs:
-  clients:
+  unit-test:
     # Name the Job
-    name: clients
+    name: ${{ matrix.module }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # We still want to see all jobs' build result to the end
+      matrix:
+        module:
+          - core
+          - clients
     steps:
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
@@ -42,24 +48,8 @@ jobs:
         with:
           java-version: '8'
       - name: Run tests
-        run: ./gradlew cleanTest clients:unitTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        env:
+          MODULE: ${{ matrix.module }}
+        run: ./gradlew cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
 
-  core:
-    # Name the Job
-    name: core
-    # Set the type of machine to run on
-    runs-on: ubuntu-latest
-    steps:
-      # Checks out a copy of your repository on the ubuntu-latest machine
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          # bring in all history because the gradle versions plugin needs to "walk back" to the closest ancestor tag
-          fetch-depth: 0
-      - name: Set up JDK 8
-        uses: actions/setup-java@v1
-        with:
-          java-version: '8'
-      - name: Run tests
-        run: ./gradlew cleanTest core:unitTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+
