@@ -20,8 +20,12 @@ package kafka.server
 import java.{lang, util}
 import java.util.Properties
 import java.util.concurrent.CompletionStage
+import java.util.concurrent.atomic.AtomicReference
 
-import kafka.utils.TestUtils
+import kafka.controller.KafkaController
+import kafka.log.{LogConfig, LogManager}
+import kafka.network.SocketServer
+import kafka.utils.{KafkaScheduler, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -31,7 +35,7 @@ import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito
+import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -83,24 +87,95 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testUpdateThreadPool(): Unit = {
+  def testEnableDefaultUncleanLeaderElection(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    origProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaServer])
+    val controllerMock = Mockito.mock(classOf[KafkaController])
+    val logManagerMock = Mockito.mock(classOf[LogManager])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+    Mockito.when(serverMock.kafkaController).thenReturn(controllerMock)
+    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
+    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
+
+    val currentDefaultLogConfig = new AtomicReference(LogConfig())
+    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
+    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
+      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
+
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
+
+    val props = new Properties()
+
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertTrue(config.uncleanLeaderElectionEnable)
+    Mockito.verify(controllerMock).enableDefaultUncleanLeaderElection()
+  }
+
+  @Test
+  def testUpdateDynamicThreadPool(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     origProps.put(KafkaConfig.NumIoThreadsProp, "4")
+    origProps.put(KafkaConfig.NumNetworkThreadsProp, "2")
+    origProps.put(KafkaConfig.NumReplicaFetchersProp, "1")
+    origProps.put(KafkaConfig.NumRecoveryThreadsPerDataDirProp, "1")
+    origProps.put(KafkaConfig.BackgroundThreadsProp, "3")
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaBroker])
     val handlerPoolMock = Mockito.mock(classOf[KafkaRequestHandlerPool])
+    val socketServerMock = Mockito.mock(classOf[SocketServer])
+    val replicaManagerMock = Mockito.mock(classOf[ReplicaManager])
+    val logManagerMock = Mockito.mock(classOf[LogManager])
+    val schedulerMock = Mockito.mock(classOf[KafkaScheduler])
+
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.dataPlaneRequestHandlerPool).thenReturn(handlerPoolMock)
+    Mockito.when(serverMock.socketServer).thenReturn(socketServerMock)
+    Mockito.when(serverMock.replicaManager).thenReturn(replicaManagerMock)
+    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
+    Mockito.when(serverMock.kafkaScheduler).thenReturn(schedulerMock)
 
     config.dynamicConfig.addBrokerReconfigurable(new DynamicThreadPool(serverMock))
 
-    val updateProps = new Properties()
-    updateProps.put(KafkaConfig.NumIoThreadsProp, "8")
+    val props = new Properties()
 
-    config.dynamicConfig.updateDefaultConfig(updateProps)
+    props.put(KafkaConfig.NumIoThreadsProp, "8")
+    config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(8, config.numIoThreads)
-    Mockito.verify(handlerPoolMock).resizeThreadPool(8)
+    Mockito.verify(handlerPoolMock).resizeThreadPool(newSize = 8)
+
+    props.put(KafkaConfig.NumNetworkThreadsProp, "4")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(4, config.numNetworkThreads)
+    Mockito.verify(socketServerMock).resizeThreadPool(oldNumNetworkThreads = 2, newNumNetworkThreads = 4)
+
+    props.put(KafkaConfig.NumReplicaFetchersProp, "2")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(2, config.numReplicaFetchers)
+    Mockito.verify(replicaManagerMock).resizeFetcherThreadPool(newSize = 2)
+
+    props.put(KafkaConfig.NumRecoveryThreadsPerDataDirProp, "2")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(2, config.numRecoveryThreadsPerDataDir)
+    Mockito.verify(logManagerMock).resizeRecoveryThreadPool(newSize = 2)
+
+    props.put(KafkaConfig.BackgroundThreadsProp, "6")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(6, config.backgroundThreads)
+    Mockito.verify(schedulerMock).resizeThreadPool(newSize = 6)
+
+    Mockito.verifyNoMoreInteractions(
+      handlerPoolMock,
+      socketServerMock,
+      replicaManagerMock,
+      logManagerMock,
+      schedulerMock
+    )
   }
 
   @nowarn("cat=deprecation")

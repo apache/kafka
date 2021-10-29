@@ -114,7 +114,9 @@ class KafkaServer(
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
-  var logManager: LogManager = null
+  var _logManager: LogManager = null
+
+  def logManager: LogManager = _logManager
 
   @volatile private[this] var _replicaManager: ReplicaManager = null
   var adminManager: ZkAdminManager = null
@@ -129,7 +131,9 @@ class KafkaServer(
 
   var transactionCoordinator: TransactionCoordinator = null
 
-  var kafkaController: KafkaController = null
+  private var _kafkaController: KafkaController = null
+
+  def kafkaController: KafkaController = _kafkaController
 
   var forwardingManager: Option[ForwardingManager] = None
 
@@ -250,7 +254,7 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs,
+        _logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
         _brokerState = BrokerState.RECOVERY
@@ -327,7 +331,7 @@ class KafkaServer(
         tokenManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
+        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
