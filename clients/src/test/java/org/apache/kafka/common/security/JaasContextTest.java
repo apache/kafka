@@ -188,6 +188,20 @@ public class JaasContextTest {
     }
 
     @Test
+    public void testNumericWordStart() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "1afka");
+        checkConfiguration("test.testNumericWordStart required password=\"1afka\";", "test.testNumericWordStart", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
+    public void testSymbolicWordStart() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("password", "#afka");
+        checkConfiguration("test.testSymbolicWordStart required password=\"#afka\";", "test.testSymbolicWordStart", LoginModuleControlFlag.REQUIRED, options);
+    }
+
+    @Test
     public void testNumericWord() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("password", "k3fka");
@@ -202,10 +216,10 @@ public class JaasContextTest {
     }
 
     @Test
-    public void testNumericCanBePartOfAWord() throws Exception {
+    public void testNumericAndSymbolicAWord() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "k2fk@");
-        checkConfiguration("test.testNumericCanBePartOfAWord required option1=\"k2fk@\";", "test.testNumericCanBePartOfAWord", LoginModuleControlFlag.REQUIRED, options);
+        checkConfiguration("test.testNumericAndSymbolicAWord required option1=\"k2fk@\";", "test.testNumericAndSymbolicAWord", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test
