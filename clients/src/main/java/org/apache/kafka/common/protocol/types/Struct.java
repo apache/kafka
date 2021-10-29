@@ -23,6 +23,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
+import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_INT_MAX;
+import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_SHORT_MAX;
+
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
  */
@@ -408,7 +411,7 @@ public class Struct {
     }
 
     public Struct set(Field.Uint16 def, int value) {
-        if (value < 0 || value > 65535) {
+        if (value < 0 || value > UNSIGNED_SHORT_MAX) {
             throw new RuntimeException("Invalid value for unsigned short for " +
                     def.name + ": " + value);
         }
@@ -416,7 +419,7 @@ public class Struct {
     }
 
     public Struct set(Field.Uint32 def, long value) {
-        if (value < 0 || value > 4294967293L) {
+        if (value < 0 || value > UNSIGNED_INT_MAX) {
             throw new RuntimeException("Invalid value for unsigned int for " +
                     def.name + ": " + value);
         }

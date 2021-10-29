@@ -30,6 +30,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Consumer;
 
+import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_INT_MAX;
+import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_SHORT_MAX;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -218,12 +220,12 @@ public class SimpleExampleMessageTest {
         assertThrows(RuntimeException.class,
             () -> new SimpleExampleMessageData().setMyUint16(-1));
         assertThrows(RuntimeException.class,
-            () -> new SimpleExampleMessageData().setMyUint16(65536));
+            () -> new SimpleExampleMessageData().setMyUint16(UNSIGNED_SHORT_MAX + 1));
 
         assertThrows(RuntimeException.class,
                 () -> new SimpleExampleMessageData().setMyUint32(-1));
         assertThrows(RuntimeException.class,
-                () -> new SimpleExampleMessageData().setMyUint32(4294967293L + 1));
+                () -> new SimpleExampleMessageData().setMyUint32(UNSIGNED_INT_MAX + 1));
 
         // Verify that the tagged field reads as empty when not set.
         testRoundTrip(new SimpleExampleMessageData(),

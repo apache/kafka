@@ -1583,7 +1583,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             field.fieldAbstractJavaType(headerGenerator, structRegistry));
         buffer.incrementIndent();
         if (field.type() instanceof FieldType.Uint16FieldType) {
-            buffer.printf("if (v < 0 || v > 65535) {%n");
+            buffer.printf("if (v < 0 || v > %d) {%n", MessageGenerator.UNSIGNED_SHORT_MAX);
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
                     "\" for unsigned short field.\");%n");
@@ -1591,7 +1591,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.printf("}%n");
         }
         if (field.type() instanceof FieldType.Uint32FieldType) {
-            buffer.printf("if (v < 0 || v > 4294967293L) {%n");
+            buffer.printf("if (v < 0 || v > %dL) {%n", MessageGenerator.UNSIGNED_INT_MAX);
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
                     "\" for unsigned int field.\");%n");

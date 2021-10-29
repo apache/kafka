@@ -339,7 +339,7 @@ public final class FieldSpec {
                 } else {
                     try {
                         int value = Integer.valueOf(defaultString, base);
-                        if (value < 0 || value > 65535) {
+                        if (value < 0 || value > MessageGenerator.UNSIGNED_SHORT_MAX) {
                             throw new RuntimeException("Invalid default for uint16 field " +
                                     name + ": out of range.");
                         }
@@ -355,7 +355,7 @@ public final class FieldSpec {
                 } else {
                     try {
                         long value = Long.valueOf(defaultString, base);
-                        if (value < 0 || value > 4294967293L) {
+                        if (value < 0 || value > MessageGenerator.UNSIGNED_INT_MAX) {
                             throw new RuntimeException("Invalid default for uint32 field " +
                                     name + ": out of range.");
                         }
