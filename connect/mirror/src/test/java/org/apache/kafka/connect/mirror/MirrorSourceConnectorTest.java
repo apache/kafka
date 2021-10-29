@@ -153,6 +153,44 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    public void testConfigPropertyFilteringExclude() {
+
+        Map<String, Object> mmConfig = new HashMap<>();
+        mmConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
+                + "leader\\.replication\\.throttled\\.replicas, "
+                + "message\\.timestamp\\.difference\\.max\\.ms, "
+                + "message\\.timestamp\\.type, "
+                + "unclean\\.leader\\.election\\.enable, "
+                + "min\\.insync\\.replicas,"
+                + "exclude_param.*");
+
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(mmConfig);
+
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, filter);
+        ArrayList<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("exclude_param.param1", "value-param1"));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config);
+
+        // property 'name-1' isn't defined in the exclude filter -> should be replicated
+        assertTrue(targetConfig.entries().stream().anyMatch(x -> x.name().equals("name-1")),
+                "should replicate properties");
+
+        // this property is in default list, just double check it:
+        String prop1 = "min.insync.replicas";
+        assertFalse(targetConfig.entries().stream().anyMatch(x -> x.name().equals(prop1)),
+                "should not replicate excluded properties " + prop1);
+        // this property is only in exclude filter custom parameter, also tests regex on the way:
+        String prop2 = "exclude_param.param1";
+        assertFalse(targetConfig.entries().stream().anyMatch(x -> x.name().equals(prop2)),
+                "should not replicate excluded properties " + prop2);
+    }
+
+    @Test
     public void testMirrorSourceConnectorTaskConfig() {
         List<TopicPartition> knownSourceTopicPartitions = new ArrayList<>();
 
