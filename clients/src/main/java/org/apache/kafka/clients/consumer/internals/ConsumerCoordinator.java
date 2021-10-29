@@ -641,15 +641,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // skip the validation for built-in cooperative sticky assignor since we've considered
         // the "generation" of ownedPartition inside the assignor
-//        if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
-//            validateCooperativeAssignment(ownedPartitions, assignments);
-//        }
-        if (protocol == RebalanceProtocol.COOPERATIVE) {
-            tryValidateCooperativeAssignment(ownedPartitions, assignments);
-
-            if (!assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
-                validateCooperativeAssignment(ownedPartitions, assignments);
-            }
+        if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
+            validateCooperativeAssignment(ownedPartitions, assignments);
         }
 
         maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
@@ -699,32 +692,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 "by some members", totalAddedPartitions);
 
             throw new IllegalStateException("Assignor supporting the COOPERATIVE protocol violates its requirements");
-        }
-    }
-
-    private void tryValidateCooperativeAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
-                                                  final Map<String, Assignment> assignments) {
-        log.info("try to validating cooperative assignment with ownedPartitions: {}, assignments: {}", ownedPartitions, assignments);
-        Set<TopicPartition> totalRevokedPartitions = new HashSet<>();
-        Set<TopicPartition> totalAddedPartitions = new HashSet<>();
-        for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
-            final Assignment assignment = entry.getValue();
-            final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
-            addedPartitions.removeAll(ownedPartitions.get(entry.getKey()));
-            final Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions.get(entry.getKey()));
-            revokedPartitions.removeAll(assignment.partitions());
-
-            totalAddedPartitions.addAll(addedPartitions);
-            totalRevokedPartitions.addAll(revokedPartitions);
-        }
-
-        // if there are overlap between revoked partitions and added partitions, it means some partitions
-        // immediately gets re-assigned to another member while it is still claimed by some member
-        totalAddedPartitions.retainAll(totalRevokedPartitions);
-        if (!totalAddedPartitions.isEmpty()) {
-            log.error("With the COOPERATIVE protocol, owned partitions cannot be " +
-                "reassigned to other members; however the assignor has reassigned partitions {} which are still owned " +
-                "by some members", totalAddedPartitions);
         }
     }
 
