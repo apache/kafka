@@ -181,7 +181,7 @@ public class TopicsImageTest {
         topicRecords.add(newPartitionRecord(newFooId, 0, Arrays.asList(0, 1, 2)));
         topicRecords.add(newPartitionRecord(newFooId, 1, Arrays.asList(0, 1, localId)));
 
-        // baz-1 - new partion to follower
+        // baz-1 - new partition to follower
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionRecord()

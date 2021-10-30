@@ -704,11 +704,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        long start = time.nanoseconds();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
-        sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-        producerMetrics.recordSendOffsets(time.nanoseconds() - start);
+
+        if (!offsets.isEmpty()) {
+            long start = time.nanoseconds();
+            TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            producerMetrics.recordSendOffsets(time.nanoseconds() - start);
+        }
     }
 
     /**

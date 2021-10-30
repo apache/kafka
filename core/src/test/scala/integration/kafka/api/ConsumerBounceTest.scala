@@ -299,6 +299,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * Then, 1 consumer should be left out of the group.
     */
   @Test
+  @Disabled // To be re-enabled once we fix KAFKA-13421
   def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
     val group = "group-max-size-test"
     val topic = "group-max-size-test"
