@@ -74,14 +74,14 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Case 5: test clients with null or empty client id.
       if (defaultConfigClient.configUser.isEmpty) {
-        // should be 4000; default client (with null or empty client id) should follow the default, overridden value.
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(defaultConfigClient.user, defaultConfigClient.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(defaultConfigClient.user, null).bound, 0.0, "Should return the newly overridden value (4000)")
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(defaultConfigClient.user, defaultConfigClient.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(defaultConfigClient.user, null).bound, 0.0, "Should return the newly overridden value (4000)")
       }
       if (client1.user == "ANONYMOUS") {
-        // should be 4000; default client (with null or empty client id) should follow the default, overridden value.
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(client1.user, "").bound, 0.0, "Should return the overridden value (4000)")
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(client1.user, null).bound, 0.0, "Should return the overridden value (4000)")
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(client1.user, "").bound, 0.0, "Should return the overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(client1.user, null).bound, 0.0, "Should return the overridden value (4000)")
       } else {
         // client1.user (with null or empty client id) should follow the user quota. (if user is 'ANONYMOUS', it should follow the default, overridden value.)
         clientQuotaManager.updateQuota(client1.configUser, None, None, Some(new Quota(2500, true)))
@@ -89,9 +89,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         assertEquals(2500L, clientQuotaManager.quota(client1.user, null).bound, 0.0, "Should return the newly overridden value (2500)")
       }
       if (client2.user == "ANONYMOUS") {
-        // should be 4000; default client (with null or empty client id) should follow the default, overridden value.
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(client2.user, "").bound, 0.0, "Should return the overridden value (4000)")
-        assertEquals(Long.MaxValue, clientQuotaManager.quota(client2.user, null).bound, 0.0, "Should return the overridden value (4000)")
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(client2.user, "").bound, 0.0, "Should return the overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(client2.user, null).bound, 0.0, "Should return the overridden value (4000)")
       } else {
         // client2.user (with null or empty client id) should follow the user quota. (if user is 'ANONYMOUS', it should follow the default, overridden value.)
         clientQuotaManager.updateQuota(client2.configUser, None, None, Some(new Quota(4500, true)))

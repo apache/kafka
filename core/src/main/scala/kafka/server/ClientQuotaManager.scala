@@ -576,8 +576,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
 
     override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
-      val sanitizedUser = metricTags.get(DefaultTags.User)
-      val clientId = metricTags.get(DefaultTags.ClientId)
+      val sanitizedUser = if (metricTags.get(DefaultTags.User) == "ANONYMOUS") "" else metricTags.get(DefaultTags.User)
+      val clientId = if (metricTags.get(DefaultTags.ClientId) == null) "" else metricTags.get(DefaultTags.ClientId)
       var quota: Quota = null
 
       if (sanitizedUser != null && clientId != null) {
@@ -612,8 +612,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/clients/<default>
             quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
           }
+        } else {
+          // /config/clients/<default>
+          quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
         }
       }
+
       if (quota == null) null else quota.bound
     }
 
