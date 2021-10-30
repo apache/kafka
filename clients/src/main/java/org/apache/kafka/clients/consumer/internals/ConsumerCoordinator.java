@@ -41,7 +41,6 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -76,7 +75,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,6 +93,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
+    private RequestFuture<Void> onJoinPrepareAsyncCommitFuture = null;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final AtomicInteger pendingAsyncCommits;
@@ -507,7 +506,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
 
                 // if not wait for join group, we would just use a timer of 0
-                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L), timer)) {
+                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L))) {
                     // since we may use a different timer in the callee, we'd still need
                     // to update the original timer's current time after the call
                     timer.update(time.milliseconds());
@@ -672,10 +671,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId, final Timer offsetCommitTimer) {
+    protected boolean onJoinPrepare(int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(offsetCommitTimer);
+        boolean onJoinPrepareAsyncCommitSucceeded;
+        try {
+            // async commit offsets prior to rebalance if auto-commit enabled
+            onJoinPrepareAsyncCommitSucceeded = maybeAutoCommitOffsetsAsync();
+        } catch (Exception e) {
+            onJoinPrepareAsyncCommitFuture = null;
+            onJoinPrepareAsyncCommitSucceeded = true;
+            // consistent with async auto-commit failures, we do not propagate the exception
+            log.warn("Asynchronous auto-commit offsets failed: {}", e.getMessage());
+        }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -731,6 +738,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
+        return onJoinPrepareAsyncCommitSucceeded;
     }
 
     @Override
@@ -917,11 +925,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    public RequestFuture<Void> commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
+        RequestFuture<Void> future =  null;
         if (!coordinatorUnknown()) {
-            doCommitOffsetsAsync(offsets, callback);
+            future = doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
             // or fail (we don't want recursive retries which can cause offset commits to arrive
@@ -951,9 +960,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Note that commits are treated as heartbeats by the coordinator, so there is no need to
         // explicitly allow heartbeats through delayed task execution.
         client.pollNoWakeup();
+        return future;
     }
 
-    private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    private RequestFuture<Void> doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
@@ -977,6 +987,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         });
+        return future;
     }
 
     /**
@@ -996,16 +1007,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return true;
 
-        boolean shouldCleanUpConsumedOffsets = !checkConsumedOffsetsAreValid(offsets);
         do {
             if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
                 return false;
             }
 
-            if (shouldCleanUpConsumedOffsets) {
-                cleanUpConsumedOffsets(offsets);
-                shouldCleanUpConsumedOffsets = false;
-            }
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
             client.poll(future, timer);
 
@@ -1023,9 +1029,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
-            if(future.exception() instanceof UnknownTopicOrPartitionException)
-                shouldCleanUpConsumedOffsets = true;
-
             timer.sleep(rebalanceConfig.retryBackoffMs);
         } while (timer.notExpired());
 
@@ -1042,11 +1045,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void doAutoCommitOffsetsAsync() {
+    private RequestFuture<Void> doAutoCommitOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
-        commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
+        return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
                 if (exception instanceof RetriableCommitFailedException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
@@ -1059,6 +1062,33 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
             }
         });
+    }
+
+    private boolean maybeAutoCommitOffsetsAsync() {
+        if (autoCommitEnabled) {
+            invokeCompletedOffsetCommitCallbacks();
+
+            if (onJoinPrepareAsyncCommitFuture == null)
+                onJoinPrepareAsyncCommitFuture = doAutoCommitOffsetsAsync();
+            if (onJoinPrepareAsyncCommitFuture == null)
+                return true;
+
+            client.pollNoWakeup();
+            invokeCompletedOffsetCommitCallbacks();
+
+            if (!onJoinPrepareAsyncCommitFuture.isDone())
+                return false;
+            if (onJoinPrepareAsyncCommitFuture.succeeded()) {
+                onJoinPrepareAsyncCommitFuture = null;
+                return true;
+            }
+            if (onJoinPrepareAsyncCommitFuture.failed() && !onJoinPrepareAsyncCommitFuture.isRetriable())
+                throw onJoinPrepareAsyncCommitFuture.exception();
+            //retry Sending asynchronous auto-commit
+            onJoinPrepareAsyncCommitFuture = doAutoCommitOffsetsAsync();
+            return false;
+        } else
+            return true;
     }
 
     private void maybeAutoCommitOffsetsSync(Timer timer) {
@@ -1076,42 +1106,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // consistent with async auto-commit failures, we do not propagate the exception
                 log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
             }
-        }
-    }
-
-    private boolean checkConsumedOffsetsAreValid(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
-        if (partitionOffsetsToBeCommitted.isEmpty())
-            return true;
-
-        Set<String> validTopics = metadata.fetch().topics();
-        for (TopicPartition topicPartition : partitionOffsetsToBeCommitted.keySet()) {
-            if (!validTopics.contains(topicPartition.topic())) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void cleanUpConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> partitionOffsetsToBeCommitted) {
-        if (partitionOffsetsToBeCommitted.isEmpty())
-            return;
-
-        Set<String> validTopics = metadata.fetch().topics();
-        Set<TopicPartition> toGiveUpTopicPartitions = new HashSet<>();
-
-        Iterator<TopicPartition> iterator = partitionOffsetsToBeCommitted.keySet().iterator();
-        while (iterator.hasNext()) {
-            TopicPartition topicPartition = iterator.next();
-            if (!validTopics.contains(topicPartition.topic())) {
-                toGiveUpTopicPartitions.add(topicPartition);
-                iterator.remove();
-            }
-        }
-
-        if (toGiveUpTopicPartitions.size() > 0) {
-            //We might get `UnknownTopicOrPartitionException` after submitting their offsets due to topics been deleted. We should update the offsets list here.
-            // The worst effect is that we may keep retrying to commit the offsets for the topics not existed any more, before timeout reached.
-            log.warn("Synchronous auto-commit of offsets {} will be abandoned", toGiveUpTopicPartitions);
         }
     }
 

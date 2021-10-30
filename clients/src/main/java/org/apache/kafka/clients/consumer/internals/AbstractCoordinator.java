@@ -188,9 +188,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * cleanup from the previous generation (such as committing offsets for the consumer)
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
-     * @param offsetCommitTimer The timer for committing offsets synchronously
+     * @return true If onJoinPrepare async commit succeeded, false otherwise
      */
-    protected abstract void onJoinPrepare(int generation, String memberId, final Timer offsetCommitTimer);
+    protected abstract boolean onJoinPrepare(int generation, String memberId);
 
     /**
      * Perform assignment for the group. This is used by the leader to push state to all the members
@@ -344,7 +344,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure that the group is active (i.e. joined and synced)
      */
     public void ensureActiveGroup() {
-        while (!ensureActiveGroup(time.timer(Long.MAX_VALUE), time.timer(rebalanceConfig.rebalanceTimeoutMs))) {
+        while (!ensureActiveGroup(time.timer(Long.MAX_VALUE))) {
             log.warn("still waiting to ensure active group");
         }
     }
@@ -353,11 +353,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure the group is active (i.e., joined and synced)
      *
      * @param timer Timer bounding how long this method can block
-     * @param offsetCommitTimer The timer for committing offsets synchronously
      * @throws KafkaException if the callback throws exception
      * @return true iff the group is active
      */
-    boolean ensureActiveGroup(final Timer timer, final Timer offsetCommitTimer) {
+    boolean ensureActiveGroup(final Timer timer) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         if (!ensureCoordinatorReady(timer)) {
@@ -365,7 +364,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
-        return joinGroupIfNeeded(timer, offsetCommitTimer);
+        return joinGroupIfNeeded(timer);
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {
@@ -404,11 +403,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Visible for testing.
      *
      * @param timer Timer bounding how long this method can block
-     * @param offsetCommitTimer The timer for committing offsets synchronously
      * @throws KafkaException if the callback throws exception
-     * @return true iff the operation succeeded
+     * @return true if the operation succeeded
      */
-    boolean joinGroupIfNeeded(final Timer timer, final Timer offsetCommitTimer) {
+    boolean joinGroupIfNeeded(final Timer timer) {
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(timer)) {
                 return false;
@@ -423,8 +421,13 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                onJoinPrepare(generation.generationId, generation.memberId, offsetCommitTimer);
+                if (!onJoinPrepare(generation.generationId, generation.memberId))
+                    needsJoinPrepare = true;
             }
+
+            //should not initiateJoinGroup if needsJoinPrepare still is true
+            if (needsJoinPrepare)
+                return false;
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future, timer);
