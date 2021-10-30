@@ -33,9 +33,11 @@ import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+@Timeout(120)
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
@@ -46,7 +48,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false).
+      map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
 

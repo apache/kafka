@@ -65,10 +65,6 @@ class ZooKeeperQuorumImplementation(val zookeeper: EmbeddedZookeeper,
     CoreUtils.swallow(zkClient.close(), log)
     CoreUtils.swallow(zookeeper.shutdown(), log)
   }
-
-  def shutdownZooKeeper(): Unit = {
-    CoreUtils.swallow(zookeeper.shutdown(), log)
-  }
 }
 
 class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndVersion],
@@ -160,6 +156,11 @@ abstract class QuorumTestHarness extends Logging {
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
 
+  // Note: according to the junit documentation: "JUnit Jupiter does not guarantee the execution
+  // order of multiple @BeforeEach methods that are declared within a single test class or test
+  // interface." Therefore, if you have things you would like to do before each test case runs, it
+  // is best to override this function rather than declaring a new @BeforeEach function.
+  // That way you control the initialization order.
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {
     val name = if (testInfo.getTestMethod().isPresent()) {
@@ -182,7 +183,7 @@ abstract class QuorumTestHarness extends Logging {
       time)
   }
 
-  def shutdownZooKeeper(): Unit = asZk().shutdownZooKeeper()
+  def shutdownZooKeeper(): Unit = asZk().shutdown()
 
   private def formatDirectories(directories: immutable.Seq[String],
                                 metaProperties: MetaProperties): Unit = {
@@ -282,23 +283,22 @@ abstract class QuorumTestHarness extends Logging {
         name = "ZooKeeperTestHarness",
         new ZKClientConfig)
       adminZkClient = new AdminZkClient(zkClient)
-      new ZooKeeperQuorumImplementation(zookeeper,
-        zkClient,
-        adminZkClient,
-        this)
     } catch {
       case t: Throwable =>
         CoreUtils.swallow(zookeeper.shutdown(), this)
-        CoreUtils.swallow(zkClient.close(), this)
+        if (zkClient != null) CoreUtils.swallow(zkClient.close(), this)
         throw t
     }
+    new ZooKeeperQuorumImplementation(zookeeper,
+      zkClient,
+      adminZkClient,
+      this)
   }
 
   @AfterEach
   def tearDown(): Unit = {
     if (implementation != null) {
       implementation.shutdown()
-      implementation = null
     }
     Configuration.setConfiguration(null)
   }

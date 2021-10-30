@@ -138,9 +138,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    if (_brokers != null) {
-      TestUtils.shutdownServers(_brokers)
-    }
+    TestUtils.shutdownServers(_brokers)
     super.tearDown()
   }
 
