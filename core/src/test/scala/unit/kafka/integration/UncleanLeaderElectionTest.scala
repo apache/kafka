@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.util.Random
 import scala.jdk.CollectionConverters._
@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutionException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
 
-class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
+class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -63,8 +63,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     configProps1 = createBrokerConfig(brokerId1, zkConnect)
     configProps2 = createBrokerConfig(brokerId2, zkConnect)

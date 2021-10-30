@@ -23,11 +23,11 @@ import kafka.controller.ReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
 
-class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTest {
 
   var servers: Seq[KafkaServer] = Seq()
 

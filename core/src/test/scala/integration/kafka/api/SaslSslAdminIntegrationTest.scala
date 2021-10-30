@@ -14,6 +14,7 @@ package kafka.api
 
 import java.io.File
 import java.util
+
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
@@ -33,9 +34,9 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import java.util.Collections
+
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -62,9 +63,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     setUpSasl()
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   def setUpSasl(): Unit = {

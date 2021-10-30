@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
@@ -58,8 +58,8 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
   }
 

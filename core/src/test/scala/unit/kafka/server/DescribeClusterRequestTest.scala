@@ -19,6 +19,7 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.util.Properties
+
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
@@ -27,7 +28,7 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeCluster
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -40,8 +41,8 @@ class DescribeClusterRequestTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
   }
 
   @Test
