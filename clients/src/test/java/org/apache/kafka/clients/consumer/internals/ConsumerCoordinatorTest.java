@@ -148,6 +148,11 @@ public abstract class ConsumerCoordinatorTest {
             put(topic2, 1);
         }
     });
+    private MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+        {
+            put(topic1, 1);
+        }
+    });
     private Node node = metadataResponse.brokers().iterator().next();
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
@@ -2837,6 +2842,49 @@ public abstract class ConsumerCoordinatorTest {
             assertTrue(res);
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
+        }
+    }
+
+    @Test
+    public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true)) {
+            subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+                {
+                    put(topic1, 1);
+                    put(topic2, 1);
+                }
+            }));
+            coordinator.maybeUpdateSubscriptionMetadata();
+            assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), subscriptions.subscription());
+
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+            coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+            // Instrument the test so that metadata will contain only one topic after next refresh.
+            client.prepareMetadataUpdate(deletedMetadataResponse);
+
+            client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+            client.prepareResponse(body -> {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().isEmpty();
+            }, syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+            // This will trigger rebalance.
+            coordinator.poll(time.timer(Long.MAX_VALUE));
+
+            // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain only one topic.
+            assertEquals(singleton(topic1), subscriptions.subscription());
+
+            // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
+            // rebalance again.
+            metadata.requestUpdate();
+            consumerClient.poll(time.timer(Long.MAX_VALUE));
+            assertFalse(coordinator.rejoinNeededOrPending());
         }
     }
 
