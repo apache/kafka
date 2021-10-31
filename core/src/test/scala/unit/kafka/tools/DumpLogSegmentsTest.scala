@@ -207,8 +207,7 @@ class DumpLogSegmentsTest {
   def testDumpTimeIndexErrors(): Unit = {
     addSimpleRecords()
     val errors = new TimeIndexDumpErrors
-    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors,
-      Int.MaxValue)
+    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
