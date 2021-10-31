@@ -20,6 +20,9 @@ package kafka.tools
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.util.Properties
+import java.lang
+import java.util.Arrays.asList
+
 
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
@@ -28,6 +31,8 @@ import kafka.utils.Implicits._
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.header.Header
+import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
@@ -208,9 +213,22 @@ object ConsoleProducer {
       .defaultsTo(1024*100)
     val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
       "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
-      "\tparse.key=true|false\n" +
-      "\tkey.separator=<key.separator>\n" +
-      "\tignore.error=true|false")
+      "\tparse.key=false\n" +
+      "\tparse.headers=false\n" +
+      "\tignore.error=false\n" +
+      "Default parsing pattern when:\n" +
+      "\tparse.headers=true & parse.key=true:\n" +
+      "\t \"h1:v1,h2...\\tkey\\tvalue\"\n" +
+      "\tparse.headers=false & parse.key=true:\n" +
+      "\t \"key\\tvalue\"\n" +
+      "\tparse.headers=true & parse.key=false:\n" +
+      "\t \"h1:v1,h2...\\tvalue\"\n" +
+      "Customize pattern via (defaults shown)\n" +
+      "\tkey.separator=\\t\n" +
+      "\theaders.delimiter=\\t\n" +
+      "\theaders.separator=,\n" +
+      "\theaders.key.separator=:"
+      )
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -264,6 +282,10 @@ object ConsoleProducer {
     var reader: BufferedReader = null
     var parseKey = false
     var keySeparator = "\t"
+    var parseHeader = false
+    var headersDelimiter = "\t"
+    var headersSeparator = ","
+    var headerKeySeparator = ":"
     var ignoreError = false
     var lineNumber = 0
     var printPrompt = System.console != null
@@ -274,6 +296,14 @@ object ConsoleProducer {
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
       if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
+      if (props.containsKey("parse.headers"))
+        parseHeader = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
+      if (props.containsKey("headers.delimiter"))
+        headersDelimiter = props.getProperty("headers.delimiter")
+      if (props.containsKey("headers.separator"))
+        headersSeparator = props.getProperty("headers.separator")
+      if (props.containsKey("headers.key.separator"))
+        headerKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
@@ -281,21 +311,59 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
-      if (printPrompt)
-        print(">")
-      (reader.readLine(), parseKey) match {
-        case (null, _) => null
-        case (line, true) =>
-          line.indexOf(keySeparator) match {
-            case -1 =>
-              if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
-              else throw new KafkaException(s"No key found on line $lineNumber: $line")
-            case n =>
-              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
-              new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
-          }
-        case (line, false) =>
-          new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+      if (printPrompt) print(">")
+      val line = reader.readLine()
+      try{
+        (line, parseKey, parseHeader) match {
+          case (null, _, _) => null
+          case (line, true, true) =>
+            val Array(headers, key, value) = line.split("[" + headersDelimiter + keySeparator + "]")
+            new ProducerRecord(topic, null, null, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
+          case (line, true, false) =>
+            val Array(key, value) = line.split("[" + keySeparator + "]")
+            new ProducerRecord(topic, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8))
+          case (line, false, true) =>
+            val Array(headers, value) = line.split("[" + headersDelimiter + "]")
+            new ProducerRecord(topic, null, null, null, value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
+          case (line, false, false) => new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+        }
+      } catch {
+        case _: MatchError => onMatchError(line)
+      }
+    }
+
+    private def onMatchError(line: String): ProducerRecord[Array[Byte], Array[Byte]] = {
+      if (ignoreError) {
+        new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+      } else {
+        throw new KafkaException("Could not parse line " + lineNumber + ", most likely line does not match pattern: " + illustratePattern())
+      }
+    }
+
+    def mapHeaders(headers: String): lang.Iterable[Header] = {
+      asList(
+        headers.split(headersSeparator)
+          .map(_.split(headerKeySeparator))
+          .map(keyValue => new RecordHeader(keyValue(0), keyValue(1).getBytes(StandardCharsets.UTF_8)))
+          : _*
+      )
+    }
+
+
+    def illustratePattern(): String = {
+      val valuePattern = "value"
+      val keyPattern: String = "key" + keySeparator
+      val headerPattern: String =
+        "headerKey0" + headerKeySeparator + "headerValue0" + headersSeparator +
+          "..." + headersSeparator +
+          "headerKeyN" + headerKeySeparator + "headerValueN" +
+          headersDelimiter
+
+      (parseKey, parseHeader) match {
+        case (false, false) => valuePattern
+        case (true, false) => keyPattern + valuePattern
+        case (false, true) => headerPattern + valuePattern
+        case (true, true) => headerPattern + keyPattern + valuePattern
       }
     }
   }
