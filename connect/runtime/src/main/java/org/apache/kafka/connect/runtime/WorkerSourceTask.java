@@ -96,6 +96,7 @@ class WorkerSourceTask extends WorkerTask {
 
     private List<SourceRecord> toSend;
     private volatile Map<Map<String, Object>, Map<String, Object>> committableOffsets;
+    private volatile SubmittedRecords.Pending pendingRecordsMetadata;
     private final SubmittedRecords submittedRecords;
     private final CountDownLatch stopRequestedLatch;
 
@@ -142,6 +143,7 @@ class WorkerSourceTask extends WorkerTask {
 
         this.toSend = null;
         this.committableOffsets = new HashMap<>();
+        this.pendingRecordsMetadata = null;
         this.submittedRecords = new SubmittedRecords();
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
@@ -293,8 +295,11 @@ class WorkerSourceTask extends WorkerTask {
         if (newOffsets.isEmpty())
             return;
 
+        SubmittedRecords.Pending latestPendingMetadata = submittedRecords.pending();
+
         synchronized (this) {
             committableOffsets.putAll(newOffsets);
+            this.pendingRecordsMetadata = latestPendingMetadata;
         }
     }
 
@@ -474,9 +479,24 @@ class WorkerSourceTask extends WorkerTask {
         long timeout = started + commitTimeoutMs;
 
         Map<Map<String, Object>, Map<String, Object>> offsetsToCommit;
+        SubmittedRecords.Pending pendingMetadataForCommit;
         synchronized (this) {
             offsetsToCommit = this.committableOffsets;
             this.committableOffsets = new HashMap<>();
+            pendingMetadataForCommit = this.pendingRecordsMetadata;
+            this.pendingRecordsMetadata = null;
+        }
+
+        if (pendingMetadataForCommit != null) {
+            log.info("There are currently {} pending messages spread across {} source partitions whose offsets will not be committed. "
+                            + "The source partition with the most pending messages is {}, with {} pending messages",
+                    pendingMetadataForCommit.totalPendingMessages(),
+                    pendingMetadataForCommit.numDeques(),
+                    pendingMetadataForCommit.largestDequePartition(),
+                    pendingMetadataForCommit.largestDequeSize()
+            );
+        } else {
+            log.info("There are currently no pending messages for this offset commit; all messages since the last commit have been acknowledged");
         }
 
         // Update the offset writer with any new offsets for records that have been acked.

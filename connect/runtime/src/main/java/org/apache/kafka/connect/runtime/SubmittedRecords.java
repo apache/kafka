@@ -21,6 +21,7 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -114,6 +115,29 @@ class SubmittedRecords {
         return result;
     }
 
+    /**
+     * @return metadata about the number of deques, total outstanding messages, etc. since the last time {@link #committableOffsets()} was invoked,
+     * or {@code null} if there are no outstanding messages
+     */
+    public Pending pending() {
+        if (records.isEmpty()) {
+            return null;
+        }
+        int numDeques = records.size();
+        int totalPendingMessages = 0;
+        int largestDequeSize = -1;
+        Map<String, Object> largestDequePartition = Collections.emptyMap();
+        for (Map.Entry<Map<String, Object>, Deque<SubmittedRecord>> partitionAndDeque : records.entrySet()) {
+            int dequeSize = partitionAndDeque.getValue().size();
+            totalPendingMessages += dequeSize;
+            if (dequeSize > largestDequeSize) {
+                largestDequeSize = dequeSize;
+                largestDequePartition = partitionAndDeque.getKey();
+            }
+        }
+        return new Pending(numDeques, totalPendingMessages, largestDequeSize, largestDequePartition);
+    }
+
     // Note that this will return null if either there are no committable offsets for the given deque, or the latest
     // committable offset is itself null. The caller is responsible for distinguishing between the two cases.
     private Map<String, Object> committableOffset(Deque<SubmittedRecord> queuedRecords) {
@@ -157,6 +181,46 @@ class SubmittedRecords {
 
         private Map<String, Object> offset() {
             return offset;
+        }
+    }
+
+    static class Pending {
+        private final int numDeques;
+        private final int totalPendingMessages;
+        private final int largestDequeSize;
+        private final Map<String, Object> largestDequePartition;
+
+        public Pending(int numDeques, int totalPendingMessages, int largestDequeSize, Map<String, Object> largestDequePartition) {
+            this.numDeques = numDeques;
+            this.totalPendingMessages = totalPendingMessages;
+            this.largestDequeSize = largestDequeSize;
+            this.largestDequePartition = largestDequePartition;
+        }
+
+        public int numDeques() {
+            return numDeques;
+        }
+
+        public int totalPendingMessages() {
+            return totalPendingMessages;
+        }
+
+        public int largestDequeSize() {
+            return largestDequeSize;
+        }
+
+        public Map<String, Object> largestDequePartition() {
+            return largestDequePartition;
+        }
+
+        @Override
+        public String toString() {
+            return "Pending{" +
+                    "numDeques=" + numDeques +
+                    ", totalPendingMessages=" + totalPendingMessages +
+                    ", largestDequeSize=" + largestDequeSize +
+                    ", largestDequePartition=" + largestDequePartition +
+                    '}';
         }
     }
 }
