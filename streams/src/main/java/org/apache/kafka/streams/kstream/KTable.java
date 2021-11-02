@@ -2119,7 +2119,7 @@ public interface KTable<K, V> {
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      *
-     * @deprecated since 3.1, removal planned in 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined)} instead.
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined)} instead.
      */
     @Deprecated
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
@@ -2129,8 +2129,9 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
-     * using the {@link TableJoined} instance for configuration of the {@link StreamPartitioner this table's
-     * key serde} and {@link StreamPartitioner the other table's key serde}.
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
@@ -2187,7 +2188,7 @@ public interface KTable<K, V> {
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      *
-     * @deprecated since 3.1, removal planned in 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
      */
     @Deprecated
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
@@ -2198,8 +2199,9 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
-     * using the {@link TableJoined} instance for configuration of the {@link StreamPartitioner this table's
-     * key serde} and {@link StreamPartitioner the other table's key serde}.
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
@@ -2254,7 +2256,7 @@ public interface KTable<K, V> {
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      *
-     * @deprecated since 3.1, removal planned in 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined)} instead.
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined)} instead.
      */
     @Deprecated
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
@@ -2264,8 +2266,9 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
-     * using the {@link TableJoined} instance for configuration of the {@link StreamPartitioner this table's
-     * key serde} and {@link StreamPartitioner the other table's key serde}.
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
@@ -2322,7 +2325,7 @@ public interface KTable<K, V> {
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
      *
-     * @deprecated since 3.1, removal planned in 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
      */
     @Deprecated
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
@@ -2333,8 +2336,9 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
-     * using the {@link TableJoined} instance for configuration of the {@link StreamPartitioner this table's
-     * key serde} and {@link StreamPartitioner the other table's key serde}.
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
