@@ -714,10 +714,12 @@ public class StreamThread extends Thread {
     }
 
     private void subscribeConsumer() {
-        if (topologyMetadata.usesPatternSubscription()) {
-            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
-        } else {
-            mainConsumer.subscribe(topologyMetadata.sourceTopicCollection(), rebalanceListener);
+        if (!topologyMetadata.isEmpty()) {
+            if (topologyMetadata.usesPatternSubscription()) {
+                mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
+            } else {
+                mainConsumer.subscribe(topologyMetadata.sourceTopicCollection(), rebalanceListener);
+            }
         }
     }
 
