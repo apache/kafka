@@ -96,46 +96,40 @@ class SubmittedRecords {
     }
 
     /**
-     * Clear out any acknowledged records at the head of the deques and return the latest offset for each source partition that can be committed.
+     * Clear out any acknowledged records at the head of the deques and return a {@link CommittableOffsets snapshot} of the offsets and offset metadata
+     * accrued between the last time this method was invoked and now. This snapshot can be {@link CommittableOffsets#updatedWith(CommittableOffsets) combined}
+     * with an existing snapshot if desired.
      * Note that this may take some time to complete if a large number of records has built up, which may occur if a
      * Kafka partition is offline and all records targeting that partition go unacknowledged while records targeting
      * other partitions continue to be dispatched to the producer and sent successfully
-     * @return the latest-possible offsets to commit for each source partition; may be empty but never null
+     * @return a fresh offset snapshot; never null
      */
-    public Map<Map<String, Object>, Map<String, Object>> committableOffsets() {
-        Map<Map<String, Object>, Map<String, Object>> result = new HashMap<>();
-        records.forEach((partition, queuedRecords) -> {
+    public CommittableOffsets committableOffsets() {
+        Map<Map<String, Object>, Map<String, Object>> offsets = new HashMap<>();
+        int totalCommittableMessages = 0;
+        int totalUncommittableMessages = 0;
+        int largestDequeSize = 0;
+        Map<String, Object> largestDequePartition = null;
+        for (Map.Entry<Map<String, Object>, Deque<SubmittedRecord>> entry : records.entrySet()) {
+            Map<String, Object> partition = entry.getKey();
+            Deque<SubmittedRecord> queuedRecords = entry.getValue();
+            int initialDequeSize = queuedRecords.size();
             if (canCommitHead(queuedRecords)) {
                 Map<String, Object> offset = committableOffset(queuedRecords);
-                result.put(partition, offset);
+                offsets.put(partition, offset);
             }
-        });
+            int uncommittableMessages = queuedRecords.size();
+            int committableMessages = initialDequeSize - uncommittableMessages;
+            totalCommittableMessages += committableMessages;
+            totalUncommittableMessages += uncommittableMessages;
+            if (uncommittableMessages > largestDequeSize) {
+                largestDequeSize = uncommittableMessages;
+                largestDequePartition = partition;
+            }
+        }
         // Clear out all empty deques from the map to keep it from growing indefinitely
         records.values().removeIf(Deque::isEmpty);
-        return result;
-    }
-
-    /**
-     * @return metadata about the number of deques, total outstanding messages, etc. since the last time {@link #committableOffsets()} was invoked,
-     * or {@code null} if there are no outstanding messages
-     */
-    public Pending pending() {
-        if (records.isEmpty()) {
-            return null;
-        }
-        int numDeques = records.size();
-        int totalPendingMessages = 0;
-        int largestDequeSize = -1;
-        Map<String, Object> largestDequePartition = Collections.emptyMap();
-        for (Map.Entry<Map<String, Object>, Deque<SubmittedRecord>> partitionAndDeque : records.entrySet()) {
-            int dequeSize = partitionAndDeque.getValue().size();
-            totalPendingMessages += dequeSize;
-            if (dequeSize > largestDequeSize) {
-                largestDequeSize = dequeSize;
-                largestDequePartition = partitionAndDeque.getKey();
-            }
-        }
-        return new Pending(numDeques, totalPendingMessages, largestDequeSize, largestDequePartition);
+        return new CommittableOffsets(offsets, totalCommittableMessages, totalUncommittableMessages, records.size(), largestDequeSize, largestDequePartition);
     }
 
     // Note that this will return null if either there are no committable offsets for the given deque, or the latest
@@ -184,43 +178,120 @@ class SubmittedRecords {
         }
     }
 
-    static class Pending {
+    /**
+     * Contains a snapshot of offsets that can be committed for a source task and metadata for that offset commit
+     * (such as the number of messages for which offsets can and cannot be committed).
+     */
+    static class CommittableOffsets {
+
+        /**
+         * An "empty" snapshot that contains no offsets to commit and whose metadata contains no committable or uncommitable messages.
+         */
+        public static final CommittableOffsets EMPTY = new CommittableOffsets(Collections.emptyMap(), 0, 0, 0, 0, null);
+
+        private final Map<Map<String, Object>, Map<String, Object>> offsets;
+        private final int numCommittableMessages;
+        private final int numUncommittableMessages;
         private final int numDeques;
-        private final int totalPendingMessages;
         private final int largestDequeSize;
         private final Map<String, Object> largestDequePartition;
 
-        public Pending(int numDeques, int totalPendingMessages, int largestDequeSize, Map<String, Object> largestDequePartition) {
+        CommittableOffsets(
+                Map<Map<String, Object>, Map<String, Object>> offsets,
+                int numCommittableMessages,
+                int numUncommittableMessages,
+                int numDeques,
+                int largestDequeSize,
+                Map<String, Object> largestDequePartition
+        ) {
+            this.offsets = offsets != null ? new HashMap<>(offsets) : Collections.emptyMap();
+            this.numCommittableMessages = numCommittableMessages;
+            this.numUncommittableMessages = numUncommittableMessages;
             this.numDeques = numDeques;
-            this.totalPendingMessages = totalPendingMessages;
             this.largestDequeSize = largestDequeSize;
             this.largestDequePartition = largestDequePartition;
         }
 
+        /**
+         * @return the offsets that can be committed at the time of the snapshot
+         */
+        public Map<Map<String, Object>, Map<String, Object>> offsets() {
+            return Collections.unmodifiableMap(offsets);
+        }
+
+        /**
+         * @return the number of committable messages at the time of the snapshot, where a committable message is both
+         * acknowledged and not preceded by any unacknowledged messages in the deque for its source partition
+         */
+        public int numCommittableMessages() {
+            return numCommittableMessages;
+        }
+
+        /**
+         * @return the number of uncommittable messages at the time of the snapshot, where an uncommittable message
+         * is either unacknowledged, or preceded in the deque for its source partition by an unacknowledged message
+         */
+        public int numUncommittableMessages() {
+            return numUncommittableMessages;
+        }
+
+        /**
+         * @return the number of non-empty deques tracking uncommittable messages at the time of the snapshot
+         */
         public int numDeques() {
             return numDeques;
         }
 
-        public int totalPendingMessages() {
-            return totalPendingMessages;
-        }
-
+        /**
+         * @return the size of the largest deque at the time of the snapshot
+         */
         public int largestDequeSize() {
             return largestDequeSize;
         }
 
+        /**
+         * Get the partition for the deque with the most uncommitted messages at the time of the snapshot.
+         * @return the applicable partition, which may be null, or null if there are no uncommitted messages;
+         * it is the caller's responsibility to distinguish between these two cases via {@link #hasPending()}
+         */
         public Map<String, Object> largestDequePartition() {
             return largestDequePartition;
         }
 
-        @Override
-        public String toString() {
-            return "Pending{" +
-                    "numDeques=" + numDeques +
-                    ", totalPendingMessages=" + totalPendingMessages +
-                    ", largestDequeSize=" + largestDequeSize +
-                    ", largestDequePartition=" + largestDequePartition +
-                    '}';
+        /**
+         * @return whether there were any uncommittable messages at the time of the snapshot
+         */
+        public boolean hasPending() {
+            return numUncommittableMessages > 0;
+        }
+
+        /**
+         * @return whether there were any committable or uncommittable messages at the time of the snapshot
+         */
+        public boolean isEmpty() {
+            return numCommittableMessages == 0 && numUncommittableMessages == 0 && offsets.isEmpty();
+        }
+
+        /**
+         * Create a new snapshot by combining the data for this snapshot with newer data in a more recent snapshot.
+         * Offsets are combined (giving precedence to the newer snapshot in case of conflict), the total number of
+         * committable messages is summed across the two snapshots, and the newer snapshot's information on pending
+         * messages (num deques, largest deque size, etc.) is used.
+         * @param newerOffsets the newer snapshot to combine with this snapshot
+         * @return the new offset snapshot containing information from this snapshot and the newer snapshot; never null
+         */
+        public CommittableOffsets updatedWith(CommittableOffsets newerOffsets) {
+            Map<Map<String, Object>, Map<String, Object>> offsets = new HashMap<>(this.offsets);
+            offsets.putAll(newerOffsets.offsets);
+
+            return new CommittableOffsets(
+                    offsets,
+                    this.numCommittableMessages + newerOffsets.numCommittableMessages,
+                    newerOffsets.numUncommittableMessages,
+                    newerOffsets.numDeques,
+                    newerOffsets.largestDequeSize,
+                    newerOffsets.largestDequePartition
+            );
         }
     }
 }

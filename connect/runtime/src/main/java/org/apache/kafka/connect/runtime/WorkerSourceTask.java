@@ -55,7 +55,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -95,8 +94,7 @@ class WorkerSourceTask extends WorkerTask {
     private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
-    private volatile Map<Map<String, Object>, Map<String, Object>> committableOffsets;
-    private volatile SubmittedRecords.Pending pendingRecordsMetadata;
+    private volatile SubmittedRecords.CommittableOffsets committableOffsets;
     private final SubmittedRecords submittedRecords;
     private final CountDownLatch stopRequestedLatch;
 
@@ -142,8 +140,7 @@ class WorkerSourceTask extends WorkerTask {
         this.closeExecutor = closeExecutor;
 
         this.toSend = null;
-        this.committableOffsets = new HashMap<>();
-        this.pendingRecordsMetadata = null;
+        this.committableOffsets = SubmittedRecords.CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
@@ -291,15 +288,9 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     private void updateCommittableOffsets() {
-        Map<Map<String, Object>, Map<String, Object>> newOffsets = submittedRecords.committableOffsets();
-        if (newOffsets.isEmpty())
-            return;
-
-        SubmittedRecords.Pending latestPendingMetadata = submittedRecords.pending();
-
+        SubmittedRecords.CommittableOffsets newOffsets = submittedRecords.committableOffsets();
         synchronized (this) {
-            committableOffsets.putAll(newOffsets);
-            this.pendingRecordsMetadata = latestPendingMetadata;
+            this.committableOffsets = this.committableOffsets.updatedWith(newOffsets);
         }
     }
 
@@ -478,32 +469,44 @@ class WorkerSourceTask extends WorkerTask {
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
 
-        Map<Map<String, Object>, Map<String, Object>> offsetsToCommit;
-        SubmittedRecords.Pending pendingMetadataForCommit;
+        SubmittedRecords.CommittableOffsets offsetsToCommit;
         synchronized (this) {
             offsetsToCommit = this.committableOffsets;
-            this.committableOffsets = new HashMap<>();
-            pendingMetadataForCommit = this.pendingRecordsMetadata;
-            this.pendingRecordsMetadata = null;
+            this.committableOffsets = SubmittedRecords.CommittableOffsets.EMPTY;
         }
 
-        if (pendingMetadataForCommit != null) {
-            log.info("There are currently {} pending messages spread across {} source partitions whose offsets will not be committed. "
-                            + "The source partition with the most pending messages is {}, with {} pending messages",
-                    pendingMetadataForCommit.totalPendingMessages(),
-                    pendingMetadataForCommit.numDeques(),
-                    pendingMetadataForCommit.largestDequePartition(),
-                    pendingMetadataForCommit.largestDequeSize()
+        if (committableOffsets.isEmpty()) {
+            log.info("{} Either no records were produced by the task since the last offset commit, " 
+                    + "or every record has been filtered out by a transformation " 
+                    + "or dropped due to transformation or conversion errors.",
+                    this
             );
+            // We continue with the offset commit process here instead of simply returning immediately
+            // in order to invoke SourceTask::commit and record metrics for a successful offset commit
         } else {
-            log.info("There are currently no pending messages for this offset commit; all messages since the last commit have been acknowledged");
+            log.info("{} Committing offsets for {} acknowledged messages", this, committableOffsets.numCommittableMessages());
+            if (committableOffsets.hasPending()) {
+                log.debug("{} There are currently {} pending messages spread across {} source partitions whose offsets will not be committed. "
+                                + "The source partition with the most pending messages is {}, with {} pending messages",
+                        this,
+                        committableOffsets.numUncommittableMessages(),
+                        committableOffsets.numDeques(),
+                        committableOffsets.largestDequePartition(),
+                        committableOffsets.largestDequeSize()
+                );
+            } else {
+                log.debug("{} There are currently no pending messages for this offset commit; " 
+                        + "all messages dispatched to the task's producer since the last commit have been acknowledged",
+                        this
+                );
+            }
         }
 
         // Update the offset writer with any new offsets for records that have been acked.
         // The offset writer will continue to track all offsets until they are able to be successfully flushed.
         // IOW, if the offset writer fails to flush, it keeps those offset for the next attempt,
         // though we may update them here with newer offsets for acked records.
-        offsetsToCommit.forEach(offsetWriter::offset);
+        offsetsToCommit.offsets().forEach(offsetWriter::offset);
 
         if (!offsetWriter.beginFlush()) {
             // There was nothing in the offsets to process, but we still mark a successful offset commit.
