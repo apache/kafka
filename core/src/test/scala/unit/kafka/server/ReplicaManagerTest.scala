@@ -3483,8 +3483,9 @@ class ReplicaManagerTest {
     assertEquals(expectedTopicId, fetchState.get.topicId)
   }
 
-  @Test
-  def testPartitionFetchStateUpdatesWithTopicIdAdded(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionFetchStateUpdatesWithTopicIdAdded(startsWithTopicIds: Boolean): Unit = {
     val aliveBrokersIds = Seq(0, 1)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       brokerId = 0, aliveBrokersIds)
@@ -3492,18 +3493,21 @@ class ReplicaManagerTest {
       val tp = new TopicPartition(topic, 0)
       val leaderAndIsr = new LeaderAndIsr(1, 0, aliveBrokersIds.toList, 0)
 
-      val leaderAndIsrRequest1 = leaderAndIsrRequest(Uuid.ZERO_UUID, tp, aliveBrokersIds, leaderAndIsr)
+      val startingId = if (startsWithTopicIds) topicId else Uuid.ZERO_UUID
+      val startingIdOpt = if (startsWithTopicIds) Some(topicId) else None
+      val leaderAndIsrRequest1 = leaderAndIsrRequest(startingId, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse1 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse1.error)
 
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, None)
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, startingIdOpt)
 
-      val leaderAndIsrRequest2 = leaderAndIsrRequest(topicId, tp, aliveBrokersIds, leaderAndIsr)
+      val endingId = if (!startsWithTopicIds) topicId else Uuid.ZERO_UUID
+      val endingIdOpt = if (!startsWithTopicIds) Some(topicId) else None
+      val leaderAndIsrRequest2 = leaderAndIsrRequest(endingId, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
 
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, Some(topicId))
-
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, endingIdOpt)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
