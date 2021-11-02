@@ -33,6 +33,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -73,18 +74,21 @@ public class FileOffsetBackingStoreTest {
 
     @Test
     public void testGetSet() throws Exception {
-        Callback<Void> setCallback = expectSuccessfulSetCallback();
+        @SuppressWarnings("unchecked")
+        Callback<Void> setCallback = mock(Callback.class);
 
         store.set(firstSet, setCallback).get();
 
         Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertNull(values.get(buffer("bad")));
+        verify(setCallback).onCompletion(isNull(), isNull());
     }
 
     @Test
     public void testSaveRestore() throws Exception {
-        Callback<Void> setCallback = expectSuccessfulSetCallback();
+        @SuppressWarnings("unchecked")
+        Callback<Void> setCallback = mock(Callback.class);
 
         store.set(firstSet, setCallback).get();
         store.stop();
@@ -95,6 +99,7 @@ public class FileOffsetBackingStoreTest {
         restore.start();
         Map<ByteBuffer, ByteBuffer> values = restore.get(Collections.singletonList(buffer("key"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
+        verify(setCallback).onCompletion(isNull(), isNull());
     }
 
     @Test
@@ -107,10 +112,4 @@ public class FileOffsetBackingStoreTest {
         return ByteBuffer.wrap(v.getBytes());
     }
 
-    private Callback<Void> expectSuccessfulSetCallback() {
-        @SuppressWarnings("unchecked")
-        Callback<Void> setCallback = mock(Callback.class);
-        setCallback.onCompletion(isNull(), isNull());
-        return setCallback;
-    }
 }
