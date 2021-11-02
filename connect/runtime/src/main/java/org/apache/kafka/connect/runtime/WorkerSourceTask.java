@@ -66,6 +66,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
+import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
@@ -94,7 +95,7 @@ class WorkerSourceTask extends WorkerTask {
     private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
-    private volatile SubmittedRecords.CommittableOffsets committableOffsets;
+    private volatile CommittableOffsets committableOffsets;
     private final SubmittedRecords submittedRecords;
     private final CountDownLatch stopRequestedLatch;
 
@@ -140,7 +141,7 @@ class WorkerSourceTask extends WorkerTask {
         this.closeExecutor = closeExecutor;
 
         this.toSend = null;
-        this.committableOffsets = SubmittedRecords.CommittableOffsets.EMPTY;
+        this.committableOffsets = CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
@@ -288,7 +289,7 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     private void updateCommittableOffsets() {
-        SubmittedRecords.CommittableOffsets newOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets newOffsets = submittedRecords.committableOffsets();
         synchronized (this) {
             this.committableOffsets = this.committableOffsets.updatedWith(newOffsets);
         }
@@ -469,10 +470,10 @@ class WorkerSourceTask extends WorkerTask {
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
 
-        SubmittedRecords.CommittableOffsets offsetsToCommit;
+        CommittableOffsets offsetsToCommit;
         synchronized (this) {
             offsetsToCommit = this.committableOffsets;
-            this.committableOffsets = SubmittedRecords.CommittableOffsets.EMPTY;
+            this.committableOffsets = CommittableOffsets.EMPTY;
         }
 
         if (committableOffsets.isEmpty()) {

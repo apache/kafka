@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
+import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -48,7 +49,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testNoRecords() {
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertTrue(committableOffsets.isEmpty());
 
         committableOffsets = submittedRecords.committableOffsets();
@@ -68,7 +69,7 @@ public class SubmittedRecordsTest {
             }
         }
 
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 9, 3, 3, PARTITION1, PARTITION2, PARTITION3);
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
 
@@ -86,7 +87,7 @@ public class SubmittedRecordsTest {
         Map<String, Object> offset = newOffset();
 
         SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, offset);
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // Record has been submitted but not yet acked; cannot commit offsets for it yet
         assertFalse(committableOffsets.isEmpty());
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
@@ -121,7 +122,7 @@ public class SubmittedRecordsTest {
         SubmittedRecord partition2Record1 = submittedRecords.submit(PARTITION2, partition2Offset1);
         SubmittedRecord partition2Record2 = submittedRecords.submit(PARTITION2, partition2Offset2);
 
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // No records ack'd yet; can't commit any offsets
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 4, 2, 2, PARTITION1, PARTITION2);
@@ -170,7 +171,7 @@ public class SubmittedRecordsTest {
     public void testRemoveLastSubmittedRecord() {
         SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
 
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION1);
 
@@ -195,7 +196,7 @@ public class SubmittedRecordsTest {
         SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
         SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
 
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 2, 2, 1, PARTITION1, PARTITION2);
         assertNoEmptyDeques();
 
@@ -232,7 +233,7 @@ public class SubmittedRecordsTest {
     @Test
     public void testNullPartitionAndOffset() {
         SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
-        SubmittedRecords.CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
+        CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 1, 1, 1, (Map<String, Object>) null);
 
         submittedRecord.ack();
@@ -264,7 +265,7 @@ public class SubmittedRecordsTest {
         return Collections.singletonMap("timestamp", offset.getAndIncrement());
     }
 
-    private void assertMetadataNoPending(SubmittedRecords.CommittableOffsets committableOffsets, int committableMessages) {
+    private void assertMetadataNoPending(CommittableOffsets committableOffsets, int committableMessages) {
         assertEquals(committableMessages, committableOffsets.numCommittableMessages());
         assertFalse(committableOffsets.hasPending());
     }
@@ -272,7 +273,7 @@ public class SubmittedRecordsTest {
     @SafeVarargs
     @SuppressWarnings("varargs")
     private final void assertMetadata(
-            SubmittedRecords.CommittableOffsets committableOffsets,
+            CommittableOffsets committableOffsets,
             int committableMessages,
             int uncommittableMessages,
             int numDeques,
