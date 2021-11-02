@@ -17,12 +17,12 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Optional;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrRequestData.PartitionData;
@@ -71,6 +71,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -79,12 +80,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -94,6 +97,7 @@ import java.util.stream.IntStream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
@@ -102,6 +106,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
+import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
 import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
@@ -127,19 +132,13 @@ public class ReplicationControlManagerTest {
         final LogContext logContext = new LogContext();
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
+        final ControllerMetrics metrics = new MockControllerMetrics();
         final ClusterControlManager clusterControl = new ClusterControlManager(
             logContext, time, snapshotRegistry, TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
-            new StripedReplicaPlacer(random));
-        final ControllerMetrics metrics = new MockControllerMetrics();
+            new StripedReplicaPlacer(random), metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
-            new LogContext(), snapshotRegistry, Collections.emptyMap());
-        final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
-            new LogContext(),
-            (short) 3,
-            1,
-            configurationControl,
-            clusterControl,
-            metrics);
+            new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty());
+        final ReplicationControlManager replicationControl;
 
         void replay(List<ApiMessageAndVersion> records) throws Exception {
             RecordTestUtils.replayAll(clusterControl, records);
@@ -148,15 +147,52 @@ public class ReplicationControlManagerTest {
         }
 
         ReplicationControlTestContext() {
+            this(Optional.empty());
+        }
+
+        ReplicationControlTestContext(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this.replicationControl = new ReplicationControlManager(snapshotRegistry,
+                new LogContext(),
+                (short) 3,
+                1,
+                configurationControl,
+                clusterControl,
+                metrics,
+                createTopicPolicy);
             clusterControl.activate();
         }
 
+        CreatableTopicResult createTestTopic(String name,
+                                             int numPartitions,
+                                             short replicationFactor,
+                                             short expectedErrorCode) throws Exception {
+            CreateTopicsRequestData request = new CreateTopicsRequestData();
+            CreatableTopic topic = new CreatableTopic().setName(name);
+            topic.setNumPartitions(numPartitions).setReplicationFactor(replicationFactor);
+            request.topics().add(topic);
+            ControllerResult<CreateTopicsResponseData> result =
+                replicationControl.createTopics(request);
+            CreatableTopicResult topicResult = result.response().topics().find(name);
+            assertNotNull(topicResult);
+            assertEquals(expectedErrorCode, topicResult.errorCode());
+            if (expectedErrorCode == NONE.code()) {
+                replay(result.records());
+            }
+            return topicResult;
+        }
+
         CreatableTopicResult createTestTopic(String name, int[][] replicas) throws Exception {
-            return createTestTopic(name, replicas, (short) 0);
+            return createTestTopic(name, replicas, Collections.emptyMap(), (short) 0);
         }
 
         CreatableTopicResult createTestTopic(String name, int[][] replicas,
-                short expectedErrorCode) throws Exception {
+                                             short expectedErrorCode) throws Exception {
+            return createTestTopic(name, replicas, Collections.emptyMap(), expectedErrorCode);
+        }
+
+        CreatableTopicResult createTestTopic(String name, int[][] replicas,
+                                             Map<String, String> configs,
+                                             short expectedErrorCode) throws Exception {
             assertFalse(replicas.length == 0);
             CreateTopicsRequestData request = new CreateTopicsRequestData();
             CreatableTopic topic = new CreatableTopic().setName(name);
@@ -165,6 +201,9 @@ public class ReplicationControlManagerTest {
                 topic.assignments().add(new CreatableReplicaAssignment().
                     setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
             }
+            configs.entrySet().forEach(e -> topic.configs().add(
+                new CreateTopicsRequestData.CreateableTopicConfig().setName(e.getKey()).
+                    setValue(e.getValue())));
             request.topics().add(topic);
             ControllerResult<CreateTopicsResponseData> result =
                 replicationControl.createTopics(request);
@@ -307,6 +346,39 @@ public class ReplicationControlManagerTest {
         }
     }
 
+    private static class MockCreateTopicPolicy implements CreateTopicPolicy {
+        private final List<RequestMetadata> expecteds;
+        private final AtomicLong index = new AtomicLong(0);
+
+        MockCreateTopicPolicy(List<RequestMetadata> expecteds) {
+            this.expecteds = expecteds;
+        }
+
+        @Override
+        public void validate(RequestMetadata actual) throws PolicyViolationException {
+            long curIndex = index.getAndIncrement();
+            if (curIndex >= expecteds.size()) {
+                throw new PolicyViolationException("Unexpected topic creation: index " +
+                    "out of range at " + curIndex);
+            }
+            RequestMetadata expected = expecteds.get((int) curIndex);
+            if (!expected.equals(actual)) {
+                throw new PolicyViolationException("Expected: " + expected +
+                    ". Got: " + actual);
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            // nothing to do
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // nothing to do
+        }
+    }
+
     @Test
     public void testCreateTopics() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
@@ -355,6 +427,99 @@ public class ReplicationControlManagerTest {
                 new ApiMessageAndVersion(new TopicRecord().
                     setTopicId(fooId).setName("foo"), (short) 0))),
             ctx.replicationControl.iterator(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testBrokerCountMetrics() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        ctx.registerBrokers(0);
+
+        assertEquals(1, ctx.metrics.fencedBrokerCount());
+        assertEquals(0, ctx.metrics.activeBrokerCount());
+
+        ctx.unfenceBrokers(0);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(1);
+        ctx.unfenceBrokers(1);
+
+        assertEquals(2, ctx.metrics.activeBrokerCount());
+
+        ctx.registerBrokers(2);
+        ctx.unfenceBrokers(2);
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(3, ctx.metrics.activeBrokerCount());
+
+        ControllerResult<Void> result = replicationControl.unregisterBroker(0);
+        ctx.replay(result.records());
+        result = replicationControl.unregisterBroker(2);
+        ctx.replay(result.records());
+
+        assertEquals(0, ctx.metrics.fencedBrokerCount());
+        assertEquals(1, ctx.metrics.activeBrokerCount());
+    }
+
+    @Test
+    public void testCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 3));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreatableTopicResult topicResult = result.response().topics().find("foo");
+        assertEquals((short) 0, topicResult.errorCode());
+    }
+
+    @Test
+    public void testInvalidCreateTopicsWithValidateOnlyFlag() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreateTopicsRequestData request = new CreateTopicsRequestData().setValidateOnly(true);
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(1).setReplicationFactor((short) 4));
+        ControllerResult<CreateTopicsResponseData> result =
+            ctx.replicationControl.createTopics(request);
+        assertEquals(0, result.records().size());
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+            setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code()).
+            setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
+                "replication factor of 4 cannot be reached because only 3 broker(s) " +
+                "are registered."));
+        assertEquals(expectedResponse, result.response());
+    }
+
+    @Test
+    public void testCreateTopicsWithPolicy() throws Exception {
+        MockCreateTopicPolicy createTopicPolicy = new MockCreateTopicPolicy(asList(
+            new CreateTopicPolicy.RequestMetadata("foo", 2, (short) 2,
+                null, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("bar", 3, (short) 2,
+                null, Collections.emptyMap()),
+            new CreateTopicPolicy.RequestMetadata("baz", null, null,
+                Collections.singletonMap(0, asList(2, 1, 0)),
+                Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000")),
+            new CreateTopicPolicy.RequestMetadata("quux", null, null,
+                Collections.singletonMap(0, asList(2, 1, 0)), Collections.emptyMap())));
+        ReplicationControlTestContext ctx =
+            new ReplicationControlTestContext(Optional.of(createTopicPolicy));
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        ctx.createTestTopic("foo", 2, (short) 2, NONE.code());
+        ctx.createTestTopic("bar", 3, (short) 3, POLICY_VIOLATION.code());
+        ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
+            Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
+        ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
     }
 
     @Test

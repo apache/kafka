@@ -16,7 +16,15 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -63,6 +71,8 @@ public class JoinStoreIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
+
+        ADMIN_CONFIG.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
     }
 
     @AfterClass
@@ -80,6 +90,8 @@ public class JoinStoreIntegrationTest {
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
+    static final Properties ADMIN_CONFIG = new Properties();
+
 
     StreamsBuilder builder;
 
@@ -107,7 +119,7 @@ public class JoinStoreIntegrationTest {
 
         left.join(
             right,
-            (value1, value2) -> value1 + value2,
+            Integer::sum,
             JoinWindows.of(ofMillis(100)),
             StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
@@ -128,6 +140,50 @@ public class JoinStoreIntegrationTest {
             assertThat(
                 exception.getMessage(),
                 is("Cannot get state store join-store because no such store is registered in the topology.")
+            );
+        }
+    }
+
+    @Test
+    public void streamJoinChangelogTopicShouldBeConfiguredWithDeleteOnlyCleanupPolicy() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-changelog-cleanup-policy");
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream(INPUT_TOPIC_RIGHT, Consumed.with(Serdes.String(), Serdes.Integer()));
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        left.join(
+            right,
+            Integer::sum,
+            JoinWindows.of(ofMillis(100)),
+            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
+            final Admin admin = Admin.create(ADMIN_CONFIG)) {
+            kafkaStreams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING) {
+                    latch.countDown();
+                }
+            });
+
+            kafkaStreams.start();
+            latch.await();
+
+            final Collection<ConfigResource> changelogTopics = Stream.of(
+                    "join-store-integration-test-changelog-cleanup-policy-join-store-this-join-store-changelog",
+                    "join-store-integration-test-changelog-cleanup-policy-join-store-other-join-store-changelog"
+                )
+                .map(name -> new ConfigResource(Type.TOPIC, name))
+                .collect(Collectors.toList());
+
+            final Map<ConfigResource, org.apache.kafka.clients.admin.Config> topicConfig
+                = admin.describeConfigs(changelogTopics).all().get();
+            topicConfig.values().forEach(
+                tc -> assertThat(
+                    tc.get("cleanup.policy").value(),
+                    is("delete")
+                )
             );
         }
     }

@@ -71,6 +71,7 @@ REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
 # Remote name, which points to Github by default
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
+PUBLIC_HTML = "public_html"
 
 delete_gitrefs = False
 work_dir = None
@@ -165,18 +166,24 @@ def user_ok(msg):
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
-    basedir, dirname = os.path.split(dir)
-    if not basedir:
-       basedir = "."
     try:
        cmd_str  = """
-cd %s
--mkdir %s
-""" % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+mkdir %s
+""" % dir
+       cmd("Creating '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % dir, "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
+
+def sftp_upload(dir):
+    try:
+       cmd_str  = """
+cd %s
+put -r %s
+""" % (PUBLIC_HTML, dir)
+       cmd("Uploading '%s' under %s in your Apache home directory" % (dir, PUBLIC_HTML), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+    except subprocess.CalledProcessError:
+        fail("Failed uploading %s to your Apache home directory" % dir)
 
 def get_pref(prefs, name, request_fn):
     "Get a preference from existing preference dictionary or invoke a function that can collect it from the user"
@@ -207,10 +214,10 @@ def get_jdk(prefs, version):
     jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ) if jdk_java_home.strip() else None
     if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
-    javaVersion = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
-    if version == 8 and "1.8.0" not in javaVersion:
+    java_version = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
+    if version == 8 and "1.8.0" not in java_version:
       fail("JDK 8 is required")
-    elif "%d.0" % version not in javaVersion:
+    elif "%d.0" % version not in java_version or '"%d"' % version not in java_version:
       fail("JDK %s is required" % version)
     return jdk_env
 
@@ -621,7 +628,9 @@ for filename in os.listdir(artifacts_dir):
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 
 cmd("Zipping artifacts", "tar -czf %s.tar.gz %s" % (artifact_name, artifact_name), cwd=work_dir)
-if not user_ok("Have you uploaded artifacts in %s, listed above, to public_html in your Apache home directory (y/n)?: " % artifacts_dir):
+sftp_mkdir(PUBLIC_HTML)
+sftp_upload(artifacts_dir)
+if not user_ok("Confirm the artifact is present under %s in your Apache home directory: https://home.apache.org/~%s/ (y/n)?: " % (PUBLIC_HTML, apache_id)):
     fail("Ok, giving up")
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
