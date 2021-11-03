@@ -92,10 +92,10 @@ public class SslConfigs {
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
     public static final String SSL_KEYSTORE_PASSWORD_DOC = "The store password for the key store file. "
         + "This is optional for client and only needed if 'ssl.keystore.location' is configured. "
-        + " Key store password is not supported for PEM format.";
+        + "Key store password is not supported for PEM format.";
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
-    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or"
+    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or "
         + "the PEM key specified in `ssl.keystore.key'. This is required for clients only if two-way authentication is configured.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
@@ -103,7 +103,7 @@ public class SslConfigs {
     public static final String DEFAULT_SSL_TRUSTSTORE_TYPE = "JKS";
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
-    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
+    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file.";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. "
