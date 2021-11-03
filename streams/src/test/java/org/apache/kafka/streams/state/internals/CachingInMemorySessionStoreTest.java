@@ -58,11 +58,9 @@ import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -326,13 +324,10 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(b, "2".getBytes());
         cachingStore.remove(a);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
-            cachingStore.findSessions(keyA, 0, 0);
-        assertFalse(rangeIter.hasNext());
-
-        assertNull(cachingStore.fetchSession(keyA, 0, 0));
-        assertThat(cachingStore.fetchSession(keyB, 0, 0), equalTo("2".getBytes()));
-
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
+                 cachingStore.findSessions(keyA, 0, 0)) {
+            assertFalse(rangeIter.hasNext());
+        }
     }
 
     @Test

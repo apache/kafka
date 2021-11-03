@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -719,7 +720,8 @@ public abstract class TransactionsCommand {
             Admin admin
         ) throws Exception {
             try {
-                return new ArrayList<>(admin.listTopics().names().get());
+                ListTopicsOptions listOptions = new ListTopicsOptions().listInternal(true);
+                return new ArrayList<>(admin.listTopics(listOptions).names().get());
             } catch (ExecutionException e) {
                 printErrorAndExit("Failed to list topics", e.getCause());
                 return Collections.emptyList();
