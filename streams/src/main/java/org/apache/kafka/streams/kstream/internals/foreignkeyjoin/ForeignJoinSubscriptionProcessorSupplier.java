@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -69,9 +68,6 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements org.
             store = internalProcessorContext.getStateStore(storeBuilder);
         }
 
-        /**
-         * @throws StreamsException if key is null
-         */
         @Override
         public void process(final KO key, final Change<VO> value) {
             // if the key is null, we do not need proceed aggregating
