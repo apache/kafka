@@ -115,10 +115,5 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             );
 
         }
-
-        @Override
-        public boolean isOptimizable() {
-            return true;
-        }
     }
 }

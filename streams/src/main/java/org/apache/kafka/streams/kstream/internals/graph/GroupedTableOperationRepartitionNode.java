@@ -119,10 +119,5 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                 processorParameters
             );
         }
-
-        @Override
-        public boolean isOptimizable() {
-            return false;
-        }
     }
 }

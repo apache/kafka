@@ -672,42 +672,6 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
-    @Test
-    public void shouldNotFilterOutNullKeysOnRepartition() throws Exception {
-        final String repartitionName = "repartition-test";
-        final long timestamp = System.currentTimeMillis();
-        sendEvents(
-            timestamp,
-            Arrays.asList(
-                new KeyValue<>(1, "A"),
-                new KeyValue<>(2, "B"),
-                new KeyValue<>(3, null)
-            )
-        );
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
-            .withKeySerde(Serdes.String())
-            .withValueSerde(Serdes.String());
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .selectKey((key, value) -> value == null ? null : key.toString())
-            .repartition(repartitioned)
-            .mapValues(value -> value != null ? "mapped-" + value  : "default-value")
-            .to(outputTopic);
-
-        startStreams(builder);
-        validateReceivedMessages(
-            new StringDeserializer(),
-            new StringDeserializer(),
-            Arrays.asList(
-                new KeyValue<>("1", "mapped-A"),
-                new KeyValue<>("2", "mapped-B"),
-                new KeyValue<>(null, "default-value")
-            )
-        );
-    }
-
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
