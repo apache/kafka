@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import com.google.common.collect.ImmutableList;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -849,11 +848,11 @@ public class WorkerSinkTaskTest {
         workerTask.iteration(); // iter 1 -- initial assignment
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
-        assertEquals(ImmutableList.of(TOPIC, TOPIC), recordsCapture.getValue().stream()
+        assertEquals(Arrays.asList(TOPIC, TOPIC), recordsCapture.getValue().stream()
                 .map(sr -> sr.originalTopicPartition().topic())
                 .collect(toList()));
 
-        assertEquals(ImmutableList.of(testPrefix + TOPIC, testPrefix + TOPIC), recordsCapture.getValue().stream()
+        assertEquals(Arrays.asList(testPrefix + TOPIC, testPrefix + TOPIC), recordsCapture.getValue().stream()
                 .map(SinkRecord::topic)
                 .collect(toList()));
 
