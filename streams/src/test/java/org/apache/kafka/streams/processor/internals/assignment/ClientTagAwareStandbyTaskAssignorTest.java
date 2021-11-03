@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -354,6 +355,29 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
         assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
+    }
+
+    @Test
+    public void shouldHandleOverlappingTagValuesBetweenDifferentTagKeys() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, CLUSTER_1), mkEntry(CLUSTER_TAG, CLUSTER_3))))
+        );
+
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, ZONE_TAG, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
+
+        assertTrue(
+            standbyClientsHonorRackAwareness(
+                TASK_0_0,
+                clientStates,
+                Collections.singletonList(
+                    mkSet(UUID_2)
+                )
+            )
+        );
     }
 
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -53,10 +54,10 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             allTaskIds
         );
 
-        final Map<String, Set<String>> tagKeyToTagValues = new HashMap<>();
-        final Map<String, Set<UUID>> tagValueToClients = new HashMap<>();
+        final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
+        final Map<TagEntry, Set<UUID>> tagEntryToClients = new HashMap<>();
 
-        fillClientsTagStatistics(clients, tagValueToClients, tagKeyToTagValues);
+        fillClientsTagStatistics(clients, tagEntryToClients, tagKeyToValues);
 
         for (final TaskId statefulTaskId : statefulTaskIds) {
             for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
@@ -71,8 +72,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                         rackAwareAssignmentTags,
                         clients,
                         tasksToRemainingStandbys,
-                        tagKeyToTagValues,
-                        tagValueToClients
+                        tagKeyToValues,
+                        tagEntryToClients
                     );
                 }
             }
@@ -97,15 +98,15 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     private static void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
-                                                 final Map<String, Set<UUID>> tagValueToClients,
-                                                 final Map<String, Set<String>> tagKeyToTagValues) {
+                                                 final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                 final Map<String, Set<String>> tagKeyToValues) {
         for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
             final UUID clientId = clientStateEntry.getKey();
             final ClientState clientState = clientStateEntry.getValue();
 
             clientState.clientTags().forEach((tagKey, tagValue) -> {
-                tagKeyToTagValues.computeIfAbsent(tagKey, ignored -> new HashSet<>()).add(tagValue);
-                tagValueToClients.computeIfAbsent(tagValue, ignored -> new HashSet<>()).add(clientId);
+                tagKeyToValues.computeIfAbsent(tagKey, ignored -> new HashSet<>()).add(tagValue);
+                tagEntryToClients.computeIfAbsent(new TagEntry(tagKey, tagValue), ignored -> new HashSet<>()).add(clientId);
             });
         }
     }
@@ -116,8 +117,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                                                         final Set<String> rackAwareAssignmentTags,
                                                         final Map<UUID, ClientState> clientStates,
                                                         final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                        final Map<String, Set<String>> tagKeyToTagValues,
-                                                        final Map<String, Set<UUID>> tagValueToClients) {
+                                                        final Map<String, Set<String>> tagKeyToValues,
+                                                        final Map<TagEntry, Set<UUID>> tagEntryToClients) {
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, t) -> !clientStates.get(client).hasAssignedTask(t),
             client -> clientStates.get(client).assignedTaskLoad()
@@ -136,8 +137,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                 usedClients,
                 rackAwareAssignmentTags,
                 clientStates,
-                tagValueToClients,
-                tagKeyToTagValues
+                tagEntryToClients,
+                tagKeyToValues
             );
 
             final UUID polledClient = standbyTaskClientsByTaskLoad.poll(
@@ -172,8 +173,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private static Set<UUID> findClientsOnUsedTagDimensions(final Set<UUID> usedClients,
                                                             final Set<String> rackAwareAssignmentTags,
                                                             final Map<UUID, ClientState> clientStates,
-                                                            final Map<String, Set<UUID>> clientsPerTagValue,
-                                                            final Map<String, Set<String>> tagKeyToTagValuesMapping) {
+                                                            final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                            final Map<String, Set<String>> tagKeyToValues) {
         final Set<UUID> filteredClients = new HashSet<>();
 
         for (final UUID usedClientId : usedClients) {
@@ -186,7 +187,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                     continue;
                 }
 
-                final Set<String> allTagValues = tagKeyToTagValuesMapping.get(tagKey);
+                final Set<String> allTagValues = tagKeyToValues.get(tagKey);
                 final String tagValue = usedClientTagEntry.getValue();
 
                 // If we have used more clients than all the tag's unique values,
@@ -195,11 +196,34 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                     continue;
                 }
 
-                final Set<UUID> clientsOnUsedTagValue = clientsPerTagValue.get(tagValue);
+                final Set<UUID> clientsOnUsedTagValue = tagEntryToClients.get(new TagEntry(tagKey, tagValue));
                 filteredClients.addAll(clientsOnUsedTagValue);
             }
         }
 
         return filteredClients;
+    }
+
+    private static final class TagEntry {
+        private final String tagKey;
+        private final String tagValue;
+
+        TagEntry(final String tagKey, final String tagValue) {
+            this.tagKey = tagKey;
+            this.tagValue = tagValue;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final TagEntry that = (TagEntry) o;
+            return Objects.equals(tagKey, that.tagKey) && Objects.equals(tagValue, that.tagValue);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(tagKey, tagValue);
+        }
     }
 }
