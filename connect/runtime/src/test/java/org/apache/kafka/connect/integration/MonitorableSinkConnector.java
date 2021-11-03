@@ -88,17 +88,14 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static class MonitorableSinkTask extends SinkTask {
 
-        private String connectorName;
+        private final Set<TopicPartition> assignments;
+        private final Map<TopicPartition, Long> committedOffsets;
         private String taskId;
-        TaskHandle taskHandle;
-        Set<TopicPartition> assignments;
-        Map<TopicPartition, Long> committedOffsets;
-        Map<String, Map<Integer, TopicPartition>> cachedTopicPartitions;
+        private TaskHandle taskHandle;
 
         public MonitorableSinkTask() {
             this.assignments = new HashSet<>();
             this.committedOffsets = new HashMap<>();
-            this.cachedTopicPartitions = new HashMap<>();
         }
 
         @Override
@@ -109,7 +106,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
-            connectorName = props.get("connector.name");
+            String connectorName = props.get("connector.name");
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             log.debug("Starting task {}", taskId);
             taskHandle.recordTaskStart();
@@ -125,28 +122,29 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         @Override
         public void put(Collection<SinkRecord> records) {
             for (SinkRecord rec : records) {
-                taskHandle.record(rec);
-                TopicPartition tp = cachedTopicPartitions
-                        .computeIfAbsent(rec.topic(), v -> new HashMap<>())
-                        .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
-                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0L) + 1);
-                log.trace("Task {} obtained record (key='{}' value='{}')", taskId, rec.key(), rec.value());
+                processRecord(rec);
             }
         }
 
+        protected void processRecord(SinkRecord rec) {
+            taskHandle.record(rec);
+            committedOffsets.put(rec.originalTopicPartition(), rec.kafkaOffset() + 1);
+            log.trace("Task {} obtained record (key='{}' value='{}')", taskId, rec.key(), rec.value());
+        }
+
         @Override
-        public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
             for (TopicPartition tp : assignments) {
                 Long recordsSinceLastCommit = committedOffsets.get(tp);
                 if (recordsSinceLastCommit == null) {
                     log.warn("preCommit was called with topic-partition {} that is not included "
                             + "in the assignments of this task {}", tp, assignments);
                 } else {
-                    taskHandle.commit(recordsSinceLastCommit.intValue());
                     log.error("Forwarding to framework request to commit additional {} for {}",
                             recordsSinceLastCommit, tp);
-                    taskHandle.commit((int) (long) recordsSinceLastCommit);
-                    committedOffsets.put(tp, 0L);
+                    taskHandle.commit(recordsSinceLastCommit.intValue());
+                    offsets.put(tp, new OffsetAndMetadata(committedOffsets.remove(tp)));
                 }
             }
             return offsets;

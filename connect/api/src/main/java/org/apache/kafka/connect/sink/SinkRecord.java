@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.sink;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -32,6 +33,7 @@ import org.apache.kafka.connect.header.Header;
 public class SinkRecord extends ConnectRecord<SinkRecord> {
     private final long kafkaOffset;
     private final TimestampType timestampType;
+    private final TopicPartition originalTopicPartition;
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset) {
         this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, null, TimestampType.NO_TIMESTAMP_TYPE);
@@ -44,9 +46,15 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
                       Long timestamp, TimestampType timestampType, Iterable<Header> headers) {
+        this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers, null);
+    }
+
+    public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
+                      Long timestamp, TimestampType timestampType, Iterable<Header> headers, TopicPartition originalTopicPartition) {
         super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.kafkaOffset = kafkaOffset;
         this.timestampType = timestampType;
+        this.originalTopicPartition = originalTopicPartition;
     }
 
     public long kafkaOffset() {
@@ -57,6 +65,14 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
         return timestampType;
     }
 
+    /**
+     * @return topic and partition corresponding to the kafka record before transformations were applied. This is
+     * necessary for internal offset tracking, to be compatible with SMTs that mutate the topic name.
+     */
+    public TopicPartition originalTopicPartition() {
+        return originalTopicPartition;
+    }
+
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
         return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers().duplicate());
@@ -65,7 +81,17 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
                                 Long timestamp, Iterable<Header> headers) {
-        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
+        return new SinkRecord(topic,
+                kafkaPartition,
+                keySchema,
+                key,
+                valueSchema,
+                value,
+                kafkaOffset(),
+                timestamp,
+                timestampType,
+                headers,
+                originalTopicPartition);
     }
 
     @Override
@@ -98,6 +124,8 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
         return "SinkRecord{" +
                 "kafkaOffset=" + kafkaOffset +
                 ", timestampType=" + timestampType +
+                ", originalTopicPartition=" + originalTopicPartition +
                 "} " + super.toString();
     }
+
 }

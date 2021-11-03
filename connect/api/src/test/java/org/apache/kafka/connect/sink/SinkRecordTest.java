@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.sink;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Values;
@@ -46,7 +47,7 @@ public class SinkRecordTest {
     @BeforeEach
     public void beforeEach() {
         record = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
-                                KAFKA_TIMESTAMP, TS_TYPE, null);
+                                KAFKA_TIMESTAMP, TS_TYPE, null, new TopicPartition(TOPIC_NAME, PARTITION_NUMBER));
     }
 
     @Test
@@ -125,4 +126,37 @@ public class SinkRecordTest {
         Header header = record.headers().lastWithName("intHeader");
         assertEquals(100, (int) Values.convertToInteger(header.schema(), header.value()));
     }
+
+    @Test
+    public void shouldCreateSinkRecordWithOriginalTopicPartition() {
+        TopicPartition tp = new TopicPartition("originalTopic", 100);
+        record = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
+                KAFKA_TIMESTAMP, TS_TYPE, null, tp);
+        assertSame(tp, record.originalTopicPartition());
+    }
+
+    @Test
+    public void shouldKeepOriginalTopicPartition() {
+        TopicPartition tp = new TopicPartition("originalTopic", 100);
+        record = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
+                KAFKA_TIMESTAMP, TS_TYPE, null, tp);
+        record = record.newRecord("otherTopic", 200, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET);
+
+        assertSame(tp, record.originalTopicPartition());
+    }
+
+    @Test
+    public void shouldNotConsiderOriginalTopicPartitionForEquality() {
+        // For backwards compatibility
+        TopicPartition tp1 = new TopicPartition("originalTopic1", 1);
+        TopicPartition tp2 = new TopicPartition("originalTopic2", 1);
+        SinkRecord record1 = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
+                KAFKA_TIMESTAMP, TS_TYPE, null, tp1);
+
+        SinkRecord record2 = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
+                KAFKA_TIMESTAMP, TS_TYPE, null, tp2);
+
+        assertTrue(record1.equals(record2));
+    }
+
 }

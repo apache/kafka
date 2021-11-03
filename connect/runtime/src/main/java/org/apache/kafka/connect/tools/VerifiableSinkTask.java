@@ -72,7 +72,10 @@ public class VerifiableSinkTask extends SinkTask {
             data.put("topic", record.topic());
             data.put("time_ms", nowMs);
             data.put("seqno", record.value());
+            data.put("partition", record.kafkaPartition());
             data.put("offset", record.kafkaOffset());
+            data.put("originalTopic", record.originalTopicPartition().topic());
+            data.put("originalPartition", record.originalTopicPartition().partition());
             String dataJson;
             try {
                 dataJson = JSON_SERDE.writeValueAsString(data);

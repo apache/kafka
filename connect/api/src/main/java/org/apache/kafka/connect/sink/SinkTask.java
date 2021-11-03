@@ -29,7 +29,7 @@ import java.util.Map;
  * from those partitions. As records are fetched from Kafka, they will be passed to the sink task using the
  * {@link #put(Collection)} API, which should either write them to the downstream system or batch them for
  * later writing. Periodically, Connect will call {@link #flush(Map)} to ensure that batched records are
- * actually pushed to the downstream system..
+ * actually pushed to the downstream system.
  *
  * Below we describe the lifecycle of a SinkTask.
  *
@@ -96,6 +96,9 @@ public abstract class SinkTask implements Task {
      * be stopped immediately. {@link SinkTaskContext#timeout(long)} can be used to set the maximum time before the
      * batch will be retried.
      *
+     * In case the connector does his own offset tracking (e.g. used by preCommit), the {@link SinkRecord#originalTopicPartition()}
+     * will have to be used, otherwise, the behavior will not be compatible with SMTs that mutate the topic name.
+     *
      * @param records the set of records to send
      */
     public abstract void put(Collection<SinkRecord> records);
@@ -104,8 +107,8 @@ public abstract class SinkTask implements Task {
      * Flush all records that have been {@link #put(Collection)} for the specified topic-partitions.
      *
      * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
-     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
-     *                       passed to {@link #put}.
+     *                       provided for convenience but could also be determined by tracking all offsets included in the
+     *                       {@link SinkRecord#originalTopicPartition()}s passed to {@link #put}.
      */
     public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
     }
@@ -116,8 +119,8 @@ public abstract class SinkTask implements Task {
      * The default implementation simply invokes {@link #flush(Map)} and is thus able to assume all {@code currentOffsets} are safe to commit.
      *
      * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
-     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
-     *                       passed to {@link #put}.
+     *                       provided for convenience but could also be determined by tracking all offsets included in the
+     *                       {@link SinkRecord#originalTopicPartition()}s passed to {@link #put}.
      *
      * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are safe to commit.
      */
@@ -171,4 +174,5 @@ public abstract class SinkTask implements Task {
      */
     @Override
     public abstract void stop();
+
 }

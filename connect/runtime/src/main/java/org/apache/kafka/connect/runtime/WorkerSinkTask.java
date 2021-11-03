@@ -503,6 +503,7 @@ class WorkerSinkTask extends WorkerTask {
             return null;
         }
 
+        TopicPartition originalTopicPartition = new TopicPartition(msg.topic(), msg.partition());
         Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
         SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
                 keyAndSchema.schema(), keyAndSchema.value(),
@@ -510,7 +511,9 @@ class WorkerSinkTask extends WorkerTask {
                 msg.offset(),
                 timestamp,
                 msg.timestampType(),
-                headers);
+                headers,
+                originalTopicPartition);
+
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
         if (isTopicTrackingEnabled) {
@@ -523,7 +526,7 @@ class WorkerSinkTask extends WorkerTask {
             return null;
         }
         // Error reporting will need to correlate each sink record with the original consumer record
-        return new InternalSinkRecord(msg, transformedRecord);
+        return new InternalSinkRecord(msg, originalTopicPartition, transformedRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

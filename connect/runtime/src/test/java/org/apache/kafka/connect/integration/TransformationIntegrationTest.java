@@ -17,11 +17,15 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
+import org.apache.kafka.connect.transforms.RegexRouter;
 import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.transforms.predicates.TopicNameMatches;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -236,7 +240,7 @@ public class TransformationIntegrationTest {
         props.put(PREDICATES_CONFIG + ".barPredicate.type", RecordIsTombstone.class.getSimpleName());
 
         // expect only half the records to be consumed by the connector
-        connectorHandle.expectedCommits(numRecords);
+        connectorHandle.expectedCommits(numRecords / 2);
         connectorHandle.expectedRecords(numRecords / 2);
 
         // start a sink connector
@@ -320,6 +324,84 @@ public class TransformationIntegrationTest {
             assertNotNull("Expected header to exist",
                     record.headers().lastHeader("header-8"));
         }
+
+        // delete connector
+        connect.deleteConnector(CONNECTOR_NAME);
+    }
+
+    /**
+     * Verify that connectors overriding preCommit are compatible with topic-mutating SMTs
+     */
+    @Test
+    public void testTopicMutationWithPreCommit() throws Exception {
+        assertConnectReady();
+
+        Map<String, Long> observedRecords = observeRecords();
+
+        // create test topics
+        int partitions = 1;
+        String fooTopic = "foo-topic";
+        String barTopic = "bar-topic";
+        int numFooRecords = 1024;
+        int numBarRecords = 666;
+        connect.kafka().createTopic(fooTopic, partitions);
+        connect.kafka().createTopic(barTopic, partitions);
+
+        // setup up props for the sink connector
+        Map<String, String> props = new HashMap<>();
+        props.put("name", CONNECTOR_NAME);
+        props.put(CONNECTOR_CLASS_CONFIG, SINK_CONNECTOR_CLASS_NAME);
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPICS_CONFIG, String.join(",", fooTopic, barTopic));
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(TRANSFORMS_CONFIG, "example");
+        props.put(TRANSFORMS_CONFIG + ".example.type", RegexRouter.class.getName());
+        props.put(TRANSFORMS_CONFIG + ".example.regex", "(.*)");
+        props.put(TRANSFORMS_CONFIG + ".example.replacement", "static-topic");
+
+        // expect all records to be consumed by the connector
+        connectorHandle.expectedRecords(numFooRecords + numBarRecords);
+
+        // expect all records to be consumed by the connector
+        connectorHandle.expectedCommits(numFooRecords + numBarRecords);
+
+        // start a sink connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+        assertConnectorRunning();
+
+        // produce some messages into source topic partitions
+        for (int i = 0; i < numBarRecords; i++) {
+            connect.kafka().produce(barTopic, i % partitions, "key", "simple-message-value-" + i);
+        }
+        for (int i = 0; i < numFooRecords; i++) {
+            connect.kafka().produce(fooTopic, i % partitions, "key", "simple-message-value-" + i);
+        }
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced.
+        assertEquals("Unexpected number of records consumed", numFooRecords,
+                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
+        assertEquals("Unexpected number of records consumed", numBarRecords,
+                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
+
+        // wait for the connector tasks to consume all records.
+        connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
+
+        // wait for the connector tasks to commit all records.
+        connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
+
+        // Assert all records went to the static topic
+        Map<String, Long> expectedRecordCounts = singletonMap("static-topic", (long) numFooRecords + numBarRecords);
+        assertObservedRecords(observedRecords, expectedRecordCounts);
+
+        // Verify all offsets were properly committed
+        Map<TopicPartition, OffsetAndMetadata> offsetMap = connect.kafka().createAdminClient()
+                .listConsumerGroupOffsets(SinkUtils.consumerGroupId(CONNECTOR_NAME))
+                .partitionsToOffsetAndMetadata()
+                .get();
+
+        assertEquals(numFooRecords, offsetMap.get(new TopicPartition(fooTopic, 0)).offset());
+        assertEquals(numBarRecords, offsetMap.get(new TopicPartition(barTopic, 0)).offset());
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);

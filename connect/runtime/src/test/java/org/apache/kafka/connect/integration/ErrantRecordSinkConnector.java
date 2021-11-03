@@ -17,13 +17,10 @@
 
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
 public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
@@ -47,15 +44,10 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
         }
 
         @Override
-        public void put(Collection<SinkRecord> records) {
-            for (SinkRecord rec : records) {
-                taskHandle.record();
-                TopicPartition tp = cachedTopicPartitions
-                    .computeIfAbsent(rec.topic(), v -> new HashMap<>())
-                    .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
-                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0L) + 1);
-                reporter.report(rec, new Throwable());
-            }
+        protected void processRecord(SinkRecord rec) {
+            super.processRecord(rec);
+            reporter.report(rec, new Throwable());
         }
+
     }
 }

@@ -184,7 +184,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 SinkRecord referenceSinkRecord
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
                 InternalSinkRecord referenceInternalSinkRecord =
-                    new InternalSinkRecord(null, referenceSinkRecord);
+                    new InternalSinkRecord(null, new TopicPartition(TOPIC, PARTITION), referenceSinkRecord);
                 assertEquals(referenceInternalSinkRecord, rec);
                 offset++;
             }

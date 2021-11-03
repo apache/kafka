@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
@@ -32,18 +33,18 @@ public class InternalSinkRecord extends SinkRecord {
 
     private final ConsumerRecord<byte[], byte[]> originalRecord;
 
-    public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, SinkRecord record) {
+    public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, TopicPartition originalTopicPartition, SinkRecord record) {
         super(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
             record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
-            record.timestampType(), record.headers());
+            record.timestampType(), record.headers(), originalTopicPartition);
         this.originalRecord = originalRecord;
     }
 
-    protected InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
+    protected InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, TopicPartition originalTopicPartition, String topic,
                                  int partition, Schema keySchema, Object key, Schema valueSchema,
                                  Object value, long kafkaOffset, Long timestamp,
                                  TimestampType timestampType, Iterable<Header> headers) {
-        super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
+        super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers, originalTopicPartition);
         this.originalRecord = originalRecord;
     }
 
@@ -51,7 +52,7 @@ public class InternalSinkRecord extends SinkRecord {
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key,
                                 Schema valueSchema, Object value, Long timestamp,
                                 Iterable<Header> headers) {
-        return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
+        return new InternalSinkRecord(originalRecord, originalTopicPartition(), topic, kafkaPartition, keySchema, key,
             valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers());
     }
 
