@@ -172,19 +172,19 @@ public class JaasContextTest {
 
     @Test
     public void testNumericOptionWithoutQuotes() throws Exception {
-        try {
-            Map<String, Object> options = new HashMap<>();
-            options.put("option", "3");
-            checkConfiguration("test.testNumericOptionWithoutQuotes required option=3;", "test.testNumericOptionWithoutQuotes", LoginModuleControlFlag.REQUIRED, options);
-            fail("Given Jaas config is parsed properly but sun.security.provider.ConfigFile$Spi.<init> throws a IOException wrapped with a SecurityException.");
-        } catch (SecurityException e) {
-            assertEquals(IOException.class, e.getCause().getClass());
-        }
+        checkInvalidConfiguration("test.testNumericOptionWithoutQuotes required option1=3;");
     }
 
     @Test
     public void testInvalidControlFlag() throws Exception {
         checkInvalidConfiguration("test.testInvalidControlFlag { option1=3;");
+    }
+
+    @Test
+    public void testAsterisk() throws Exception {
+        Map<String, Object> options = new HashMap<>();
+        options.put("option", "*");
+        checkConfiguration("test.testAsterisk required option=*;", "test.testAsterisk", LoginModuleControlFlag.REQUIRED, options);
     }
 
     @Test

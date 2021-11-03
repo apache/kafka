@@ -57,17 +57,15 @@ class JaasConfig extends Configuration {
         // 3. Single quote ({@code '\u005C''}, 39) and double quote ({@code '"'}, 34) are considered to be quote.
         // 4. Ends of lines are treated as white space, not as separate tokens.
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
-        tokenizer.resetSyntax();            // Reset the default configuration.
-        tokenizer.wordChars(32, 128);       // All characters in [32, 128] are allowed.
-        tokenizer.wordChars(128 + 32, 255); // All characters in [160, 255] are allowed.
-        tokenizer.ordinaryChar(';');        // ';' is treated as a reserved word.
-        tokenizer.ordinaryChar('=');        // '=' is treated as a reserved word.
-        tokenizer.whitespaceChars(0, ' ');  // All characters in [0, 32] (including ' ') are treated as space character.
-        tokenizer.commentChar('/');         // '/' is treated as a comment character.
-        tokenizer.quoteChar('"');           // '"' is treated as a quote.
-        tokenizer.quoteChar('\'');          // ''' is treated as a quote.
+        tokenizer.quoteChar('"');       // '"' is treated as a quote.
+        tokenizer.wordChars('$', '$');  // '$' symbol is allowed.
+        tokenizer.wordChars('_', '_');  // '_' symbol is allowed.
+        tokenizer.wordChars('-', '-');  // '-' symbol is allowed.
+        tokenizer.wordChars('*', '*');  // '*' symbol is allowed.
+        tokenizer.lowerCaseMode(false);
         tokenizer.slashSlashComments(true); // Allow '//' comments.
         tokenizer.slashStarComments(true);  // Allow '/*', '*/' comments.
+        tokenizer.eolIsSignificant(true);
 
         try {
             configEntries = new ArrayList<>();
