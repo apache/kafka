@@ -36,7 +36,10 @@ import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
@@ -153,41 +156,45 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
-    public void testConfigPropertyFilteringExclude() {
-
-        Map<String, Object> mmConfig = new HashMap<>();
-        mmConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
+    public void testNewTopicConfigs() throws Exception {
+        Map<String, Object> filterConfig = new HashMap<>();
+        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
                 + "leader\\.replication\\.throttled\\.replicas, "
                 + "message\\.timestamp\\.difference\\.max\\.ms, "
                 + "message\\.timestamp\\.type, "
                 + "unclean\\.leader\\.election\\.enable, "
                 + "min\\.insync\\.replicas,"
                 + "exclude_param.*");
-
         DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
-        filter.configure(mmConfig);
+        filter.configure(filterConfig);
 
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), x -> true, filter);
-        ArrayList<ConfigEntry> entries = new ArrayList<>();
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, filter));
+
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         entries.add(new ConfigEntry("exclude_param.param1", "value-param1"));
         entries.add(new ConfigEntry("min.insync.replicas", "2"));
         Config config = new Config(entries);
-        Config targetConfig = connector.targetConfig(config);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doAnswer(invocation -> {
+            Map<String, NewTopic> newTopics = invocation.getArgument(0);
+            assertNotNull(newTopics.get("source." + topic));
+            Map<String, String> targetConfig = newTopics.get("source." + topic).configs();
 
-        // property 'name-1' isn't defined in the exclude filter -> should be replicated
-        assertTrue(targetConfig.entries().stream().anyMatch(x -> x.name().equals("name-1")),
-                "should replicate properties");
+            // property 'name-1' isn't defined in the exclude filter -> should be replicated
+            assertNotNull(targetConfig.get("name-1"), "should replicate properties");
 
-        // this property is in default list, just double check it:
-        String prop1 = "min.insync.replicas";
-        assertFalse(targetConfig.entries().stream().anyMatch(x -> x.name().equals(prop1)),
-                "should not replicate excluded properties " + prop1);
-        // this property is only in exclude filter custom parameter, also tests regex on the way:
-        String prop2 = "exclude_param.param1";
-        assertFalse(targetConfig.entries().stream().anyMatch(x -> x.name().equals(prop2)),
-                "should not replicate excluded properties " + prop2);
+            // this property is in default list, just double check it:
+            String prop1 = "min.insync.replicas";
+            assertNull(targetConfig.get(prop1), "should not replicate excluded properties " + prop1);
+            // this property is only in exclude filter custom parameter, also tests regex on the way:
+            String prop2 = "exclude_param.param1";
+            assertNull(targetConfig.get(prop2), "should not replicate excluded properties " + prop2);
+            return null;
+        }).when(connector).createNewTopics(any());
+        connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
     }
 
     @Test
