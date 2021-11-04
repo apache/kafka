@@ -310,7 +310,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
-            log.info("Revoke previously paused partitions {}", Utils.join(revokePausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
@@ -333,7 +333,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
-            log.info("Lost previously paused partitions {}", Utils.join(lostPausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to lost.", Utils.join(lostPausedPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
