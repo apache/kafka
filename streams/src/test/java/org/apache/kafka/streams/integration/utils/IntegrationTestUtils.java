@@ -797,10 +797,26 @@ public class IntegrationTestUtils {
         return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, waitTime, false);
     }
 
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                    final String topic,
+                                                                                    final List<KeyValue<K, V>> expectedRecords,
+                                                                                    final Set<KeyValue<K, V>> forbiddenRecords) throws Exception {
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, forbiddenRecords, DEFAULT_TIMEOUT, false);
+    }
+
+    private static <K, V, T> List<T> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                           final String topic,
+                                                                           final List<T> expectedRecords,
+                                                                           final long waitTime,
+                                                                           final boolean withTimestamp) throws Exception {
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, Collections.emptySet(), waitTime, withTimestamp);
+    }
+
     @SuppressWarnings("unchecked")
     private static <K, V, T> List<T> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
                                                                            final String topic,
                                                                            final List<T> expectedRecords,
+                                                                           final Set<T> forbiddenRecords,
                                                                            final long waitTime,
                                                                            final boolean withTimestamp) throws Exception {
         final List<T> accumData = new ArrayList<>();
@@ -812,6 +828,14 @@ public class IntegrationTestUtils {
                 } else {
                     readData = (List<T>) readKeyValues(topic, consumer, waitTime, expectedRecords.size());
                 }
+
+                for (final T record : readData) {
+                    if (forbiddenRecords.contains(record)) {
+                        final String errorMessage = "Topic %s contains a forbidden record %s";
+                        throw new AssertionError(String.format(errorMessage, topic, record));
+                    }
+                }
+
                 accumData.addAll(readData);
 
                 // filter out all intermediate records we don't want

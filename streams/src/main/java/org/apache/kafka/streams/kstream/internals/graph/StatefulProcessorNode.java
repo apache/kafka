@@ -108,6 +108,10 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
                 topologyBuilder.addStateStore(storeBuilder, processorName);
             }
         }
+    }
 
+    @Override
+    public boolean dropsRecordsWithNullKeys() {
+        return true;
     }
 }

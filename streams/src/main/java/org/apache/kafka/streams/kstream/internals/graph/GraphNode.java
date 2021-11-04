@@ -93,6 +93,10 @@ public abstract class GraphNode {
         return valueChangingOperation;
     }
 
+    public boolean dropsRecordsWithNullKeys() {
+        return false;
+    }
+
     public boolean isMergeNode() {
         return mergeNode;
     }

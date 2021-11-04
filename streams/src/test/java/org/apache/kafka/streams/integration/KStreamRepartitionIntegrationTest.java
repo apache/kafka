@@ -672,6 +672,118 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
+    @Test
+    public void shouldKeepNullKeysOnRepartitionIfDownstreamDoesNotDropThem() throws Exception {
+        final String repartitionName = "repartition-test";
+        final long timestamp = System.currentTimeMillis();
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B"),
+                new KeyValue<>(3, null)
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
+
+        final KStream<String, String> stream = builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .selectKey((key, value) -> value == null ? null : key.toString())
+            .repartition(repartitioned);
+
+        stream.to(outputTopic); // keeps null keys
+        stream.groupByKey().aggregate(() -> "", (k, v, a) -> v); // drops null keys
+
+        startStreams(builder);
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1", "A"),
+                new KeyValue<>("2", "B"),
+                new KeyValue<>(null, null)
+            ));
+    }
+
+    @Test
+    public void shouldDropNullKeysOnRepartitionWithDownstreamAggregate() throws Exception {
+        final String repartitionName = "repartition-test";
+        final long timestamp = System.currentTimeMillis();
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B"),
+                new KeyValue<>(3, null)
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
+
+        final KStream<String, String> stream = builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .selectKey((key, value) -> value == null ? null : key.toString())
+            .repartition(repartitioned);
+
+        stream.groupByKey()
+            .aggregate(() -> "", (k, v, a) -> v)
+            .toStream()
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1", "A"),
+                new KeyValue<>("2", "B")
+            ),
+            Collections.singleton(new KeyValue<>(null, null))
+        );
+    }
+
+    @Test
+    public void shouldDropNullKeysOnRepartitionWithDownstreamJoin() throws Exception {
+        CLUSTER.createTopic(topicB);
+        final String repartitionName = "repartition-test";
+        final long timestamp = System.currentTimeMillis();
+        final List<KeyValue<Integer, String>> records = Arrays.asList(
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(2, "B"),
+            new KeyValue<>(3, null)
+        );
+        sendEvents(inputTopic, timestamp, records);
+        sendEvents(topicB, timestamp, records);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Repartitioned<Integer, String> repartitioned = Repartitioned.<Integer, String>as(repartitionName);
+        final KStream<Integer, String> topicBStream = builder
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()));
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(repartitioned)
+            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            ),
+            Collections.singleton(new KeyValue<>(null, null))
+        );
+    }
+
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
@@ -794,7 +906,13 @@ public class KStreamRepartitionIntegrationTest {
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws Exception {
+        validateReceivedMessages(keySerializer, valueSerializer, expectedRecords, Collections.emptySet());
+    }
 
+    private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
+                                                 final Deserializer<V> valueSerializer,
+                                                 final List<KeyValue<K, V>> expectedRecords,
+                                                 final Set<KeyValue<K, V>> forbiddenRecords) throws Exception {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -812,7 +930,8 @@ public class KStreamRepartitionIntegrationTest {
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
             consumerProperties,
             outputTopic,
-            expectedRecords
+            expectedRecords,
+            forbiddenRecords
         );
     }
 }
