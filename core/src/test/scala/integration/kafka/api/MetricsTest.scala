@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
@@ -54,10 +54,10 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     verifyNoRequestMetrics("Request metrics not removed in a previous test")
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @AfterEach
