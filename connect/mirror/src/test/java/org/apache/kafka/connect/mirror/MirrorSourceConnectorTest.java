@@ -195,6 +195,7 @@ public class MirrorSourceConnectorTest {
             return null;
         }).when(connector).createNewTopics(any());
         connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
+        verify(connector).createNewTopics(any(), any());
     }
 
     @Test
