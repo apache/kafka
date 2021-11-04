@@ -151,11 +151,6 @@ public abstract class ConsumerCoordinatorTest {
             put(topic2, 1);
         }
     });
-    private MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
-        {
-            put(topic1, 1);
-        }
-    });
     private Node node = metadataResponse.brokers().iterator().next();
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
@@ -1060,7 +1055,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true)) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
             client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
                 {
@@ -1074,6 +1069,11 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+                {
+                    put(topic1, 1);
+                }
+            });
             // Instrument the test so that metadata will contain only one topic after next refresh.
             client.prepareMetadataUpdate(deletedMetadataResponse);
 

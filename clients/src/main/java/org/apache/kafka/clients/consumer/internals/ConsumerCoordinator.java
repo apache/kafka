@@ -95,7 +95,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
-    private RequestFuture<Void> onJoinPrepareAsyncCommitFuture = null;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final AtomicInteger pendingAsyncCommits;
@@ -695,15 +694,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected boolean onJoinPrepare(int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        boolean onJoinPrepareAsyncCommitSucceeded;
-        try {
-            // async commit offsets prior to rebalance if auto-commit enabled
-            onJoinPrepareAsyncCommitSucceeded = maybeAutoCommitOffsetsAsync();
-        } catch (Exception e) {
-            onJoinPrepareAsyncCommitFuture = null;
+        boolean onJoinPrepareAsyncCommitSucceeded = false;
+        // async commit offsets prior to rebalance if auto-commit enabled
+        RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
+        if (future == null)
             onJoinPrepareAsyncCommitSucceeded = true;
-            // consistent with async auto-commit failures, we do not propagate the exception
-            log.warn("Asynchronous auto-commit offsets failed: {}", e.getMessage());
+        else {
+            if (future.succeeded()) {
+                onJoinPrepareAsyncCommitSucceeded = true;
+            } else if (future.failed() && !future.isRetriable()) {
+                // consistent with async auto-commit failures, we do not propagate the exception
+                log.warn("Asynchronous auto-commit offsets failed: {}", future.exception().getMessage());
+                onJoinPrepareAsyncCommitSucceeded = true;
+            }
         }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
@@ -920,7 +923,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
-            maybeAutoCommitOffsetsSync(timer);
+            maybeAutoCommitOffsetsAsync();
             while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 client.poll(timer);
@@ -1062,12 +1065,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             nextAutoCommitTimer.update(now);
             if (nextAutoCommitTimer.isExpired()) {
                 nextAutoCommitTimer.reset(autoCommitIntervalMs);
-                doAutoCommitOffsetsAsync();
+                autoCommitOffsetsAsync();
             }
         }
     }
 
-    private RequestFuture<Void> doAutoCommitOffsetsAsync() {
+    private RequestFuture<Void> autoCommitOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
@@ -1086,49 +1089,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
-    private boolean maybeAutoCommitOffsetsAsync() {
+    private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled) {
-            invokeCompletedOffsetCommitCallbacks();
-
-            if (onJoinPrepareAsyncCommitFuture == null)
-                onJoinPrepareAsyncCommitFuture = doAutoCommitOffsetsAsync();
-            if (onJoinPrepareAsyncCommitFuture == null)
-                return true;
-
+            RequestFuture<Void> future = autoCommitOffsetsAsync();
             client.pollNoWakeup();
             invokeCompletedOffsetCommitCallbacks();
-
-            if (!onJoinPrepareAsyncCommitFuture.isDone())
-                return false;
-            if (onJoinPrepareAsyncCommitFuture.succeeded()) {
-                onJoinPrepareAsyncCommitFuture = null;
-                return true;
-            }
-            if (onJoinPrepareAsyncCommitFuture.failed() && !onJoinPrepareAsyncCommitFuture.isRetriable())
-                throw onJoinPrepareAsyncCommitFuture.exception();
-            //retry Sending asynchronous auto-commit
-            onJoinPrepareAsyncCommitFuture = doAutoCommitOffsetsAsync();
-            return false;
+            return future;
         } else
-            return true;
-    }
-
-    private void maybeAutoCommitOffsetsSync(Timer timer) {
-        if (autoCommitEnabled) {
-            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
-            try {
-                log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
-                if (!commitOffsetsSync(allConsumedOffsets, timer))
-                    log.debug("Auto-commit of offsets {} timed out before completion", allConsumedOffsets);
-            } catch (WakeupException | InterruptException e) {
-                log.debug("Auto-commit of offsets {} was interrupted before completion", allConsumedOffsets);
-                // rethrow wakeups since they are triggered by the user
-                throw e;
-            } catch (Exception e) {
-                // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
-            }
-        }
+            return null;
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {

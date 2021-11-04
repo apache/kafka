@@ -404,7 +404,7 @@ public abstract class AbstractCoordinator implements Closeable {
      *
      * @param timer Timer bounding how long this method can block
      * @throws KafkaException if the callback throws exception
-     * @return true if the operation succeeded
+     * @return true iff the operation succeeded
      */
     boolean joinGroupIfNeeded(final Timer timer) {
         while (rejoinNeededOrPending()) {
@@ -421,13 +421,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                if (!onJoinPrepare(generation.generationId, generation.memberId))
+                if (!onJoinPrepare(generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
+                    //should not initiateJoinGroup if needsJoinPrepare still is true
+                    return false;
+                }
             }
-
-            //should not initiateJoinGroup if needsJoinPrepare still is true
-            if (needsJoinPrepare)
-                return false;
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future, timer);
