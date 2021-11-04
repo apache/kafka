@@ -1644,11 +1644,11 @@ class FetchSessionTest {
 
 object FetchSessionTest {
   def idUsageCombinations: java.util.stream.Stream[Arguments] = {
-    Seq(
+    java.util.stream.Stream.of(
       Arguments.of(true, true),
       Arguments.of(true, false),
       Arguments.of(false, true),
       Arguments.of(false, false)
-    ).asJava.stream()
+    )
   }
 }

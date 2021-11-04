@@ -121,13 +121,6 @@ public class FetchMetadata {
     }
 
     /**
-     * Return the metadata for the next closed session response.
-     */
-    public FetchMetadata closeExisting() {
-        return new FetchMetadata(sessionId, FINAL_EPOCH);
-    }
-
-    /**
      * Return the metadata for the next full fetch request.
      */
     public static FetchMetadata newIncremental(int sessionId) {

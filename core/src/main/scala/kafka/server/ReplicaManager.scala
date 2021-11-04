@@ -1057,7 +1057,7 @@ class ReplicaManager(val config: KafkaConfig,
         responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp.topicPartition) }
+      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
 
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
@@ -1174,7 +1174,7 @@ class ReplicaManager(val config: KafkaConfig,
             lastStableOffset = None,
             exception = Some(e))
         case e: Throwable =>
-          brokerTopicStats.topicStats(tp.topicPartition.topic).failedFetchRequestRate.mark()
+          brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
 
           val fetchSource = Request.describeReplicaId(replicaId)

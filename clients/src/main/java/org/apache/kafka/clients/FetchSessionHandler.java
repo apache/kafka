@@ -272,8 +272,6 @@ public class FetchSessionHandler {
                 }
                 sessionPartitions = next;
                 next = null;
-                Map<TopicPartition, PartitionData> toSend =
-                        Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 // Only add topic IDs to the session if we are using topic IDs.
                 if (canUseTopicIds) {
                     Map<Uuid, Set<String>> newTopicNames = sessionPartitions.entrySet().stream().collect(Collectors.groupingByConcurrent(entry -> entry.getValue().topicId,
@@ -283,8 +281,10 @@ public class FetchSessionHandler {
                     // There should only be one topic name per topic ID.
                     newTopicNames.forEach((topicId, topicNamesSet) -> topicNamesSet.forEach(topicName -> sessionTopicNames.put(topicId, topicName)));
                 } else {
-                    sessionTopicNames = new HashMap<>();
+                    sessionTopicNames = Collections.emptyMap();
                 }
+                Map<TopicPartition, PartitionData> toSend =
+                        Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 return new FetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), toSend, nextMetadata, canUseTopicIds);
             }
 
@@ -349,9 +349,9 @@ public class FetchSessionHandler {
 
             if (log.isDebugEnabled()) {
                 log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {}, " +
-                                "replaced {} out of {}", nextMetadata, node, topicIdPartitionsToLogString(added),
-                        topicIdPartitionsToLogString(altered), topicIdPartitionsToLogString(removed),
-                        topicIdPartitionsToLogString(replaced), topicPartitionsToLogString(sessionPartitions.keySet()));
+                          "replaced {} out of {}", nextMetadata, node, topicIdPartitionsToLogString(added),
+                          topicIdPartitionsToLogString(altered), topicIdPartitionsToLogString(removed),
+                          topicIdPartitionsToLogString(replaced), topicPartitionsToLogString(sessionPartitions.keySet()));
             }
             Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
@@ -425,9 +425,9 @@ public class FetchSessionHandler {
     String verifyFullFetchResponsePartitions(Set<TopicPartition> topicPartitions, Set<Uuid> ids, short version) {
         StringBuilder bld = new StringBuilder();
         Set<TopicPartition> extra =
-                findMissing(topicPartitions, sessionPartitions.keySet());
+            findMissing(topicPartitions, sessionPartitions.keySet());
         Set<TopicPartition> omitted =
-                findMissing(sessionPartitions.keySet(), topicPartitions);
+            findMissing(sessionPartitions.keySet(), topicPartitions);
         Set<Uuid> extraIds = new HashSet<>();
         if (version >= 13) {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
@@ -462,7 +462,7 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         Set<TopicPartition> extra =
-                findMissing(topicPartitions, sessionPartitions.keySet());
+            findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
         if (extra.isEmpty())
             bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");

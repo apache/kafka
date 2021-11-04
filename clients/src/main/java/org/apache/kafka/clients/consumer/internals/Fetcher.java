@@ -823,14 +823,6 @@ public class Fetcher<K, V> implements Closeable {
         return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
     }
 
-    static boolean hasUsableTopicIdFetchRequestVersion(NodeApiVersions nodeApiVersions) {
-        ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.FETCH);
-        if (apiVersion == null)
-            return false;
-
-        return apiVersion.maxVersion() >= 13;
-    }
-
     /**
      * For each partition which needs validation, make an asynchronous request to get the end-offsets for the partition
      * with the epoch less than or equal to the epoch the partition last saw.

@@ -707,12 +707,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
         fetchContext.foreachPartition { (topicIdPartition, data) =>
-          if (topicIdPartition.topicPartition.topic == null )
+          if (topicIdPartition.topic == null)
             erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
           else if (!metadataCache.contains(topicIdPartition.topicPartition))
             erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
           else
-            interesting += (topicIdPartition -> data)
+            interesting += topicIdPartition -> data
         }
       } else {
         fetchContext.foreachPartition { (topicIdPartition, _) =>
@@ -723,19 +723,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Regular Kafka consumers need READ permission on each partition they are fetching.
       val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, FetchRequest.PartitionData)]
       fetchContext.foreachPartition { (topicIdPartition, partitionData) =>
-        if (topicIdPartition.topicPartition.topic == null)
+        if (topicIdPartition.topic == null)
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
         else
           partitionDatas += topicIdPartition -> partitionData
       }
       val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topicPartition.topic)
       partitionDatas.foreach { case (topicIdPartition, data) =>
-        if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
+        if (!authorizedTopics.contains(topicIdPartition.topic))
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
         else if (!metadataCache.contains(topicIdPartition.topicPartition))
           erroneous += topicIdPartition -> FetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else
-          interesting += (topicIdPartition -> data)
+          interesting += topicIdPartition -> data
       }
     }
 
@@ -795,7 +795,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 new FetchResponseData.PartitionData()
-                  .setPartitionIndex(tp.topicPartition.partition)
+                  .setPartitionIndex(tp.partition)
                   .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
                   .setHighWatermark(partitionData.highWatermark)
                   .setLastStableOffset(partitionData.lastStableOffset)
@@ -811,7 +811,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           case None =>
             new FetchResponseData.PartitionData()
-              .setPartitionIndex(tp.topicPartition.partition)
+              .setPartitionIndex(tp.partition)
               .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
               .setHighWatermark(partitionData.highWatermark)
               .setLastStableOffset(partitionData.lastStableOffset)
@@ -833,7 +833,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         val partitionData = new FetchResponseData.PartitionData()
-          .setPartitionIndex(tp.topicPartition.partition)
+          .setPartitionIndex(tp.partition)
           .setErrorCode(maybeDownConvertStorageError(data.error).code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
@@ -870,8 +870,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           topicResponse.partitions.forEach { data =>
             // If the topic name was not known, we will have no bytes out.
             if (topicResponse.topic != null) {
-              val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic, data.partitionIndex()))
-              brokerTopicStats.updateBytesOut(tp.topicPartition.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
+              val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic, data.partitionIndex))
+              brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
             }
           }
         }
@@ -3497,7 +3497,7 @@ object KafkaApis {
     val responseData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     unconvertedResponse.data.responses().forEach(topicResponse =>
       topicResponse.partitions().forEach(partition =>
-        responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex())), partition)))
+        responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex)), partition)))
     FetchResponse.sizeOf(versionId, responseData.entrySet
       .iterator.asScala.filter(element => element.getKey.topicPartition.topic != null && quota.isThrottled(element.getKey.topicPartition)).asJava)
   }

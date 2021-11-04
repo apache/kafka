@@ -93,31 +93,36 @@ class CachedPartition(var topic: String,
   def this(topic: String, partition: Int, topicId: Uuid) =
     this(topic, topicId, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
 
-  def this(part: TopicPartition, topicId: Uuid) =
-    this(part.topic, part.partition, topicId)
+  def this(part: TopicIdPartition) = {
+    this(part.topic, part.partition, part.topicId)
+  }
 
-  def this(part: TopicPartition, id: Uuid, reqData: FetchRequest.PartitionData) =
-    this(part.topic, id, part.partition, reqData.maxBytes, reqData.fetchOffset, -1,
+  def this(part: TopicIdPartition, reqData: FetchRequest.PartitionData) =
+    this(part.topic, part.topicId, part.partition, reqData.maxBytes, reqData.fetchOffset, -1,
       reqData.currentLeaderEpoch, reqData.logStartOffset, -1, reqData.lastFetchedEpoch)
 
-  def this(part: TopicPartition, id: Uuid, reqData: FetchRequest.PartitionData,
+  def this(part: TopicIdPartition, reqData: FetchRequest.PartitionData,
            respData: FetchResponseData.PartitionData) =
-    this(part.topic, id, part.partition, reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
+    this(part.topic, part.topicId, part.partition, reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
       reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset, reqData.lastFetchedEpoch)
 
   def reqData = new FetchRequest.PartitionData(topicId, fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
 
-  def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
+  def maybeUpdateRequestParamsOrName(reqData: FetchRequest.PartitionData, name: String): Unit = {
     // Update our cached request parameters.
     maxBytes = reqData.maxBytes
     fetchOffset = reqData.fetchOffset
     fetcherLogStartOffset = reqData.logStartOffset
     leaderEpoch = reqData.currentLeaderEpoch
     lastFetchedEpoch = reqData.lastFetchedEpoch
+    // Update name if needed
+    maybeSetUnknownName(name)
   }
 
-  def resolveUnknownName(name: String): Unit = {
-    this.topic = name
+  def maybeSetUnknownName(name: String): Unit = {
+    if (this.topic == null) {
+      this.topic = name
+    }
   }
 
   def maybeResolveUnknownName(topicNames: FetchSession.TOPIC_NAME_MAP): Unit = {
@@ -180,8 +185,11 @@ class CachedPartition(var topic: String,
    *
    * @return the hash code for the CachedPartition depending on what request version we are using.
    */
-  override def hashCode: Int = if (topicId != Uuid.ZERO_UUID) (31 * partition) + topicId.hashCode else
-    (31 * partition) + topic.hashCode
+  override def hashCode: Int =
+    if (topicId != Uuid.ZERO_UUID)
+      (31 * partition) + topicId.hashCode
+    else
+      (31 * partition) + topic.hashCode
 
   def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
@@ -197,11 +205,10 @@ class CachedPartition(var topic: String,
   override def equals(that: Any): Boolean =
     that match {
       case that: CachedPartition =>
-        this.eq(that) ||
-          (that.canEqual(this) &&
-            this.partition.equals(that.partition) &&
-            (if (this.topicId != Uuid.ZERO_UUID) this.topicId.equals(that.topicId)
-            else this.topic.equals(that.topic)))
+        this.eq(that) || (if (this.topicId != Uuid.ZERO_UUID)
+          this.partition.equals(that.partition) && this.topicId.equals(that.topicId)
+        else
+          this.partition.equals(that.partition) && this.topic.equals(that.topic))
       case _ => false
     }
 
@@ -264,7 +271,7 @@ class FetchSession(val id: Int,
   def metadata: JFetchMetadata = synchronized { new JFetchMetadata(id, epoch) }
 
   def getFetchOffset(topicIdPartition: TopicIdPartition): Option[Long] = synchronized {
-    Option(partitionMap.find(new CachedPartition(topicIdPartition.topicPartition, topicIdPartition.topicId))).map(_.fetchOffset)
+    Option(partitionMap.find(new CachedPartition(topicIdPartition))).map(_.fetchOffset)
   }
 
   type TL = util.ArrayList[TopicIdPartition]
@@ -272,27 +279,23 @@ class FetchSession(val id: Int,
   // Update the cached partition data based on the request.
   def update(fetchData: FetchSession.REQ_MAP,
              toForget: util.List[TopicIdPartition],
-             reqMetadata: JFetchMetadata,
-             usesTopicIds: Boolean): (TL, TL, TL) = synchronized {
+             reqMetadata: JFetchMetadata): (TL, TL, TL) = synchronized {
     val added = new TL
     val updated = new TL
     val removed = new TL
     fetchData.forEach { (topicPart, reqData) =>
-      val newCachedPart = new CachedPartition(topicPart.topicPartition, topicPart.topicId, reqData)
-      val cachedPart = partitionMap.find(newCachedPart)
+      val cachedPartitionKey = new CachedPartition(topicPart, reqData)
+      val cachedPart = partitionMap.find(cachedPartitionKey)
       if (cachedPart == null) {
-        partitionMap.mustAdd(newCachedPart)
+        partitionMap.mustAdd(cachedPartitionKey)
         added.add(topicPart)
       } else {
-        cachedPart.updateRequestParams(reqData)
-        if (cachedPart.topic == null)
-        // Update the topic name in place
-          cachedPart.resolveUnknownName(topicPart.topicPartition.topic)
+        cachedPart.maybeUpdateRequestParamsOrName(reqData, topicPart.topic)
         updated.add(topicPart)
       }
     }
     toForget.forEach { p =>
-      if (partitionMap.remove(new CachedPartition(p.topicPartition.topic, p.topicPartition.partition, p.topicId))) {
+      if (partitionMap.remove(new CachedPartition(p))) {
         removed.add(p)
       }
     }
@@ -418,7 +421,7 @@ class FullFetchContext(private val time: Time,
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       updates.forEach { (part, respData) =>
         val reqData = fetchData.get(part)
-        cachedPartitions.mustAdd(new CachedPartition(part.topicPartition, part.topicId, reqData, respData))
+        cachedPartitions.mustAdd(new CachedPartition(part, reqData, respData))
       }
       cachedPartitions
     }
@@ -470,7 +473,7 @@ class IncrementalFetchContext(private val time: Time,
         val element = iter.next()
         val topicPart = element.getKey
         val respData = element.getValue
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart.topicPartition, topicPart.topicId))
+        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
         val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
           nextElement = element
@@ -817,7 +820,7 @@ class FetchManager(private val time: Time,
                 s", but request version $reqVersion means that we can not.")
               new SessionErrorContext(Errors.FETCH_SESSION_TOPIC_ID_ERROR, reqMetadata)
             } else {
-              val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata, reqVersion >= 13)
+              val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata)
               if (session.isEmpty) {
                 debug(s"Created a new sessionless FetchContext and closing session id ${session.id}, " +
                   s"epoch ${session.epoch}: after removing ${partitionsToLogString(removed)}, " +

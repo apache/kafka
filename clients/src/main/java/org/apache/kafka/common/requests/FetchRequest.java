@@ -209,6 +209,19 @@ public class FetchRequest extends AbstractRequest {
             return this;
         }
 
+        private void addToForgottenTopicMap(List<TopicIdPartition> toForget, Map<String, FetchRequestData.ForgottenTopic> forgottenTopicMap) {
+            toForget.forEach(topicIdPartition -> {
+                FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicIdPartition.topic());
+                if (forgottenTopic == null) {
+                    forgottenTopic = new ForgottenTopic()
+                            .setTopic(topicIdPartition.topic())
+                            .setTopicId(topicIdPartition.topicId());
+                    forgottenTopicMap.put(topicIdPartition.topic(), forgottenTopic);
+                }
+                forgottenTopic.partitions().add(topicIdPartition.partition());
+            });
+        }
+
         @Override
         public FetchRequest build(short version) {
             if (version < 3) {
@@ -224,32 +237,14 @@ public class FetchRequest extends AbstractRequest {
             fetchRequestData.setForgottenTopicsData(new ArrayList<>());
 
             Map<String, FetchRequestData.ForgottenTopic> forgottenTopicMap = new LinkedHashMap<>();
-            removed.forEach(topicIdPartition -> {
-                FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicIdPartition.topic());
-                if (forgottenTopic == null) {
-                    forgottenTopic = new ForgottenTopic()
-                        .setTopic(topicIdPartition.topic())
-                        .setTopicId(topicIdPartition.topicId());
-                    forgottenTopicMap.put(topicIdPartition.topic(), forgottenTopic);
-                }
-                forgottenTopic.partitions().add(topicIdPartition.partition());
-            });
+            addToForgottenTopicMap(removed, forgottenTopicMap);
 
             // If a version older than v13 is used, topic-partition which were replaced
             // by a topic-partition with the same name but a different topic ID are not
             // sent out in the "forget" set in order to not remove the newly added
             // partition in the "fetch" set.
             if (version >= 13) {
-                replaced.forEach(topicIdPartition -> {
-                    FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicIdPartition.topic());
-                    if (forgottenTopic == null) {
-                        forgottenTopic = new ForgottenTopic()
-                            .setTopic(topicIdPartition.topic())
-                            .setTopicId(topicIdPartition.topicId());
-                        forgottenTopicMap.put(topicIdPartition.topic(), forgottenTopic);
-                    }
-                    forgottenTopic.partitions().add(topicIdPartition.partition());
-                });
+                addToForgottenTopicMap(replaced, forgottenTopicMap);
             }
 
             forgottenTopicMap.forEach((topic, forgottenTopic) -> fetchRequestData.forgottenTopicsData().add(forgottenTopic));
@@ -375,6 +370,7 @@ public class FetchRequest extends AbstractRequest {
                             name = topicNames.get(fetchTopic.topicId());
                         }
                         fetchTopic.partitions().forEach(fetchPartition ->
+                                // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
                                 fetchData.put(new TopicIdPartition(fetchTopic.topicId(), new TopicPartition(name, fetchPartition.partition())),
                                         new PartitionData(
                                                 fetchTopic.topicId(),
@@ -405,6 +401,7 @@ public class FetchRequest extends AbstractRequest {
                         } else {
                             name = topicNames.get(forgottenTopic.topicId());
                         }
+                        // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
                         forgottenTopic.partitions().forEach(partitionId -> toForget.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
                     });
                 }
