@@ -26,8 +26,11 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.Position;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+
+import java.util.Optional;
 
 /**
  * For internal use so we can update the {@link RecordContext} and current
@@ -115,7 +118,8 @@ public interface InternalProcessorContext<KOut, VOut>
     void logChange(final String storeName,
                    final Bytes key,
                    final byte[] value,
-                   final long timestamp);
+                   final long timestamp,
+                   final Optional<Position> position);
 
     String changelogFor(final String storeName);
 }

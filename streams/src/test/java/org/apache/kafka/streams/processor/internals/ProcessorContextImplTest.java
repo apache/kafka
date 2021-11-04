@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -47,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
@@ -384,12 +387,14 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void shouldNotSendRecordHeadersToChangelogTopic() {
+    public void shouldSendV0RecordHeadersToChangelogTopic() {
+        final Headers headers = new RecordHeaders();
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_DEFAULT);
         recordCollector.send(
             CHANGELOG_PARTITION.topic(),
             KEY_BYTES,
             VALUE_BYTES,
-            null,
+            headers,
             CHANGELOG_PARTITION.partition(),
             TIMESTAMP,
             BYTES_KEY_SERIALIZER,
@@ -400,7 +405,7 @@ public class ProcessorContextImplTest {
 
         replay(recordCollector, task);
         context.transitionToActive(task, recordCollector, null);
-        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, Optional.empty());
 
         verify(recordCollector);
     }
@@ -410,7 +415,7 @@ public class ProcessorContextImplTest {
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
-            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L)
+            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L, Optional.empty())
         );
     }
 
@@ -692,6 +697,8 @@ public class ProcessorContextImplTest {
 
     private StreamsConfig streamsConfigMock() {
         final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        expect(streamsConfig.originals()).andStubReturn(Collections.emptyMap());
+        expect(streamsConfig.values()).andStubReturn(Collections.emptyMap());
         expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andStubReturn("add-id");
         expect(streamsConfig.defaultValueSerde()).andStubReturn(Serdes.ByteArray());
         expect(streamsConfig.defaultKeySerde()).andStubReturn(Serdes.ByteArray());

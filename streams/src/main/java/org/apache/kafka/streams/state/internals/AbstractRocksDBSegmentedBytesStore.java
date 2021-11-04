@@ -20,11 +20,15 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -38,6 +42,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
+
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
 
@@ -49,6 +56,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private ProcessorContext context;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+    private boolean consistencyEnabled = false;
+    private Position position;
 
     private volatile boolean open;
 
@@ -60,6 +69,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.metricScope = metricScope;
         this.keySchema = keySchema;
         this.segments = segments;
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -216,6 +226,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
+            try {
+                final InternalProcessorContext internalContext = asInternalProcessorContext(context);
+                if (internalContext != null && internalContext.recordMetadata().isPresent()) {
+                    final RecordMetadata meta = internalContext.recordMetadata().get();
+                    position = position.update(meta.topic(), meta.partition(), meta.offset());
+                }
+            } catch (final IllegalArgumentException e) {
+                LOG.warn("Cannot update position as context does not have record metadata information.");
+            }
             segment.put(key, value);
         }
     }
@@ -253,9 +272,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         segments.openExisting(this.context, observedStreamTime);
 
         // register and possibly restore the state from the logs
-        context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
+        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreAllInternal);
 
         open = true;
+
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false);
     }
 
     @Override
@@ -285,7 +309,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     // Visible for testing
-    void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
+    void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         try {
             final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
             for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
@@ -300,22 +324,23 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     // Visible for testing
-    Map<S, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
+    Map<S, WriteBatch> getWriteBatches(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         // advance stream time to the max timestamp in the batch
-        for (final KeyValue<byte[], byte[]> record : records) {
-            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key()));
             observedStreamTime = Math.max(observedStreamTime, timestamp);
         }
 
         final Map<S, WriteBatch> writeBatchMap = new HashMap<>();
-        for (final KeyValue<byte[], byte[]> record : records) {
-            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key()));
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, consistencyEnabled, position);
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-                    segment.addToBatch(record, batch);
+                    segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
                 }
@@ -324,11 +349,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return writeBatchMap;
     }
 
-    private class RocksDBSegmentsBatchingRestoreCallback implements BatchingStateRestoreCallback {
-
-        @Override
-        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-            restoreAllInternal(records);
-        }
+    Position getPosition() {
+        return position;
     }
 }
