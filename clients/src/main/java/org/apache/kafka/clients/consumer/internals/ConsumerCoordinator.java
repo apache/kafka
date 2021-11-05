@@ -694,18 +694,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected boolean onJoinPrepare(int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        boolean onJoinPrepareAsyncCommitSucceeded = false;
+        boolean onJoinPrepareAsyncCommitCompleted = false;
         // async commit offsets prior to rebalance if auto-commit enabled
+        // and if auto-commit disable or the coordinatorUnknown is true, the future will be null,
+        // the asynchronous commit operation will not do.
         RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
         if (future == null)
-            onJoinPrepareAsyncCommitSucceeded = true;
+            onJoinPrepareAsyncCommitCompleted = true;
         else {
             if (future.succeeded()) {
-                onJoinPrepareAsyncCommitSucceeded = true;
-            } else if (future.failed() && !future.isRetriable()) {
+                onJoinPrepareAsyncCommitCompleted = true;
+            } else if (future.failed()) {
                 // consistent with async auto-commit failures, we do not propagate the exception
                 log.warn("Asynchronous auto-commit offsets failed: {}", future.exception().getMessage());
-                onJoinPrepareAsyncCommitSucceeded = true;
+                if (!future.isRetriable())
+                    onJoinPrepareAsyncCommitCompleted = true;
             }
         }
 
@@ -763,7 +766,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
-        return onJoinPrepareAsyncCommitSucceeded;
+        return onJoinPrepareAsyncCommitCompleted;
     }
 
     @Override

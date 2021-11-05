@@ -421,6 +421,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
+                // return false when onJoinPrepare is waiting for committing offset
                 if (!onJoinPrepare(generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
                     //should not initiateJoinGroup if needsJoinPrepare still is true
