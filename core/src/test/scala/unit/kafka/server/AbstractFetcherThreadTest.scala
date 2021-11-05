@@ -1089,8 +1089,7 @@ class AbstractFetcherThreadTest {
 
     override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
       val fetchData = mutable.Map.empty[TopicPartition, FetchRequest.PartitionData]
-      partitionMap.foreach { case (partition, state) => 0
-        .equals(0)
+      partitionMap.foreach { case (partition, state) =>
         if (state.isReadyForFetch) {
           val replicaState = replicaPartitionState(partition)
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)

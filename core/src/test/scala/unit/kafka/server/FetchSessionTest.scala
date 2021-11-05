@@ -169,9 +169,9 @@ class FetchSessionTest {
     }
 
     val requestData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    requestData1.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100, Optional.empty()))
-    requestData1.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 10, 0, 100, Optional.of(1)))
-    requestData1.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100, Optional.of(2)))
+    requestData1.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100, Optional.empty()))
+    requestData1.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100, Optional.of(1)))
+    requestData1.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 10, 0, 100, Optional.of(2)))
 
     val request1 = createRequest(JFetchMetadata.INITIAL, requestData1, EMPTY_PART_LIST, false)
     val context1 = fetchManager.newContext(
@@ -225,9 +225,9 @@ class FetchSessionTest {
 
     // Now verify we can change the leader epoch and the context is updated
     val requestData3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    requestData3.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100, Optional.of(6)))
-    requestData3.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 10, 0, 100, Optional.empty()))
-    requestData3.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100, Optional.of(3)))
+    requestData3.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100, Optional.of(6)))
+    requestData3.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100, Optional.empty()))
+    requestData3.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 10, 0, 100, Optional.of(3)))
 
     val request3 = createRequest(new JFetchMetadata(sessionId, 2), requestData3, EMPTY_PART_LIST, false)
     val context3 = fetchManager.newContext(
@@ -269,9 +269,9 @@ class FetchSessionTest {
     }
 
     val requestData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    requestData1.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
-    requestData1.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 10, 0, 100, Optional.of(1), Optional.empty[Integer]))
-    requestData1.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100, Optional.of(2), Optional.of(1)))
+    requestData1.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
+    requestData1.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100, Optional.of(1), Optional.empty[Integer]))
+    requestData1.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 10, 0, 100, Optional.of(2), Optional.of(1)))
 
     val request1 = createRequest(JFetchMetadata.INITIAL, requestData1, EMPTY_PART_LIST, false)
     val context1 = fetchManager.newContext(
@@ -324,9 +324,9 @@ class FetchSessionTest {
 
     // Now verify we can change the leader epoch and the context is updated
     val requestData3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    requestData3.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100, Optional.of(6), Optional.of(5)))
-    requestData3.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 10, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
-    requestData3.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100, Optional.of(3), Optional.of(3)))
+    requestData3.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100, Optional.of(6), Optional.of(5)))
+    requestData3.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
+    requestData3.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 10, 0, 100, Optional.of(3), Optional.of(3)))
 
     val request3 = createRequest(new JFetchMetadata(sessionId, 2), requestData3, EMPTY_PART_LIST, false)
     val context3 = fetchManager.newContext(
@@ -369,9 +369,9 @@ class FetchSessionTest {
 
     // Create a new fetch session with a FULL fetch request
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100,
+    reqData2.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100,
       Optional.empty()))
-    reqData2.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 10, 0, 100,
+    reqData2.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100,
       Optional.empty()))
     val request2 = createRequest(JFetchMetadata.INITIAL, reqData2, EMPTY_PART_LIST, false)
     val context2 = fetchManager.newContext(
@@ -497,9 +497,9 @@ class FetchSessionTest {
     var nextSessionId = prevSessionId
     do {
       val reqData8 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-      reqData8.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 0, 0, 100,
+      reqData8.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 0, 0, 100,
         Optional.empty()))
-      reqData8.put(tp3.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100,
+      reqData8.put(tp3.topicPartition, new FetchRequest.PartitionData(tp3.topicId, 10, 0, 100,
         Optional.empty()))
       val request8 = createRequest(new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
       val context8 = fetchManager.newContext(
@@ -633,7 +633,7 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100,
+    reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100,
       Optional.empty()))
     reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(10, 0, 100,
       Optional.empty()))
@@ -674,12 +674,13 @@ class FetchSessionTest {
     val time = new MockTime()
     val cache = new FetchSessionCache(10, 1000)
     val fetchManager = new FetchManager(time, cache)
-    val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
-    val topicIds = topicNames.asScala.map(_.swap).asJava
-    val foo0 = new TopicIdPartition(topicIds.getOrDefault("foo", Uuid.ZERO_UUID), new TopicPartition("foo", 0))
-    val foo1 = new TopicIdPartition(topicIds.getOrDefault("foo", Uuid.ZERO_UUID), new TopicPartition("foo", 1))
-    val emptyFoo0 = new TopicIdPartition(topicIds.getOrDefault("foo", Uuid.ZERO_UUID), new TopicPartition(null, 0))
-    val emptyFoo1 = new TopicIdPartition(topicIds.getOrDefault("foo", Uuid.ZERO_UUID), new TopicPartition(null, 1))
+    val fooId = Uuid.randomUuid()
+    val barId = Uuid.randomUuid()
+    val topicNames = Map(fooId -> "foo", barId -> "bar").asJava
+    val foo0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0))
+    val foo1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1))
+    val emptyFoo0 = new TopicIdPartition(fooId, new TopicPartition(null, 0))
+    val emptyFoo1 = new TopicIdPartition(fooId, new TopicPartition(null, 1))
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
@@ -689,7 +690,7 @@ class FetchSessionTest {
       Optional.empty()))
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     // Simulate unknown topic ID for foo.
-    val topicNamesOnlyBar = Collections.singletonMap(topicIds.get("bar"), "bar")
+    val topicNamesOnlyBar = Collections.singletonMap(barId, "bar")
     // We should not throw error since we have an older request version.
     val context1 = fetchManager.newContext(
       request1.version,
@@ -700,6 +701,7 @@ class FetchSessionTest {
       topicNamesOnlyBar
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
+    context1.foreachPartition((topicIdPartition, _) => assertEquals(fooId, topicIdPartition.topicId))
     val respData1 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     respData1.put(emptyFoo0, new FetchResponseData.PartitionData()
       .setPartitionIndex(0)
@@ -725,8 +727,8 @@ class FetchSessionTest {
       request2.forgottenTopics(topicNames),
       topicNames
     )
-    // run through each partition to resolve them
-    context2.foreachPartition((_, _) => ())
+    // Topic names in the session but not in the request are lazily resolved via foreachPartition. Resolve them here.
+    context2.foreachPartition((topicIdPartition, _) => assertEquals(topicNames.get(topicIdPartition.topicId), topicIdPartition.topic))
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val respData2 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     respData2.put(foo0, new FetchResponseData.PartitionData()
@@ -870,9 +872,9 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and bar-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 0, 0, 100,
+    reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100,
       Optional.empty()))
-    reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 10, 0, 100,
+    reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 10, 0, 100,
       Optional.empty()))
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     // Start a fetch session. Simulate unknown partition foo-0.
@@ -1471,8 +1473,8 @@ class FetchSessionTest {
     val tp2 = new TopicIdPartition(topicIds.get("bar"), new TopicPartition("bar", 2))
 
     val reqData = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData.put(tp1.topicPartition, new FetchRequest.PartitionData(topicIds.get("foo"), 100, 0, 1000, Optional.of(5), Optional.of(4)))
-    reqData.put(tp2.topicPartition, new FetchRequest.PartitionData(topicIds.get("bar"), 100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp1.topicPartition, new FetchRequest.PartitionData(tp1.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp2.topicPartition, new FetchRequest.PartitionData(tp2.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
 
     // Full fetch context returns all partitions in the response
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData, EMPTY_PART_LIST, false)
@@ -1557,9 +1559,9 @@ class FetchSessionTest {
     val tp3 = new TopicIdPartition(topicIds.get("zar"), new TopicPartition("zar", 3))
 
     val reqData = new util.LinkedHashMap[TopicIdPartition, FetchRequest.PartitionData]
-    reqData.put(tp1, new FetchRequest.PartitionData(topicIds.get("foo"), 100, 0, 1000, Optional.of(5), Optional.of(4)))
-    reqData.put(tp2, new FetchRequest.PartitionData(topicIds.get("bar"), 100, 0, 1000, Optional.of(5), Optional.of(4)))
-    reqData.put(tp3, new FetchRequest.PartitionData(topicIds.get("zar"), 100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp1, new FetchRequest.PartitionData(tp1.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp2, new FetchRequest.PartitionData(tp2.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
+    reqData.put(tp3, new FetchRequest.PartitionData(tp3.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
 
     // Full fetch context returns all partitions in the response
     val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false,
@@ -1644,11 +1646,10 @@ class FetchSessionTest {
 
 object FetchSessionTest {
   def idUsageCombinations: java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(
-      Arguments.of(true, true),
-      Arguments.of(true, false),
-      Arguments.of(false, true),
-      Arguments.of(false, false)
-    )
+    val data = new java.util.ArrayList[Arguments]()
+    for (startsWithTopicIds <- Array(true, false))
+      for (endsWithTopicIds <- Array(true, false))
+        data.add(Arguments.of(startsWithTopicIds, endsWithTopicIds))
+    data.stream()
   }
 }

@@ -217,9 +217,6 @@ public class FetcherTest {
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
             Collections.emptyMap(), singletonMap(topicName, 4),
             tp -> validLeaderEpoch, topicIds), false, 0L);
-
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
     }
 
     private void assignFromUserNoId(Set<TopicPartition> partitions) {
@@ -230,9 +227,6 @@ public class FetcherTest {
         metadata.update(9, RequestTestUtils.metadataUpdateWithIds("dummy", 1,
             Collections.emptyMap(), singletonMap("noId", 1),
             tp -> validLeaderEpoch, topicIds), false, 0L);
-
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
     }
 
     @AfterEach
@@ -488,7 +482,7 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicIdPartition tp, final long offset) {
         return body -> {
             FetchRequest fetch = (FetchRequest) body;
-            Map<TopicIdPartition, FetchRequest.PartitionData> fetchData =  fetch.fetchData(topicNames);
+            Map<TopicIdPartition, FetchRequest.PartitionData> fetchData = fetch.fetchData(topicNames);
             return fetchData.containsKey(tp) &&
                     fetchData.get(tp).fetchOffset == offset;
         };
@@ -936,8 +930,6 @@ public class FetcherTest {
 
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
             1, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -962,8 +954,6 @@ public class FetcherTest {
 
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
             1, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -1272,8 +1262,6 @@ public class FetcherTest {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1,
                 Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99, topicIds);
         client.updateMetadata(metadataResponse);
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         subscriptions.seek(tp0, 10);
         assertEquals(1, fetcher.sendFetches());
@@ -2383,8 +2371,6 @@ public class FetcherTest {
         TopicIdPartition tidp1 = new TopicIdPartition(topicIds.get(topic1), tp1);
         TopicIdPartition tidp2 = new TopicIdPartition(topicIds.get(topic2), tp2);
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, tp -> validLeaderEpoch, topicIds));
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         int expectedBytes = 0;
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> fetchPartitionData = new LinkedHashMap<>();
@@ -3962,8 +3948,6 @@ public class FetcherTest {
 
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
                 Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         Node node = metadata.fetch().nodes().get(0);
         assertFalse(client.isConnected(node.idString()));
@@ -3975,9 +3959,11 @@ public class FetcherTest {
         assertFalse(client.isConnected(node.idString()));
         assertTrue(subscriptions.awaitingValidation(tp0));
 
-        // Node is now connected
+        // No version information is initially available, but the node is now connected
         fetcher.validateOffsetsIfNeeded();
         assertTrue(subscriptions.awaitingValidation(tp0));
+        assertTrue(client.isConnected(node.idString()));
+        apiVersions.update(node.idString(), NodeApiVersions.create());
 
         // On the next call, the OffsetForLeaderEpoch request is sent and validation completes
         client.prepareResponseFrom(
@@ -4354,8 +4340,6 @@ public class FetcherTest {
 
         subscriptions.assignFromUser(singleton(tp0));
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
         subscriptions.seek(tp0, 0);
 
         // Node preferred replica before first fetch response
@@ -4399,8 +4383,6 @@ public class FetcherTest {
 
         subscriptions.assignFromUser(singleton(tp0));
         client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
 
         subscriptions.seek(tp0, 0);
 
@@ -4808,8 +4790,6 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        metadata.fetch().nodes().forEach(node ->
-                apiVersions.update(node.idString(), NodeApiVersions.create()));
         fetcher = new Fetcher<>(
                 new LogContext(),
                 consumerClient,
@@ -4842,7 +4822,6 @@ public class FetcherTest {
         metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
-        client.setNodeApiVersions(NodeApiVersions.create());
         metrics = new Metrics(metricConfig, time);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
