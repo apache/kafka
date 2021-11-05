@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.utils.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
 @Target({ElementType.ANNOTATION_TYPE, ElementType.METHOD})
