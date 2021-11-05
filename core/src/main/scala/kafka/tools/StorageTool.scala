@@ -55,6 +55,12 @@ object StorageTool extends Logging {
         help("The cluster ID to use.")
       formatParser.addArgument("--ignore-formatted", "-g").
         action(storeTrue())
+      formatParser.addArgument("--metadata-version", "-v").
+        action(store()).
+        `type`(classOf[Short]).
+        required(true).
+        setDefault(MetadataVersions.latest().version()).
+        help(s"The initial metadata.version to use. Default is the latest (${MetadataVersions.latest().version()}).")
 
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")
@@ -70,7 +76,8 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metaProperties = buildMetadataProperties(clusterId, config.get)
+          val metadataVersion = namespace.getShort("metadata_version")
+          val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
@@ -189,7 +196,8 @@ object StorageTool extends Logging {
 
   def buildMetadataProperties(
     clusterIdStr: String,
-    config: KafkaConfig
+    config: KafkaConfig,
+    metadataVersion: Short
   ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)
@@ -198,7 +206,7 @@ object StorageTool extends Logging {
         s"does not appear to be a valid UUID: ${e.getMessage}")
     }
     require(config.nodeId >= 0, s"The node.id must be set to a non-negative integer.")
-    new MetaProperties(effectiveClusterId.toString, config.nodeId, MetadataVersions.latest().version())
+    new MetaProperties(effectiveClusterId.toString, config.nodeId, metadataVersion)
   }
 
   def formatCommand(stream: PrintStream,

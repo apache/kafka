@@ -25,12 +25,16 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.metadata.MetadataVersionProvider;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.FeatureMap;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
@@ -65,16 +69,33 @@ public class FeatureControlManager {
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
-            Map<String, VersionRange> updates, Set<String> downgradeables,
+            Map<String, Short> updates, Set<String> downgradeables,
             Map<Integer, Map<String, VersionRange>> brokerFeatures) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : updates.entrySet()) {
+        for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
                 downgradeables.contains(entry.getKey()), brokerFeatures, records));
         }
 
         return ControllerResult.atomicOf(records, results);
+    }
+
+    ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {
+        if (finalizedVersions.containsKey(MetadataVersions.FEATURE_NAME)) {
+            return ControllerResult.atomicOf(
+                Collections.emptyList(),
+                Collections.singletonMap(
+                    MetadataVersions.FEATURE_NAME,
+                    new ApiError(Errors.INVALID_UPDATE_VERSION,
+                        "Cannot initialize metadata.version since it has already been initialized.")
+            ));
+        }
+        final VersionRange supportedRange = supportedFeatures.get(MetadataVersions.FEATURE_NAME);
+        final VersionRange initRange = VersionRange.of(supportedRange.min(), initVersion);
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ApiError result = updateMetadataVersion(initRange, records::add);
+        return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersions.FEATURE_NAME, result));
     }
 
     void register(String listenerName, FeatureLevelListener listener) {
@@ -87,14 +108,39 @@ public class FeatureControlManager {
     }
 
     private ApiError updateFeature(String featureName,
-                                   VersionRange newRange,
+                                   short newVersion,
                                    boolean downgradeable,
-                                   Map<Integer, Map<String, VersionRange>> brokerFeatures,
+                                   Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
                                    List<ApiMessageAndVersion> records) {
-        if (newRange.min() <= 0) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The lower value for the new range cannot be less than 1.");
+        final VersionRange currentRange = finalizedVersions.get(featureName);
+        final VersionRange newRange;
+        if (currentRange == null) {
+            // Never seen this feature before. Initialize its min version to the max of supported broker mins
+            Optional<Short> minFinalizedVersion = brokersAndFeatures.values().stream().map(brokerFeatures -> {
+                VersionRange brokerFeatureVersion = brokerFeatures.get(featureName);
+                if (brokerFeatureVersion != null) {
+                    return brokerFeatureVersion.min();
+                } else {
+                    return (short) -1;
+                }
+            }).max(Short::compareTo);
+
+            if (minFinalizedVersion.isPresent()) {
+                newRange = VersionRange.of(minFinalizedVersion.get(), newVersion);
+            } else {
+                // No brokers know about this feature!
+                return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                    "Cannot finalized this feature flag since no alive brokers support it.");
+            }
+        } else {
+            newRange = VersionRange.of(currentRange.min(), newVersion);
         }
+
+        if (newRange.max() < newRange.min()) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The upper value for the new range cannot be less than the lower value.");
+        }
+
         if (newRange.max() <= 0) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The upper value for the new range cannot be less than 1.");
@@ -104,7 +150,8 @@ public class FeatureControlManager {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The controller does not support the given feature range.");
         }
-        for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokerFeatures.entrySet()) {
+
+        for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
             VersionRange brokerRange = brokerEntry.getValue().get(featureName);
             if (brokerRange == null || !brokerRange.contains(newRange)) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -112,7 +159,7 @@ public class FeatureControlManager {
                         "feature range.");
             }
         }
-        VersionRange currentRange = finalizedVersions.get(featureName);
+
         if (currentRange != null && currentRange.max() > newRange.max()) {
             if (!downgradeable) {
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -120,11 +167,54 @@ public class FeatureControlManager {
                     "setting downgradable to true.");
             }
         }
-        records.add(new ApiMessageAndVersion(
-            new FeatureLevelRecord().setName(featureName).
-                setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
+
+        if (featureName.equals(MetadataVersions.FEATURE_NAME)) {
+            return updateMetadataVersion(newRange, records::add);
+        } else {
+            records.add(new ApiMessageAndVersion(
+                new FeatureLevelRecord().setName(featureName).
+                    setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
                 metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
+            return ApiError.NONE;
+        }
+    }
+
+    /**
+     * Perform some additional validation for metadata.version updates.
+     */
+    private ApiError updateMetadataVersion(VersionRange newRange, Consumer<ApiMessageAndVersion> recordConsumer) {
+        if (newRange.max() < newRange.min()) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The upper value for the new range cannot be less than the lower value.");
+        }
+
+        if (newRange.max() <= 0) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The upper value for the new range cannot be less than 1.");
+        }
+
+        if (!canSupportVersion(MetadataVersions.FEATURE_NAME, newRange)) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The controller does not support the given feature range.");
+        }
+
+        VersionRange currentRange = finalizedVersions.get(MetadataVersions.FEATURE_NAME);
+        if (currentRange != null && currentRange.max() > newRange.max()) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Downgrading metadata.version is not yet supported.");
+        }
+
+        try {
+            MetadataVersions.of(newRange.max());
+        } catch (IllegalArgumentException e) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newRange.max());
+        }
+
+        recordConsumer.accept(new ApiMessageAndVersion(
+            new FeatureLevelRecord().setName(MetadataVersions.FEATURE_NAME).
+                setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
+            metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
         return ApiError.NONE;
+
     }
 
     FeatureMapAndEpoch finalizedFeatures(long lastCommittedOffset) {

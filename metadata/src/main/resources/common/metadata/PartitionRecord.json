@@ -37,8 +37,6 @@
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The epoch of the partition leader." },
     { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
-      "about": "An epoch that gets incremented each time we change anything in the partition." },
-    { "name": "DavidTest", "type": "int32", "default":  42, "versions": "1+"},
-    { "name": "OptionalTest", "type": "int32", "taggedVersions": "1+", "tag": 0, "versions": "1+"}
+      "about": "An epoch that gets incremented each time we change anything in the partition." }
   ]
 }

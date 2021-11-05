@@ -32,6 +32,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -47,6 +48,8 @@ import java.util.List;
 public final class MetadataDelta {
     private final MetadataImage image;
 
+    private final MetadataVersionProvider metadataVersionProvider;
+
     private long highestOffset;
 
     private int highestEpoch;
@@ -61,8 +64,9 @@ public final class MetadataDelta {
 
     private ClientQuotasDelta clientQuotasDelta = null;
 
-    public MetadataDelta(MetadataImage image) {
+    public MetadataDelta(MetadataImage image, MetadataVersionProvider metadataVersionProvider) {
         this.image = image;
+        this.metadataVersionProvider = metadataVersionProvider;
         this.highestOffset = image.highestOffsetAndEpoch().offset;
         this.highestEpoch = image.highestOffsetAndEpoch().epoch;
     }
@@ -201,7 +205,7 @@ public final class MetadataDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
+        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features(), metadataVersionProvider);
         featuresDelta.replay(record);
     }
 
@@ -216,7 +220,7 @@ public final class MetadataDelta {
     }
 
     public void replay(RemoveFeatureLevelRecord record) {
-        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
+        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features(), metadataVersionProvider);
         featuresDelta.replay(record);
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.VersionRange;
 
@@ -36,10 +37,13 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<VersionRange>> changes = new HashMap<>();
 
-    private Optional<VersionRange> metadataVersionChange = Optional.empty();
+    private final MetadataVersionProvider metadataVersionProvider;
 
-    public FeaturesDelta(FeaturesImage image) {
+    private VersionRange metadataVersionChange = null;
+
+    public FeaturesDelta(FeaturesImage image, MetadataVersionProvider metadataVersionProvider) {
         this.image = image;
+        this.metadataVersionProvider = metadataVersionProvider;
     }
 
     public Map<String, Optional<VersionRange>> changes() {
@@ -47,7 +51,7 @@ public final class FeaturesDelta {
     }
 
     public Optional<VersionRange> metadataVersionChange() {
-        return metadataVersionChange;
+        return Optional.ofNullable(metadataVersionChange);
     }
 
     public void finishSnapshot() {
@@ -62,7 +66,7 @@ public final class FeaturesDelta {
         VersionRange versionRange = VersionRange.of(record.minFeatureLevel(), record.maxFeatureLevel());
         changes.put(record.name(), Optional.of(versionRange));
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = Optional.of(versionRange);
+            metadataVersionChange = versionRange;
         }
     }
 
@@ -91,7 +95,7 @@ public final class FeaturesDelta {
                 }
             }
         }
-        return new FeaturesImage(newFinalizedVersions);
+        return new FeaturesImage(newFinalizedVersions, metadataVersionProvider);
     }
 
     @Override

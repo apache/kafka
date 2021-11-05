@@ -328,12 +328,15 @@ class BrokerServer(
           new BrokerSnapshotWriterBuilder(raftManager.client)
         ))
       }
+      val metadataVersionManager = new MetadataVersionManager()
 
       metadataListener = new BrokerMetadataListener(config.nodeId,
                                                     time,
                                                     threadNamePrefix,
                                                     config.metadataSnapshotMaxNewRecordBytes,
-                                                    metadataSnapshotter)
+                                                    metadataSnapshotter,
+                                                    metadataVersionManager
+      )
 
       val networkListeners = new ListenerCollection()
       config.advertisedListeners.foreach { ep =>
@@ -429,11 +432,10 @@ class BrokerServer(
       // Block until we've caught up with the latest metadata from the controller quorum.
       lifecycleManager.initialCatchUpFuture.get()
 
-      val metadataVersion = new MetadataVersionManager()
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config, metadataCache,
         logManager, replicaManager, groupCoordinator, transactionCoordinator,
-        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap, metadataVersion)
+        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap, metadataVersionManager)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

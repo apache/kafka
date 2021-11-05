@@ -183,6 +183,6 @@ Found problem:
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+          () => StorageTool.buildMetadataProperties("invalid", config, 1)).getMessage)
   }
 }

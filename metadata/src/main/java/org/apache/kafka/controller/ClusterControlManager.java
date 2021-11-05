@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;

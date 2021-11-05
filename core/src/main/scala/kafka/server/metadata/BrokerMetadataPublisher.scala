@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{UnifiedLog, LogManager}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigType
 import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -29,6 +29,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters._
 
 
 object BrokerMetadataPublisher extends Logging {
@@ -99,7 +100,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               featureCache: FinalizedFeatureCache,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
-                              metadataVersion: MetadataVersionManager) extends MetadataPublisher with Logging {
+                              metadataVersionManager: MetadataVersionManager) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -123,8 +124,14 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
+      val metadataVersion = newImage.features().metadataVersion().asScala
+      val versionDelta = metadataVersionManager.delta(metadataVersion, highestOffsetAndEpoch.offset)
+
       if (_firstPublish) {
         info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
+
+        // We need to learn about the metadata.version, if set, before other components load
+        metadataVersionManager.delta(metadataVersion, highestOffsetAndEpoch.offset)
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
@@ -136,13 +143,12 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
-        metadataVersion.update(featuresDelta, highestOffsetAndEpoch.offset)
       }
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
         // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(topicsDelta, newImage)
+        replicaManager.applyDelta(topicsDelta, newImage, versionDelta)
 
         // Handle the case where the old consumer offsets topic was deleted.
         if (topicsDelta.topicWasDeleted(Topic.GROUP_METADATA_TOPIC_NAME)) {

@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -47,7 +48,7 @@ public class FeaturesImageTest {
         map1.put("foo", VersionRange.of((short) 1, (short) 2));
         map1.put("bar", VersionRange.of((short) 1, (short) 1));
         map1.put("baz", VersionRange.of((short) 1, (short) 8));
-        IMAGE1 = new FeaturesImage(map1);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersions::latest);
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -58,12 +59,12 @@ public class FeaturesImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
             setName("baz"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
 
-        DELTA1 = new FeaturesDelta(IMAGE1);
+        DELTA1 = new FeaturesDelta(IMAGE1, MetadataVersions::latest);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<String, VersionRange> map2 = new HashMap<>();
         map2.put("foo", VersionRange.of((short) 1, (short) 3));
-        IMAGE2 = new FeaturesImage(map2);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersions::latest);
     }
 
     @Test
@@ -89,7 +90,7 @@ public class FeaturesImageTest {
     private void testToImageAndBack(FeaturesImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
         image.write(writer);
-        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
+        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY, MetadataVersions::latest);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
         FeaturesImage nextImage = delta.apply();
         assertEquals(image, nextImage);

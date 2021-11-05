@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
-import org.apache.kafka.metadata.MetadataVersions;
 
 @FunctionalInterface
 public interface MetadataVersionProvider {

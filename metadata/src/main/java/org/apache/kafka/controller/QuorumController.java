@@ -40,6 +40,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -87,6 +89,8 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -94,6 +98,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
@@ -807,14 +812,7 @@ public final class QuorumController implements Controller {
                         // TODO can we do without this write event here? Probably
                         appendWriteEvent("initializeMetadataVersion", () -> {
                             log.info("Initializing metadata.version to {}", initialMetadataVersion);
-                            Map<Integer, Map<String, VersionRange>> brokerSupportedFeatures = clusterControl.brokerRegistrations()
-                                .entrySet()
-                                .stream()
-                                .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().supportedFeatures()));
-                            return featureControl.updateFeatures(
-                                Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(initialMetadataVersion.version(), initialMetadataVersion.version())),
-                                Collections.emptySet(),
-                                brokerSupportedFeatures);
+                            return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
                         });
                     }
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
@@ -881,6 +879,8 @@ public final class QuorumController implements Controller {
                         // TODO other synchronous controller stuff here
                     //});
                 }
+            } else {
+                // TODO handle other feature updates here
             }
         }
     }
@@ -1418,6 +1418,38 @@ public final class QuorumController implements Controller {
             .thenApply(result -> new AllocateProducerIdsResponseData()
                     .setProducerIdStart(result.producerIdStart())
                     .setProducerIdLen(result.producerIdLen()));
+    }
+
+    @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+            UpdateFeaturesRequestData request) {
+        return appendWriteEvent("updateFeatures", () -> {
+            Set<String> downgradeables = new HashSet<>();
+            Map<String, Short> updates = new HashMap<>();
+            request.featureUpdates().forEach(featureUpdate -> {
+                String featureName = featureUpdate.feature();
+                if (featureUpdate.allowDowngrade()) {
+                    downgradeables.add(featureName);
+                }
+                updates.put(featureName, featureUpdate.maxVersionLevel());
+            });
+            // TODO move this part into FeatureControlManager
+            Map<Integer, Map<String, VersionRange>> brokerSupportedFeatures = clusterControl.brokerRegistrations()
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().supportedFeatures()));
+            return featureControl.updateFeatures(updates, downgradeables, brokerSupportedFeatures);
+        }).thenApply(result -> {
+            UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
+                .setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection());
+            result.forEach((featureName, error) -> {
+                responseData.results().add(new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message()));
+            });
+            return responseData;
+        });
     }
 
     @Override

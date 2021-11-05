@@ -108,6 +108,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
+        case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -771,6 +772,22 @@ class ControllerApis(val requestChannel: RequestChannel,
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
             results.setThrottleTimeMs(requestThrottleMs)
             new AllocateProducerIdsResponse(results)
+          })
+        }
+      })
+  }
+
+  def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
+    val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
+    authHelper.authorizeClusterOperation(request, ALTER)
+    controller.updateFeatures(updateFeaturesRequest.data)
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+            results.setThrottleTimeMs(requestThrottleMs)
+            new UpdateFeaturesResponse(results)
           })
         }
       })

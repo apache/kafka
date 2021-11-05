@@ -19,10 +19,10 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.function.Consumer
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.metadata.MetadataVersionProvider
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -39,7 +39,8 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: Option[MetadataSnapshotter]
+  val snapshotter: Option[MetadataSnapshotter],
+  val metadataVersionProvider: MetadataVersionProvider
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -73,7 +74,7 @@ class BrokerMetadataListener(
   /**
    * The current metadata delta. Accessed only from the event queue thread.
    */
-  private var _delta = new MetadataDelta(_image)
+  private var _delta = new MetadataDelta(_image, metadataVersionProvider)
 
   /**
    * The object to use to publish new metadata changes, or None if this listener has not
@@ -118,9 +119,14 @@ class BrokerMetadataListener(
       }
       _publisher.foreach(publish)
 
+      // If we detected a change in metadata.version, generate a local snapshot
+      val metadataVersionChanged = Option(_delta.featuresDelta()).exists { featuresDelta =>
+        featuresDelta.metadataVersionChange().isPresent
+      }
+
       snapshotter.foreach { snapshotter =>
         _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-        if (shouldSnapshot()) {
+        if (shouldSnapshot() || metadataVersionChanged) {
           if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
             _bytesSinceLastSnapshot = 0L
           }
@@ -144,7 +150,7 @@ class BrokerMetadataListener(
     override def run(): Unit = {
       try {
         info(s"Loading snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}.")
-        _delta = new MetadataDelta(_image) // Discard any previous deltas.
+        _delta = new MetadataDelta(_image, metadataVersionProvider) // Discard any previous deltas.
         val loadResults = loadBatches(
           _delta,
           reader,
@@ -251,7 +257,7 @@ class BrokerMetadataListener(
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
     _image = _delta.apply()
-    _delta = new MetadataDelta(_image)
+    _delta = new MetadataDelta(_image, metadataVersionProvider)
     publisher.publish(delta, _image)
   }
 
