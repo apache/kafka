@@ -123,11 +123,9 @@ $ cd <KAFKA_HOME>; JMX_PORT=9991 nohup sh bin/kafka-server-start.sh config/serve
 $ sh kafka-topics.sh --bootstrap-server localhost:9092 --topic sample-tiered-storage-test --replication-factor 1 --partitions 5 --create --config local.retention.ms=60000 --config segment.bytes=1048576 --config remote.storage.enable=true
 
 # Run producer perf script to generate load on the topic
-$ cat test-producer.config
-bootstrap-server=localhost:9092
-acks=all
+$ echo "bootstrap.servers=localhost:9092\nacks=all" | cat > test-producer.properties
 
-$ sh kafka-producer-perf-test.sh --topic sample-tiered-storage-test --num-records 100000 --throughput 100 --record-size 10240 --producer.config ../config/producer.properties
+$ sh kafka-producer-perf-test.sh --topic sample-tiered-storage-test --num-records 100000 --throughput 100 --record-size 10240 --producer.config test-producer.properties
 
 # To view the uploaded segments chronologically in HDFS:
 $ bin/hdfs dfs -ls -R kafka-remote-storage/ | grep sample | sort -k6,7
