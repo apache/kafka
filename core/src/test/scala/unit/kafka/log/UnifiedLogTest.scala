@@ -1640,8 +1640,8 @@ class UnifiedLogTest {
       timestamp = mockTime.milliseconds))
     messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
     log.roll()
-    log.flush()
-    assertEquals(numMessages + 1, logDir.listFiles(_.getName.endsWith(".log")).length)
+    log.close()
+    assertEquals(numMessages + 1, logDir.listFiles(_.getName.endsWith(".index")).length)
   }
 
   /**

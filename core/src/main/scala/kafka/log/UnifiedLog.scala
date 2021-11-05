@@ -655,6 +655,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
+      flush(logEndOffset + 1)
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
@@ -1507,7 +1508,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * We have to pass logEngOffset + 1 to the `def flush(offset: Long): Unit` function to flush empty
    * active segments, which is important to make sure we don't lose logEndOffset during shutdown.
    */
-  def flush(): Unit = flush(logEndOffset + 1)
+  def flush(): Unit = flush(logEndOffset)
 
   /**
    * Flush local log segments for all offsets up to offset-1
