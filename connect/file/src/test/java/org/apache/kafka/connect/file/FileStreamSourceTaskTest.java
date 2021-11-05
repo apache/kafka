@@ -19,10 +19,9 @@ package org.apache.kafka.connect.file;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -38,8 +37,12 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-public class FileStreamSourceTaskTest extends EasyMockSupport {
+public class FileStreamSourceTaskTest {
 
     private static final String TOPIC = "test";
 
@@ -59,8 +62,8 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
         task = new FileStreamSourceTask(2);
-        offsetStorageReader = createMock(OffsetStorageReader.class);
-        context = createMock(SourceTaskContext.class);
+        offsetStorageReader = mock(OffsetStorageReader.class);
+        context = mock(SourceTaskContext.class);
         task.initialize(context);
     }
 
@@ -73,14 +76,12 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
     }
 
     private void replay() {
-        replayAll();
         verifyMocks = true;
     }
 
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
-        replay();
 
         task.start(config);
 
@@ -128,12 +129,13 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
         os.close();
         task.stop();
+
+        verifyAll();
     }
 
     @Test
     public void testBatchSize() throws IOException, InterruptedException {
         expectOffsetLookupReturnNone();
-        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
@@ -154,13 +156,13 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
         os.close();
         task.stop();
+        verifyAll();
     }
 
     @Test
     public void testBufferResize() throws IOException, InterruptedException {
         int batchSize = 1000;
         expectOffsetLookupReturnNone();
-        replay();
 
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
         task.start(config);
@@ -181,6 +183,8 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         writeAndAssertBufferSize(batchSize, os, "9       \n".getBytes(), 2048);
         os.close();
         task.stop();
+
+        verifyAll();
     }
 
     private void writeAndAssertBufferSize(int batchSize, OutputStream os, byte[] bytes, int expectBufferSize)
@@ -204,8 +208,6 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     @Test
     public void testMissingFile() throws InterruptedException {
-        replay();
-
         String data = "line\n";
         System.setIn(new ByteArrayInputStream(data.getBytes()));
 
@@ -220,6 +222,8 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.stop();
     }
 
+    @Test
+    @Disabled
     public void testInvalidFile() throws InterruptedException {
         config.put(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
@@ -228,9 +232,13 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
             assertNull(task.poll());
     }
 
-
     private void expectOffsetLookupReturnNone() {
-        EasyMock.expect(context.offsetStorageReader()).andReturn(offsetStorageReader);
-        EasyMock.expect(offsetStorageReader.offset(EasyMock.<Map<String, String>>anyObject())).andReturn(null);
+        when(context.offsetStorageReader()).thenReturn(offsetStorageReader);
+        when(offsetStorageReader.offset(anyMap())).thenReturn(null);
+    }
+
+    private void verifyAll() {
+        verify(context).offsetStorageReader();
+        verify(offsetStorageReader).offset(anyMap());
     }
 }

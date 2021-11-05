@@ -2517,9 +2517,8 @@ project(':connect:file') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
 
-    testImplementation libs.easymock
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
