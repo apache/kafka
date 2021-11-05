@@ -24,7 +24,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 @Target({ElementType.ANNOTATION_TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
-@ArgumentsSource(ApiKeyArgumentsProvider.class)
-public @interface ApiKeySource {
+@ArgumentsSource(ApiKeyVersionsProvider.class)
+public @interface ApiKeyVersionsSource {
     ApiKeys apiKey();
 }

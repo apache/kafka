@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.ApiKeySource;
+import org.apache.kafka.common.protocol.ApiKeyVersionsSource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -37,7 +37,7 @@ public class AddPartitionsToTxnRequestTest {
     private static int throttleTimeMs = 10;
 
     @ParameterizedTest
-    @ApiKeySource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
     public void testConstructor(short version) {
         List<TopicPartition> partitions = new ArrayList<>();
         partitions.add(new TopicPartition("topic", 0));

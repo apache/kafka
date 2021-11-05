@@ -22,12 +22,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.support.AnnotationConsumer;
 
-public class ApiKeyArgumentsProvider implements ArgumentsProvider, AnnotationConsumer<ApiKeySource> {
+public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationConsumer<ApiKeyVersionsSource> {
     private ApiKeys apiKey;
 
-    ApiKeyArgumentsProvider() { }
+    ApiKeyVersionsProvider() { }
 
-    public void accept(ApiKeySource source) {
+    public void accept(ApiKeyVersionsSource source) {
         apiKey = source.apiKey();
     }
 
