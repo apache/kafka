@@ -34,6 +34,7 @@ public abstract class GraphNode {
     private boolean mergeNode;
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
+    private DecoratorNode decoratorNode = null;
 
     public GraphNode(final String nodeName) {
         this.nodeName = nodeName;
@@ -93,8 +94,22 @@ public abstract class GraphNode {
         return valueChangingOperation;
     }
 
-    public boolean dropsRecordsWithNullKeys() {
-        return false;
+    public DecoratorNode decoratorNode() {
+        return decoratorNode;
+    }
+
+    public void setDecoratorNode(final DecoratorNode decoratorNode) {
+        this.decoratorNode = decoratorNode;
+    }
+
+    DecoratorNode decoratorFromProcessorParameters(final ProcessorParameters processorParameters) {
+        if (processorParameters.dropsNullKeysAndValues()) {
+            return new DropNullKeyValueNode<>(processorParameters.processorName());
+        } else if (processorParameters.dropsNullKeys()) {
+            return new DropNullKeyNode<>(processorParameters.processorName());
+        } else {
+            return null;
+        }
     }
 
     public boolean isMergeNode() {

@@ -133,11 +133,6 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
         }
     }
 
-    @Override
-    public boolean dropsRecordsWithNullKeys() {
-        return true;
-    }
-
     public static final class TableSourceNodeBuilder<K, V> {
 
         private String nodeName;

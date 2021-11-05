@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -62,6 +63,10 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.joinThisStoreNames = joinThisStoreNames;
         this.joinOtherStoreNames = joinOtherStoreNames;
         this.storeBuilder = storeBuilder;
+
+        assert joinThisProcessorParameters.dropsNullKeys() == joinOtherProcessorParameters.dropsNullKeys();
+        assert joinThisProcessorParameters.dropsNullKeysAndValues() == joinOtherProcessorParameters.dropsNullKeysAndValues();
+        setDecoratorNode(decoratorFromProcessorParameters(joinThisProcessorParameters));
     }
 
     public Serde<K> keySerde() {
@@ -95,20 +100,33 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         return (KTableKTableJoinMerger<K, VR>) merger;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String thisProcessorName = thisProcessorParameters().processorName();
-        final String otherProcessorName = otherProcessorParameters().processorName();
+        final DecoratorNode decoratorNode = decoratorNode();
+        final ProcessorParameters<K, Change<V1>, ?, ?> thisProcessorParameters = thisProcessorParameters();
+        final ProcessorParameters<K, Change<V2>, ?, ?> otherProcessorParameters = otherProcessorParameters();
+        final String thisProcessorName = thisProcessorParameters.processorName();
+        final String otherProcessorName = otherProcessorParameters.processorName();
         final String mergeProcessorName = mergeProcessorParameters().processorName();
+
+        final ProcessorSupplier<K, Change<V1>, ?, ?> thisProcessorSupplier = thisProcessorParameters.processorSupplier();
+        final ProcessorSupplier<K, Change<V1>, ?, ?> maybeDecoratedThisProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(thisProcessorSupplier)
+            : thisProcessorSupplier;
+        final ProcessorSupplier<K, Change<V2>, ?, ?> otherProcessorSupplier = otherProcessorParameters.processorSupplier();
+        final ProcessorSupplier<K, Change<V2>, ?, ?> maybeDecoratedOtherProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(thisProcessorSupplier)
+            : otherProcessorSupplier;
 
         topologyBuilder.addProcessor(
             thisProcessorName,
-            thisProcessorParameters().processorSupplier(),
+            maybeDecoratedThisProcessorSupplier,
             thisJoinSideNodeName());
 
         topologyBuilder.addProcessor(
             otherProcessorName,
-            otherProcessorParameters().processorSupplier(),
+            maybeDecoratedOtherProcessorSupplier,
             otherJoinSideNodeName());
 
         topologyBuilder.addProcessor(

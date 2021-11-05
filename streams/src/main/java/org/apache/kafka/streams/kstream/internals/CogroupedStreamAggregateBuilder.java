@@ -71,7 +71,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                     CogroupedKStreamImpl.AGGREGATE_NAME),
                 stateCreated,
                 storeBuilder,
-                parentProcessor);
+                parentProcessor,
+                false,
+                true);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -109,7 +111,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                     CogroupedKStreamImpl.AGGREGATE_NAME),
                 stateCreated,
                 storeBuilder,
-                parentProcessor);
+                parentProcessor,
+                true,
+                false);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -148,7 +152,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                     CogroupedKStreamImpl.AGGREGATE_NAME),
                 stateCreated,
                 storeBuilder,
-                parentProcessor);
+                parentProcessor,
+                true,
+                false);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -185,7 +191,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                     CogroupedKStreamImpl.AGGREGATE_NAME),
                 stateCreated,
                 storeBuilder,
-                parentProcessor);
+                parentProcessor,
+                false,
+                true);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -257,20 +265,22 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
                                                                  final boolean stateCreated,
                                                                  final StoreBuilder<?> storeBuilder,
-                                                                 final ProcessorSupplier<K, ?, K, ?> kStreamAggregate) {
+                                                                 final ProcessorSupplier<K, ?, K, ?> kStreamAggregate,
+                                                                 final boolean dropsNullKeys,
+                                                                 final boolean dropsNullKeysAndValues) {
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
         if (!stateCreated) {
             statefulProcessorNode =
                 new StatefulProcessorNode<>(
                     processorName,
-                    new ProcessorParameters<>(kStreamAggregate, processorName),
+                    new ProcessorParameters<>(kStreamAggregate, processorName, dropsNullKeys, dropsNullKeysAndValues),
                     storeBuilder
                 );
         } else {
             statefulProcessorNode =
                 new StatefulProcessorNode<>(
                     processorName,
-                    new ProcessorParameters<>(kStreamAggregate, processorName),
+                    new ProcessorParameters<>(kStreamAggregate, processorName, dropsNullKeys, dropsNullKeysAndValues),
                     new String[]{storeBuilder.name()}
                 );
         }

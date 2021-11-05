@@ -25,6 +25,9 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.DecoratorNode;
+import org.apache.kafka.streams.kstream.internals.graph.DropNullKeyNode;
+import org.apache.kafka.streams.kstream.internals.graph.DropNullKeyValueNode;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -227,7 +230,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                       final GraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
-        parent.addChild(child);
+        if (child.decoratorNode() != null) {
+            final DecoratorNode decorator = child.decoratorNode();
+            decorator.addChild(child);
+            parent.addChild(decorator);
+            child.setDecoratorNode(null);
+        } else {
+            parent.addChild(child);
+        }
         maybeAddNodeForOptimizationMetadata(child);
     }
 
@@ -275,6 +285,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public void buildAndOptimizeTopology(final boolean optimizeTopology) {
 
+        applyDecorators();
         mergeDuplicateSourceNodes();
         if (optimizeTopology) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
@@ -424,6 +435,97 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             keyChangingNode.addChild(optimizedSingleRepartition);
             entryIterator.remove();
         }
+    }
+
+    private void applyDecorators() {
+        for (final GraphNode node : root.children()) {
+            applyDecorators(node, null);
+            if (node instanceof DecoratorNode) {
+                root.removeChild(node);
+            }
+        }
+    }
+
+    private void applyDecorators(final GraphNode node, DecoratorNode prevDecorator) {
+        Collection<GraphNode> children = Collections.unmodifiableCollection(node.children());
+        if (node instanceof DecoratorNode) {
+            prevDecorator = applyDecorator((DecoratorNode) node, prevDecorator);
+        } else if (node.isKeyChangingOperation()
+            || (prevDecorator instanceof DropNullKeyValueNode && node.isValueChangingOperation())) {
+            // if the operation changes key/value, we can't carry previously observed decorator.
+            prevDecorator = null;
+        } else if (prevDecorator == null
+            && node.children().size() > 1
+            && node.children().stream().allMatch(ch -> ch instanceof DecoratorNode)) {
+            // all children of the current node are decorators. Since the node does not change keys
+            // we might be able to move the decorator upstream.
+            prevDecorator = maybeExtractDecoratorFromChildren(node);
+            children = node.children();
+        }
+
+        for (final GraphNode next : children) {
+            applyDecorators(next, prevDecorator);
+            if (next instanceof DecoratorNode) {
+                node.removeChild(next);
+            }
+        }
+    }
+
+    private DecoratorNode applyDecorator(final DecoratorNode node, final DecoratorNode prevDecorator) {
+        DecoratorNode decoratorToSet = null;
+        if (prevDecorator == null) {
+            // no observed decorator before, so we apply and return it
+            decoratorToSet = node;
+        } else if (prevDecorator instanceof DropNullKeyNode && node instanceof DropNullKeyValueNode) {
+            // new decorator is "stronger", so we apply it
+            decoratorToSet = prevDecorator;
+        }
+
+        // apply (or unset) the decorator and remove it from the topology
+        for (final GraphNode child : node.children()) {
+            child.setDecoratorNode(decoratorToSet);
+            node.removeChild(child);
+            for (final GraphNode parent : node.parentNodes()) {
+                parent.addChild(child);
+            }
+        }
+
+        return decoratorToSet == null ? prevDecorator : decoratorToSet;
+    }
+
+    /**
+     * Extracts common decorator from the node's children and applies it to the present node.
+     *
+     * This method's assumptions are
+     * <ul>
+     *     <li>The node has more than one child</li>
+     *     <li>Children are decorators</li>
+     * </ul>
+     *
+     */
+    private DecoratorNode maybeExtractDecoratorFromChildren(final GraphNode node) {
+        DecoratorNode decoratorNode = null;
+        final Set<Class<? extends DecoratorNode>> nextDecorators = new HashSet<>();
+        for (final GraphNode child : node.children()) {
+            nextDecorators.add(((DecoratorNode) child).getClass());
+        }
+
+        if (nextDecorators.size() == 1) {
+            // all decorators are either DropNullKey or DropNullKeyValue. We apply the
+            decoratorNode = (DecoratorNode) node.children().iterator().next();
+            node.setDecoratorNode(decoratorNode);
+
+            // remove decorators from node's children
+            for (final GraphNode child : node.children()) {
+                node.removeChild(child);
+                for (final GraphNode grandChild : child.children()) {
+                    grandChild.setDecoratorNode(null);
+                    child.removeChild(grandChild);
+                    node.addChild(grandChild);
+                }
+            }
+        }
+        return decoratorNode;
     }
 
     private void maybeUpdateKeyChangingRepartitionNodeMap() {

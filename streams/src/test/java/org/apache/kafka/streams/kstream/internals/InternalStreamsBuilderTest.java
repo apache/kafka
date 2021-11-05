@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -26,6 +27,9 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.internals.graph.DropNullKeyNode;
+import org.apache.kafka.streams.kstream.internals.graph.DropNullKeyValueNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -122,7 +126,6 @@ public class InternalStreamsBuilderTest {
         assertEquals(0, topology.storeToChangelogTopic().size());
         assertNull(table1.queryableStoreName());
     }
-    
     @Test
     public void shouldBuildGlobalTableWithNonQueryableStoreName() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
@@ -362,4 +365,385 @@ public class InternalStreamsBuilderTest {
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @Test
+    public void shouldApplyDropNullKeyDecorator() {
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode =
+            new DropNullKeyNode<>("drop-null-key");
+        final GraphNode graphNode = new KeyUnchangingGraphNode("some-node");
+        graphNode.setDecoratorNode(dropNullKeyNode);
+        builder.addGraphNode(builder.root, graphNode);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyNode)));
+        assertThat(dropNullKeyNode.children(), equalTo(Collections.singleton(graphNode)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode)));
+        assertThat(graphNode.decoratorNode(), instanceOf(DropNullKeyNode.class));
+    }
+
+    @Test
+    public void shouldApplyDropNullKeyValueDecorator() {
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKeyValueNode =
+            new DropNullKeyValueNode<>("drop-null-kv");
+        final GraphNode graphNode = new KeyValueUnchangingGraphNode("some-node");
+        graphNode.setDecoratorNode(dropNullKeyValueNode);
+        builder.addGraphNode(builder.root, graphNode);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyValueNode)));
+        assertThat(dropNullKeyValueNode.children(), equalTo(Collections.singleton(graphNode)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode)));
+        assertThat(graphNode.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+    }
+
+    @Test
+    public void shouldOptimizeChainOfDropNullKeyDecorators() {
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode1 =
+            new DropNullKeyNode<>("drop-null-key1");
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode2 =
+            new DropNullKeyNode<>("drop-null-key2");
+        final GraphNode graphNode1 = new KeyUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyNode1);
+        final GraphNode graphNode2 = new KeyUnchangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKeyNode2);
+
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyNode1)));
+        assertThat(dropNullKeyNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(dropNullKeyNode2)));
+        assertThat(dropNullKeyNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+
+        // only the first node has a decorator
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyNode.class));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+    }
+
+    @Test
+    public void shouldOptimizeChainOfDropNullKeyValueDecorators() {
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKeyValueNode1 =
+            new DropNullKeyValueNode<>("drop-null-kv1");
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKeyValueNode2 =
+            new DropNullKeyValueNode<>("drop-null-kv2");
+        final GraphNode graphNode1 = new KeyValueUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyValueNode1);
+        final GraphNode graphNode2 = new KeyValueUnchangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKeyValueNode2);
+
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyValueNode1)));
+        assertThat(dropNullKeyValueNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(dropNullKeyValueNode2)));
+        assertThat(dropNullKeyValueNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+
+        // only the first node has a decorator
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+    }
+
+    @Test
+    public void shouldOptimizeDropNullKeyValueDecoratorFollowedByDropNullKeyDecorator() {
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKVNode1 =
+            new DropNullKeyValueNode<>("drop-null-kv1");
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode2 =
+            new DropNullKeyNode<>("drop-null-key2");
+        final GraphNode graphNode1 = new KeyValueUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKVNode1);
+        final GraphNode graphNode2 = new KeyUnchangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKeyNode2);
+
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKVNode1)));
+        assertThat(dropNullKVNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(dropNullKeyNode2)));
+        assertThat(dropNullKeyNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+
+        // only the first node has a decorator
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+    }
+
+    @Test
+    public void shouldOptimizeMultipleChildrenWithDropNullKeyDecorators() {
+        final GraphNode graphNode0 = new KeyUnchangingGraphNode("some-node0");
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode1 =
+            new DropNullKeyNode<>("drop-null-key1");
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode2 =
+            new DropNullKeyNode<>("drop-null-key2");
+        final GraphNode graphNode1 = new KeyUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyNode1);
+        final GraphNode graphNode2 = new KeyUnchangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKeyNode2);
+
+        builder.addGraphNode(builder.root, graphNode0);
+        builder.addGraphNode(graphNode0, graphNode1);
+        builder.addGraphNode(graphNode0, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode0)));
+        assertThat(graphNode0.children(), equalTo(
+            new HashSet<>(Arrays.asList(dropNullKeyNode1, dropNullKeyNode2))));
+        assertThat(dropNullKeyNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(dropNullKeyNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode0)));
+        assertThat(graphNode0.children(), equalTo(
+            new HashSet<>(Arrays.asList(graphNode1, graphNode2))));
+
+        // only the first node has a decorator
+        assertThat(graphNode0.decoratorNode(), instanceOf(DropNullKeyNode.class));
+        assertThat(graphNode1.decoratorNode(), equalTo(null));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+    }
+
+    @Test
+    public void shouldOptimizeMultipleChildrenWithDropNullKeyValueDecorators() {
+        final GraphNode graphNode0 = new KeyUnchangingGraphNode("some-node0");
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKVNode1 =
+            new DropNullKeyValueNode<>("drop-null-kv1");
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKVNode2 =
+            new DropNullKeyValueNode<>("drop-null-kv2");
+        final GraphNode graphNode1 = new KeyUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKVNode1);
+        final GraphNode graphNode2 = new KeyUnchangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKVNode2);
+
+        builder.addGraphNode(builder.root, graphNode0);
+        builder.addGraphNode(graphNode0, graphNode1);
+        builder.addGraphNode(graphNode0, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode0)));
+        assertThat(graphNode0.children(), equalTo(
+            new HashSet<>(Arrays.asList(dropNullKVNode1, dropNullKVNode2))));
+        assertThat(dropNullKVNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(dropNullKVNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode0)));
+        assertThat(graphNode0.children(), equalTo(new HashSet<>(Arrays.asList(graphNode1, graphNode2))));
+
+        // only the first node has a decorator
+        assertThat(graphNode0.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+        assertThat(graphNode1.decoratorNode(), equalTo(null));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+    }
+
+    @Test
+    public void shouldNotOptimizeDropNullKeyDecoratorForKeyChangingOperations() {
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode1 =
+            new DropNullKeyNode<>("drop-null-key1");
+        final GraphNode graphNode1 = new KeyChangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyNode1);
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode2 =
+            new DropNullKeyNode<>("drop-null-key2");
+        final GraphNode graphNode2 = new KeyChangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKeyNode2);
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyNode1)));
+        assertThat(dropNullKeyNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(dropNullKeyNode2)));
+        assertThat(dropNullKeyNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyNode.class));
+        assertThat(graphNode2.decoratorNode(), instanceOf(DropNullKeyNode.class));
+    }
+
+    @Test
+    public void shouldNotOptimizeDropNullKeyValueDecoratorForKeyChangingOperations() {
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKVNode1 =
+            new DropNullKeyValueNode<>("drop-null-key1");
+        final GraphNode graphNode1 = new KeyChangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKVNode1);
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKVNode2 =
+            new DropNullKeyValueNode<>("drop-null-key2");
+        final GraphNode graphNode2 = new KeyChangingGraphNode("some-node2");
+        graphNode2.setDecoratorNode(dropNullKVNode2);
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKVNode1)));
+        assertThat(dropNullKVNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(dropNullKVNode2)));
+        assertThat(dropNullKVNode2.children(), equalTo(Collections.singleton(graphNode2)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+        assertThat(graphNode2.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+    }
+
+    @Test
+    public void shouldNotOptimizeBreakingChainOfDropNullKeyDecorators() {
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode1 =
+            new DropNullKeyNode<>("drop-null-key1");
+        final DropNullKeyNode<Object, Object, Object, Object> dropNullKeyNode3 =
+            new DropNullKeyNode<>("drop-null-key3");
+        final GraphNode graphNode1 = new KeyChangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyNode1);
+        final GraphNode graphNode2 = new KeyChangingGraphNode("some-node2");
+        final GraphNode graphNode3 = new KeyChangingGraphNode("some-node3");
+        graphNode3.setDecoratorNode(dropNullKeyNode3);
+
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+        builder.addGraphNode(graphNode2, graphNode3);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyNode1)));
+        assertThat(dropNullKeyNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode2.children(), equalTo(Collections.singleton(dropNullKeyNode3)));
+        assertThat(dropNullKeyNode3.children(), equalTo(Collections.singleton(graphNode3)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode2.children(), equalTo(Collections.singleton(graphNode3)));
+
+        // only the first node has a decorator
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyNode.class));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+        assertThat(graphNode3.decoratorNode(), instanceOf(DropNullKeyNode.class));
+    }
+
+    @Test
+    public void shouldNotOptimizeBreakingChainOfDropNullKeyValueDecorators() {
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKeyValueNode1 =
+            new DropNullKeyValueNode<>("drop-null-kv1");
+        final DropNullKeyValueNode<Object, Object, Object, Object> dropNullKeyValueNode3 =
+            new DropNullKeyValueNode<>("drop-null-kv3");
+        final GraphNode graphNode1 = new KeyValueUnchangingGraphNode("some-node1");
+        graphNode1.setDecoratorNode(dropNullKeyValueNode1);
+        final GraphNode graphNode2 = new KeyChangingGraphNode("some-node2");
+        final GraphNode graphNode3 = new KeyValueUnchangingGraphNode("some-node3");
+        graphNode3.setDecoratorNode(dropNullKeyValueNode3);
+
+        builder.addGraphNode(builder.root, graphNode1);
+        builder.addGraphNode(graphNode1, graphNode2);
+        builder.addGraphNode(graphNode2, graphNode3);
+
+        // before optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(dropNullKeyValueNode1)));
+        assertThat(dropNullKeyValueNode1.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode2.children(), equalTo(Collections.singleton(dropNullKeyValueNode3)));
+        assertThat(dropNullKeyValueNode3.children(), equalTo(Collections.singleton(graphNode3)));
+
+        builder.buildAndOptimizeTopology();
+        // after optimization
+        assertThat(builder.root.children(), equalTo(Collections.singleton(graphNode1)));
+        assertThat(graphNode1.children(), equalTo(Collections.singleton(graphNode2)));
+        assertThat(graphNode2.children(), equalTo(Collections.singleton(graphNode3)));
+
+        // only the first node has a decorator
+        assertThat(graphNode1.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+        assertThat(graphNode2.decoratorNode(), equalTo(null));
+        assertThat(graphNode3.decoratorNode(), instanceOf(DropNullKeyValueNode.class));
+    }
+
+    private static class KeyChangingGraphNode extends GraphNode {
+        public KeyChangingGraphNode(final String nodeName) {
+            super(nodeName);
+        }
+
+        @Override
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+
+        }
+
+        @Override
+        public boolean isKeyChangingOperation() {
+            return true;
+        }
+
+        @Override
+        public boolean isValueChangingOperation() {
+            return false;
+        }
+    }
+
+    private static class KeyUnchangingGraphNode extends GraphNode {
+        public KeyUnchangingGraphNode(final String nodeName) {
+            super(nodeName);
+        }
+
+        @Override
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+
+        }
+
+        @Override
+        public boolean isKeyChangingOperation() {
+            return false;
+        }
+
+        @Override
+        public boolean isValueChangingOperation() {
+            return true;
+        }
+    }
+
+    private static class KeyValueUnchangingGraphNode extends GraphNode {
+        public KeyValueUnchangingGraphNode(final String nodeName) {
+            super(nodeName);
+        }
+
+        @Override
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+
+        }
+
+        @Override
+        public boolean isKeyChangingOperation() {
+            return false;
+        }
+
+        @Override
+        public boolean isValueChangingOperation() {
+            return false;
+        }
+    }
 }

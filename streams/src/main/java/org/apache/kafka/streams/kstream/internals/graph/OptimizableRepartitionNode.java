@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -63,13 +64,20 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         return "OptimizableRepartitionNode{ " + super.toString() + " }";
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
+        final DecoratorNode decoratorNode = decoratorNode();
+        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
+        final ProcessorSupplier<K, V, ?, ?> maybeDecoratedProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(processorSupplier)
+            : processorSupplier;
+
         topologyBuilder.addProcessor(
             processorParameters.processorName(),
-            processorParameters.processorSupplier(),
+            maybeDecoratedProcessorSupplier,
             parentNodeNames()
         );
 
@@ -79,7 +87,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             keySerializer(),
             valueSerializer(),
             partitioner,
-            processorParameters.processorName()
+            parentNodeNames()
         );
 
         topologyBuilder.addSource(

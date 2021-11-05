@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -43,7 +44,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private StreamStreamJoinNode(final String nodeName,
                                  final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
                                  final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
-                                 final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters,
+                                 final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters,
                                  final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
                                  final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters,
                                  final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters,
@@ -56,7 +57,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         super(nodeName,
               valueJoiner,
               joinThisProcessorParameters,
-              joinOtherProcessParameters,
+              joinOtherProcessorParameters,
               joinMergeProcessorParameters,
               null,
               null);
@@ -68,6 +69,10 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.otherWindowedStreamProcessorParameters =  otherWindowedStreamProcessorParameters;
         this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
         this.enableSpuriousResultFix = enableSpuriousResultFix;
+
+        assert joinThisProcessorParameters.dropsNullKeys() == joinOtherProcessorParameters.dropsNullKeys();
+        assert joinThisProcessorParameters.dropsNullKeysAndValues() == joinOtherProcessorParameters.dropsNullKeysAndValues();
+        setDecoratorNode(decoratorFromProcessorParameters(joinThisProcessorParameters));
     }
 
 
@@ -86,14 +91,25 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-
-        final String thisProcessorName = thisProcessorParameters().processorName();
-        final String otherProcessorName = otherProcessorParameters().processorName();
+        final DecoratorNode decoratorNode = decoratorNode();
+        final ProcessorParameters<K, V1, ?, ?> thisProcessorParameters = thisProcessorParameters();
+        final ProcessorParameters<K, V2, ?, ?> otherProcessorParameters = otherProcessorParameters();
+        final String thisProcessorName = thisProcessorParameters.processorName();
+        final String otherProcessorName = otherProcessorParameters.processorName();
         final String thisWindowedStreamProcessorName = thisWindowedStreamProcessorParameters.processorName();
         final String otherWindowedStreamProcessorName = otherWindowedStreamProcessorParameters.processorName();
 
-        topologyBuilder.addProcessor(thisProcessorName, thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorName);
-        topologyBuilder.addProcessor(otherProcessorName, otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorName);
+        final ProcessorSupplier<K, V1, ?, ?> thisProcessorSupplier = thisProcessorParameters.processorSupplier();
+        final ProcessorSupplier<K, V1, ?, ?> maybeDecoratedThisProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(thisProcessorSupplier)
+            : thisProcessorSupplier;
+        final ProcessorSupplier<K, V1, ?, ?> otherProcessorSupplier = thisProcessorParameters.processorSupplier();
+        final ProcessorSupplier<K, V1, ?, ?> maybeDecoratedOtherProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(otherProcessorSupplier)
+            : otherProcessorSupplier;
+
+        topologyBuilder.addProcessor(thisProcessorName, maybeDecoratedThisProcessorSupplier, thisWindowedStreamProcessorName);
+        topologyBuilder.addProcessor(otherProcessorName, maybeDecoratedOtherProcessorSupplier, otherWindowedStreamProcessorName);
         topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorName, otherProcessorName);
         topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorName, otherProcessorName);
         topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);

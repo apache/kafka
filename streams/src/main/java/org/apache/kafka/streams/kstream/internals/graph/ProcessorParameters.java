@@ -38,6 +38,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
     private final String processorName;
+    private final boolean dropsNullKeys;
+    private final boolean dropsNullKeysAndValues;
 
     @SuppressWarnings("deprecation") // Old PAPI compatibility.
     public ProcessorParameters(final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> processorSupplier,
@@ -45,6 +47,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         oldProcessorSupplier = processorSupplier;
         this.processorSupplier = () -> ProcessorAdapter.adapt(processorSupplier.get());
         this.processorName = processorName;
+        this.dropsNullKeys = false;
+        this.dropsNullKeysAndValues = false;
     }
 
     public ProcessorParameters(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
@@ -52,6 +56,20 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         oldProcessorSupplier = null;
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
+        this.dropsNullKeys = false;
+        this.dropsNullKeysAndValues = false;
+    }
+
+    public ProcessorParameters(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
+                               final String processorName,
+                               // TODO: these two should be enum - DROP_NOTHING, DROP_NULL_KEYS, DROP_NULL_KEYS_VALUES
+                               final boolean dropsNullKeys,
+                               final boolean dropsNullKeysAndValues) {
+        oldProcessorSupplier = null;
+        this.processorSupplier = processorSupplier;
+        this.processorName = processorName;
+        this.dropsNullKeys = dropsNullKeys;
+        this.dropsNullKeysAndValues = dropsNullKeysAndValues;
     }
 
     public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
@@ -81,6 +99,14 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
     public String processorName() {
         return processorName;
+    }
+
+    public boolean dropsNullKeys() {
+        return dropsNullKeys;
+    }
+
+    public boolean dropsNullKeysAndValues() {
+        return dropsNullKeysAndValues;
     }
 
     @Override

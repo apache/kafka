@@ -99,7 +99,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         final StatefulProcessorNode<K, V> statefulProcessorNode =
             new StatefulProcessorNode<>(
                 aggFunctionName,
-                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName, false, true),
                 storeBuilder
             );
 

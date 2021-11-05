@@ -41,6 +41,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         final Stream<String> valueGetterStoreNames = valueGetterSuppliers.stream().flatMap(s -> Arrays.stream(s.storeNames()));
         storeNames = Stream.concat(registeredStoreNames, valueGetterStoreNames).toArray(String[]::new);
         storeBuilder = null;
+        setDecoratorNode(decoratorFromProcessorParameters(processorParameters));
     }
 
     /**
@@ -53,6 +54,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
         this.storeNames = storeNames;
         this.storeBuilder = null;
+        setDecoratorNode(decoratorFromProcessorParameters(processorParameters));
     }
 
 
@@ -67,6 +69,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
         this.storeNames = null;
         this.storeBuilder = materializedKTableStoreBuilder;
+        setDecoratorNode(decoratorFromProcessorParameters(processorParameters));
     }
 
     @Override
@@ -78,10 +81,15 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
+        final DecoratorNode decoratorNode = decoratorNode();
         final String processorName = processorParameters().processorName();
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
+        final ProcessorSupplier<K, V, ?, ?> rawProcessorSupplier = processorParameters().processorSupplier();
+        final ProcessorSupplier<K, V, ?, ?> processorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(rawProcessorSupplier)
+            : rawProcessorSupplier;
 
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 
@@ -108,10 +116,5 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
                 topologyBuilder.addStateStore(storeBuilder, processorName);
             }
         }
-    }
-
-    @Override
-    public boolean dropsRecordsWithNullKeys() {
-        return true;
     }
 }

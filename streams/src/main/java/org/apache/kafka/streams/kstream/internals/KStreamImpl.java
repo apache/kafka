@@ -1017,27 +1017,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // Always need to generate the names to burn index counter for compatibility
         final String genSinkName = builder.newProcessorName(SINK_NAME);
-        final String genNullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
+        final String filterProcessorName = builder.newProcessorName(FILTER_NAME);
         final String genSourceName = builder.newProcessorName(SOURCE_NAME);
 
         final String sinkName;
         final String sourceName;
-        final String nullKeyFilterProcessorName;
+        final String processorName;
 
         if (repartitionTopicNamePrefix.matches("KSTREAM.*-[0-9]{10}")) {
             sinkName = genSinkName;
             sourceName = genSourceName;
-            nullKeyFilterProcessorName = genNullKeyFilterProcessorName;
+            processorName = filterProcessorName;
         } else {
             sinkName = repartitionTopicName + "-sink";
             sourceName = repartitionTopicName + "-source";
-            nullKeyFilterProcessorName = repartitionTopicName + "-filter";
+            processorName = repartitionTopicName + "-filter";
         }
-
-        final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
         final ProcessorParameters<K1, V1, ?, ?> processorParameters = new ProcessorParameters<>(
-            new KStreamFilter<>(notNullKeyPredicate, false),
-            nullKeyFilterProcessorName
+            new PassThrough<>(), processorName
         );
 
         baseRepartitionNodeBuilder.withKeySerde(keySerde)
@@ -1050,7 +1047,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                   // reusing the source name for the graph node name
                                   // adding explicit variable as it simplifies logic
                                   .withNodeName(sourceName);
-
         return sourceName;
     }
 

@@ -16,26 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupplier<KIn, VIn, KIn, VAgg> {
-
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
 
     private final String storeName;
     private final Initializer<VAgg> initializer;
@@ -64,16 +56,11 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
     private class KStreamAggregateProcessor extends ContextualProcessor<KIn, VIn, KIn, Change<VAgg>> {
         private TimestampedKeyValueStore<KIn, VAgg> store;
-        private Sensor droppedRecordsSensor;
         private TimestampedTupleForwarder<KIn, VAgg> tupleForwarder;
 
         @Override
         public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
             super.init(context);
-            droppedRecordsSensor = droppedRecordsSensor(
-                Thread.currentThread().getName(),
-                context.taskId().toString(),
-                (StreamsMetricsImpl) context.metrics());
             store =  context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
@@ -84,24 +71,6 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
         @Override
         public void process(final Record<KIn, VIn> record) {
-            // If the key or value is null we don't need to proceed
-            if (record.key() == null || record.value() == null) {
-                if (context().recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context().recordMetadata().get();
-                    LOG.warn(
-                        "Skipping record due to null key or value. "
-                            + "topic=[{}] partition=[{}] offset=[{}]",
-                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                    );
-                } else {
-                    LOG.warn(
-                        "Skipping record due to null key or value. Topic, partition, and offset not known."
-                    );
-                }
-                droppedRecordsSensor.record();
-                return;
-            }
-
             final ValueAndTimestamp<VAgg> oldAggAndTimestamp = store.get(record.key());
             VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
 

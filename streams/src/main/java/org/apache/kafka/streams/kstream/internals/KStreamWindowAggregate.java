@@ -100,23 +100,6 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
         @Override
         public void process(final Record<KIn, VIn> record) {
-            if (record.key() == null) {
-                if (context().recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context().recordMetadata().get();
-                    log.warn(
-                        "Skipping record due to null key. "
-                            + "topic=[{}] partition=[{}] offset=[{}]",
-                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                    );
-                } else {
-                    log.warn(
-                        "Skipping record due to null key. Topic, partition, and offset not known."
-                    );
-                }
-                droppedRecordsSensor.record();
-                return;
-            }
-
             // first get the matching windows
             final long timestamp = record.timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);

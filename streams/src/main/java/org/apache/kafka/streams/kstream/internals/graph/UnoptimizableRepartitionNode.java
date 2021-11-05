@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -49,30 +50,22 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
         );
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
-        boolean downstreamDropsNullKeys = true;
-        for (final GraphNode child : children()) {
-            if (!child.dropsRecordsWithNullKeys()) {
-                downstreamDropsNullKeys = false;
-                break;
-            }
-        }
+        final DecoratorNode decoratorNode = decoratorNode();
+        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
+        final ProcessorSupplier<K, V, ?, ?> maybeDecoratedProcessorSupplier = decoratorNode != null
+            ? decoratorNode.decorate(processorSupplier)
+            : processorSupplier;
 
-        final String[] predecessors;
-        // if not all downstream operations drop null keys, we have to remove the not null predicate.
-        if (downstreamDropsNullKeys) {
-            topologyBuilder.addProcessor(
-                processorParameters.processorName(),
-                processorParameters.processorSupplier(),
-                parentNodeNames()
-            );
-            predecessors = new String[] {processorParameters.processorName()};
-        } else {
-            predecessors = parentNodeNames();
-        }
+        topologyBuilder.addProcessor(
+            processorParameters.processorName(),
+            maybeDecoratedProcessorSupplier,
+            parentNodeNames()
+        );
 
         topologyBuilder.addSink(
             sinkName,
@@ -80,7 +73,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
             keySerializer(),
             valueSerializer(),
             partitioner,
-            predecessors
+            processorParameters.processorName()
         );
 
         topologyBuilder.addSource(
