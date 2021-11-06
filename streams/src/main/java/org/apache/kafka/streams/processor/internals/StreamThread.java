@@ -285,8 +285,6 @@ public class StreamThread extends Thread {
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
     private long totalCommittedSinceLastSummary = 0L;
-    private long maxBufferSizeBytes;
-    private long bufferSize = 0L;
 
     private long now;
     private long lastPollMs;
@@ -320,7 +318,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
-    private final AtomicLong maxBufferResizeSize = new AtomicLong(-1L);
+    private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
     private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -530,7 +528,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.maxBufferSizeBytes = maxBufferSizeBytes;
+        this.maxBufferSizeBytes.set(maxBufferSizeBytes);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -592,10 +590,6 @@ public class StreamThread extends Thread {
                 final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
                     cacheResizer.accept(size);
-                }
-                final long bufferBytesSize = maxBufferResizeSize.getAndSet(-1L);
-                if (size != -1) {
-                    maxBufferSizeBytes = bufferBytesSize;
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -717,12 +711,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
-    }
-
-    public void resize(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheOrBufferMemory(final long size, final boolean cacheResize) {
+        if (cacheResize)
+            cacheResizeSize.set(size);
+        else
+            maxBufferSizeBytes.set(size);
     }
 
     /**
@@ -781,8 +774,7 @@ public class StreamThread extends Thread {
              */
             do {
                 log.debug("Processing tasks with {} iterations.", numIterations);
-                final TaskManager.RecordsProcessedMetadata processedData = taskManager.process(numIterations, time);
-                final int processed = processedData.totalProcessed;
+                final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
@@ -798,7 +790,8 @@ public class StreamThread extends Thread {
 
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
-                    if (bufferSize > maxBufferSizeBytes && bufferSize - processedData.totalBytesConsumed <= maxBufferSizeBytes) {
+                    final long bufferSize = taskManager.getInputBufferSizeInBytes();
+                    if (bufferSize <= maxBufferSizeBytes.get()) {
                         mainConsumer.resume(mainConsumer.paused());
                     }
                     bufferSize -= processedData.totalBytesConsumed;
@@ -949,21 +942,12 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
-        long polledRecordsSize = 0L;
-
         for (final TopicPartition topicPartition: records.partitions()) {
             records
                 .records(topicPartition)
                 .stream()
                 .max(Comparator.comparing(ConsumerRecord::offset))
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
-
-            polledRecordsSize += records
-                    .records(topicPartition)
-                    .stream()
-                    .mapToLong(record -> (record.key() != null ? record.serializedKeySize() : 0)
-                            + (record.value() != null ? record.serializedValueSize() : 0))
-                    .sum();
         }
 
         log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
@@ -971,17 +955,21 @@ public class StreamThread extends Thread {
 
         pollSensor.record(pollLatency, now);
 
-        bufferSize += polledRecordsSize;
-
-        // Pausing partitions as the buffer size now exceeds max buffer size
-        if (bufferSize > maxBufferSizeBytes) {
-            log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes);
-            mainConsumer.pause(taskManager.nonEmptyPartitions());
-        }
 
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
+            // Check buffer size after adding records to tasks
+            final long bufferSize = taskManager.getInputBufferSizeInBytes();
+            // Pausing partitions as the buffer size now exceeds max buffer size
+            if (bufferSize > maxBufferSizeBytes.get()) {
+                log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes.get());
+                // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
+                // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
+                // and even lead to temporal deadlock. More explanation can be found here:
+                // https://issues.apache.org/jira/browse/KAFKA-13152?focusedCommentId=17400647&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-17400647
+                mainConsumer.pause(taskManager.nonEmptyPartitions());
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
@@ -1328,10 +1316,6 @@ public class StreamThread extends Thread {
 
     int currentNumIterations() {
         return numIterations;
-    }
-
-    long bufferSize() {
-        return bufferSize;
     }
 
     ConsumerRebalanceListener rebalanceListener() {

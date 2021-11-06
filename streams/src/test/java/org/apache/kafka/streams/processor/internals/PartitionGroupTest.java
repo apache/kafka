@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -845,8 +846,19 @@ public class PartitionGroupTest {
     private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
         long rawRecordsSizeInBytes = 0L;
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            rawRecordsSizeInBytes += (rawRecord.key() != null ? rawRecord.serializedKeySize() : 0)
-                    + (rawRecord.value() != null ? rawRecord.serializedValueSize() : 0);
+            long headerSizeInBytes = 0L;
+
+            for (final Header header: rawRecord.headers().toArray()) {
+                headerSizeInBytes += header.key().getBytes().length + header.value().length;
+            }
+
+            rawRecordsSizeInBytes += rawRecord.serializedKeySize() +
+                    rawRecord.serializedValueSize() +
+                    8L + // timestamp
+                    8L + // offset
+                    rawRecord.topic().getBytes().length +
+                    4L + // partition
+                    headerSizeInBytes;
         }
         return rawRecordsSizeInBytes;
     }

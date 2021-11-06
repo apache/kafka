@@ -386,7 +386,7 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // all 10 bytes should be available for remaining thread
-                    if (log.endsWith("Resizing thread cache due to thread removal, new cache size per thread is 10")) {
+                    if (log.endsWith("Resizing thread cache/max buffer size due to thread removal, new cache size/max buffer size per thread is 10/536870912")) {
                         return;
                     }
                 }
@@ -412,7 +412,7 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // all 10 bytes should be available for remaining thread
-                    if (log.endsWith("Resizing max buffer size due to thread removal, new buffer size per thread is 10")) {
+                    if (log.endsWith("Resizing thread cache/max buffer size due to thread removal, new cache size/max buffer size per thread is 10485760/10")) {
                         return;
                     }
                 }
@@ -468,7 +468,7 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // after we replace the thread there should be two remaining threads with 5 bytes each
-                    if (log.endsWith("Adding StreamThread-3, there will now be 2 live threads and the new cache size per thread is 5")) {
+                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with a buffer size 268435456 and cache size 5 per thread.")) {
                         return;
                     }
                 }
@@ -524,7 +524,7 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // after we replace the thread there should be two remaining threads with 5 bytes each
-                    if (log.endsWith("Adding StreamThread-3, there will now be 2 live threads and the new buffer size per thread is 5")) {
+                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with a buffer size 5 and cache size 5242880 per thread.")) {
                         return;
                     }
                 }
