@@ -24,6 +24,24 @@ import java.util.Objects;
 public class FeatureUpdate {
     private final short maxVersionLevel;
     private final boolean allowDowngrade;
+    private final DowngradeType downgradeType;
+
+    public enum DowngradeType {
+        UNSET(-1), // Used for backwards compatibility with allowDowngrade
+        NONE(0),
+        SAFE(1),
+        UNSAFE(2);
+
+        private final byte code;
+
+        DowngradeType(int code) {
+            this.code = (byte) code;
+        }
+
+        public byte code() {
+            return code;
+        }
+    }
 
     /**
      * @param maxVersionLevel   the new maximum version level for the finalized feature.
@@ -42,6 +60,23 @@ public class FeatureUpdate {
         }
         this.maxVersionLevel = maxVersionLevel;
         this.allowDowngrade = allowDowngrade;
+        this.downgradeType = DowngradeType.UNSET;
+    }
+
+    /**
+     * TODO
+     * @param maxVersionLevel
+     * @param downgradeType
+     */
+    public FeatureUpdate(final short maxVersionLevel, final DowngradeType downgradeType) {
+        if (maxVersionLevel < 1 && !downgradeType.equals(DowngradeType.NONE)) {
+            throw new IllegalArgumentException(String.format(
+                    "The downgradeType flag should be set to something other than NONE when the provided maxVersionLevel:%d is < 1.",
+                    maxVersionLevel));
+        }
+        this.maxVersionLevel = maxVersionLevel;
+        this.downgradeType = downgradeType;
+        this.allowDowngrade = false;
     }
 
     public short maxVersionLevel() {
@@ -50,6 +85,10 @@ public class FeatureUpdate {
 
     public boolean allowDowngrade() {
         return allowDowngrade;
+    }
+
+    public DowngradeType downgradeType() {
+        return downgradeType;
     }
 
     @Override
@@ -63,16 +102,21 @@ public class FeatureUpdate {
         }
 
         final FeatureUpdate that = (FeatureUpdate) other;
-        return this.maxVersionLevel == that.maxVersionLevel && this.allowDowngrade == that.allowDowngrade;
+        return this.maxVersionLevel == that.maxVersionLevel && this.allowDowngrade == that.allowDowngrade
+            && this.downgradeType.equals(that.downgradeType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxVersionLevel, allowDowngrade);
+        return Objects.hash(maxVersionLevel, allowDowngrade, downgradeType);
     }
 
     @Override
     public String toString() {
-        return String.format("FeatureUpdate{maxVersionLevel:%d, allowDowngrade:%s}", maxVersionLevel, allowDowngrade);
+        if (downgradeType.equals(DowngradeType.UNSET)) {
+            return String.format("FeatureUpdate{maxVersionLevel:%d, allowDowngrade:%s}", maxVersionLevel, allowDowngrade);
+        } else {
+            return String.format("FeatureUpdate{maxVersionLevel:%d, downgradeType:%s}", maxVersionLevel, downgradeType);
+        }
     }
 }

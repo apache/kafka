@@ -26,4 +26,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
+    private boolean dryRun = false;
+
+    public boolean shouldDryRun() {
+        return dryRun;
+    }
+
+    public UpdateFeaturesOptions dryRun(boolean dryRun) {
+        this.dryRun = dryRun;
+        return this;
+    }
 }

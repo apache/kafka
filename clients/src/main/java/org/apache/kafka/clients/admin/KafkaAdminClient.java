@@ -4245,13 +4245,25 @@ public class KafkaAdminClient extends AdminClient {
                         new UpdateFeaturesRequestData.FeatureUpdateKey();
                     requestItem.setFeature(feature);
                     requestItem.setMaxVersionLevel(update.maxVersionLevel());
-                    requestItem.setAllowDowngrade(update.allowDowngrade());
+                    switch (update.downgradeType()) {
+                        case UNSET:
+                            // v0 behavior
+                            requestItem.setAllowDowngrade(update.allowDowngrade());
+                            break;
+                        case NONE:
+                        case SAFE:
+                        case UNSAFE:
+                            // v1 behavior
+                            requestItem.setDowngradeType(update.downgradeType().code());
+                            break;
+                    }
                     featureUpdatesRequestData.add(requestItem);
                 }
                 return new UpdateFeaturesRequest.Builder(
                     new UpdateFeaturesRequestData()
                         .setTimeoutMs(timeoutMs)
-                        .setFeatureUpdates(featureUpdatesRequestData));
+                        .setFeatureUpdates(featureUpdatesRequestData)
+                            .set);
             }
 
             @Override
