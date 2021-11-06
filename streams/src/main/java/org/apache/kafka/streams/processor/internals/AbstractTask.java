@@ -200,15 +200,4 @@ public abstract class AbstractTask implements Task {
             deadlineMs = NO_DEADLINE;
         }
     }
-
-    @Override
-    public long getBytesConsumed() {
-        return bytesConsumed;
-    }
-
-    @Override
-    public void setBytesConsumed(final long bytesConsumed) {
-        this.bytesConsumed = bytesConsumed;
-    }
-
 }

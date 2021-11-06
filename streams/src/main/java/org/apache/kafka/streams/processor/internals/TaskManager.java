@@ -1180,6 +1180,14 @@ public class TaskManager {
         }
     }
 
+    long getInputBufferSizeInBytes() {
+        long bytesBuffered = 0L;
+        for (final Task task : activeTaskIterable()) {
+            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
+        }
+        return bytesBuffered;
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException      if any task threw an exception while processing

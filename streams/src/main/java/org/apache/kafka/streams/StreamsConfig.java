@@ -378,11 +378,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
     private static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
-    /** {@code input.buffer.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
-    private static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
-
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
     private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
@@ -392,11 +387,6 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
-
-    /** {@statestore.cache.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
-    private static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
     /** {@statestore.cache.max.bytes} */
     @SuppressWarnings("WeakerAccess")
@@ -860,6 +850,302 @@ public class StreamsConfig extends AbstractConfig {
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(METADATA_MAX_AGE_CONFIG,
+                    ConfigDef.Type.LONG,
+                    5 * 60 * 1000L,
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.METADATA_MAX_AGE_DOC)
+            .define(METRICS_NUM_SAMPLES_CONFIG,
+                    Type.INT,
+                    2,
+                    atLeast(1),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+            .define(METRIC_REPORTER_CLASSES_CONFIG,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+            .define(METRICS_RECORDING_LEVEL_CONFIG,
+                    Type.STRING,
+                    Sensor.RecordingLevel.INFO.toString(),
+                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), RecordingLevel.TRACE.toString()),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+            .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                    Type.LONG,
+                    30000L,
+                    atLeast(0),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+            .define(POLL_MS_CONFIG,
+                    Type.LONG,
+                    100L,
+                    Importance.LOW,
+                    POLL_MS_DOC)
+            .define(PROBING_REBALANCE_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    atLeast(60 * 1000L),
+                    Importance.LOW,
+                    PROBING_REBALANCE_INTERVAL_MS_DOC)
+            .define(RECEIVE_BUFFER_CONFIG,
+                    Type.INT,
+                    32 * 1024,
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
+                    Importance.LOW,
+                    CommonClientConfigs.RECEIVE_BUFFER_DOC)
+            .define(RECONNECT_BACKOFF_MS_CONFIG,
+                    Type.LONG,
+                    50L,
+                    atLeast(0L),
+                    Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                    Type.LONG,
+                    1000L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
+            .define(RETRIES_CONFIG,
+                    Type.INT,
+                    0,
+                    between(0, Integer.MAX_VALUE),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRIES_DOC)
+            .define(RETRY_BACKOFF_MS_CONFIG,
+                    Type.LONG,
+                    100L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(REQUEST_TIMEOUT_MS_CONFIG,
+                    Type.INT,
+                    40 * 1000,
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+            .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.LOW,
+                    ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+            .define(SEND_BUFFER_CONFIG,
+                    Type.INT,
+                    128 * 1024,
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
+                    Importance.LOW,
+                    CommonClientConfigs.SEND_BUFFER_DOC)
+            .define(STATE_CLEANUP_DELAY_MS_CONFIG,
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    Importance.LOW,
+                    STATE_CLEANUP_DELAY_MS_DOC)
+            .define(UPGRADE_FROM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    null,
+                    in(null,
+                       UPGRADE_FROM_0100,
+                       UPGRADE_FROM_0101,
+                       UPGRADE_FROM_0102,
+                       UPGRADE_FROM_0110,
+                       UPGRADE_FROM_10,
+                       UPGRADE_FROM_11,
+                       UPGRADE_FROM_20,
+                       UPGRADE_FROM_21,
+                       UPGRADE_FROM_22,
+                       UPGRADE_FROM_23),
+                    Importance.LOW,
+                    UPGRADE_FROM_DOC)
+            .define(WINDOWED_INNER_CLASS_SERDE,
+                Type.STRING,
+                null,
+                Importance.LOW,
+                WINDOWED_INNER_CLASS_SERDE_DOC)
+            .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+                    Type.LONG,
+                    24 * 60 * 60 * 1000L,
+                    Importance.LOW,
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+            .define(WINDOW_SIZE_MS_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.LOW,
+                    WINDOW_SIZE_MS_DOC);
+=======
+                // HIGH
+
+                .define(APPLICATION_ID_CONFIG, // required with no default value
+                        Type.STRING,
+                        Importance.HIGH,
+                        APPLICATION_ID_DOC)
+                .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
+                        Type.LIST,
+                        Importance.HIGH,
+                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                .define(STATE_DIR_CONFIG,
+                        Type.STRING,
+                        System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
+                        Importance.HIGH,
+                        STATE_DIR_DOC)
+
+                // MEDIUM
+
+                .define(ACCEPTABLE_RECOVERY_LAG_CONFIG,
+                        Type.LONG,
+                        10_000L,
+                        atLeast(0),
+                        Importance.MEDIUM,
+                        ACCEPTABLE_RECOVERY_LAG_DOC)
+                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        Type.LONG,
+                        10 * 1024 * 1024L,
+                        atLeast(0),
+                        Importance.MEDIUM,
+                        CACHE_MAX_BYTES_BUFFERING_DOC)
+                .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        Type.LONG,
+                        10 * 1024 * 1024L,
+                        atLeast(0),
+                        Importance.MEDIUM,
+                        STATESTORE_CACHE_MAX_BYTES_DOC)
+                .define(CLIENT_ID_CONFIG,
+                        Type.STRING,
+                        "",
+                        Importance.MEDIUM,
+                        CLIENT_ID_DOC)
+                .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                        Type.CLASS,
+                        LogAndFailExceptionHandler.class.getName(),
+                        Importance.MEDIUM,
+                        DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+                .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        DEFAULT_KEY_SERDE_CLASS_DOC)
+                .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
+                .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
+                .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
+                .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
+                .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                        Type.CLASS,
+                        DefaultProductionExceptionHandler.class.getName(),
+                        Importance.MEDIUM,
+                        DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
+                .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                        Type.CLASS,
+                        FailOnInvalidTimestamp.class.getName(),
+                        Importance.MEDIUM,
+                        DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
+                        Type.CLASS,
+                        null,
+                        Importance.MEDIUM,
+                        DEFAULT_VALUE_SERDE_CLASS_DOC)
+                .define(MAX_TASK_IDLE_MS_CONFIG,
+                        Type.LONG,
+                        0L,
+                        Importance.MEDIUM,
+                        MAX_TASK_IDLE_MS_DOC)
+                .define(MAX_WARMUP_REPLICAS_CONFIG,
+                        Type.INT,
+                        2,
+                        atLeast(1),
+                        Importance.MEDIUM,
+                        MAX_WARMUP_REPLICAS_DOC)
+                .define(NUM_STANDBY_REPLICAS_CONFIG,
+                        Type.INT,
+                        0,
+                        Importance.MEDIUM,
+                        NUM_STANDBY_REPLICAS_DOC)
+                .define(NUM_STREAM_THREADS_CONFIG,
+                        Type.INT,
+                        1,
+                        Importance.MEDIUM,
+                        NUM_STREAM_THREADS_DOC)
+                .define(PROCESSING_GUARANTEE_CONFIG,
+                        Type.STRING,
+                        AT_LEAST_ONCE,
+                        in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
+                        Importance.MEDIUM,
+                        PROCESSING_GUARANTEE_DOC)
+                .define(REPLICATION_FACTOR_CONFIG,
+                        Type.INT,
+                        -1,
+                        Importance.MEDIUM,
+                        REPLICATION_FACTOR_DOC)
+                .define(SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                        Importance.MEDIUM,
+                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .define(TASK_TIMEOUT_MS_CONFIG,
+                        Type.LONG,
+                        Duration.ofMinutes(5L).toMillis(),
+                        atLeast(0L),
+                        Importance.MEDIUM,
+                        TASK_TIMEOUT_MS_DOC)
+                .define(TOPOLOGY_OPTIMIZATION_CONFIG,
+                        Type.STRING,
+                        NO_OPTIMIZATION,
+                        in(NO_OPTIMIZATION, OPTIMIZE),
+                        Importance.MEDIUM,
+                        TOPOLOGY_OPTIMIZATION_DOC)
+                .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
+                        Type.LONG,
+                        512 * 1024 * 1024,
+                        Importance.MEDIUM,
+                        INPUT_BUFFER_MAX_BYTES_DOC)
+
+            // LOW
+
+            .define(APPLICATION_SERVER_CONFIG,
+                    Type.STRING,
+                    "",
+                    Importance.LOW,
+                    APPLICATION_SERVER_DOC)
+            .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                    Type.INT,
+                    1000,
+                    Importance.LOW,
+                    BUFFERED_RECORDS_PER_PARTITION_DOC)
+            .define(BUILT_IN_METRICS_VERSION_CONFIG,
+                    Type.STRING,
+                    METRICS_LATEST,
+                    in(
+                        METRICS_LATEST
+                    ),
+                    Importance.LOW,
+                    BUILT_IN_METRICS_VERSION_DOC)
+            .define(COMMIT_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    COMMIT_INTERVAL_MS_DOC)
+            .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    9 * 60 * 1000L,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
                     5 * 60 * 1000L,
@@ -1539,6 +1825,26 @@ public class StreamsConfig extends AbstractConfig {
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         return props;
+    }
+
+    public long getTotalCacheSize() {
+        // both deprecated and new config set. Warn and use the new one.
+        if (originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
+            log.warn("Use of deprecated config {} noticed.", CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            if (!getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG).equals(getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG))) {
+                log.warn("Config {} and {} have been set to different values. {} would be considered as total cache size",
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        STATESTORE_CACHE_MAX_BYTES_CONFIG);
+            }
+            return getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+        } else if (originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG)) {
+            // only deprecated config set.
+            log.warn("Use of deprecated config {} noticed.", CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            return getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+        }
+        // only new or no config set. Use default or user specified value.
+        return getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
     }
 
     /**
