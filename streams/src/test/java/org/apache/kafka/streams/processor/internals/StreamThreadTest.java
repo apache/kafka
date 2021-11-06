@@ -2687,10 +2687,8 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
         thread.pollPhase();
-        assertEquals(8L, thread.bufferSize());
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
         thread.pollPhase();
-        assertEquals(16L, thread.bufferSize());
         EasyMock.reset(consumer);
         consumer.pause(anyObject());
         // Consumer.pause should be called only once, when we added the second record.
@@ -2781,9 +2779,9 @@ public class StreamThreadTest {
         ));
         expect(taskManager.standbyTaskMap()).andReturn(new HashMap<>());
         expect(taskManager.commit(anyObject())).andReturn(0);
-        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(1, 8L));
-        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(1, 8L));
-        expect(taskManager.process(anyInt(), anyObject())).andReturn(new TaskManager.RecordsProcessedMetadata(0, 0L));
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(1);
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(1);
+        expect(taskManager.process(anyInt(), anyObject())).andReturn(0);
 
         EasyMock.replay(taskManager);
 
@@ -2814,7 +2812,6 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
 
         thread.runOnce();
-        assertEquals(0L, thread.bufferSize());
         EasyMock.reset(consumer);
         consumer.resume(anyObject());
         // Consumer.resume should be called only once, when we added the second record.

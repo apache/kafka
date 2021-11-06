@@ -661,6 +661,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     ACCEPTABLE_RECOVERY_LAG_DOC)
+            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    Type.LONG,
+                    10 * 1024 * 1024L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
