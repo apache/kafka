@@ -61,6 +61,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -79,6 +80,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
     private final boolean eosEnabled;
 
+    private final int maxBufferedSize;
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
@@ -169,6 +171,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
+        maxBufferedSize = config.maxBufferedSize;
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
@@ -186,7 +189,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
-            TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -713,8 +715,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            bytesConsumed += (record.key() != null ? record.serializedKeySize() : 0) +
-                    (record.value() != null ? record.serializedValueSize() : 0);
+            // after processing this record, if its partition queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
+                mainConsumer.resume(singleton(partition));
+            }
 
             record = null;
         } catch (final TimeoutException timeoutException) {
@@ -964,6 +969,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
 
+        // if after adding these records, its partition queue's buffered size has been
+        // increased beyond the threshold, we can then pause the consumption for this partition
+        // We do this only if the deprecated config buffered.records.per.partition is set
+        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+            mainConsumer.pause(singleton(partition));
+        }
     }
 
     /**
@@ -1199,7 +1210,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // if we are in running state, just return the latest offset sentinel indicating
             // we should be at the end of the changelog
             return changelogPartitions().stream()
-                                        .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+                    .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }
@@ -1244,6 +1255,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     Set<TopicPartition> getNonEmptyTopicPartitions() {
         return this.partitionGroup.getNonEmptyTopicPartitions();
+    }
+
+    long totalBytesBuffered() {
+        return partitionGroup.totalBytesBuffered();
     }
 
     // below are visible for testing only
