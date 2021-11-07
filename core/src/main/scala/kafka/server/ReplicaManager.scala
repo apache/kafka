@@ -897,9 +897,11 @@ class ReplicaManager(val config: KafkaConfig,
                                requiredAcks: Short,
                                requestLocal: RequestLocal): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
+    val failedTopicSet = mutable.Set[String]()
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
-      brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
+      // Every time appending to a local log fails, collect the topic names into the set.
+      failedTopicSet.add(topicPartition.topic)
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
       error(s"Error processing append operation on partition $topicPartition", t)
 
@@ -909,7 +911,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (traceEnabled)
       trace(s"Append [$entriesPerPartition] to local log")
 
-    entriesPerPartition.map { case (topicPartition, records) =>
+    val resultPerTopicPartition = entriesPerPartition.map { case (topicPartition, records) =>
       brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
 
@@ -956,6 +958,12 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     }
+
+    failedTopicSet.foreach { case topic =>
+      brokerTopicStats.topicStats(topic).failedProduceRequestRate.mark()
+    }
+
+    resultPerTopicPartition
   }
 
   def fetchOffsetForTimestamp(topicPartition: TopicPartition,
