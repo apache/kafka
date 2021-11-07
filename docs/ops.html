@@ -1438,10 +1438,30 @@ $ bin/kafka-acls.sh \
         <td></td>
       </tr>
       <tr>
+        <td>Produce request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Fetch request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>Error rate</td>
         <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
         <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
             multiple errors, all are counted. error=NONE indicates successful responses.</td>
+      </tr>
+      <tr>
+        <td>Failed produce request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Failed fetch request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec</td>
+        <td></td>
       </tr>
       <tr>
         <td>Request size in bytes</td>
@@ -1476,6 +1496,11 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Byte out rate to other brokers</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Rejected byte out rate due to the record batch size is greater than max.message.bytes configuration</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec</td>
         <td></td>
       </tr>
       <tr>
