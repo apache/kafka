@@ -911,8 +911,10 @@ class ReplicaManager(val config: KafkaConfig,
     if (traceEnabled)
       trace(s"Append [$entriesPerPartition] to local log")
 
+    val requestedTopicSet = mutable.Set[String]()
     val resultPerTopicPartition = entriesPerPartition.map { case (topicPartition, records) =>
-      brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
+      // Every time produce request arrives, collect the topic names into the set.
+      requestedTopicSet.add(topicPartition.topic())
       brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
 
       // reject appending to internal topics if it is not allowed
@@ -957,6 +959,10 @@ class ReplicaManager(val config: KafkaConfig,
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
         }
       }
+    }
+
+    requestedTopicSet.foreach { case topic =>
+      brokerTopicStats.topicStats(topic).totalProduceRequestRate.mark()
     }
 
     failedTopicSet.foreach { case topic =>
