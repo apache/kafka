@@ -1091,6 +1091,7 @@ class ReplicaManager(val config: KafkaConfig,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicIdPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
+    val failedTopicSet = mutable.Set[String]()
     def read(tp: TopicIdPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
       val partitionFetchSize = fetchInfo.maxBytes
@@ -1186,7 +1187,8 @@ class ReplicaManager(val config: KafkaConfig,
             lastStableOffset = None,
             exception = Some(e))
         case e: Throwable =>
-          brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
+          // Every time reading from a local log fails, collect the topic names into the set.
+          failedTopicSet.add(tp.topic)
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
 
           val fetchSource = Request.describeReplicaId(replicaId)
@@ -1216,6 +1218,9 @@ class ReplicaManager(val config: KafkaConfig,
         minOneMessage = false
       limitBytes = math.max(0, limitBytes - recordBatchSize)
       result += (tp -> readResult)
+    }
+    failedTopicSet.foreach { case topic =>
+      brokerTopicStats.topicStats(topic).failedFetchRequestRate.mark()
     }
     result
   }
