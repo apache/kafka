@@ -1037,8 +1037,10 @@ class ReplicaManager(val config: KafkaConfig,
     var errorReadingData = false
     var hasDivergingEpoch = false
     val logReadResultMap = new mutable.HashMap[TopicIdPartition, LogReadResult]
+    val requestedTopicSet = mutable.Set[String]()
     logReadResults.foreach { case (topicIdPartition, logReadResult) =>
-      brokerTopicStats.topicStats(topicIdPartition.topicPartition.topic).totalFetchRequestRate.mark()
+      // Every time fetch request arrives, collect the topic names into the set.
+      requestedTopicSet.add(topicIdPartition.topicPartition.topic)
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
 
       if (logReadResult.error != Errors.NONE)
@@ -1047,6 +1049,10 @@ class ReplicaManager(val config: KafkaConfig,
         hasDivergingEpoch = true
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
       logReadResultMap.put(topicIdPartition, logReadResult)
+    }
+
+    requestedTopicSet.foreach { case topic =>
+      brokerTopicStats.topicStats(topic).totalFetchRequestRate.mark()
     }
 
     // respond immediately if 1) fetch request does not want to wait
