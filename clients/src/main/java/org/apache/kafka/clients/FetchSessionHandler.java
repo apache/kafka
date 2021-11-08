@@ -249,6 +249,7 @@ public class FetchSessionHandler {
 
         Builder(int initialSize, boolean copySessionPartitions) {
             this.next = new LinkedHashMap<>(initialSize);
+            this.topicNames = new HashMap<>();
             this.copySessionPartitions = copySessionPartitions;
         }
 

@@ -98,7 +98,6 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
-    // Will throw UnknownTopicIdException if a topic ID is unknown.
     val fetchData = request.fetchData(topicNames.asJava)
 
     replicaMgr.fetchMessages(

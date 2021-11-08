@@ -20,7 +20,6 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchRequestData.ForgottenTopic;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -348,7 +347,7 @@ public class FetchRequest extends AbstractRequest {
 
     // For versions < 13, builds the partitionData map using only the FetchRequestData.
     // For versions 13+, builds the partitionData map using both the FetchRequestData and a mapping of topic IDs to names.
-    public Map<TopicIdPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+    public Map<TopicIdPartition, PartitionData> fetchData(Map<Uuid, String> topicNames) {
         if (fetchData == null) {
             synchronized (this) {
                 if (fetchData == null) {
@@ -381,7 +380,9 @@ public class FetchRequest extends AbstractRequest {
         return fetchData;
     }
 
-    public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) throws UnknownTopicIdException {
+    // For versions < 13, builds the forgotten topics list using only the FetchRequestData.
+    // For versions 13+, builds the forgotten topics list using both the FetchRequestData and a mapping of topic IDs to names.
+    public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) {
         if (toForget == null) {
             synchronized (this) {
                 if (toForget == null) {

@@ -58,8 +58,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     not supported by the fetch request version
  * - {@link Errors#CORRUPT_MESSAGE} If corrupt message encountered, e.g. when the broker scans the log to find
  *     the fetch offset after the index lookup
- * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker or a partition in the session has
- *     an ID that differs from the broker
+ * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker
  * - {@link Errors#FETCH_SESSION_TOPIC_ID_ERROR} If the request version supports topic IDs but the session does not or vice versa,
  *     or a topic ID in the request is inconsistent with a topic ID in the session
  * - {@link Errors#INCONSISTENT_TOPIC_ID} If a topic ID in the session does not match the topic ID in the log
@@ -83,9 +82,9 @@ public class FetchResponse extends AbstractResponse {
     /**
      * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
      * Version 13 introduces topic IDs which can lead to a few new errors. If there is any unknown topic ID in the request, the
-     * response will contain a top-level UNKNOWN_TOPIC_ID error.
+     * response will contain a partition-level UNKNOWN_TOPIC_ID error for that partition.
      * If a request's topic ID usage is inconsistent with the session, we will return a top level FETCH_SESSION_TOPIC_ID_ERROR error.
-     * We may also return INCONSISTENT_TOPIC_ID error as a top-level error when a partition in the session has a topic ID
+     * We may also return INCONSISTENT_TOPIC_ID error as a partition-level error when a partition in the session has a topic ID
      * inconsistent with the log.
      */
     public FetchResponse(FetchResponseData fetchResponseData) {

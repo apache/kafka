@@ -494,18 +494,30 @@ public class FetchSessionHandlerTest {
         FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId2, 0, 100, 200, Optional.empty());
         builder2.add(tp, partitionData);
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
-        if (startsWithTopicIds) {
-            // If we started with an ID, both a new ID and a zero ID will count towards replaced.
-            // The zero ID will lead to a fetch session ID error and close the session when it is sent out.
+        if (startsWithTopicIds && endsWithTopicIds) {
+            // If we started with an ID, both a only a new ID will count towards replaced.
             // The old topic ID partition should be in toReplace, and the new one should be in toSend.
             assertEquals(Collections.singletonList(new TopicIdPartition(topicId1, tp)), data2.toReplace());
             assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)),
                     data2.toSend(), data2.sessionPartitions());
+            assertTrue(handler.sessionTopicNames().containsKey(topicId2));
+        } else if (startsWithTopicIds || endsWithTopicIds) {
+            // If we downgraded to not using topic IDs we will want to send this data.
+            // However, we will not mark the partition as one replaced. In this scenario, we should see the session close due to
+            // changing request types.
+            // We will have the new topic ID in the session partition map
+            assertEquals(0, data2.toReplace().size());
+            assertEquals(1, data2.toSend().size());
+            assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)), data2.sessionPartitions());
+            // The topicNames map will have the new topic ID if it is valid.
+            // The old topic ID should be removed as the map will be empty if the request doesn't use topic IDs.
+            assertEquals(endsWithTopicIds, handler.sessionTopicNames().containsKey(topicId2));
+            assertFalse(handler.sessionTopicNames().containsKey(topicId1));
         } else {
-            // Otherwise, we have no partition in toReplace and since the partition was not updated, there is no data to send.
+            // Otherwise, we have no partition in toReplace and since the partition and topic ID was not updated, there is no data to send.
             assertEquals(0, data2.toReplace().size());
             assertEquals(0, data2.toSend().size());
-            assertMapsEqual(reqMap(new ReqEntry("foo", topicId1, 0, 0, 100, 200)), data2.sessionPartitions());
+            assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)), data2.sessionPartitions());
         }
         // Should have the same session ID, and next epoch and can use topic IDs if it ended with topic IDs.
         assertEquals(123, data2.metadata().sessionId(), "Did not use same session");
