@@ -625,8 +625,6 @@ object TopicCommand extends Logging {
       }
       if (!has(listOpt) && !has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
-      if (has(createOpt) && !has(replicaAssignmentOpt))
-        CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
       if (has(alterOpt)) {
         CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt),
         Some(kafkaConfigsCanAlterTopicConfigsViaBootstrapServer))

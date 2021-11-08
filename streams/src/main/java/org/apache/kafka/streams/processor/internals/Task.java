@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -189,7 +188,7 @@ public interface Task {
     }
 
     /**
-     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     * @throws StreamsException if {@code currentWallClockMs > task-timeout-deadline}
      */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                      final Exception cause);

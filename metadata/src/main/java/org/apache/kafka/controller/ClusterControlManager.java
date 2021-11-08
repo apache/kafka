@@ -117,6 +117,11 @@ public class ClusterControlManager {
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
 
     /**
+     * A reference to the controller's metrics registry.
+     */
+    private final ControllerMetrics controllerMetrics;
+
+    /**
      * The broker heartbeat manager, or null if this controller is on standby.
      */
     private BrokerHeartbeatManager heartbeatManager;
@@ -131,7 +136,8 @@ public class ClusterControlManager {
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
-                          ReplicaPlacer replicaPlacer) {
+                          ReplicaPlacer replicaPlacer,
+                          ControllerMetrics metrics) {
         this.logContext = logContext;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
@@ -140,6 +146,7 @@ public class ClusterControlManager {
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
+        this.controllerMetrics = metrics;
     }
 
     /**
@@ -249,11 +256,13 @@ public class ClusterControlManager {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
+       
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
                     record.incarnationId(), listeners, features,
                     Optional.ofNullable(record.rack()), record.fenced()));
+        updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (prevRegistration == null) {
             log.info("Registered new broker: {}", record);
         } else if (prevRegistration.incarnationId().equals(record.incarnationId())) {
@@ -274,6 +283,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.remove(brokerId);
+            updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Unregistered broker: {}", record);
         }
     }
@@ -289,6 +299,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(true));
+            updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Fenced broker: {}", record);
         }
     }
@@ -304,6 +315,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record.toString()));
         } else {
             brokerRegistrations.put(brokerId, registration.cloneWithFencing(false));
+            updateMetrics(registration, brokerRegistrations.get(brokerId));
             log.info("Unfenced broker: {}", record);
         }
         if (readyBrokersFuture.isPresent()) {
@@ -313,6 +325,31 @@ public class ClusterControlManager {
             }
         }
     }
+
+    private void updateMetrics(BrokerRegistration prevRegistration, BrokerRegistration registration) {
+        if (registration == null) {
+            if (prevRegistration.fenced()) {
+                controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() - 1);
+            } else {
+                controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() - 1);
+            }
+        } else if (prevRegistration == null) {
+            if (registration.fenced()) {
+                controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
+            } else {
+                controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() + 1);
+            }
+        } else {
+            if (prevRegistration.fenced() && !registration.fenced()) {
+                controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() - 1);
+                controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() + 1);
+            } else if (!prevRegistration.fenced() && registration.fenced()) {
+                controllerMetrics.setFencedBrokerCount(controllerMetrics.fencedBrokerCount() + 1);
+                controllerMetrics.setActiveBrokerCount(controllerMetrics.activeBrokerCount() - 1);
+            }
+        }
+    }
+
 
     public List<List<Integer>> placeReplicas(int startPartition,
                                              int numPartitions,

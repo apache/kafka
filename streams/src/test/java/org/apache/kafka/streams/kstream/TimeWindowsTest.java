@@ -60,6 +60,13 @@ public class TimeWindowsTest {
         assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(-1)));
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void graceShouldNotCalledAfterGraceSet() {
+        assertThrows(IllegalStateException.class, () -> TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
+        assertThrows(IllegalStateException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(10)).grace(ofMillis(10)));
+    }
+
     @Test
     public void advanceIntervalMustNotBeZero() {
         final TimeWindows windowSpec = TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE));

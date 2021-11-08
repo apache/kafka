@@ -25,10 +25,10 @@ import javax.security.auth.Subject
 import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.KafkaZkClient
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.acl.AclOperation.{READ, WRITE}
@@ -43,12 +43,12 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.server.auth.DigestLoginModule
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
+class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
 
   private val aclAuthorizer = new AclAuthorizer
   private val aclAuthorizer2 = new AclAuthorizer
@@ -60,7 +60,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
   private var config: KafkaConfig = _
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     // Allow failed clients to avoid server closing the connection before reporting AuthFailed.
     System.setProperty("zookeeper.allowSaslFailedClients", "true")
 
@@ -76,7 +76,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     aclAuthorizer.maxUpdateRetries = Int.MaxValue
     aclAuthorizer2.maxUpdateRetries = Int.MaxValue
 
-    super.setUp()
+    super.setUp(testInfo)
     config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect))
 
     aclAuthorizer.configure(config.originals)

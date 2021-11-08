@@ -47,8 +47,8 @@ import static org.junit.Assert.assertTrue;
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Connect format - any types should be accepted here
-    private static final Map<String, String> OFFSET_KEY = Collections.singletonMap("key", "key");
-    private static final Map<String, Integer> OFFSET_VALUE = Collections.singletonMap("key", 12);
+    private static final Map<String, Object> OFFSET_KEY = Collections.singletonMap("key", "key");
+    private static final Map<String, Object> OFFSET_VALUE = Collections.singletonMap("key", 12);
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
@@ -229,8 +229,8 @@ public class OffsetStorageWriterTest {
      *                          ensure tests complete.
      * @return the captured set of ByteBuffer key-value pairs passed to the storage layer
      */
-    private void expectStore(Map<String, String> key, byte[] keySerialized,
-                             Map<String, Integer> value, byte[] valueSerialized,
+    private void expectStore(Map<String, Object> key, byte[] keySerialized,
+                             Map<String, Object> value, byte[] valueSerialized,
                              final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {

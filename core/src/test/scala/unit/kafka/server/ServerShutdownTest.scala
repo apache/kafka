@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 
@@ -40,14 +40,14 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 @Timeout(60)
-class ServerShutdownTest extends ZooKeeperTestHarness {
+class ServerShutdownTest extends QuorumTestHarness {
   var config: KafkaConfig = null
   val host = "localhost"
   val topic = "test"
@@ -55,8 +55,8 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   val sent2 = List("more", "messages")
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     config = KafkaConfig.fromProps(props)
   }
