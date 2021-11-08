@@ -131,12 +131,12 @@ public class WorkerTest extends ThreadedTest {
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
     private final ConnectorClientConfigOverridePolicy allConnectorClientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
 
-    private Map<String, String> workerProps = new HashMap<>();
+    private final Map<String, String> workerProps = new HashMap<>();
     private WorkerConfig config;
     private Worker worker;
 
-    private Map<String, String> defaultProducerConfigs = new HashMap<>();
-    private Map<String, String> defaultConsumerConfigs = new HashMap<>();
+    private final Map<String, String> defaultProducerConfigs = new HashMap<>();
+    private final Map<String, String> defaultConsumerConfigs = new HashMap<>();
 
     @Mock
     private Plugins plugins;
@@ -199,8 +199,6 @@ public class WorkerTest extends ThreadedTest {
         defaultProducerConfigs.put(
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         defaultProducerConfigs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
-        defaultProducerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
-        defaultProducerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         defaultProducerConfigs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
 
         defaultConsumerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
