@@ -520,8 +520,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
 
-    // We need a copy of the current config since `currentConfig` is initialized with `kafkaConfig`
-    // which means the call to `updateCurrentConfig` would end up mutating `oldConfig`.
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false)
     if (newConfig ne currentConfig) {
