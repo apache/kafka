@@ -142,7 +142,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue"), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-//        assertThat(forwarded.get(0).keyValue(), is(new KeyValue<>("lhs1", "(lhsValue,rhsValue)")));
+        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,rhsValue)", 0)));
     }
 
     @Test
@@ -168,7 +168,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-//        assertThat(forwarded.get(0).keyValue(), is(new KeyValue<>("lhs1", null)));
+        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
     }
 
     @Test
@@ -194,7 +194,7 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-//        assertThat(forwarded.get(0).keyValue(), is(new KeyValue<>("lhs1", "(lhsValue,null)")));
+        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", "(lhsValue,null)", 0)));
     }
 
     @Test
@@ -220,6 +220,6 @@ public class SubscriptionResolverJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, null), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded.size(), is(1));
-//        assertThat(forwarded.get(0).keyValue(), is(new KeyValue<>("lhs1", null)));
+        assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
     }
 }
