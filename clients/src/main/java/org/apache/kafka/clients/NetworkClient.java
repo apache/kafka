@@ -316,10 +316,12 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
-        if (connectionStates.isDisconnected(nodeId))
+        if (connectionStates.isDisconnected(nodeId)) {
+            log.debug("Client requested disconnect from node {}, which is already disconnected", nodeId);
             return;
+        }
 
-        log.info("Client requested disconnect from node {} (invoking callbacks for in-flight requests)", nodeId);
+        log.info("Client requested disconnect from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, abortedSends);
@@ -361,7 +363,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void close(String nodeId) {
-        log.info("Client requested disconnect from node {} (not invoking callbacks for in-flight requests)", nodeId);
+        log.info("Client requested connection close from node {}", nodeId);
         selector.close(nodeId);
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null);
