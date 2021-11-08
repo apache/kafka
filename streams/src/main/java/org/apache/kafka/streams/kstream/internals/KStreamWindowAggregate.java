@@ -207,7 +207,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
         private TimestampedWindowStore<KIn, VAgg> windowStore;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             windowStore = context.getStateStore(storeName);
         }
 

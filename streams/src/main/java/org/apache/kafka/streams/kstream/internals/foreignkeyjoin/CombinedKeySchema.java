@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
@@ -51,7 +51,7 @@ public class CombinedKeySchema<KO, K> {
     }
 
     @SuppressWarnings("unchecked")
-    public void init(final ProcessorContext context) {
+    public void init(final ProcessorContext<?, ?> context) {
         primaryKeySerdeTopic = undecoratedPrimaryKeySerdeTopicSupplier.get();
         foreignKeySerdeTopic = undecoratedForeignKeySerdeTopicSupplier.get();
         primaryKeySerializer = primaryKeySerializer == null ? (Serializer<K>) context.keySerde().serializer() : primaryKeySerializer;
