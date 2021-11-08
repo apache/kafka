@@ -2403,9 +2403,9 @@ class KafkaApisTest {
       }
     })
 
-    val fetchData = Map(tidp -> new FetchRequest.PartitionData(0, 0, 1000,
+    val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
-    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(0, 0, 1000,
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
@@ -2956,8 +2956,8 @@ class KafkaApisTest {
     setupBasicMetadataCache(tp0.topic, numPartitions = 1, 1, topicId)
     val hw = 3
 
-    val fetchDataBuilder = Collections.singletonMap(tp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
-    val fetchData = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
+    val fetchDataBuilder = Collections.singletonMap(tp0, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
+    val fetchData = Collections.singletonMap(tidp0, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchFromFollower = buildRequest(new FetchRequest.Builder(
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchDataBuilder).build())
 

@@ -46,7 +46,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     val fetchStatus = FetchPartitionStatus(
       startOffsetMetadata = LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
+      fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchMetadata = buildFetchMetadata(replicaId, topicIdPartition, fetchStatus)
 
     var fetchResultOpt: Option[FetchPartitionData] = None
@@ -94,7 +94,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     val fetchStatus = FetchPartitionStatus(
       startOffsetMetadata = LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
+      fetchInfo = new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
     val fetchMetadata = buildFetchMetadata(replicaId, topicIdPartition, fetchStatus)
 
     var fetchResultOpt: Option[FetchPartitionData] = None

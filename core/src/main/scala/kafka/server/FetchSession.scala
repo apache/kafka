@@ -116,10 +116,6 @@ class CachedPartition(var topic: String,
     leaderEpoch = reqData.currentLeaderEpoch
     lastFetchedEpoch = reqData.lastFetchedEpoch
     // Update name if needed
-    maybeSetUnknownName(name)
-  }
-
-  def maybeSetUnknownName(name: String): Unit = {
     if (this.topic == null) {
       this.topic = name
     }
@@ -190,8 +186,6 @@ class CachedPartition(var topic: String,
       (31 * partition) + topicId.hashCode
     else
       (31 * partition) + topic.hashCode
-
-  def canEqual(that: Any): Boolean = that.isInstanceOf[CachedPartition]
 
   /**
    * We have different equality checks depending on whether topic IDs are used.

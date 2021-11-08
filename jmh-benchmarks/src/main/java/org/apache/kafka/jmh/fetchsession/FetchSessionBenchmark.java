@@ -99,7 +99,7 @@ public class FetchSessionBenchmark {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
-                fetches.put(topicPartition, new FetchRequest.PartitionData(50, 40, 200,
+                fetches.put(topicPartition, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 50, 40, 200,
                         Optional.empty()));
             }
             counter++;

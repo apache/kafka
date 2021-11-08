@@ -635,7 +635,7 @@ class FetchSessionTest {
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(tp0.topicId, 0, 0, 100,
       Optional.empty()))
-    reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(10, 0, 100,
+    reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 10, 0, 100,
       Optional.empty()))
     val request1 = createRequestWithoutTopicIds(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     // Simulate unknown topic ID for foo.
@@ -676,17 +676,22 @@ class FetchSessionTest {
     val fetchManager = new FetchManager(time, cache)
     val fooId = Uuid.randomUuid()
     val barId = Uuid.randomUuid()
+    val zarId = Uuid.randomUuid()
     val topicNames = Map(fooId -> "foo", barId -> "bar").asJava
     val foo0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0))
     val foo1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1))
+    val zar0 = new TopicIdPartition(zarId, new TopicPartition("zar", 0))
     val emptyFoo0 = new TopicIdPartition(fooId, new TopicPartition(null, 0))
     val emptyFoo1 = new TopicIdPartition(fooId, new TopicPartition(null, 1))
+    val emptyZar0 = new TopicIdPartition(zarId, new TopicPartition(null, 0))
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     reqData1.put(foo0.topicPartition, new FetchRequest.PartitionData(foo0.topicId, 0, 0, 100,
       Optional.empty()))
     reqData1.put(foo1.topicPartition, new FetchRequest.PartitionData(foo1.topicId,10, 0, 100,
+      Optional.empty()))
+    reqData1.put(zar0.topicPartition, new FetchRequest.PartitionData(zar0.topicId,10, 0, 100,
       Optional.empty()))
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     // Simulate unknown topic ID for foo.
@@ -701,12 +706,15 @@ class FetchSessionTest {
       topicNamesOnlyBar
     )
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    context1.foreachPartition((topicIdPartition, _) => assertEquals(fooId, topicIdPartition.topicId))
+    assertPartitionsOrder(context1, Seq(emptyFoo0, emptyFoo1, emptyZar0))
     val respData1 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     respData1.put(emptyFoo0, new FetchResponseData.PartitionData()
       .setPartitionIndex(0)
       .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
     respData1.put(emptyFoo1, new FetchResponseData.PartitionData()
+      .setPartitionIndex(1)
+      .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
+    respData1.put(emptyZar0, new FetchResponseData.PartitionData()
       .setPartitionIndex(1)
       .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
@@ -727,8 +735,8 @@ class FetchSessionTest {
       request2.forgottenTopics(topicNames),
       topicNames
     )
-    // Topic names in the session but not in the request are lazily resolved via foreachPartition. Resolve them here.
-    context2.foreachPartition((topicIdPartition, _) => assertEquals(topicNames.get(topicIdPartition.topicId), topicIdPartition.topic))
+    // Topic names in the session but not in the request are lazily resolved via foreachPartition. Resolve foo topic IDs here.
+    assertPartitionsOrder(context2, Seq(foo0, foo1, emptyZar0))
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val respData2 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     respData2.put(foo0, new FetchResponseData.PartitionData()
@@ -741,12 +749,19 @@ class FetchSessionTest {
       .setHighWatermark(10)
       .setLastStableOffset(10)
       .setLogStartOffset(10))
+    respData1.put(emptyZar0, new FetchResponseData.PartitionData()
+      .setPartitionIndex(1)
+      .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
     // Since we are ignoring IDs, we should have no errors.
     assertEquals(Errors.NONE, resp2.error())
     assertTrue(resp2.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, resp2.responseData(topicNames, request2.version).size)
-    resp2.responseData(topicNames, request2.version).forEach( (_, resp) => assertEquals(Errors.NONE.code, resp.errorCode))
+    resp2.responseData(topicNames, request2.version).forEach( (tp, resp) =>
+      if (tp.topic.equals("foo"))
+       assertEquals(Errors.NONE.code, resp.errorCode)
+      else
+       assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp.errorCode))
   }
 
   @Test
@@ -759,7 +774,7 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(foo0.topicPartition, new FetchRequest.PartitionData(0, 0, 100,
+    reqData1.put(foo0.topicPartition, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 100,
       Optional.empty()))
     val request1 = createRequestWithoutTopicIds(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     // Start a fetch session using a request version that does not use topic IDs.
@@ -1635,6 +1650,33 @@ class FetchSessionTest {
     assertPartitionsOrder(context2, Seq(tp1, tp3, tp2))
   }
 
+  @Test
+  def testCachedPartitionEquals(): Unit = {
+    val topicId = Uuid.randomUuid()
+    val topicName = "topic"
+    val partition = 0
+
+    val cachedPartitionWithIdAndName = new CachedPartition(topicName, partition, topicId)
+    val cachedPartitionWithIdAndNoName = new CachedPartition(null, partition, topicId)
+    val cachedPartitionWithDifferentIdAndName = new CachedPartition(topicName, partition, Uuid.randomUuid())
+    val cachedPartitionWithZeroIdAndName = new CachedPartition(topicName, partition, Uuid.ZERO_UUID)
+    val cachedPartitionWithZeroIdAndOtherName = new CachedPartition("otherTopic", partition, Uuid.ZERO_UUID)
+
+    // CachedPartitions with valid topic IDs will compare topic ID and partition but not topic name.
+    assertTrue(cachedPartitionWithIdAndName.equals(cachedPartitionWithIdAndNoName))
+    assertFalse(cachedPartitionWithIdAndName.equals(cachedPartitionWithDifferentIdAndName))
+    assertFalse(cachedPartitionWithIdAndName.equals(cachedPartitionWithZeroIdAndName))
+
+    // CachedPartitions will null name and valid IDs will act just like ones with valid names
+    assertTrue(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithIdAndName))
+    assertFalse(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithDifferentIdAndName))
+    assertFalse(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithZeroIdAndName))
+
+    // CachedPartition with zero Uuids will compare topic name and partition.
+    assertFalse(cachedPartitionWithZeroIdAndName.equals(cachedPartitionWithZeroIdAndOtherName))
+    assertTrue(cachedPartitionWithZeroIdAndName.equals(cachedPartitionWithZeroIdAndName))
+  }
+
   private def assertPartitionsOrder(context: FetchContext, partitions: Seq[TopicIdPartition]): Unit = {
     val partitionsInContext = ArrayBuffer.empty[TopicIdPartition]
     context.foreachPartition { (tp, _) =>
@@ -1647,8 +1689,8 @@ class FetchSessionTest {
 object FetchSessionTest {
   def idUsageCombinations: java.util.stream.Stream[Arguments] = {
     val data = new java.util.ArrayList[Arguments]()
-    for (startsWithTopicIds <- Array(true, false))
-      for (endsWithTopicIds <- Array(true, false))
+    for (startsWithTopicIds <- Array(java.lang.Boolean.TRUE, java.lang.Boolean.FALSE))
+      for (endsWithTopicIds <- Array(java.lang.Boolean.TRUE, java.lang.Boolean.FALSE))
         data.add(Arguments.of(startsWithTopicIds, endsWithTopicIds))
     data.stream()
   }

@@ -440,12 +440,12 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(numRecords, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, numRecords, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // fetch should return empty since LSO should be stuck at 0
       var consumerFetchResult = fetchAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
       var fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
@@ -455,7 +455,7 @@ class ReplicaManagerTest {
 
       // delayed fetch should timeout and return nothing
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 1000)
       assertFalse(consumerFetchResult.isFired)
       timer.advanceClock(1001)
@@ -476,7 +476,7 @@ class ReplicaManagerTest {
       // the LSO has advanced, but the appended commit marker has not been replicated, so
       // none of the data from the transaction should be visible yet
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       fetchData = consumerFetchResult.assertFired
@@ -485,12 +485,12 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(numRecords + 1, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, numRecords + 1, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // now all of the records should be fetchable
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       fetchData = consumerFetchResult.assertFired
@@ -554,13 +554,13 @@ class ReplicaManagerTest {
 
       // fetch as follower to advance the high watermark
       fetchAsFollower(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(numRecords + 1, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, numRecords + 1, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // Set the minBytes in order force this request to enter purgatory. When it returns, we should still
       // see the newly aborted transaction.
       val fetchResult = fetchAsConsumer(replicaManager, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         isolationLevel = IsolationLevel.READ_COMMITTED, minBytes = 10000)
       assertFalse(fetchResult.isFired)
 
@@ -619,7 +619,7 @@ class ReplicaManagerTest {
 
       // Followers are always allowed to fetch above the high watermark
       val followerFetchResult = fetchAsFollower(rm, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(1, 0, 100000, Optional.empty()))
+        new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
       assertEquals(Errors.NONE, followerFetchData.error, "Should not give an exception")
       assertTrue(followerFetchData.records.batches.iterator.hasNext, "Should return some data")
@@ -628,7 +628,7 @@ class ReplicaManagerTest {
       // high watermark could be stale at the time of the request, we do not return an out of
       // range error and instead return an empty record set.
       val consumerFetchResult = fetchAsConsumer(rm, new TopicIdPartition(topicId, new TopicPartition(topic, 0)),
-        new PartitionData(1, 0, 100000, Optional.empty()))
+        new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, consumerFetchData.error, "Should not give an exception")
       assertEquals(MemoryRecords.EMPTY, consumerFetchData.records, "Should return empty response")
@@ -689,7 +689,7 @@ class ReplicaManagerTest {
         successfulFetch = response.headOption.filter(_._1 == tidp).map(_._2)
       }
 
-      val validFetchPartitionData = new FetchRequest.PartitionData(0L, 0L, maxFetchBytes,
+      val validFetchPartitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch))
 
       replicaManager.fetchMessages(
@@ -712,7 +712,7 @@ class ReplicaManagerTest {
 
       // Next we receive an invalid request with a higher fetch offset, but an old epoch.
       // We expect that the replica state does not get updated.
-      val invalidFetchPartitionData = new FetchRequest.PartitionData(3L, 0L, maxFetchBytes,
+      val invalidFetchPartitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 3L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch - 1))
 
       replicaManager.fetchMessages(
@@ -793,16 +793,16 @@ class ReplicaManagerTest {
 
       // We receive one valid request from the follower and replica state is updated
       var successfulFetch: Option[FetchPartitionData] = None
-      def callback(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter { case (topicIdPartition, _) => topicIdPartition.topicPartition == tidp.topicPartition }.map { case (_, data) => data }
-      }
 
-      val validFetchPartitionData = new FetchRequest.PartitionData(0L, 0L, maxFetchBytes,
+      val validFetchPartitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch))
 
       // Fetch messages simulating a different ID than the one in the log.
       val inconsistentTidp = new TopicIdPartition(Uuid.randomUuid(), tidp.topicPartition)
+      def callback1(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter(_._1 == inconsistentTidp).map(_._2)
+      }
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
@@ -812,7 +812,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(inconsistentTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback,
+        responseCallback = callback1,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
@@ -822,6 +822,10 @@ class ReplicaManagerTest {
       // Fetch messages simulating an ID in the log.
       // We should not see topic ID errors.
       val zeroTidp = new TopicIdPartition(Uuid.ZERO_UUID, tidp.topicPartition)
+      def callback2(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter(_._1 == zeroTidp).map(_._2)
+      }
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
@@ -831,7 +835,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(zeroTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback,
+        responseCallback = callback2,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
@@ -840,11 +844,6 @@ class ReplicaManagerTest {
       // Next create a topic without a topic ID written in the log.
       val tp2 = new TopicPartition("noIdTopic", 0)
       val tidp2 = new TopicIdPartition(Uuid.randomUuid(), tp2)
-
-      def callback2(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter { case (topicIdPartition, _) => topicIdPartition.topicPartition == tidp2.topicPartition }.map { case (_, data) => data }
-      }
 
       // Broker 0 becomes leader of the partition
       val leaderAndIsrPartitionState2 = new LeaderAndIsrPartitionState()
@@ -866,6 +865,10 @@ class ReplicaManagerTest {
 
       assertEquals(None, replicaManager.getPartitionOrException(tp2).topicId)
 
+      def callback3(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter(_._1 == tidp2).map(_._2)
+      }
       // Fetch messages simulating the request containing a topic ID. We should not have an error.
       replicaManager.fetchMessages(
         timeout = 0L,
@@ -876,7 +879,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback2,
+        responseCallback = callback3,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
@@ -884,6 +887,10 @@ class ReplicaManagerTest {
 
       // Fetch messages simulating the request not containing a topic ID. We should not have an error.
       val zeroTidp2 = new TopicIdPartition(Uuid.ZERO_UUID, tidp2.topicPartition)
+      def callback4(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
+        successfulFetch = response.headOption.filter(_._1 == zeroTidp2).map(_._2)
+      }
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
@@ -893,7 +900,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(zeroTidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback2,
+        responseCallback = callback4,
         clientMetadata = None
       )
       assertTrue(successfulFetch.isDefined)
@@ -991,8 +998,8 @@ class ReplicaManagerTest {
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(
-          tidp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
-          tidp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
+          tidp0 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty()),
+          tidp1 -> new PartitionData(Uuid.ZERO_UUID, 1, 0, 100000, Optional.empty())),
         quota = UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
@@ -1157,7 +1164,7 @@ class ReplicaManagerTest {
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         clientMetadata = Some(metadata))
 
       // Fetch from follower succeeds
@@ -1215,7 +1222,7 @@ class ReplicaManagerTest {
         InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
       val consumerResult = fetchAsConsumer(replicaManager, tidp0,
-        new PartitionData(0, 0, 100000, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, 100000, Optional.empty()),
         clientMetadata = Some(metadata))
 
       // Fetch from follower succeeds
@@ -1275,7 +1282,7 @@ class ReplicaManagerTest {
     // Increment the hw in the leader by fetching from the last offset
     val fetchOffset = simpleRecords.size
     var followerResult = fetchAsFollower(replicaManager, tidp0,
-      new PartitionData(fetchOffset, 0, 100000, Optional.empty()),
+      new PartitionData(Uuid.ZERO_UUID, fetchOffset, 0, 100000, Optional.empty()),
       clientMetadata = None)
     assertTrue(followerResult.isFired)
     assertEquals(0, followerResult.assertFired.highWatermark)
@@ -1285,7 +1292,7 @@ class ReplicaManagerTest {
     // Fetch from the same offset, no new data is expected and hence the fetch request should
     // go to the purgatory
     followerResult = fetchAsFollower(replicaManager, tidp0,
-      new PartitionData(fetchOffset, 0, 100000, Optional.empty()),
+      new PartitionData(Uuid.ZERO_UUID, fetchOffset, 0, 100000, Optional.empty()),
       clientMetadata = None, minBytes = 1000)
     assertFalse(followerResult.isFired, "Request completed immediately unexpectedly")
 
@@ -1363,14 +1370,14 @@ class ReplicaManagerTest {
 
       // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
       val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
-      var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      var partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(0))
       var fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
       assertNotNull(fetchResult.get)
       assertEquals(Errors.NONE, fetchResult.get.error)
 
       // Fetch from follower, with empty ClientMetadata (which implies an older version)
-      partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(0))
       fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None)
       assertNotNull(fetchResult.get)
@@ -1413,7 +1420,7 @@ class ReplicaManagerTest {
       assertEquals(expected, replicaManager.brokerTopicStats.topicStats(topic).totalFetchRequestRate.count)
     }
 
-    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+    val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.empty())
 
     val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 0)
@@ -1456,7 +1463,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-      val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.empty())
       val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 10)
       assertNull(fetchResult.get)
@@ -1514,7 +1521,7 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
       val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
-      val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(1))
       val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata), timeout = 10)
       assertNull(fetchResult.get)
@@ -1570,13 +1577,13 @@ class ReplicaManagerTest {
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
     val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
-    var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+    var partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.of(1))
     var fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
     assertNotNull(fetchResult.get)
     assertEquals(Errors.NONE, fetchResult.get.error)
 
-    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+    partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.empty())
     fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
     assertNotNull(fetchResult.get)
@@ -1613,7 +1620,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+    val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.of(1))
     val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 10)
     assertNull(fetchResult.get)
@@ -2966,7 +2973,7 @@ class ReplicaManagerTest {
         replicaManager,
         otherId,
         topicIdPartition,
-        new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
         Int.MaxValue,
         IsolationLevel.READ_UNCOMMITTED,
         None
@@ -3035,7 +3042,7 @@ class ReplicaManagerTest {
         replicaManager,
         otherId,
         topicIdPartition,
-        new PartitionData(numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
         Int.MaxValue,
         IsolationLevel.READ_UNCOMMITTED,
         None
@@ -3308,7 +3315,7 @@ class ReplicaManagerTest {
         replicaManager,
         otherId,
         topicIdPartition,
-        new PartitionData(0, 0, Int.MaxValue, Optional.empty()),
+        new PartitionData(Uuid.ZERO_UUID, 0, 0, Int.MaxValue, Optional.empty()),
         Int.MaxValue,
         IsolationLevel.READ_UNCOMMITTED,
         None

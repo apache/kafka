@@ -653,12 +653,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @Test
-  def testPartitionDataEquals(): Unit = {
-    assertEquals(new FetchRequest.PartitionData(300, 0L, 300, Optional.of(300)),
-    new FetchRequest.PartitionData(300, 0L, 300, Optional.of(300)))
-  }
-
-  @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
     val topicConfig = Map(LogConfig.CompressionTypeProp -> ProducerCompressionCodec.name)

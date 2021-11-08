@@ -29,6 +29,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
@@ -42,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.TreeSet;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INITIAL_EPOCH;
@@ -266,12 +269,9 @@ public class FetchSessionHandlerTest {
             addTopicId(topicIds, topicNames, "bar", version);
             Uuid barId = topicIds.getOrDefault("bar", Uuid.ZERO_UUID);
             TopicPartition bar0 = new TopicPartition("bar", 0);
-            builder2.add(foo0,
-                    new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
-            builder2.add(foo1,
-                    new FetchRequest.PartitionData(fooId, 10, 120, 210, Optional.empty()));
-            builder2.add(bar0,
-                    new FetchRequest.PartitionData(barId, 20, 200, 200, Optional.empty()));
+            builder2.add(foo0, new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
+            builder2.add(foo1, new FetchRequest.PartitionData(fooId, 10, 120, 210, Optional.empty()));
+            builder2.add(bar0, new FetchRequest.PartitionData(barId, 20, 200, 200, Optional.empty()));
             FetchSessionHandler.FetchRequestData data2 = builder2.build();
             assertFalse(data2.metadata().isFull());
             assertMapEquals(reqMap(new ReqEntry("foo", fooId, 0, 0, 100, 200),
@@ -293,12 +293,9 @@ public class FetchSessionHandlerTest {
             handler.handleResponse(resp3, version);
 
             FetchSessionHandler.Builder builder4 = handler.newBuilder();
-            builder4.add(foo0,
-                    new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
-            builder4.add(foo1,
-                    new FetchRequest.PartitionData(fooId, 10, 120, 210, Optional.empty()));
-            builder4.add(bar0,
-                    new FetchRequest.PartitionData(barId, 20, 200, 200, Optional.empty()));
+            builder4.add(foo0, new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
+            builder4.add(foo1, new FetchRequest.PartitionData(fooId, 10, 120, 210, Optional.empty()));
+            builder4.add(bar0, new FetchRequest.PartitionData(barId, 20, 200, 200, Optional.empty()));
             FetchSessionHandler.FetchRequestData data4 = builder4.build();
             assertTrue(data4.metadata().isFull());
             assertEquals(data2.metadata().sessionId(), data4.metadata().sessionId());
@@ -362,8 +359,7 @@ public class FetchSessionHandlerTest {
 
             // Test an incremental fetch request which removes two partitions.
             FetchSessionHandler.Builder builder2 = handler.newBuilder();
-            builder2.add(foo1,
-                    new FetchRequest.PartitionData(fooId, 10, 110, 210, Optional.empty()));
+            builder2.add(foo1, new FetchRequest.PartitionData(fooId, 10, 110, 210, Optional.empty()));
             FetchSessionHandler.FetchRequestData data2 = builder2.build();
             assertFalse(data2.metadata().isFull());
             assertEquals(123, data2.metadata().sessionId());
@@ -383,8 +379,7 @@ public class FetchSessionHandlerTest {
             handler.handleResponse(resp2, version);
 
             FetchSessionHandler.Builder builder3 = handler.newBuilder();
-            builder3.add(foo0,
-                    new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
+            builder3.add(foo0, new FetchRequest.PartitionData(fooId, 0, 100, 200, Optional.empty()));
             FetchSessionHandler.FetchRequestData data3 = builder3.build();
             assertTrue(data3.metadata().isFull());
             assertEquals(INVALID_SESSION_ID, data3.metadata().sessionId());
@@ -465,48 +460,57 @@ public class FetchSessionHandlerTest {
         });
     }
 
+    private static Stream<Arguments> idUsageCombinations() {
+        return Stream.of(
+                Arguments.of(true, true),
+                Arguments.of(true, false),
+                Arguments.of(false, true),
+                Arguments.of(false, false)
+        );
+    }
+
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testTopicIdReplaced(boolean fetchRequestUsesIds) {
+    @MethodSource("idUsageCombinations")
+    public void testTopicIdReplaced(boolean startsWithTopicIds, boolean endsWithTopicIds) {
         TopicPartition tp = new TopicPartition("foo", 0);
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
-        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId1 = startsWithTopicIds ? Uuid.randomUuid() : Uuid.ZERO_UUID;
         builder.add(tp, new FetchRequest.PartitionData(topicId1, 0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data = builder.build();
         assertMapsEqual(reqMap(new ReqEntry("foo", topicId1, 0, 0, 100, 200)),
                 data.toSend(), data.sessionPartitions());
         assertTrue(data.metadata().isFull());
-        assertTrue(data.canUseTopicIds());
+        assertEquals(startsWithTopicIds, data.canUseTopicIds());
 
         FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123, respMap(new RespEntry("foo", 0, topicId1, 10, 20)));
-        short version = fetchRequestUsesIds ? ApiKeys.FETCH.latestVersion() : 12;
+        short version = startsWithTopicIds ? ApiKeys.FETCH.latestVersion() : 12;
         handler.handleResponse(resp, version);
 
         // Try to add a new topic ID.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
-        Uuid topicId2 = Uuid.randomUuid();
+        Uuid topicId2 = endsWithTopicIds ? Uuid.randomUuid() : Uuid.ZERO_UUID;
         // Use the same data besides the topic ID.
         FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId2, 0, 100, 200, Optional.empty());
         builder2.add(tp, partitionData);
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
-        // The old topic ID partition should be in toReplace, and the new one should be in toSend.
-        assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)),
-                data2.toSend(), data2.sessionPartitions());
-        assertEquals(Collections.singletonList(new TopicIdPartition(topicId1, tp)), data2.toReplace());
-        // Should have the same session ID, and next epoch and can use topic IDs.
+        if (startsWithTopicIds) {
+            // If we started with an ID, both a new ID and a zero ID will count towards replaced.
+            // The zero ID will lead to a fetch session ID error and close the session when it is sent out.
+            // The old topic ID partition should be in toReplace, and the new one should be in toSend.
+            assertEquals(Collections.singletonList(new TopicIdPartition(topicId1, tp)), data2.toReplace());
+            assertMapsEqual(reqMap(new ReqEntry("foo", topicId2, 0, 0, 100, 200)),
+                    data2.toSend(), data2.sessionPartitions());
+        } else {
+            // Otherwise, we have no partition in toReplace and since the partition was not updated, there is no data to send.
+            assertEquals(0, data2.toReplace().size());
+            assertEquals(0, data2.toSend().size());
+            assertMapsEqual(reqMap(new ReqEntry("foo", topicId1, 0, 0, 100, 200)), data2.sessionPartitions());
+        }
+        // Should have the same session ID, and next epoch and can use topic IDs if it ended with topic IDs.
         assertEquals(123, data2.metadata().sessionId(), "Did not use same session");
         assertEquals(1, data2.metadata().epoch(), "Did not have correct epoch");
-        assertTrue(data2.canUseTopicIds());
-
-        FetchRequest fetchRequest = FetchRequest.Builder
-                .forReplica(version, 0, 1, 1, data2.toSend())
-                .removed(data2.toForget())
-                .replaced(data2.toReplace())
-                .metadata(data2.metadata()).build(version);
-
-        assertEquals(fetchRequestUsesIds, fetchRequest.data().forgottenTopicsData().size() > 0);
-        assertEquals(1, fetchRequest.data().topics().size());
+        assertEquals(endsWithTopicIds, data2.canUseTopicIds());
     }
 
     @ParameterizedTest
@@ -534,10 +538,8 @@ public class FetchSessionHandlerTest {
 
         // Re-add the first partition. Then add a partition with opposite ID usage.
         FetchSessionHandler.Builder builder2 = handler.newBuilder();
-        builder2.add(tp0,
-                new FetchRequest.PartitionData(fooId, 10, 110, 210, Optional.empty()));
-        builder2.add(tp1,
-                new FetchRequest.PartitionData(barId, 0, 100, 200, Optional.empty()));
+        builder2.add(tp0, new FetchRequest.PartitionData(fooId, 10, 110, 210, Optional.empty()));
+        builder2.add(tp1, new FetchRequest.PartitionData(barId, 0, 100, 200, Optional.empty()));
         FetchSessionHandler.FetchRequestData data2 = builder2.build();
         // Should have the same session ID, and the next epoch and can not use topic IDs.
         // The receiving broker will handle closing the session.

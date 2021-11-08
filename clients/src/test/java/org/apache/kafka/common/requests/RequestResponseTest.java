@@ -1027,7 +1027,7 @@ public class RequestResponseTest {
     @Test
     public void testFetchRequestCompat() {
         Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
-        fetchData.put(new TopicPartition("test", 0), new FetchRequest.PartitionData(100, 2, 100, Optional.of(42)));
+        fetchData.put(new TopicPartition("test", 0), new FetchRequest.PartitionData(Uuid.ZERO_UUID, 100, 2, 100, Optional.of(42)));
         FetchRequest req = FetchRequest.Builder
                 .forConsumer((short) 2, 100, 100, fetchData)
                 .metadata(new FetchMetadata(10, 20))

@@ -133,7 +133,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(0L)
     when(futureLog.latestEpoch).thenReturn(None)
 
-    val fencedRequestData = new FetchRequest.PartitionData(0L, 0L,
+    val fencedRequestData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch - 1))
     val fencedResponseData = FetchPartitionData(
       error = Errors.FENCED_LEADER_EPOCH,
@@ -173,7 +173,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.currentLeaderEpoch))
     assertEquals(1, thread.partitionCount)
 
-    val requestData = new FetchRequest.PartitionData(0L, 0L,
+    val requestData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
     val responseData = FetchPartitionData(
       error = Errors.NONE,
@@ -231,7 +231,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(0L)
     when(futureLog.latestEpoch).thenReturn(None)
 
-    val requestData = new FetchRequest.PartitionData(0L, 0L,
+    val requestData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
     val responseData = FetchPartitionData(
       error = Errors.NONE,

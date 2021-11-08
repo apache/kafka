@@ -46,8 +46,8 @@ class ReplicaManagerQuotasTest {
   val topicIdPartition1 = new TopicIdPartition(topicId, topicPartition1)
   val topicIdPartition2 = new TopicIdPartition(topicId, topicPartition2)
   val fetchInfo = Seq(
-    topicIdPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
-    topicIdPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
+    topicIdPartition1 -> new PartitionData(Uuid.ZERO_UUID, 0, 0, 100, Optional.empty()),
+    topicIdPartition2 -> new PartitionData(Uuid.ZERO_UUID, 0, 0, 100, Optional.empty()))
   var quotaManager: QuotaManagers = _
   var replicaManager: ReplicaManager = _
 
@@ -179,7 +179,7 @@ class ReplicaManagerQuotasTest {
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-         relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()))
+         relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
         fetchMaxBytes = 1000,
         hardMaxBytesLimit = true,
