@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -238,11 +237,13 @@ public class FetchSessionHandler {
          * incremental fetch requests (see below).
          */
         private LinkedHashMap<TopicPartition, PartitionData> next;
+        private Map<Uuid, String> topicNames;
         private final boolean copySessionPartitions;
         private int partitionsWithoutTopicIds = 0;
 
         Builder() {
             this.next = new LinkedHashMap<>();
+            this.topicNames = new HashMap<>();
             this.copySessionPartitions = true;
         }
 
@@ -259,6 +260,8 @@ public class FetchSessionHandler {
             // topicIds should not change between adding partitions and building, so we can use putIfAbsent
             if (data.topicId.equals(Uuid.ZERO_UUID)) {
                 partitionsWithoutTopicIds++;
+            } else {
+                topicNames.putIfAbsent(data.topicId, topicPartition.topic());
             }
         }
 
@@ -274,12 +277,7 @@ public class FetchSessionHandler {
                 next = null;
                 // Only add topic IDs to the session if we are using topic IDs.
                 if (canUseTopicIds) {
-                    Map<Uuid, Set<String>> newTopicNames = sessionPartitions.entrySet().stream().collect(Collectors.groupingByConcurrent(entry -> entry.getValue().topicId,
-                            Collectors.mapping(entry -> entry.getKey().topic(), Collectors.toSet())));
-
-                    sessionTopicNames = new HashMap<>(newTopicNames.size());
-                    // There should only be one topic name per topic ID.
-                    newTopicNames.forEach((topicId, topicNamesSet) -> topicNamesSet.forEach(topicName -> sessionTopicNames.put(topicId, topicName)));
+                    sessionTopicNames = topicNames;
                 } else {
                     sessionTopicNames = Collections.emptyMap();
                 }
@@ -301,7 +299,9 @@ public class FetchSessionHandler {
                 if (nextData != null) {
                     // We basically check if the new partition had the same topic ID. If not,
                     // we add it to the "replaced" set.
-                    if (!prevData.topicId.equals(nextData.topicId) && !prevData.topicId.equals(Uuid.ZERO_UUID)) {
+                    if (!prevData.topicId.equals(nextData.topicId)
+                            && !prevData.topicId.equals(Uuid.ZERO_UUID)
+                            && !nextData.topicId.equals(Uuid.ZERO_UUID)) {
                         // Re-add the replaced partition to the end of 'next'
                         next.put(topicPartition, nextData);
                         entry.setValue(nextData);
@@ -340,11 +340,9 @@ public class FetchSessionHandler {
             // Add topic IDs to session if we can use them. If an ID is inconsistent, we will handle in the receiving broker.
             // If we switched from using topic IDs to not using them (or vice versa), that error will also be handled in the receiving broker.
             if (canUseTopicIds) {
-                Map<Uuid, Set<String>> newTopicNames = added.stream().collect(Collectors.groupingByConcurrent(TopicIdPartition::topicId,
-                        Collectors.mapping(topicIdPartition -> topicIdPartition.topicPartition().topic(), Collectors.toSet())));
-
-                // There should only be one topic name per topic ID.
-                newTopicNames.forEach((topicId, topicNamesSet) -> topicNamesSet.forEach(topicName -> sessionTopicNames.put(topicId, topicName)));
+                sessionTopicNames = topicNames;
+            } else {
+                sessionTopicNames = Collections.emptyMap();
             }
 
             if (log.isDebugEnabled()) {

@@ -69,6 +69,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -137,10 +138,12 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -270,34 +273,318 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchWithNoId() {
+    public void testFetchWithNoTopicId() {
         // Should work and default to using old request type.
         buildFetcher();
 
-        TopicPartition noId = new TopicPartition("noId", 0);
-        TopicIdPartition noIdPart = new TopicIdPartition(Uuid.ZERO_UUID, noId);
-        assignFromUserNoId(singleton(noId));
-        subscriptions.seek(noId, 0);
+        TopicIdPartition noId = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("noId", 0));
+        assignFromUserNoId(singleton(noId.topicPartition()));
+        subscriptions.seek(noId.topicPartition(), 0);
 
-        // fetch should use request version 12
+        // Fetch should use request version 12
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(noIdPart, this.records, Errors.NONE, 100L, 0));
+        client.prepareResponse(
+            fetchRequestMatcher((short) 12, noId, 0, Optional.of(validLeaderEpoch)),
+            fullFetchResponse(noId, this.records, Errors.NONE, 100L, 0)
+        );
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
-        assertTrue(partitionRecords.containsKey(noId));
+        assertTrue(partitionRecords.containsKey(noId.topicPartition()));
 
-        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(noId);
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(noId.topicPartition());
         assertEquals(3, records.size());
-        assertEquals(4L, subscriptions.position(noId).offset); // this is the next fetching position
+        assertEquals(4L, subscriptions.position(noId.topicPartition()).offset); // this is the next fetching position
         long offset = 1;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    @Test
+    public void testFetchWithTopicId() {
+        buildFetcher();
+
+        TopicIdPartition tp = new TopicIdPartition(topicId, new TopicPartition(topicName, 0));
+        assignFromUser(singleton(tp.topicPartition()));
+        subscriptions.seek(tp.topicPartition(), 0);
+
+        // Fetch should use latest version
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(), tp, 0, Optional.of(validLeaderEpoch)),
+            fullFetchResponse(tp, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp.topicPartition()));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp.topicPartition());
+        assertEquals(3, records.size());
+        assertEquals(4L, subscriptions.position(tp.topicPartition()).offset); // this is the next fetching position
+        long offset = 1;
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            assertEquals(offset, record.offset());
+            offset += 1;
+        }
+    }
+
+    @Test
+    public void testFetchForgetTopicIdWhenUnassigned() {
+        buildFetcher();
+
+        TopicIdPartition foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition bar = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+
+        // Assign foo and bar.
+        subscriptions.assignFromUser(singleton(foo.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(foo), tp -> validLeaderEpoch));
+        subscriptions.seek(foo.topicPartition(), 0);
+
+        // Fetch should use latest version.
+        assertEquals(1, fetcher.sendFetches());
+
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
+                singletonMap(foo, new PartitionData(
+                    foo.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                emptyList()
+            ),
+            fullFetchResponse(1, foo, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+
+        // Assign bar and unassign foo.
+        subscriptions.assignFromUser(singleton(bar.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(bar), tp -> validLeaderEpoch));
+        subscriptions.seek(bar.topicPartition(), 0);
+
+        // Fetch should use latest version.
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
+                singletonMap(bar, new PartitionData(
+                    bar.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                singletonList(foo)
+            ),
+            fullFetchResponse(1, bar, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+    }
+
+    @Test
+    public void testFetchForgetTopicIdWhenReplaced() {
+        buildFetcher();
+
+        TopicIdPartition fooWithOldTopicId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition fooWithNewTopicId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+
+        // Assign foo with old topic id.
+        subscriptions.assignFromUser(singleton(fooWithOldTopicId.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithOldTopicId), tp -> validLeaderEpoch));
+        subscriptions.seek(fooWithOldTopicId.topicPartition(), 0);
+
+        // Fetch should use latest version.
+        assertEquals(1, fetcher.sendFetches());
+
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
+                singletonMap(fooWithOldTopicId, new PartitionData(
+                    fooWithOldTopicId.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                emptyList()
+            ),
+            fullFetchResponse(1, fooWithOldTopicId, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+
+        // Replace foo with old topic id with foo with new topic id.
+        subscriptions.assignFromUser(singleton(fooWithNewTopicId.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithNewTopicId), tp -> validLeaderEpoch));
+        subscriptions.seek(fooWithNewTopicId.topicPartition(), 0);
+
+        // Fetch should use latest version.
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // foo with old topic id should be removed from the session.
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
+                singletonMap(fooWithNewTopicId, new PartitionData(
+                    fooWithNewTopicId.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                singletonList(fooWithOldTopicId)
+            ),
+            fullFetchResponse(1, fooWithNewTopicId, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+    }
+
+    @Test
+    public void testFetchTopicIdUpgradeDowngrade() {
+        buildFetcher();
+
+        TopicIdPartition fooWithoutId = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0));
+        TopicIdPartition fooWithId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+
+        // Assign foo without a topic id.
+        subscriptions.assignFromUser(singleton(fooWithoutId.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithoutId), tp -> validLeaderEpoch));
+        subscriptions.seek(fooWithoutId.topicPartition(), 0);
+
+        // Fetch should use version 12.
+        assertEquals(1, fetcher.sendFetches());
+
+        client.prepareResponse(
+            fetchRequestMatcher((short) 12,
+                singletonMap(fooWithoutId, new PartitionData(
+                    fooWithoutId.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                emptyList()
+            ),
+            fullFetchResponse(1, fooWithoutId, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+
+        // Upgrade.
+        subscriptions.assignFromUser(singleton(fooWithId.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithId), tp -> validLeaderEpoch));
+        subscriptions.seek(fooWithId.topicPartition(), 0);
+
+        // Fetch should use latest version.
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // foo with old topic id should be removed from the session.
+        client.prepareResponse(
+            fetchRequestMatcher(ApiKeys.FETCH.latestVersion(),
+                singletonMap(fooWithId, new PartitionData(
+                    fooWithId.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                emptyList()
+            ),
+            fullFetchResponse(1, fooWithId, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+
+        // Downgrade.
+        subscriptions.assignFromUser(singleton(fooWithoutId.topicPartition()));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singleton(fooWithoutId), tp -> validLeaderEpoch));
+        subscriptions.seek(fooWithoutId.topicPartition(), 0);
+
+        // Fetch should use version 12.
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // foo with old topic id should be removed from the session.
+        client.prepareResponse(
+            fetchRequestMatcher((short) 12,
+                singletonMap(fooWithoutId, new PartitionData(
+                    fooWithoutId.topicId(),
+                    0,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchSize,
+                    Optional.of(validLeaderEpoch))
+                ),
+                emptyList()
+            ),
+            fullFetchResponse(1, fooWithoutId, this.records, Errors.NONE, 100L, 0)
+        );
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+    }
+
+    private MockClient.RequestMatcher fetchRequestMatcher(
+        short expectedVersion,
+        TopicIdPartition tp,
+        long expectedFetchOffset,
+        Optional<Integer> expectedCurrentLeaderEpoch
+    ) {
+        return fetchRequestMatcher(
+            expectedVersion,
+            singletonMap(tp, new PartitionData(
+                tp.topicId(),
+                expectedFetchOffset,
+                FetchRequest.INVALID_LOG_START_OFFSET,
+                fetchSize,
+                expectedCurrentLeaderEpoch
+            )),
+            emptyList()
+        );
+    }
+
+    private MockClient.RequestMatcher fetchRequestMatcher(
+        short expectedVersion,
+        Map<TopicIdPartition, PartitionData> fetch,
+        List<TopicIdPartition> forgotten
+    ) {
+        return body -> {
+            if (body instanceof FetchRequest) {
+                FetchRequest fetchRequest = (FetchRequest) body;
+                assertEquals(expectedVersion, fetchRequest.version());
+                assertEquals(fetch, fetchRequest.fetchData(topicNames(new ArrayList<>(fetch.keySet()))));
+                assertEquals(forgotten, fetchRequest.forgottenTopics(topicNames(forgotten)));
+                return true;
+            } else {
+                fail("Should have seen FetchRequest");
+                return false;
+            }
+        };
+    }
+
+    private Map<Uuid, String> topicNames(List<TopicIdPartition> partitions) {
+        Map<Uuid, String> topicNames = new HashMap<>();
+        partitions.forEach(partition -> topicNames.putIfAbsent(partition.topicId(), partition.topic()));
+        return topicNames;
     }
 
     @Test
@@ -1040,7 +1327,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1075,7 +1362,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1110,7 +1397,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
 
         subscriptions.seek(tp0, 1);
         assertEquals(1, fetcher.sendFetches());
@@ -1359,7 +1646,7 @@ public class FetcherTest {
         // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
 
@@ -1405,7 +1692,7 @@ public class FetcherTest {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
 
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
@@ -1490,7 +1777,7 @@ public class FetcherTest {
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
-        assignFromUser(Utils.mkSet(tp0));
+        assignFromUser(mkSet(tp0));
         subscriptions.seek(tp0, 1);
         assertEquals(1, fetcher.sendFetches());
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
@@ -1503,7 +1790,7 @@ public class FetcherTest {
 
         assertEquals(2, fetcher.fetchedRecords().get(tp0).size());
 
-        subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptions.assignFromUser(mkSet(tp0, tp1));
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, fetcher.sendFetches());
@@ -2361,7 +2648,7 @@ public class FetcherTest {
         TopicPartition tp1 = new TopicPartition(topic1, 0);
         TopicPartition tp2 = new TopicPartition(topic2, 0);
 
-        subscriptions.assignFromUser(Utils.mkSet(tp1, tp2));
+        subscriptions.assignFromUser(mkSet(tp1, tp2));
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
@@ -2375,7 +2662,7 @@ public class FetcherTest {
         int expectedBytes = 0;
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> fetchPartitionData = new LinkedHashMap<>();
 
-        for (TopicIdPartition tp : Utils.mkSet(tidp1, tidp2)) {
+        for (TopicIdPartition tp : mkSet(tidp1, tidp2)) {
             subscriptions.seek(tp.topicPartition(), 0);
 
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
@@ -2439,7 +2726,7 @@ public class FetcherTest {
     @Test
     public void testFetchResponseMetricsWithOnePartitionError() {
         buildFetcher();
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2482,7 +2769,7 @@ public class FetcherTest {
     public void testFetchResponseMetricsWithOnePartitionAtTheWrongOffset() {
         buildFetcher();
 
-        assignFromUser(Utils.mkSet(tp0, tp1));
+        assignFromUser(mkSet(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2640,7 +2927,7 @@ public class FetcherTest {
         for (Errors retriableError : retriableErrors) {
             buildFetcher();
 
-            subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
+            subscriptions.assignFromUser(mkSet(tp0, tp1));
             client.updateMetadata(initialUpdateResponse);
 
             final long fetchTimestamp = 10L;
@@ -2792,7 +3079,7 @@ public class FetcherTest {
     public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
         buildFetcher();
 
-        subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptions.assignFromUser(mkSet(tp0, tp1));
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
 
@@ -2839,7 +3126,7 @@ public class FetcherTest {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
-        subscriptions.assignFromUser(Utils.mkSet(tp0, t2p0));
+        subscriptions.assignFromUser(mkSet(tp0, t2p0));
 
         client.reset();
 
@@ -3052,7 +3339,7 @@ public class FetcherTest {
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             fetchedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertEquals(Utils.mkSet("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
+        assertEquals(mkSet("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
     }
 
     @Test
@@ -3879,7 +4166,7 @@ public class FetcherTest {
     @Test
     public void testOffsetValidationRequestGrouping() {
         buildFetcher();
-        assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
 
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 3,
             Collections.emptyMap(), singletonMap(topicName, 4),
@@ -4639,11 +4926,11 @@ public class FetcherTest {
     }
 
     private FetchResponse fullFetchResponseWithAbortedTransactions(MemoryRecords records,
-                                                                                  List<FetchResponseData.AbortedTransaction> abortedTransactions,
-                                                                                  Errors error,
-                                                                                  long lastStableOffset,
-                                                                                  long hw,
-                                                                                  int throttleTime) {
+                                                                   List<FetchResponseData.AbortedTransaction> abortedTransactions,
+                                                                   Errors error,
+                                                                   long lastStableOffset,
+                                                                   long hw,
+                                                                   int throttleTime) {
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tidp0,
                 new FetchResponseData.PartitionData()
                         .setPartitionIndex(tp0.partition())
@@ -4656,11 +4943,20 @@ public class FetcherTest {
         return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
     }
 
+    private FetchResponse fullFetchResponse(int sessionId, TopicIdPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
+        return fullFetchResponse(sessionId, tp, records, error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, throttleTime);
+    }
+
     private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
         return fullFetchResponse(tp, records, error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, throttleTime);
     }
 
     private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
+                                            long lastStableOffset, int throttleTime) {
+        return fullFetchResponse(INVALID_SESSION_ID, tp, records, error, hw, lastStableOffset, throttleTime);
+    }
+
+    private FetchResponse fullFetchResponse(int sessionId, TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
                                             long lastStableOffset, int throttleTime) {
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponseData.PartitionData()
@@ -4670,11 +4966,11 @@ public class FetcherTest {
                         .setLastStableOffset(lastStableOffset)
                         .setLogStartOffset(0)
                         .setRecords(records));
-        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(Errors.NONE, throttleTime, sessionId, new LinkedHashMap<>(partitions));
     }
 
     private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
-                                                           long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId) {
+                                            long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId) {
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponseData.PartitionData()
                         .setPartitionIndex(tp.topicPartition().partition())

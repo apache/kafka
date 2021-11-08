@@ -313,8 +313,8 @@ public class Fetcher<K, V> implements Closeable {
                                                 new Object[]{partition, data.metadata()}).getMessage();
                                     } else {
                                         message = MessageFormatter.arrayFormat(
-                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}",
-                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget()}).getMessage();
+                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
+                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
                                     }
 
                                     // Received fetch response for missing session partition
