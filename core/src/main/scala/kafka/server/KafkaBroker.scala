@@ -22,6 +22,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
+import kafka.security.CredentialProvider
 import kafka.utils.KafkaScheduler
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -82,7 +83,11 @@ trait KafkaBroker extends KafkaMetricsGroup {
   def metadataCache: MetadataCache
   def groupCoordinator: GroupCoordinator
   def boundPort(listenerName: ListenerName): Int
+  def startup(): Unit
+  def awaitShutdown(): Unit
   def shutdown(): Unit
+  def brokerTopicStats: BrokerTopicStats
+  def credentialProvider: CredentialProvider
 
   // For backwards compatibility, we need to keep older metrics tied
   // to their original name when this class was named `KafkaServer`

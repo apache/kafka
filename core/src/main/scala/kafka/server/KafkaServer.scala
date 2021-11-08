@@ -159,7 +159,7 @@ class KafkaServer(
   }.toMap
 
   private var _clusterId: String = null
-  private var _brokerTopicStats: BrokerTopicStats = null
+  @volatile var _brokerTopicStats: BrokerTopicStats = null
 
   private var _featureChangeListener: FinalizedFeatureChangeListener = null
 
@@ -173,7 +173,7 @@ class KafkaServer(
   // Visible for testing
   private[kafka] def zkClient = _zkClient
 
-  private[kafka] def brokerTopicStats = _brokerTopicStats
+  override def brokerTopicStats = _brokerTopicStats
 
   private[kafka] def featureChangeListener = _featureChangeListener
 

@@ -35,7 +35,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -413,7 +413,7 @@ public abstract class TopologyTestDriverTest {
             .count(Materialized.as(firstTableName));
 
         builder.table(SOURCE_TOPIC_2, Materialized.as(secondTableName))
-            .join(t1, v -> v, (v1, v2) -> v2, Named.as(joinName));
+            .join(t1, v -> v, (v1, v2) -> v2, TableJoined.as(joinName));
 
         return builder.build(config);
     }

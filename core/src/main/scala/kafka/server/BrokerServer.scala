@@ -139,7 +139,7 @@ class BrokerServer(
 
   var clientQuotaMetadataManager: ClientQuotaMetadataManager = null
 
-  private var _brokerTopicStats: BrokerTopicStats = null
+  @volatile var brokerTopicStats: BrokerTopicStats = null
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
@@ -154,8 +154,6 @@ class BrokerServer(
   var metadataPublisher: BrokerMetadataPublisher = null
 
   def kafkaYammerMetrics: kafka.metrics.KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
-
-  private[kafka] def brokerTopicStats = _brokerTopicStats
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -178,7 +176,7 @@ class BrokerServer(
 
   def replicaManager: ReplicaManager = _replicaManager
 
-  def startup(): Unit = {
+  override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
       info("Starting broker")
@@ -190,7 +188,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      _brokerTopicStats = new BrokerTopicStats
+      brokerTopicStats = new BrokerTopicStats
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
@@ -543,7 +541,7 @@ class BrokerServer(
     }
   }
 
-  def awaitShutdown(): Unit = {
+  override def awaitShutdown(): Unit = {
     lock.lock()
     try {
       while (true) {

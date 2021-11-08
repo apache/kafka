@@ -25,10 +25,10 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractResponse, OffsetFetchRequest, OffsetFetchResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
-
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import java.util
 import java.util.Collections.singletonList
+
 import scala.jdk.CollectionConverters._
 import java.util.{Optional, Properties}
 
@@ -74,8 +74,8 @@ class OffsetFetchRequestTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     TestUtils.createOffsetsTopic(zkClient, servers)
   }
