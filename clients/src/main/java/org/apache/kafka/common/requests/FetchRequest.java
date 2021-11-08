@@ -94,7 +94,8 @@ public class FetchRequest extends AbstractRequest {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             PartitionData that = (PartitionData) o;
-            return fetchOffset == that.fetchOffset &&
+            return topicId == that.topicId &&
+                fetchOffset == that.fetchOffset &&
                 logStartOffset == that.logStartOffset &&
                 maxBytes == that.maxBytes &&
                 Objects.equals(currentLeaderEpoch, that.currentLeaderEpoch) &&
@@ -103,7 +104,7 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public int hashCode() {
-            return Objects.hash(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, lastFetchedEpoch);
+            return Objects.hash(topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, lastFetchedEpoch);
         }
 
         @Override
