@@ -525,13 +525,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     public void testTopicConfigPropertyFilteringExclude() throws Exception {
         // create exclude filter configuration and start MM2:
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
-        mm2Props.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
-                + "leader\\.replication\\.throttled\\.replicas, "
-                + "message\\.timestamp\\.difference\\.max\\.ms, "
-                + "message\\.timestamp\\.type, "
-                + "unclean\\.leader\\.election\\.enable, "
-                + "min\\.insync\\.replicas,"
-                + "delete\\.retention\\..*"); // this is in addition to the default exclude list
+        // For the test, set only only one param to exclude and test.
+        mm2Props.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "delete\\.retention\\..*");
 
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -558,7 +553,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         backupConfig = getTopicConfig(backup.kafka(), PRIMARY_CLUSTER_ALIAS + "." + topic, "retention.bytes");
         assertEquals(primaryConfig, backupConfig,
                 "`retention.bytes` should be the same, because it isn't in exclude filter! ");
-        assertEquals(backupConfig, "1000",
+        assertEquals("1000", backupConfig,
                 "`retention.bytes` should be the same, because it's explicitly defined! ");
     }
 
