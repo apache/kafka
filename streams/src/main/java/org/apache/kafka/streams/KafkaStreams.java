@@ -151,6 +151,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Time time;
     private final Logger log;
     private final String clientId;
+    protected final String applicationId;
     private final Metrics metrics;
     private final StreamsConfig config;
     protected final List<StreamThread> threads;
@@ -158,7 +159,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
-    private final Admin adminClient;
+    protected final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
     private final long totalCacheSize;
     private final StreamStateListener streamStateListener;
@@ -872,7 +873,7 @@ public class KafkaStreams implements AutoCloseable {
 
         // The application ID is a required config and hence should always have value
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
             clientId = applicationId + "-" + processId;
         } else {

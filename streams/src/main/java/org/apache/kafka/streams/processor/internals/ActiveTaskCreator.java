@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -51,7 +52,7 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig config;
+    private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -71,7 +72,7 @@ class ActiveTaskCreator {
     private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
-                      final StreamsConfig config,
+                      final StreamsConfig applicationConfig,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ChangelogReader storeChangelogReader,
@@ -82,7 +83,7 @@ class ActiveTaskCreator {
                       final UUID processId,
                       final Logger log) {
         this.topologyMetadata = topologyMetadata;
-        this.config = config;
+        this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -93,7 +94,7 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = StreamThread.processingMode(config);
+        processingMode = StreamThread.processingMode(applicationConfig);
 
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
@@ -105,7 +106,7 @@ class ActiveTaskCreator {
             final LogContext logContext = new LogContext(threadIdPrefix);
 
             threadProducer = new StreamsProducer(
-                config,
+                applicationConfig,
                 threadId,
                 clientSupplier,
                 null,
@@ -170,7 +171,7 @@ class ActiveTaskCreator {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 Task.TaskType.ACTIVE,
-                StreamThread.eosEnabled(config),
+                StreamThread.eosEnabled(applicationConfig),
                 logContext,
                 stateDirectory,
                 storeChangelogReader,
@@ -180,7 +181,7 @@ class ActiveTaskCreator {
 
             final InternalProcessorContext context = new ProcessorContextImpl(
                 taskId,
-                config,
+                applicationConfig,
                 stateManager,
                 streamsMetrics,
                 cache
@@ -239,7 +240,7 @@ class ActiveTaskCreator {
         if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
             log.info("Creating producer client for task {}", taskId);
             streamsProducer = new StreamsProducer(
-                config,
+                applicationConfig,
                 threadId,
                 clientSupplier,
                 taskId,
@@ -255,7 +256,7 @@ class ActiveTaskCreator {
             logContext,
             taskId,
             streamsProducer,
-            config.defaultProductionExceptionHandler(),
+            applicationConfig.defaultProductionExceptionHandler(),
             streamsMetrics
         );
 
@@ -264,7 +265,8 @@ class ActiveTaskCreator {
             inputPartitions,
             topology,
             consumer,
-            config,
+            new TaskConfig(applicationConfig, topologyMetadata.getConfigForTask(taskId)),
+            StreamThread.eosEnabled(applicationConfig),
             streamsMetrics,
             stateDirectory,
             cache,

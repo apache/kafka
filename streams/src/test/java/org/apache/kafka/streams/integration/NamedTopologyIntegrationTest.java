@@ -73,7 +73,7 @@ import static java.util.Collections.singletonList;
 public class NamedTopologyIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    // TODO KAFKA-12648:
+    // TODO KAFKA-12648: Pt.4
     //  1) full test coverage for add/removeNamedTopology, covering:
     //      - the "last topology removed" case
     //      - test using multiple clients, with standbys
@@ -362,7 +362,7 @@ public class NamedTopologyIntegrationTest {
         streams = new KafkaStreamsNamedTopologyWrapper(buildNamedTopologies(topology1Builder, topology2Builder), props, clientSupplier);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        streams.removeNamedTopology("topology-2");
+        streams.removeNamedTopology("topology-2", false);
 
         produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(DELAYED_INPUT_STREAM_2, STANDARD_INPUT_DATA);
@@ -383,7 +383,7 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1");
+        streams.removeNamedTopology("topology-1", false);
         streams.cleanUpNamedTopology("topology-1");
 
         // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
@@ -423,6 +423,34 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+
+    @Test
+    public void shouldAddToEmptyInitialTopologyRemoveThenAddNewNamedTopology() throws Exception {
+        CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        // Build up named topology with two stateful subtopologies
+        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+        streams.start();
+        streams.addNamedTopology(topology1Builder.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        streams.removeNamedTopology("topology-1", false);
+        streams.cleanUpNamedTopology("topology-1");
+
+        final KStream<String, Long> inputStream2 = topology1Builder2.stream(INPUT_STREAM_1);
+        inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+
+        produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+        streams.addNamedTopology(topology1Builder2.buildNamedTopology(props));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
