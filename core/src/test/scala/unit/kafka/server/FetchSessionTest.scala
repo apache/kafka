@@ -967,6 +967,113 @@ class FetchSessionTest {
       .setErrorCode(errorCode)
   }
 
+  @Test
+  def testResolveUnknownPartitions(): Unit = {
+    val time = new MockTime()
+    val cache = new FetchSessionCache(10, 1000)
+    val fetchManager = new FetchManager(time, cache)
+
+    def newContext(
+      metadata: JFetchMetadata,
+      partitions: Seq[TopicIdPartition],
+      topicNames: Map[Uuid, String] // Topic ID to name mapping known by the broker.
+    ): FetchContext = {
+      val data = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      partitions.foreach { topicIdPartition =>
+        data.put(
+          topicIdPartition.topicPartition,
+          new FetchRequest.PartitionData(topicIdPartition.topicId, 0, 0, 100, Optional.empty())
+        )
+      }
+
+      val fetchRequest = createRequest(metadata, data, EMPTY_PART_LIST, false)
+
+      fetchManager.newContext(
+        fetchRequest.version,
+        fetchRequest.metadata,
+        fetchRequest.isFromFollower,
+        fetchRequest.fetchData(topicNames.asJava),
+        fetchRequest.forgottenTopics(topicNames.asJava),
+        topicNames.asJava
+      )
+    }
+
+    def updateAndGenerateResponseData(
+      context: FetchContext
+    ): Int = {
+      val data = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
+      context.foreachPartition { (topicIdPartition, _) =>
+        data.put(
+          topicIdPartition,
+          if (topicIdPartition.topicId == Uuid.ZERO_UUID)
+            errorResponse(Errors.UNKNOWN_TOPIC_ID.code)
+          else
+            noErrorResponse
+        )
+      }
+      context.updateAndGenerateResponseData(data).sessionId
+    }
+
+    val foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val bar = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0))
+    val zar = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("zar", 0))
+
+    val fooUnresolved = new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition))
+    val barUnresolved = new TopicIdPartition(bar.topicId, new TopicPartition(null, bar.partition))
+    val zarUnresolved = new TopicIdPartition(zar.topicId, new TopicPartition(null, zar.partition))
+
+    // The metadata cache does not know about the topic.
+    val context1 = newContext(
+      JFetchMetadata.INITIAL,
+      Seq(foo, bar, zar),
+      Map.empty[Uuid, String]
+    )
+
+    // So the context contains unresolved partitions.
+    assertEquals(classOf[FullFetchContext], context1.getClass)
+    assertPartitionsOrder(context1, Seq(fooUnresolved, barUnresolved, zarUnresolved))
+
+    // The response is sent back to create the session.
+    val sessionId = updateAndGenerateResponseData(context1)
+
+    // The metadata cache only knows about foo.
+    val context2 = newContext(
+      new JFetchMetadata(sessionId, 1),
+      Seq.empty,
+      Map(foo.topicId -> foo.topic)
+    )
+
+    // So foo is resolved but not the others.
+    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
+    assertPartitionsOrder(context2, Seq(foo, barUnresolved, zarUnresolved))
+
+    updateAndGenerateResponseData(context2)
+
+    // The metadata cache knows about foo and bar.
+    val context3 = newContext(
+      new JFetchMetadata(sessionId, 2),
+      Seq(bar),
+      Map(foo.topicId -> foo.topic, bar.topicId -> bar.topic)
+    )
+
+    // So foo and bar are resolved.
+    assertEquals(classOf[IncrementalFetchContext], context3.getClass)
+    assertPartitionsOrder(context3, Seq(foo, bar, zarUnresolved))
+
+    updateAndGenerateResponseData(context2)
+
+    // The metadata cache knows about all topics.
+    val context4 = newContext(
+      new JFetchMetadata(sessionId, 3),
+      Seq.empty,
+      Map(foo.topicId -> foo.topic, bar.topicId -> bar.topic, zar.topicId -> zar.topic)
+    )
+
+    // So all topics are resolved.
+    assertEquals(classOf[IncrementalFetchContext], context4.getClass)
+    assertPartitionsOrder(context4, Seq(foo, bar, zar))
+  }
+
   // This test either simulates an update to a partition using all possible topic ID usage combinations.
   // The possible change will be found in an update from the partition.
   @ParameterizedTest
