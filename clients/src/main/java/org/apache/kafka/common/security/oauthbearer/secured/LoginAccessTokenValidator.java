@@ -84,14 +84,13 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
 
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        log.debug("validate - accessToken: {}", accessToken);
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
         Map<String, Object> payload;
 
         try {
             payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
         } catch (OAuthBearerIllegalTokenException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new ValidateException("Could not validate the access token", e);
         }
 
         Object scopeRaw = getClaim(payload, scopeClaimName);
@@ -120,8 +119,6 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
             expiration,
             subject,
             issuedAt);
-
-        log.debug("validate - token: {}", token);
 
         return token;
     }

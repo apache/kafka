@@ -241,13 +241,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         checkInitialized();
-
         String accessToken = accessTokenRetriever.retrieve();
-        log.debug("handle - accessToken: {}", accessToken);
 
         try {
             OAuthBearerToken token = accessTokenValidator.validate(accessToken);
-            log.debug("handle - token: {}", token);
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);

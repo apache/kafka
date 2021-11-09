@@ -149,7 +149,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        log.debug("validate - accessToken: {}", accessToken);
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 
         JwtContext jwt;
@@ -157,7 +156,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         try {
             jwt = jwtConsumer.process(serializedJwt.getToken());
         } catch (InvalidJwtException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new ValidateException("Could not validate the access token", e);
         }
 
         JwtClaims claims = jwt.getJwtClaims();
@@ -188,8 +187,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             expiration,
             sub,
             issuedAt);
-
-        log.debug("validate - token: {}", token);
 
         return token;
     }
