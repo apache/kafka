@@ -117,7 +117,8 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
 
             // update the store with the new value
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
-            tupleForwarder.maybeForward(record.key(), newAgg, sendOldValues ? oldAgg : null, newTimestamp);
+            tupleForwarder.maybeForward(
+                record.withValue(new Change<>(newAgg, oldAgg)).withTimestamp(newTimestamp));
         }
 
     }
