@@ -184,6 +184,53 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
+  def testPartitionsInError(): Unit = {
+    val partition1 = new TopicPartition("topic1", 0)
+    val partition2 = new TopicPartition("topic2", 0)
+    val partition3 = new TopicPartition("topic3", 0)
+    val fetchBackOffMs = 250
+
+    class ErrorMockFetcherThread(fetchBackOffMs: Int)
+      extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
+
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+        Map(partition1 -> new FetchData().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
+            partition2 -> new FetchData().setErrorCode(Errors.INCONSISTENT_TOPIC_ID.code),
+            partition3 -> new FetchData().setErrorCode(Errors.NONE.code))
+      }
+    }
+    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = fetchBackOffMs)
+
+    fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition1 -> initialFetchState(Some(Uuid.randomUuid()), 0L, leaderEpoch = 0)))
+    fetcher.setReplicaState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition2 -> initialFetchState(Some(Uuid.randomUuid()), 0L, leaderEpoch = 0)))
+    fetcher.setReplicaState(partition3, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition3 -> initialFetchState(Some(Uuid.randomUuid()), 0L, leaderEpoch = 0)))
+
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0,
+      new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
+    val leaderState = MockFetcherThread.PartitionState(Seq(batch), leaderEpoch = 0, highWatermark = 2L)
+    fetcher.setLeaderState(partition1, leaderState)
+    fetcher.setLeaderState(partition2, leaderState)
+    fetcher.setLeaderState(partition3, leaderState)
+
+    fetcher.doWork()
+
+    val partition1FetchState = fetcher.fetchState(partition1)
+    val partition2FetchState = fetcher.fetchState(partition2)
+    val partition3FetchState = fetcher.fetchState(partition3)
+    assertTrue(partition1FetchState.isDefined)
+    assertTrue(partition2FetchState.isDefined)
+    assertTrue(partition3FetchState.isDefined)
+
+    // Only the partitions with errors should be delayed.
+    assertTrue(partition1FetchState.get.isDelayed)
+    assertTrue(partition2FetchState.get.isDelayed)
+    assertFalse(partition3FetchState.get.isDelayed)
+  }
+
+  @Test
   def testFencedTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcher = new MockFetcherThread
