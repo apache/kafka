@@ -29,6 +29,7 @@ import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
+import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
@@ -49,6 +50,8 @@ import scala.annotation.nowarn
  */
 object CoreUtils {
   private val logger = Logger(getClass)
+
+  private val inetAddressValidator = InetAddressValidator.getInstance()
 
   /**
    * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
@@ -233,16 +236,62 @@ object CoreUtils {
     listenerListToEndPoints(listeners, securityProtocolMap, true)
   }
 
+  def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
+    (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
+      (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
+
+  def checkDuplicateListenerNames(endpoints: Seq[EndPoint], listeners: String): Unit = {
+    val distinctListenerNames = endpoints.map(_.listenerName).distinct
+    require(distinctListenerNames.size == endpoints.size, s"Each listener must have a different name unless you have exactly " +
+      s"one listener on IPv4 and the other IPv6 on the same port, listeners: $listeners")
+  }
+
+  def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+    val distinctPorts = endpoints.map(_.port).distinct
+    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
+  }
+
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
-      // filter port 0 for unit tests
-      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
-      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+      // Exception case, lets allow duplicate ports if the host is on IPv4 and the other is on IPv6
+      val (duplicatePorts, nonDuplicatePorts) = endPoints.filter {
+        ep => ep.port != 0
+      }.groupBy(_.port).partition {
+        case (_, endpoints) => endpoints.size > 1
+      }
 
-      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
-      if (requireDistinctPorts) {
-        val distinctPorts = portsExcludingZero.distinct
-        require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      val nonDuplicatePortsOnlyEndpoints = nonDuplicatePorts.flatMap { case (_, eps) => eps }.toList
+
+      checkDuplicateListenerNames(nonDuplicatePortsOnlyEndpoints, listeners)
+      if (requireDistinctPorts)
+        checkDuplicateListenerPorts(nonDuplicatePortsOnlyEndpoints, listeners)
+
+      val duplicatePortsPartitionedByValidIps = duplicatePorts.map{
+        case (port, eps) =>
+          (port, eps.partition(ep =>
+            ep.host != null && inetAddressValidator.isValid(ep.host)
+          ))
+      }
+
+      // Iterate through every grouping of duplicates by port to see if they are valid
+      duplicatePortsPartitionedByValidIps.foreach{
+        case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
+          checkDuplicateListenerNames(duplicatesWithoutIpHosts, listeners)
+          if (requireDistinctPorts)
+            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
+
+          duplicatesWithIpHosts match {
+            case s if s.isEmpty =>
+            case Seq(one, two) =>
+              if (requireDistinctPorts)
+                require(validateOneIsIpv4AndOtherIpv6(one.host, two.host), "If you have two listeners on " +
+                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port")
+            case other =>
+              checkDuplicateListenerNames(other, listeners)
+              if (requireDistinctPorts)
+                throw new IllegalArgumentException(s"Each listener must have a different port unless exactly one listener has " +
+                  s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
+          }
       }
     }
 
