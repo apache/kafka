@@ -114,11 +114,9 @@ class KafkaServer(
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
-  var _logManager: LogManager = null
+  @volatile private var _logManager: LogManager = null
 
-  def logManager: LogManager = _logManager
-
-  @volatile private[this] var _replicaManager: ReplicaManager = null
+  @volatile private var _replicaManager: ReplicaManager = null
   var adminManager: ZkAdminManager = null
   var tokenManager: DelegationTokenManager = null
 
@@ -131,9 +129,7 @@ class KafkaServer(
 
   var transactionCoordinator: TransactionCoordinator = null
 
-  private var _kafkaController: KafkaController = null
-
-  def kafkaController: KafkaController = _kafkaController
+  @volatile private var _kafkaController: KafkaController = null
 
   var forwardingManager: Option[ForwardingManager] = None
 
@@ -177,7 +173,11 @@ class KafkaServer(
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
-  def replicaManager: ReplicaManager = _replicaManager
+  override def replicaManager: ReplicaManager = _replicaManager
+
+  override def logManager: LogManager = _logManager
+
+  def kafkaController: KafkaController = _kafkaController
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
