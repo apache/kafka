@@ -112,7 +112,6 @@ import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenRetriever
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.secured.VerificationKeyResolverFactory;
 import org.apache.kafka.common.utils.Exit;
 
@@ -187,18 +186,8 @@ public class OAuthCompatibilityTool {
                 "To use, first export KAFKA_OPTS with Java system properties that match%n" +
                 "your OAuth/OIDC configuration. Next, run the following script to%n" +
                 "execute the test:%n%n" +
-                "    ./bin/kafka-run-class.sh %s" +
-                "%n%n" +
-                "Please refer to the following source files for OAuth/OIDC client and%n" +
-                "broker configuration options:" +
-                "%n%n" +
-                "    %s%n" +
-                "    %s%n" +
-                "    %s",
-            OAuthCompatibilityTool.class.getName(),
-            SaslConfigs.class.getName(),
-            SslConfigs.class.getName(),
-            OAuthBearerLoginCallbackHandler.class.getName());
+                "    ./bin/kafka-run-class.sh %s",
+            OAuthCompatibilityTool.class.getName());
 
         private final ArgumentParser parser;
 
@@ -270,7 +259,7 @@ public class OAuthCompatibilityTool {
         }
 
         private Argument addArgument(String option, String help, Class<?> clazz) {
-            // Change FOO_BAR into --foo-bar
+            // Change foo.bar into --foo-bar
             String name = "--" + option.toLowerCase(Locale.ROOT).replace('.', '-');
 
             return parser.addArgument(name)
