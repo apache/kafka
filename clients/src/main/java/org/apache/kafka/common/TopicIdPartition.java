@@ -58,7 +58,7 @@ public class TopicIdPartition {
     }
 
     /**
-     * @return the topic name or null.
+     * @return the topic name or null if it is unknown.
      */
     public String topic() {
         return topicPartition.topic();
