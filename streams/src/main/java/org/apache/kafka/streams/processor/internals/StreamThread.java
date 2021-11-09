@@ -912,12 +912,14 @@ public class StreamThread extends Thread {
             lastSeenTopologyVersion = topologyMetadata.topologyVersion();
             taskManager.handleTopologyUpdates();
 
-            topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
-
-            // TODO KAFKA-12648 Pt.4: optimize to avoid always triggering a rebalance for each thread on every update
             log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
+            final boolean rebalance = topologyMetadata.reachedVersion(lastSeenTopologyVersion);
+
+            topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
             subscribeConsumer();
-            mainConsumer.enforceRebalance();
+            if (rebalance) {
+                mainConsumer.enforceRebalance();
+            }
         }
     }
 

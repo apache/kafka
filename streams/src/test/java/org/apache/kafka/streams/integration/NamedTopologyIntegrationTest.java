@@ -96,6 +96,8 @@ public class NamedTopologyIntegrationTest {
     // "delayed" input topics which are empty at start to allow control over when input data appears
     private final static String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
     private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
+    private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
+
 
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
@@ -113,6 +115,7 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_1, 2, 1);
         CLUSTER.createTopic(DELAYED_INPUT_STREAM_2, 2, 1);
+        CLUSTER.createTopic(DELAYED_INPUT_STREAM_3, 2, 1);
 
         producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, LongSerializer.class);
         consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
@@ -439,6 +442,29 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_3, 3), equalTo(COUNT_OUTPUT_DATA));
     }
+
+    @Test
+    public void shouldAddToEmptyInitialTopologyRemoveThenAddSameNamedTopology() throws Exception {
+        CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        // Build up named topology with two stateful subtopologies
+        final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
+        inputStream1.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream1.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+        streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+        streams.start();
+        final NamedTopology namedTopology = topology1Builder.buildNamedTopology(props);
+        streams.addNamedTopology(namedTopology).all().get();
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
+        streams.removeNamedTopology("topology-1").all().get();
+        streams.cleanUpNamedTopology("topology-1");
+
+        streams.addNamedTopology(namedTopology).all().get();
+
+        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+    }
+
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
