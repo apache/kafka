@@ -183,10 +183,8 @@ public class OAuthCompatibilityTool {
 
         private static final String DESCRIPTION = String.format(
             "This tool is used to verify OAuth/OIDC provider compatibility.%n%n" +
-                "To use, first export KAFKA_OPTS with Java system properties that match%n" +
-                "your OAuth/OIDC configuration. Next, run the following script to%n" +
-                "execute the test:%n%n" +
-                "    ./bin/kafka-run-class.sh %s",
+            "Run the following script to determine the configuration options for the test:%n%n" +
+                "    ./bin/kafka-run-class.sh %s --help",
             OAuthCompatibilityTool.class.getName());
 
         private final ArgumentParser parser;
