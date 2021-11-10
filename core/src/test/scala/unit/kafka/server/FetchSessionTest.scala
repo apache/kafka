@@ -24,7 +24,7 @@ import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
-import org.apache.kafka.common.requests.{FetchRequest, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -1019,7 +1019,7 @@ class FetchSessionTest {
       context.foreachPartition { (topicIdPartition, _) =>
         data.put(
           topicIdPartition,
-          if (topicIdPartition.topicId == Uuid.ZERO_UUID)
+          if (topicIdPartition.topic == null)
             errorResponse(Errors.UNKNOWN_TOPIC_ID.code)
           else
             noErrorResponse
@@ -1101,175 +1101,217 @@ class FetchSessionTest {
     assertPartitionsOrder(context4, Seq(foo, bar, zar))
   }
 
-  // This test either simulates an update to a partition using all possible topic ID usage combinations.
-  // The possible change will be found in an update from the partition.
-  @ParameterizedTest
-  @MethodSource(Array("idUsageCombinations"))
-  def testUpdatedPartitionResolvesId(startsWithTopicIdsInMetadataCache: Boolean, endsWithTopicIdsInMetadataCache: Boolean): Unit = {
-    // TODO: make cleaner
-    val time = new MockTime()
-    val cache = new FetchSessionCache(10, 1000)
-    val fetchManager = new FetchManager(time, cache)
-    val fooId = Uuid.randomUuid()
-    val topicNames = Map(fooId -> "foo").asJava
-    val tp0 = new TopicPartition("foo", 0)
-    val tidp0 = new TopicIdPartition(fooId, tp0)
-    val nullTidp0 = new TopicIdPartition(fooId, new TopicPartition(null, tp0.partition))
-
-    // Create a new fetch session with foo-0
-    val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(tp0, new FetchRequest.PartitionData(fooId, 0, 0, 100,
-      Optional.empty()))
-    val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
-    val topicNamesForRequest1 = if (startsWithTopicIdsInMetadataCache) topicNames else Map[Uuid, String]().asJava
-    // Start a fetch session. Simulate no error or unknown topic ID depending on whether we used topic IDs.
-    val context1 = fetchManager.newContext(
-      request1.version,
-      request1.metadata,
-      request1.isFromFollower,
-      request1.fetchData(topicNamesForRequest1),
-      request1.forgottenTopics(topicNamesForRequest1),
-      topicNamesForRequest1
-    )
-    assertEquals(classOf[FullFetchContext], context1.getClass)
-    val partitionsInSession1 = if (startsWithTopicIdsInMetadataCache) Seq(tidp0) else Seq(nullTidp0)
-    assertPartitionsOrder(context1, partitionsInSession1)
-    val respData1 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-    val errorCode1 = if (startsWithTopicIdsInMetadataCache) Errors.NONE.code else Errors.UNKNOWN_TOPIC_ID.code
-    val fooResponseTp1 = if (startsWithTopicIdsInMetadataCache) tidp0 else nullTidp0
-    val fooResponse1 = if (startsWithTopicIdsInMetadataCache) noErrorResponse else errorResponse(errorCode1)
-    respData1.put(fooResponseTp1, fooResponse1)
-    val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
-    assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    val responseData1 = resp1.responseData(topicNames, request1.version)
-    assertEquals(errorCode1, responseData1.get(tp0).errorCode)
-
-    // Create an incremental fetch request with an update to the partition.
-    val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(tp0, new FetchRequest.PartitionData(fooId, 0, 0, 100,
-      Optional.empty()))
-    val request2 = createRequest(new JFetchMetadata(resp1.sessionId(), 1), reqData2, EMPTY_PART_LIST, false)
-    val topicNamesForRequest2 = if (endsWithTopicIdsInMetadataCache) Map(fooId -> "foo").asJava else Map[Uuid, String]().asJava
-    val context2 = fetchManager.newContext(
-      request2.version,
-      request2.metadata,
-      request2.isFromFollower,
-      request2.fetchData(topicNamesForRequest2),
-      request2.forgottenTopics(topicNamesForRequest2),
-      topicNamesForRequest2
-    )
-    assertEquals(classOf[IncrementalFetchContext], context2.getClass)
-    // We will still have the topic ID in the session if we started with topic IDs and currently do not have the ID anymore.
-    val partitionsInSession2 = if (startsWithTopicIdsInMetadataCache || endsWithTopicIdsInMetadataCache) Seq(tidp0) else Seq(nullTidp0)
-    assertPartitionsOrder(context2, partitionsInSession2)
-    val respData2 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-    // If we always had topic IDs in the metadata cache or newly resolved the ID we won't have an error.
-    // If the topic ID was once in the metadata cache and in the session, the partition has likely been deleted and would have an INCONSISTENT_TOPIC_ID error.
-    // Likely if the topic ID was never in the broker, return UNKNOWN_TOPIC_OR_PARTITION
-    val errorCode2 = if (endsWithTopicIdsInMetadataCache) Errors.NONE.code
-    else if (startsWithTopicIdsInMetadataCache) Errors.INCONSISTENT_TOPIC_ID.code else Errors.UNKNOWN_TOPIC_OR_PARTITION.code
-    val fooResponseTp2 = partitionsInSession2(0)
-    val fooResponse2 = if (endsWithTopicIdsInMetadataCache) noErrorResponse else errorResponse(errorCode2)
-    respData2.put(fooResponseTp2, fooResponse2)
-    val resp2 = context2.updateAndGenerateResponseData(respData2)
-
-    assertEquals(Errors.NONE, resp2.error)
-    assertTrue(resp2.sessionId > 0)
-    val responseData2 = resp2.responseData(topicNames, request2.version)
-    if (startsWithTopicIdsInMetadataCache && endsWithTopicIdsInMetadataCache) {
-      // if both requests had topic IDs there was no change so we won't have a response
-      assertEquals(0, responseData2.size())
-    } else {
-      assertEquals(errorCode2, responseData2.get(tp0).errorCode)
-    }
-  }
-
   // This test simulates trying to forget a topic partition with all possible topic ID usages for both requests.
   @ParameterizedTest
   @MethodSource(Array("idUsageCombinations"))
-  def testToForgetCases(startsWithTopicIds: Boolean, endsWithTopicIds: Boolean): Unit = {
+  def testToForgetPartitions(fooStartsResolved: Boolean, fooEndsResolved: Boolean): Unit = {
     val time = new MockTime()
     val cache = new FetchSessionCache(10, 1000)
     val fetchManager = new FetchManager(time, cache)
-    val fooId = Uuid.randomUuid()
-    val barId = Uuid.randomUuid()
-    val topicNames = Map(fooId -> "foo", barId -> "bar").asJava
-    val tp0 = new TopicIdPartition("foo", fooId, 0)
-    val nullTp0 = new TopicIdPartition(fooId, new TopicPartition(null, 0))
-    // tp1 will always be unknown until the last iteration.
-    val tp1 = new TopicIdPartition("bar", barId, 0)
-    val nullTp1 = new TopicIdPartition(barId, new TopicPartition(null, 0))
 
-    // Create a new fetch session with foo-0
-    val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(tp0.topicPartition, new FetchRequest.PartitionData(fooId, 0, 0, 100,
-      Optional.empty()))
-    reqData1.put(tp1.topicPartition, new FetchRequest.PartitionData(barId, 0, 0, 100,
-      Optional.empty()))
-    val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
-    val topicNamesForRequest1 = if (startsWithTopicIds) Collections.singletonMap(fooId, "foo") else Map[Uuid, String]().asJava
-    // Start a fetch session. Start a fetch session. For tp0, Simulate no error or unknown topic ID depending on whether we used topic IDs.
-    val context1 = fetchManager.newContext(
-      request1.version,
-      request1.metadata,
-      request1.isFromFollower,
-      request1.fetchData(topicNamesForRequest1),
-      request1.forgottenTopics(topicNamesForRequest1),
-      topicNamesForRequest1
+    def newContext(
+      metadata: JFetchMetadata,
+      partitions: Seq[TopicIdPartition],
+      toForget: Seq[TopicIdPartition],
+      topicNames: Map[Uuid, String] // Topic ID to name mapping known by the broker.
+    ): FetchContext = {
+      val data = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      partitions.foreach { topicIdPartition =>
+        data.put(
+          topicIdPartition.topicPartition,
+          new FetchRequest.PartitionData(topicIdPartition.topicId, 0, 0, 100, Optional.empty())
+        )
+      }
+
+      val fetchRequest = createRequest(metadata, data, toForget.toList.asJava, false)
+
+      fetchManager.newContext(
+        fetchRequest.version,
+        fetchRequest.metadata,
+        fetchRequest.isFromFollower,
+        fetchRequest.fetchData(topicNames.asJava),
+        fetchRequest.forgottenTopics(topicNames.asJava),
+        topicNames.asJava
+      )
+    }
+
+    def updateAndGenerateResponseData(
+      context: FetchContext
+    ): Int = {
+      val data = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
+      context.foreachPartition { (topicIdPartition, _) =>
+        data.put(
+          topicIdPartition,
+          if (topicIdPartition.topic == null)
+            errorResponse(Errors.UNKNOWN_TOPIC_ID.code)
+          else
+            noErrorResponse
+        )
+      }
+      context.updateAndGenerateResponseData(data).sessionId
+    }
+
+    val foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val bar = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0))
+
+    val fooUnresolved = new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition))
+    val barUnresolved = new TopicIdPartition(bar.topicId, new TopicPartition(null, bar.partition))
+
+
+    // Create a new context where foo's resolution depends on fooStartsResolved and bar is unresolved.
+    val context1Names = if (fooStartsResolved) Map(foo.topicId -> foo.topic) else Map.empty[Uuid, String]
+    val fooContext1 = if (fooStartsResolved) foo else fooUnresolved
+    val context1 = newContext(
+      JFetchMetadata.INITIAL,
+      Seq(fooContext1, bar),
+      Seq.empty,
+      context1Names
     )
+
+    // So the context contains unresolved bar and a resolved foo iff fooStartsResolved
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val fooResponseTp1 = if (startsWithTopicIds) tp0 else nullTp0
-    assertPartitionsOrder(context1, Seq(fooResponseTp1, nullTp1))
+    assertPartitionsOrder(context1, Seq(fooContext1, barUnresolved))
 
-    val errorCode1 = if (startsWithTopicIds) Errors.NONE.code else Errors.UNKNOWN_TOPIC_ID.code
-    val respData1 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-    respData1.put(fooResponseTp1, errorResponse(errorCode1))
-    respData1.put(nullTp1, errorResponse(Errors.UNKNOWN_TOPIC_ID.code))
-    val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
-    assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    val responseData1 = resp1.responseData(topicNames, request1.version)
-    assertEquals(Map(tp0.topicPartition -> errorResponse(errorCode1), tp1.topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_ID.code)).asJava, responseData1)
+    // The response is sent back to create the session.
+    val sessionId = updateAndGenerateResponseData(context1)
 
-    // Create an incremental fetch request forgetting tp0.
-    val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    val request2 = createRequest(new JFetchMetadata(resp1.sessionId(), 1), reqData2, Collections.singletonList(tp0), false)
-    val topicNamesForRequest2 = if (endsWithTopicIds) Collections.singletonMap(fooId, "foo") else Map[Uuid, String]().asJava
-    val context2 = fetchManager.newContext(
-      request2.version,
-      request2.metadata,
-      request2.isFromFollower,
-      request2.fetchData(topicNamesForRequest2),
-      request2.forgottenTopics(topicNamesForRequest2),
-      topicNamesForRequest2
+    // Forget foo, but keep bar. Foo's resolution depends on fooEndsResolved and bar stays unresolved.
+    val context2Names = if (fooEndsResolved) Map(foo.topicId -> foo.topic) else Map.empty[Uuid, String]
+    val fooContext2 = if (fooEndsResolved) foo else fooUnresolved
+    val context2 = newContext(
+      new JFetchMetadata(sessionId, 1),
+      Seq.empty,
+      Seq(fooContext2),
+      context2Names
     )
+
+    // So foo is removed but not the others.
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
-    assertPartitionsOrder(context2, Seq(nullTp1))
-    val respData2 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
-    respData2.put(nullTp1, errorResponse(Errors.UNKNOWN_TOPIC_ID.code))
-    val resp2 = context1.updateAndGenerateResponseData(respData2)
-    assertEquals(Errors.NONE, resp2.error())
-    assertTrue(resp2.sessionId() != INVALID_SESSION_ID)
-    val responseData2 = resp2.responseData(topicNames, request2.version)
-    assertEquals(Collections.singletonMap(tp1.topicPartition, errorResponse(Errors.UNKNOWN_TOPIC_ID.code)), responseData2)
+    assertPartitionsOrder(context2, Seq(barUnresolved))
 
-    // Create a new request where we forget tp1 too.
-    val reqData3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    val request3 = createRequest(new JFetchMetadata(resp1.sessionId(), 2), reqData3, Collections.singletonList(tp1), false)
-    val topicNamesForRequest3 = topicNames
-    val context3 = fetchManager.newContext(
-      request3.version,
-      request3.metadata,
-      request3.isFromFollower,
-      request3.fetchData(topicNamesForRequest3),
-      request3.forgottenTopics(topicNamesForRequest3),
-      topicNamesForRequest3
+    updateAndGenerateResponseData(context2)
+
+    // Now remove bar
+    val context3 = newContext(
+      new JFetchMetadata(sessionId, 2),
+      Seq.empty,
+      Seq(bar),
+      Map.empty[Uuid, String]
     )
 
-    // All partitions have been removed so we will get a sessionless fetch context.
+    // Context is sessionless since it is empty.
     assertEquals(classOf[SessionlessFetchContext], context3.getClass)
     assertPartitionsOrder(context3, Seq())
+  }
+
+  @Test
+  def testUpdateAndGenerateResponseData(): Unit = {
+    val time = new MockTime()
+    val cache = new FetchSessionCache(10, 1000)
+    val fetchManager = new FetchManager(time, cache)
+
+    def newContext(
+      metadata: JFetchMetadata,
+      partitions: Seq[TopicIdPartition],
+      topicNames: Map[Uuid, String] // Topic ID to name mapping known by the broker.
+    ): FetchContext = {
+      val data = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      partitions.foreach { topicIdPartition =>
+        data.put(
+          topicIdPartition.topicPartition,
+          new FetchRequest.PartitionData(topicIdPartition.topicId, 0, 0, 100, Optional.empty())
+        )
+      }
+
+      val fetchRequest = createRequest(metadata, data, EMPTY_PART_LIST, false)
+
+      fetchManager.newContext(
+        fetchRequest.version,
+        fetchRequest.metadata,
+        fetchRequest.isFromFollower,
+        fetchRequest.fetchData(topicNames.asJava),
+        fetchRequest.forgottenTopics(topicNames.asJava),
+        topicNames.asJava
+      )
+    }
+
+    // Give both topics errors so they will stay in the session.
+    def updateAndGenerateResponseData(
+      context: FetchContext
+    ): FetchResponse = {
+      val data = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
+      context.foreachPartition { (topicIdPartition, _) =>
+        data.put(
+          topicIdPartition,
+          if (topicIdPartition.topic == null)
+            errorResponse(Errors.UNKNOWN_TOPIC_ID.code)
+          else
+            errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        )
+      }
+      context.updateAndGenerateResponseData(data)
+    }
+
+    val foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val bar = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0))
+
+    // Foo will always be resolved and bar will always not be resolved on the receiving broker.
+    val receivingBrokerTopicNames = Map(foo.topicId -> foo.topic)
+    // The sender will know both topics' id to name mappings.
+    val sendingTopicNames = Map(foo.topicId -> foo.topic, bar.topicId -> bar.topic)
+
+    def checkResponseData(response: FetchResponse): Unit = {
+      assertEquals(
+        Map(
+          foo.topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+          bar.topicPartition -> Errors.UNKNOWN_TOPIC_ID.code,
+        ),
+        response.responseData(sendingTopicNames.asJava, ApiKeys.FETCH.latestVersion).asScala.map { case (tp, resp) =>
+          tp -> resp.errorCode
+        }
+      )
+    }
+
+    // Start with a sessionless context.
+    val context1 = newContext(
+      JFetchMetadata.LEGACY,
+      Seq(foo, bar),
+      receivingBrokerTopicNames
+    )
+    assertEquals(classOf[SessionlessFetchContext], context1.getClass)
+    // Check the response can be read as expected.
+    checkResponseData(updateAndGenerateResponseData(context1))
+
+    // Now create a full context.
+    val context2 = newContext(
+      JFetchMetadata.INITIAL,
+      Seq(foo, bar),
+      receivingBrokerTopicNames
+    )
+    assertEquals(classOf[FullFetchContext], context2.getClass)
+    // We want to get the session ID to build more contexts in this session.
+    val response2 = updateAndGenerateResponseData(context2)
+    val sessionId = response2.sessionId
+    checkResponseData(response2)
+
+    // Now create an incremental context. We re-add foo as though the partition data is updated. In a real broker, the data would update.
+    val context3 = newContext(
+      new JFetchMetadata(sessionId, 1),
+      Seq.empty,
+      receivingBrokerTopicNames
+    )
+    assertEquals(classOf[IncrementalFetchContext], context3.getClass)
+    checkResponseData(updateAndGenerateResponseData(context3))
+
+    // Finally create an error context by using the same epoch
+    val context4 = newContext(
+      new JFetchMetadata(sessionId, 1),
+      Seq.empty,
+      receivingBrokerTopicNames
+    )
+    assertEquals(classOf[SessionErrorContext], context4.getClass)
+    // The response should be empty.
+    assertEquals(Collections.emptyList, updateAndGenerateResponseData(context4).data.responses)
   }
 
   @Test
@@ -1836,30 +1878,30 @@ class FetchSessionTest {
     val cachedPartitionWithZeroIdAndOtherName = new CachedPartition("otherTopic", Uuid.ZERO_UUID, partition)
 
     // CachedPartitions with valid topic IDs will compare topic ID and partition but not topic name.
-    assertTrue(cachedPartitionWithIdAndName.equals(cachedPartitionWithIdAndNoName))
+    assertEquals(cachedPartitionWithIdAndName, cachedPartitionWithIdAndNoName)
     assertEquals(cachedPartitionWithIdAndName.hashCode, cachedPartitionWithIdAndNoName.hashCode)
 
-    assertFalse(cachedPartitionWithIdAndName.equals(cachedPartitionWithDifferentIdAndName))
+    assertNotEquals(cachedPartitionWithIdAndName, cachedPartitionWithDifferentIdAndName)
     assertNotEquals(cachedPartitionWithIdAndName.hashCode, cachedPartitionWithDifferentIdAndName.hashCode)
 
-    assertFalse(cachedPartitionWithIdAndName.equals(cachedPartitionWithZeroIdAndName))
+    assertNotEquals(cachedPartitionWithIdAndName, cachedPartitionWithZeroIdAndName)
     assertNotEquals(cachedPartitionWithIdAndName.hashCode, cachedPartitionWithZeroIdAndName.hashCode)
 
     // CachedPartitions will null name and valid IDs will act just like ones with valid names
-    assertTrue(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithIdAndName))
+    assertEquals(cachedPartitionWithIdAndNoName, cachedPartitionWithIdAndName)
     assertEquals(cachedPartitionWithIdAndNoName.hashCode, cachedPartitionWithIdAndName.hashCode)
 
-    assertFalse(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithDifferentIdAndName))
+    assertNotEquals(cachedPartitionWithIdAndNoName, cachedPartitionWithDifferentIdAndName)
     assertNotEquals(cachedPartitionWithIdAndNoName.hashCode, cachedPartitionWithDifferentIdAndName.hashCode)
 
-    assertFalse(cachedPartitionWithIdAndNoName.equals(cachedPartitionWithZeroIdAndName))
+    assertNotEquals(cachedPartitionWithIdAndNoName, cachedPartitionWithZeroIdAndName)
     assertNotEquals(cachedPartitionWithIdAndNoName.hashCode, cachedPartitionWithZeroIdAndName.hashCode)
 
     // CachedPartition with zero Uuids will compare topic name and partition.
-    assertFalse(cachedPartitionWithZeroIdAndName.equals(cachedPartitionWithZeroIdAndOtherName))
+    assertNotEquals(cachedPartitionWithZeroIdAndName, cachedPartitionWithZeroIdAndOtherName)
     assertNotEquals(cachedPartitionWithZeroIdAndName.hashCode, cachedPartitionWithZeroIdAndOtherName.hashCode)
 
-    assertTrue(cachedPartitionWithZeroIdAndName.equals(cachedPartitionWithZeroIdAndName))
+    assertEquals(cachedPartitionWithZeroIdAndName, cachedPartitionWithZeroIdAndName)
     assertEquals(cachedPartitionWithZeroIdAndName.hashCode, cachedPartitionWithZeroIdAndName.hashCode)
   }
 
@@ -1882,29 +1924,6 @@ class FetchSessionTest {
 
     // If the ID is not in the map, then we don't resolve the name.
     nullNamePartition2.maybeResolveUnknownName(topicNames)
-    assertEquals(null, nullNamePartition2.topic)
-  }
-
-  @Test
-  def maybeUpdateRequestParamsOrName(): Unit = {
-    val namedPartition = new CachedPartition("topic", Uuid.randomUuid(), 0)
-    val nullNamePartition1 = new CachedPartition(null, Uuid.randomUuid(), 0)
-    val nullNamePartition2 = new CachedPartition(null, Uuid.randomUuid(), 0)
-
-    // Dummy reqData val to feed into method
-    val reqData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, -1, -1, -1, Optional.empty(), Optional.empty[Integer])
-
-    // Since the name is not null, we should not change the topic name.
-    // We should never have a scenario where the same ID is used by two topic names, but this is used to test we respect the null check.
-    namedPartition.maybeUpdateRequestParamsOrName(reqData, "foo")
-    assertEquals("topic", namedPartition.topic)
-
-    // We will resolve this name as a name is provided and the current name is null.
-    nullNamePartition1.maybeUpdateRequestParamsOrName(reqData, "bar")
-    assertEquals("bar", nullNamePartition1.topic)
-
-    // If the ID provided is null, then we don't resolve the name.
-    nullNamePartition2.maybeUpdateRequestParamsOrName(reqData, null)
     assertEquals(null, nullNamePartition2.topic)
   }
 

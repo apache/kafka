@@ -108,17 +108,13 @@ class CachedPartition(var topic: String,
 
   def reqData = new FetchRequest.PartitionData(topicId, fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
 
-  def maybeUpdateRequestParamsOrName(reqData: FetchRequest.PartitionData, name: String): Unit = {
+  def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
     // Update our cached request parameters.
     maxBytes = reqData.maxBytes
     fetchOffset = reqData.fetchOffset
     fetcherLogStartOffset = reqData.logStartOffset
     leaderEpoch = reqData.currentLeaderEpoch
     lastFetchedEpoch = reqData.lastFetchedEpoch
-    // Update name if needed
-    if (this.topic == null) {
-      this.topic = name
-    }
   }
 
   def maybeResolveUnknownName(topicNames: FetchSession.TOPIC_NAME_MAP): Unit = {
@@ -284,7 +280,7 @@ class FetchSession(val id: Int,
         partitionMap.mustAdd(cachedPartitionKey)
         added.add(topicPart)
       } else {
-        cachedPart.maybeUpdateRequestParamsOrName(reqData, topicPart.topic)
+        cachedPart.updateRequestParams(reqData)
         updated.add(topicPart)
       }
     }

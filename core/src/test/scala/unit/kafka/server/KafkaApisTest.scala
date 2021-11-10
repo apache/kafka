@@ -2445,36 +2445,40 @@ class KafkaApisTest {
   /**
    * Verifies that partitions with unknown topic ID errors are added to the erroneous set and there is not an attempt to fetch them.
    */
-  @Test
-  def testFetchRequestErroneousPartitions(): Unit = {
-    val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
-    val tp = tidp.topicPartition
-    val nullTp = new TopicPartition(null, tp.partition)
-    addTopicToMetadataCache(tp.topic, 1, topicId = tidp.topicId)
+  @ParameterizedTest
+  @ValueSource(ints = Array(-1, 0))
+  def testFetchRequestErroneousPartitions(replicaId: Int): Unit = {
+    val foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val unresolvedFoo = new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition))
 
-    expect(replicaManager.getLogConfig(EasyMock.eq(nullTp))).andReturn(None)
+    addTopicToMetadataCache(foo.topic, 1, topicId = foo.topicId)
+
+    // We will never return a logConfig when the topic name is null. This is ok since we won't have any records to convert.
+    expect(replicaManager.getLogConfig(EasyMock.eq(unresolvedFoo.topicPartition))).andReturn(None)
 
     // Simulate unknown topic ID in the context
-    val fetchData = Map(new TopicIdPartition(tidp.topicId(), new TopicPartition(null, tidp.partition)) ->
-      new FetchRequest.PartitionData(tidp.topicId, 0, 0, 1000, Optional.empty())).asJava
-    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(tidp.topicId, 0, 0, 1000,
+    val fetchData = Map(new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition)) ->
+      new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000, Optional.empty())).asJava
+    val fetchDataBuilder = Map(foo.topicPartition -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+      fetchMetadata, fetchData, true, replicaId >= 0)
+    // We expect to have the resolved partition, but we will simulate an unknown one with the fetchContext we return.
     expect(fetchManager.newContext(
-      anyObject[Short],
-      anyObject[JFetchMetadata],
-      anyObject[Boolean],
-      anyObject[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicIdPartition]],
-      anyObject[util.Map[Uuid, String]])).andReturn(fetchContext)
+      ApiKeys.FETCH.latestVersion,
+      fetchMetadata,
+      replicaId >= 0,
+      Map(foo -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000, Optional.empty())).asJava,
+      Collections.emptyList,
+      metadataCache.topicIdsToNames())).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
 
+    // If replicaId is -1 we will build a consumer request. Any non-negative replicaId will build a follower request.
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
-      -1, 100, 0, fetchDataBuilder).build()
+      replicaId, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
     val request = buildRequest(fetchRequest)
     val capturedResponse = expectNoThrottling(request)
 
@@ -2483,9 +2487,9 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[FetchResponse]
     val responseData = response.responseData(metadataCache.topicIdsToNames(), ApiKeys.FETCH.latestVersion)
-    assertTrue(responseData.containsKey(tp))
+    assertTrue(responseData.containsKey(foo.topicPartition))
 
-    val partitionData = responseData.get(tp)
+    val partitionData = responseData.get(foo.topicPartition)
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, partitionData.errorCode)
     assertEquals(-1, partitionData.highWatermark)
     assertEquals(-1, partitionData.lastStableOffset)
