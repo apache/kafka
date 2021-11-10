@@ -368,7 +368,6 @@ public class NamedTopologyIntegrationTest {
         //  and vice versa, to make sure we hit case where not all new tasks are initially assigned, and when not all yet known
     }
 
-    @Ignore // TODO KAFKA-12648: re-enable once we have the ability to block on the removed topology
     @Test
     public void shouldRemoveOneNamedTopologyWhileAnotherContinuesProcessing() throws Exception {
         topology1Builder.stream(DELAYED_INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
@@ -378,7 +377,7 @@ public class NamedTopologyIntegrationTest {
         streams.start(asList(topology1Builder.build(), topology2Builder.build()));
         waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(30));
 
-        streams.removeNamedTopology("topology-2");
+        streams.removeNamedTopology("topology-2").all().get();
 
         produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
         produceToInputTopics(DELAYED_INPUT_STREAM_2, STANDARD_INPUT_DATA);
@@ -386,7 +385,6 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
     }
 
-    @Ignore // TODO KAFKA-12648: re-enable once we have the ability to block on the removed topology
     @Test
     public void shouldRemoveAndReplaceTopologicallyIncompatibleNamedTopology() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
@@ -400,7 +398,7 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1");
+        streams.removeNamedTopology("topology-1").all().get();
         streams.cleanUpNamedTopology("topology-1");
 
         // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
@@ -444,7 +442,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddToEmptyInitialTopologyRemoveThenAddSameNamedTopology() throws Exception {
+    public void shouldAddToEmptyInitialTopologyRemoveResetOffsetsThenAddSameNamedTopology() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
         // Build up named topology with two stateful subtopologies
         final KStream<String, Long> inputStream1 = topology1Builder.stream(INPUT_STREAM_1);
@@ -457,10 +455,17 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
-        streams.removeNamedTopology("topology-1").all().get();
+        streams.removeNamedTopology("topology-1", true).all().get();
         streams.cleanUpNamedTopology("topology-1");
 
-        streams.addNamedTopology(namedTopology).all().get();
+        final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
+        inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
+        inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
+
+        final NamedTopology namedTopologyDup = topology1BuilderDup.buildNamedTopology(props);
+        streams.addNamedTopology(namedTopologyDup).all().get();
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
 
         CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }

@@ -2107,6 +2107,14 @@ public class InternalTopologyBuilder {
     }
 
     /**
+     * @return a list of all topic partitions that have ever been consumed from, and possibly have committed offsets for
+     */
+    public synchronized Set<TopicPartition> allSourceTopicPartitions() {
+
+        return new HashSet<>();
+    }
+
+    /**
      * @return a copy of the string representation of any pattern subscribed source nodes
      */
     public synchronized List<String> allSourcePatternStrings() {

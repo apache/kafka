@@ -908,19 +908,22 @@ public class StreamThread extends Thread {
 
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
-        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion() || topologyMetadata.isEmpty()) {
-            lastSeenTopologyVersion = topologyMetadata.topologyVersion();
-            taskManager.handleTopologyUpdates();
-
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            final boolean rebalance = topologyMetadata.reachedVersion(lastSeenTopologyVersion);
-
+        do {
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
-            subscribeConsumer();
-            if (rebalance) {
-                mainConsumer.enforceRebalance();
+            if (lastSeenTopologyVersion < topologyMetadata.topologyVersion()) {
+                lastSeenTopologyVersion = topologyMetadata.topologyVersion();
+                taskManager.handleTopologyUpdates();
+
+                log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
+                final boolean rebalance = topologyMetadata.reachedVersion(lastSeenTopologyVersion);
+
+                mainConsumer.unsubscribe();
+                subscribeConsumer();
+                if (rebalance) {
+                    mainConsumer.enforceRebalance();
+                }
             }
-        }
+        } while (topologyMetadata.isEmpty());
     }
 
     private long pollPhase() {

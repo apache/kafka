@@ -135,7 +135,7 @@ public class TopologyMetadata {
                     if (threads == getStreamThreadCount.get()) {
                         topologyVersionWaiters.future.complete(null);
                         version.activeTopologyWaiters.remove(topologyVersionWaiters);
-                        wakeupThreads();
+                        log.error("changes have been applied on version {}", topologyVersion);
                         return true;
                     }
                 }
@@ -156,16 +156,14 @@ public class TopologyMetadata {
     }
 
     public void maybeWaitForNonEmptyTopology(final Supplier<State> threadState) {
-        if (isEmpty() && threadState.get().isAlive()) {
+        if (isEmpty() && threadState.get().isAlive() && version.activeTopologyWaiters.isEmpty()) {
             try {
                 lock();
-                while (isEmpty() && threadState.get().isAlive()) {
-                    try {
-                        log.debug("Detected that the topology is currently empty, waiting for something to process");
-                        version.topologyCV.await();
-                    } catch (final InterruptedException e) {
-                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
-                    }
+                try {
+                    log.error("Detected that the topology is currently empty, waiting for something to process");
+                    version.topologyCV.await();
+                } catch (final InterruptedException e) {
+                    log.debug("StreamThread was interrupted while waiting on empty topology", e);
                 }
             } finally {
                 unlock();
@@ -181,7 +179,7 @@ public class TopologyMetadata {
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.info("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            log.error("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             buildAndVerifyTopology(newTopologyBuilder);
@@ -200,7 +198,7 @@ public class TopologyMetadata {
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.info("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
+            log.error("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
@@ -338,7 +336,7 @@ public class TopologyMetadata {
         return null;
     }
 
-    Collection<String> sourceTopicCollection() {
+    public Collection<String> sourceTopicCollection() {
         final List<String> sourceTopics = new ArrayList<>();
         applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
         return sourceTopics;

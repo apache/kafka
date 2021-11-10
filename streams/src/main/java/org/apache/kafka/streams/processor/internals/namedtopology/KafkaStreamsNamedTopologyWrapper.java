@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -28,12 +32,19 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
+import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
+
 
 /**
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
@@ -48,6 +59,22 @@ import java.util.concurrent.ConcurrentSkipListMap;
  */
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
+
+    private final Logger log;
+
+    /**
+     * A Kafka Streams application with a single initial NamedTopology
+     */
+    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props) {
+        this(Collections.singleton(topology), new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * A Kafka Streams application with a single initial NamedTopology
+     */
+    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
+        this(Collections.singleton(topology), new StreamsConfig(props), clientSupplier);
+    }
 
     /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
@@ -125,6 +152,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             clientSupplier
         );
         topologyMetadata.registerNumStreamThreadsSupplier(threads::size);
+        final LogContext logContext = new LogContext();
+        this.log = logContext.logger(getClass());
     }
 
     /**
@@ -144,6 +173,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public AddNamedTopologyResult addNamedTopology(final NamedTopology newTopology) {
+        log.error("adding {}", newTopology.name());
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
@@ -168,14 +198,43 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove, final boolean resetOffsets) {
+        log.error("Removing {}", topologyToRemove);
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {
             throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
+        final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
+            .stream()
+            .flatMap(t -> {
+                            final HashSet<TaskMetadata> tasks = new HashSet<>();
+                            tasks.addAll(t.activeTasks());
+                            tasks.addAll(t.standbyTasks());
+                            return tasks.stream();
+                        })
+            .flatMap(t -> t.topicPartitions().stream())
+//            .filter(t -> topologyMetadata.sourceTopicCollection().contains(t))
+            .collect(Collectors.toSet());
+        log.error("partitions to reset: {}", partitionsToReset);
+
+
 
         final KafkaFuture<Void> removeTopologyFuture = topologyMetadata.unregisterTopology(topologyToRemove);
 
+        if (resetOffsets) {
+            if (!partitionsToReset.isEmpty()) {
+                try {
+                    removeTopologyFuture.get();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }
+                final DeleteConsumerGroupOffsetsResult deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
+                    config.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
+                return new RemoveNamedTopologyResult(removeTopologyFuture, deleteOffsetsResult);
+            }
+        }
         return new RemoveNamedTopologyResult(removeTopologyFuture);
     }
 
