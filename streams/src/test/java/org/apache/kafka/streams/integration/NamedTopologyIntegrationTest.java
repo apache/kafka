@@ -46,7 +46,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -144,10 +143,6 @@ public class NamedTopologyIntegrationTest {
         asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
     private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
         asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
-    private final static List<KeyValue<String, Long>> COUNT_OUTPUT_DATA_RESET =
-        asList(pair("B", 2L), pair("A", 4L), pair("C", 4L)); // output of count operation with caching after offset reset
-    private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA_RESET =
-        asList(pair("B", 400L), pair("A", 800L), pair("C", 700L)); // output of summation with cachinga fter offset reset
 
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
@@ -327,10 +322,10 @@ public class NamedTopologyIntegrationTest {
         topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         streams.start(topology1Builder.build());
         waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(30));
-        streams.addNamedTopology(topology2Builder.build());
+        streams.addNamedTopology(topology2Builder.build()).all().get();
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+//        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
     }
 
     @Test
@@ -467,8 +462,8 @@ public class NamedTopologyIntegrationTest {
 
         final NamedTopology namedTopologyDup = topology1Builder.build();
         streams.addNamedTopology(namedTopologyDup).all().get();
-//        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA_RESET));
-//        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA_RESET));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
 
         CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }

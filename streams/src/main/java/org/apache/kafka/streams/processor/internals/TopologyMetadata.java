@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -130,12 +131,15 @@ public class TopologyMetadata {
         boolean needRebalance = false;
         try {
             lock();
-            for (final TopologyVersionWaiters topologyVersionWaiters: version.activeTopologyWaiters) {
+            final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
+            TopologyVersionWaiters topologyVersionWaiters;
+            while (iterator.hasNext()) {
+                topologyVersionWaiters = iterator.next();
                 if (topologyVersionWaiters.topologyVersion <= topologyVersion) {
                     final long threads = topologyVersionWaiters.threadsWaiting.incrementAndGet();
                     if (threads == getStreamThreadCount.get()) {
                         topologyVersionWaiters.future.complete(null);
-                        version.activeTopologyWaiters.remove(topologyVersionWaiters);
+                        iterator.remove();
                         log.error("changes have been applied on version {}", topologyVersionWaiters.topologyVersion);
                         needRebalance = true;
                     }
@@ -160,7 +164,7 @@ public class TopologyMetadata {
         if (isEmpty() && threadState.get().isAlive()) {
             try {
                 lock();
-                if (version.activeTopologyWaiters.isEmpty()) {
+                while (isEmpty() && threadState.get().isAlive() && version.activeTopologyWaiters.isEmpty()) {
                     try {
                         log.error("Detected that the topology is currently empty, waiting for something to process");
                         version.topologyCV.await();
