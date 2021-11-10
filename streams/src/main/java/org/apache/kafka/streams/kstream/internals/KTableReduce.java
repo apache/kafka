@@ -108,7 +108,8 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
             // update the store with the new value
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
             tupleForwarder.maybeForward(
-                record.withValue(new Change<>(newAgg, oldAgg)).withTimestamp(newTimestamp));
+                record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
         }
     }
 
