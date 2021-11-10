@@ -120,7 +120,8 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
             tupleForwarder.maybeForward(
-                record.withValue(new Change<>(newAgg, oldAgg)).withTimestamp(newTimestamp));
+                record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
         }
     }
 
