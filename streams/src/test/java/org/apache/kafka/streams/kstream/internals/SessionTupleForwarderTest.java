@@ -83,7 +83,7 @@ public class SessionTupleForwarderTest {
                 new Record<>(
                 new Windowed<>("key", new SessionWindow(21L, 42L)),
                 new Change<>("value", "oldValue"),
-            42L));
+                42L));
 
         verify(store, context);
     }
