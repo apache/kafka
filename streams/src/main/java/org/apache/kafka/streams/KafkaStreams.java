@@ -152,7 +152,6 @@ public class KafkaStreams implements AutoCloseable {
     private final Logger log;
     private final String clientId;
     private final Metrics metrics;
-    protected final StreamsConfig config;
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;

@@ -927,6 +927,7 @@ public class StreamThread extends Thread {
     }
 
     private long pollPhase() {
+        checkForTopologyUpdates();
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 

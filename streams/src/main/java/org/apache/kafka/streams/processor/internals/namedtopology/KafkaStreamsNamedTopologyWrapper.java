@@ -41,7 +41,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 
@@ -63,20 +62,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     private final Logger log;
 
     /**
-     * A Kafka Streams application with a single initial NamedTopology
-     */
-    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props) {
-        this(Collections.singleton(topology), new StreamsConfig(props), new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * A Kafka Streams application with a single initial NamedTopology
-     */
-    public KafkaStreamsNamedTopologyWrapper(final NamedTopology topology, final Properties props, final KafkaClientSupplier clientSupplier) {
-        this(Collections.singleton(topology), new StreamsConfig(props), clientSupplier);
-    }
-
-    /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
      */
     public KafkaStreamsNamedTopologyWrapper(final Properties props) {
@@ -89,6 +74,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private KafkaStreamsNamedTopologyWrapper(final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier);
+        topologyMetadata.registerNumStreamThreadsSupplier(threads::size);
+        final LogContext logContext = new LogContext();
+        this.log = logContext.logger(getClass());
     }
 
     /**
@@ -135,25 +123,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public NamedTopologyBuilder newNamedTopologyBuilder(final String topologyName) {
         return newNamedTopologyBuilder(topologyName, new Properties());
-    }
-
-    private KafkaStreamsNamedTopologyWrapper(final Collection<NamedTopology> topologies, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
-        super(
-            new TopologyMetadata(
-                topologies.stream().collect(Collectors.toMap(
-                    NamedTopology::name,
-                    NamedTopology::internalTopologyBuilder,
-                    (v1, v2) -> {
-                        throw new IllegalArgumentException("Topology names must be unique");
-                    },
-                    () -> new ConcurrentSkipListMap<>())),
-                config),
-            config,
-            clientSupplier
-        );
-        topologyMetadata.registerNumStreamThreadsSupplier(threads::size);
-        final LogContext logContext = new LogContext();
-        this.log = logContext.logger(getClass());
     }
 
     /**
@@ -207,11 +176,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
             .stream()
             .flatMap(t -> {
-                            final HashSet<TaskMetadata> tasks = new HashSet<>();
-                            tasks.addAll(t.activeTasks());
-                            tasks.addAll(t.standbyTasks());
-                            return tasks.stream();
-                        })
+                final HashSet<TaskMetadata> tasks = new HashSet<>();
+                tasks.addAll(t.activeTasks());
+                tasks.addAll(t.standbyTasks());
+                return tasks.stream();
+            })
             .flatMap(t -> t.topicPartitions().stream())
 //            .filter(t -> topologyMetadata.sourceTopicCollection().contains(t))
             .collect(Collectors.toSet());
@@ -225,13 +194,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             if (!partitionsToReset.isEmpty()) {
                 try {
                     removeTopologyFuture.get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
+                } catch (final Exception e) {
                     e.printStackTrace();
                 }
                 final DeleteConsumerGroupOffsetsResult deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
-                    config.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
+                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
                 return new RemoveNamedTopologyResult(removeTopologyFuture, deleteOffsetsResult);
             }
         }

@@ -127,6 +127,7 @@ public class TopologyMetadata {
     }
 
     public boolean reachedVersion(final long topologyVersion) {
+        boolean needRebalance = false;
         try {
             lock();
             for (final TopologyVersionWaiters topologyVersionWaiters: version.activeTopologyWaiters) {
@@ -135,15 +136,15 @@ public class TopologyMetadata {
                     if (threads == getStreamThreadCount.get()) {
                         topologyVersionWaiters.future.complete(null);
                         version.activeTopologyWaiters.remove(topologyVersionWaiters);
-                        log.error("changes have been applied on version {}", topologyVersion);
-                        return true;
+                        log.error("changes have been applied on version {}", topologyVersionWaiters.topologyVersion);
+                        needRebalance = true;
                     }
                 }
             }
         } finally {
             unlock();
         }
-        return false;
+        return needRebalance;
     }
 
     public void wakeupThreads() {
@@ -156,14 +157,16 @@ public class TopologyMetadata {
     }
 
     public void maybeWaitForNonEmptyTopology(final Supplier<State> threadState) {
-        if (isEmpty() && threadState.get().isAlive() && version.activeTopologyWaiters.isEmpty()) {
+        if (isEmpty() && threadState.get().isAlive()) {
             try {
                 lock();
-                try {
-                    log.error("Detected that the topology is currently empty, waiting for something to process");
-                    version.topologyCV.await();
-                } catch (final InterruptedException e) {
-                    log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                if (version.activeTopologyWaiters.isEmpty()) {
+                    try {
+                        log.error("Detected that the topology is currently empty, waiting for something to process");
+                        version.topologyCV.await();
+                    } catch (final InterruptedException e) {
+                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                    }
                 }
             } finally {
                 unlock();
