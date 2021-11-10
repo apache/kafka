@@ -35,6 +35,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -66,11 +67,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.MockMetricsReporter;
-import org.apache.kafka.test.MockPartitioner;
-import org.apache.kafka.test.MockProducerInterceptor;
-import org.apache.kafka.test.MockSerializer;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.*;
 import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
@@ -87,6 +84,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.ExecutionException;
@@ -1504,6 +1502,41 @@ public class KafkaProducerTest {
         // send a record with null topic should fail
         assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
             "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    public void testCallbackForApiException() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        // Trigger timeout
+        MockTime mockTime = new MockTime();
+        when(metadata.fetch()).then(invocation -> {
+            mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            return onePartitionCluster;
+        });
+
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
+        MockCallback callback = new MockCallback();
+
+        Future<RecordMetadata> future = producer.send(record, callback);
+        try {
+            future.get(1, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        } finally {
+            producer.close(Duration.ofMillis(0));
+        }
+
+        assertTrue(callback.exception instanceof ApiException);
+        assertNotNull(callback.metadata);
+        assertEquals(callback.metadata.offset(), -1);
+        assertEquals(callback.invocations, 1);
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

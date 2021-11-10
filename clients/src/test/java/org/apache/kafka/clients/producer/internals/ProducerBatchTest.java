@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.test.MockCallback;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
@@ -288,19 +289,6 @@ public class ProducerBatchTest {
             RuntimeException caughtException = TestUtils.assertFutureThrows(future, RuntimeException.class);
             RuntimeException expectedException = recordExceptions.apply(i);
             assertEquals(expectedException, caughtException);
-        }
-    }
-
-    private static class MockCallback implements Callback {
-        private int invocations = 0;
-        private RecordMetadata metadata;
-        private Exception exception;
-
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            invocations++;
-            this.metadata = metadata;
-            this.exception = exception;
         }
     }
 
