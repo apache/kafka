@@ -81,9 +81,9 @@ public class SessionTupleForwarderTest {
             sendOldValued)
             .maybeForward(
                 new Record<>(
-                new Windowed<>("key", new SessionWindow(21L, 42L)),
-                new Change<>("value", "oldValue"),
-                42L));
+                    new Windowed<>("key", new SessionWindow(21L, 42L)),
+                    new Change<>("value", "oldValue"),
+                    42L));
 
         verify(store, context);
     }
