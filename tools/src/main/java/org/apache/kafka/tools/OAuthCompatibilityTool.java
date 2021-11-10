@@ -182,7 +182,7 @@ public class OAuthCompatibilityTool {
 
         private static final String DESCRIPTION = String.format(
             "This tool is used to verify OAuth/OIDC provider compatibility.%n%n" +
-            "Run the following script to determine the configuration options for the test:%n%n" +
+            "Run the following script to determine the configuration options:%n%n" +
                 "    ./bin/kafka-run-class.sh %s --help",
             OAuthCompatibilityTool.class.getName());
 
