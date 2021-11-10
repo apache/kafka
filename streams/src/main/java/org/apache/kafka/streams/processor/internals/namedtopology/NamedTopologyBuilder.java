@@ -16,36 +16,27 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
-import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.List;
+import java.util.Properties;
 
-public class NamedTopology extends Topology {
+public class NamedTopologyBuilder extends StreamsBuilder {
 
-    NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {
-        super(internalTopologyBuilder);
+    NamedTopologyBuilder(final String topologyName, final StreamsConfig applicationConfigs, final Properties topologyOverrides) {
+        super(new TopologyConfig(topologyName, applicationConfigs, topologyOverrides));
+        internalTopologyBuilder.setNamedTopology((NamedTopology) topology);
     }
 
-    /**
-     * @return the name of this topology
-     */
-    public String name() {
-        return internalTopologyBuilder.topologyName();
+    @Override
+    public synchronized NamedTopology build() {
+        super.build(internalTopologyBuilder.topologyConfigs().topologyOverrides);
+        return (NamedTopology) topology;
     }
 
-    /**
-     * @return the list of all source topics this topology is subscribed to
-     */
-    public List<String> sourceTopics() {
-        return super.internalTopologyBuilder.fullSourceTopicNames();
-    }
-
-    InternalTopologyBuilder internalTopologyBuilder() {
-        return internalTopologyBuilder;
-    }
-
-    TopologyConfig topologyConfigs() {
-        return internalTopologyBuilder.topologyConfigs();
+    @Override
+    protected NamedTopology getNewTopology(final TopologyConfig topologyConfigs) {
+        return new NamedTopology(new InternalTopologyBuilder(topologyConfigs));
     }
 }
