@@ -17,12 +17,13 @@
 package kafka.admin
 
 import java.util.Properties
+
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Test
 
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -33,13 +34,6 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   private val describeTypeMembers = Array(Array("--members"), Array("--members", "--verbose"))
   private val describeTypeState = Array(Array("--state"))
   private val describeTypes = describeTypeOffsets ++ describeTypeMembers ++ describeTypeState
-  private val customProps = new Properties
-
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    super.setUp(testInfo)
-    customProps.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "10000")
-  }
 
   @Test
   def testDescribeNonExistingGroup(): Unit = {
@@ -426,7 +420,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run two consumers in the group consuming from a single-partition topic
-      addConsumerGroupExecutor(numConsumers = 2, group = group, customPropsOpt = Some(customProps))
+      addConsumerGroupExecutor(numConsumers = 2, group = group)
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
@@ -443,7 +437,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -462,7 +456,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -487,7 +481,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -526,7 +520,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2, topic2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -548,7 +542,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2, topic2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -574,7 +568,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2, topic2)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -684,7 +678,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // create a consumer group that never commits offsets
     customProps.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, customPropsOpt = Some(customProps))
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)

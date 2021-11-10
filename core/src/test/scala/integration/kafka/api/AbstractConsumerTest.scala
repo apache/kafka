@@ -96,10 +96,10 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     }
   }
 
-  protected def createConsumerWithGroupId(groupId: String,
-                                          customProps: Properties = new Properties()): KafkaConsumer[Array[Byte], Array[Byte]] = {
-    customProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    createConsumer(configOverrides = customProps)
+  protected def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+    val groupOverrideConfig = new Properties
+    groupOverrideConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    createConsumer(configOverrides = groupOverrideConfig)
   }
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
@@ -234,10 +234,9 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                                    consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                                                    topicsToSubscribe: List[String],
                                                    subscriptions: Set[TopicPartition],
-                                                   group: String = group,
-                                                   customProps: Properties = new Properties()): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+                                                   group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
-    addConsumersToGroup(numOfConsumersToAdd, consumerGroup, consumerPollers, topicsToSubscribe, subscriptions, group, customProps)
+    addConsumersToGroup(numOfConsumersToAdd, consumerGroup, consumerPollers, topicsToSubscribe, subscriptions, group)
     // wait until topics get re-assigned and validate assignment
     validateGroupAssignment(consumerPollers, subscriptions)
 
@@ -260,10 +259,9 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                           consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                           topicsToSubscribe: List[String],
                           subscriptions: Set[TopicPartition],
-                          group: String = group,
-                          customProps: Properties = new Properties()): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+                          group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
     for (_ <- 0 until numOfConsumersToAdd) {
-      val consumer = createConsumerWithGroupId(group, customProps)
+      val consumer = createConsumerWithGroupId(group)
       consumerGroup += consumer
       consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
     }
