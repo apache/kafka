@@ -116,6 +116,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
             }
         };
+        context.setTime(0L);
         TaskMetrics.droppedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
 
         initStore(enableCache);
@@ -361,7 +362,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
             ),
             results
         );
-
     }
 
     @Test

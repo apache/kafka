@@ -48,11 +48,12 @@ class SessionTupleForwarder<K, V> {
 
     public void maybeForward(final Record<Windowed<K>, Change<V>> record) {
         if (!cachingEnabled) {
-            if (sendOldValues) {
-                context.forward(record);
-            } else {
-                context.forward(record.withValue(new Change<>(record.value().newValue, null)));
-            }
+            context.forward(
+                record.withValue(
+                        new Change<>(
+                            record.value().newValue,
+                            sendOldValues ? record.value().oldValue : null))
+                    .withTimestamp(record.key().window().end()));
         }
     }
 }
