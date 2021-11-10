@@ -45,6 +45,10 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Utils;
+import org.jose4j.jwk.PublicJsonWebKey;
+import org.jose4j.jwk.RsaJsonWebKey;
+import org.jose4j.jwk.RsaJwkGenerator;
+import org.jose4j.lang.JoseException;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.function.Executable;
@@ -193,6 +197,26 @@ public abstract class OAuthBearerTest {
 
     protected Map<String, ?> getSaslConfigs() {
         return getSaslConfigs(Collections.emptyMap());
+    }
+
+    protected PublicJsonWebKey createRsaJwk() throws JoseException {
+        RsaJsonWebKey jwk = RsaJwkGenerator.generateJwk(2048);
+        jwk.setKeyId("key-1");
+        return jwk;
+    }
+
+    protected PublicJsonWebKey createEcJwk() throws JoseException {
+        PublicJsonWebKey jwk = PublicJsonWebKey.Factory.newPublicJwk("{" +
+            "  \"kty\": \"EC\"," +
+            "  \"d\": \"Tk7qzHNnSBMioAU7NwZ9JugFWmWbUCyzeBRjVcTp_so\"," +
+            "  \"use\": \"sig\"," +
+            "  \"crv\": \"P-256\"," +
+            "  \"kid\": \"key-1\"," +
+            "  \"x\": \"qqeGjWmYZU5M5bBrRw1zqZcbPunoFVxsfaa9JdA0R5I\"," +
+            "  \"y\": \"wnoj0YjheNP80XYh1SEvz1-wnKByEoHvb6KrDcjMuWc\"" +
+            "}");
+        jwk.setKeyId("key-1");
+        return jwk;
     }
 
 }

@@ -40,6 +40,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.utils.Utils;
+import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
 public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
@@ -47,7 +48,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testHandleTokenCallback() throws Exception {
         Map<String, ?> configs = getSaslConfigs();
-        AccessTokenBuilder builder = new AccessTokenBuilder();
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .jwk(createRsaJwk())
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         String accessToken = builder.build();
         AccessTokenRetriever accessTokenRetriever = () -> accessToken;
 
