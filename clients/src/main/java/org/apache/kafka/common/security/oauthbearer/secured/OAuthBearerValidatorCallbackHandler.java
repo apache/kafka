@@ -182,7 +182,6 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
         try {
             token = accessTokenValidator.validate(callback.tokenValue());
-            log.debug("handle - token: {}", token);
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);
