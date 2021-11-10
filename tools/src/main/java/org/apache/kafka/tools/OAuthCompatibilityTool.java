@@ -254,9 +254,7 @@ public class OAuthCompatibilityTool {
         }
 
         private Argument addArgument(String option, String help, Class<?> clazz) {
-            // Change foo.bar into --foo.bar. Apparently something in the CLI arguments library
-            // will automatically force things to lower case, so values like "clientId" have to
-            // be provided by the user as "clientid" :\
+            // Change foo.bar into --foo.bar.
             String name = "--" + option;
 
             return parser.addArgument(name)
