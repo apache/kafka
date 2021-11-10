@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -56,6 +56,7 @@ class StreamsOptimizedTest(Test):
                                            throughput=1000,
                                            acks=1)
 
+    @cluster(num_nodes=9)
     def test_upgrade_optimized_topology(self):
         self.zookeeper.start()
         self.kafka.start()

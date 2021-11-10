@@ -16,11 +16,12 @@
   */
 package kafka.server
 
+import kafka.api.KAFKA_3_0_IV1
+
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
 import kafka.utils._
@@ -30,12 +31,15 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -91,11 +95,38 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertTrue(log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
   }
 
+  @nowarn("cat=deprecation")
+  @Test
+  def testMessageFormatVersionChange(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val logProps = new Properties()
+    logProps.put(MessageFormatVersionProp, "0.10.2")
+    createTopic(tp.topic, 1, 1, logProps)
+    val server = servers.head
+    TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined,
+      "Topic metadata propagation failed")
+    val log = server.logManager.getLog(tp).get
+    // message format version should always be 3.0 if inter-broker protocol is 3.0 or higher
+    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(RecordVersion.V2, log.config.recordVersion)
+
+    val compressionType = CompressionType.LZ4.name
+    logProps.put(MessageFormatVersionProp, "0.11.0")
+    // set compression type so that we can detect when the config change has propagated
+    logProps.put(CompressionTypeProp, compressionType)
+    adminZkClient.changeTopicConfig(tp.topic, logProps)
+    TestUtils.waitUntilTrue(() =>
+      server.logManager.getLog(tp).get.config.compressionType == compressionType,
+      "Topic config change propagation failed")
+    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(RecordVersion.V2, log.config.recordVersion)
+  }
+
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
     assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), "Should contain a ConfigHandler for " + rootEntityType)
     val props = new Properties()
-    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
-    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1000")
+    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
 
     val quotaManagers = servers.head.dataPlaneRequestProcessor.quotas
     rootEntityType match {
@@ -167,14 +198,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val server = servers.head
     val clientIdProps = new Properties()
     server.shutdown()
-    clientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
-    clientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    clientIdProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1000")
+    clientIdProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
     val userProps = new Properties()
-    userProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "10000")
-    userProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "20000")
+    userProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "10000")
+    userProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "20000")
     val userClientIdProps = new Properties()
-    userClientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "100000")
-    userClientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "200000")
+    userClientIdProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
+    userClientIdProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "200000")
 
     adminZkClient.changeClientIdConfig("overriddenClientId", clientIdProps)
     adminZkClient.changeUserOrUserClientIdConfig("overriddenUser", userProps)
@@ -197,7 +228,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testIpHandlerUnresolvableAddress(): Unit = {
     val configHandler = new IpConfigHandler(null)
     val props: Properties = new Properties()
-    props.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "1")
+    props.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
 
     assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
   }
@@ -206,9 +237,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def testIpQuotaInitialization(): Unit = {
     val server = servers.head
     val ipOverrideProps = new Properties()
-    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    ipOverrideProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "10")
     val ipDefaultProps = new Properties()
-    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+    ipDefaultProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "20")
     server.shutdown()
 
     adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
@@ -228,9 +259,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testIpQuotaConfigChange(): Unit = {
     val ipOverrideProps = new Properties()
-    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    ipOverrideProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "10")
     val ipDefaultProps = new Properties()
-    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+    ipDefaultProps.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "20")
 
     val overrideQuotaIp = InetAddress.getByName("1.2.3.4")
     val defaultQuotaIp = InetAddress.getByName("2.3.4.5")
@@ -254,7 +285,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     verifyConnectionQuota(overrideQuotaIp, 20)
 
     adminZkClient.changeIpConfig(ConfigEntityName.Default, emptyProps)
-    verifyConnectionQuota(overrideQuotaIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+    verifyConnectionQuota(overrideQuotaIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
   }
 
   @Test

@@ -17,7 +17,6 @@
 package kafka.controller
 
 import java.util.Properties
-
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
@@ -847,17 +846,17 @@ class ControllerChannelManagerTest {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
       val topicIds = leaderAndIsrRequest.topicIds
-      val topicErrors = leaderAndIsrRequest.data.topicStates.asScala.map(t =>
-        new LeaderAndIsrTopicError()
+      val data = new LeaderAndIsrResponseData()
+        .setErrorCode(error.code)
+      leaderAndIsrRequest.data.topicStates.asScala.foreach { t =>
+        data.topics.add(new LeaderAndIsrTopicError()
           .setTopicId(topicIds.get(t.topicName))
           .setPartitionErrors(t.partitionStates.asScala.map(p =>
             new LeaderAndIsrPartitionError()
               .setPartitionIndex(p.partitionIndex)
               .setErrorCode(error.code)).asJava))
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(
-        new LeaderAndIsrResponseData()
-          .setErrorCode(error.code)
-          .setTopics(topicErrors.toBuffer.asJava), leaderAndIsrRequest.version())
+      }
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(data, leaderAndIsrRequest.version)
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }
@@ -873,8 +872,7 @@ class ControllerChannelManagerTest {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
     props.put(KafkaConfig.ZkConnectProp, "zkConnect")
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerVersion.version)
+    TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
     KafkaConfig.fromProps(props)
   }
 

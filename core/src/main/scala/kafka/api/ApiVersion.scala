@@ -21,10 +21,9 @@ import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
-import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
-import org.apache.kafka.common.requests.ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.record.RecordVersion
+import org.apache.kafka.common.requests.ApiVersionsResponse
 
 /**
  * This class contains the different Kafka versions.
@@ -113,7 +112,14 @@ object ApiVersion {
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     KAFKA_2_8_IV0,
     // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
-    KAFKA_2_8_IV1
+    KAFKA_2_8_IV1,
+    // Introduce AllocateProducerIds (KIP-730)
+    KAFKA_3_0_IV0,
+    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
+    // Assume message format version is 3.0 (KIP-724)
+    KAFKA_3_0_IV1,
+    // Adds topic IDs to Fetch requests/responses (KIP-516)
+    KAFKA_3_1_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -147,52 +153,46 @@ object ApiVersion {
     }
   }
 
-  def apiVersionsResponse(throttleTimeMs: Int,
-                          maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange],
-                          controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
+  def apiVersionsResponse(
+    throttleTimeMs: Int,
+    minRecordVersion: RecordVersion,
+    latestSupportedFeatures: Features[SupportedVersionRange],
+    controllerApiVersions: Option[NodeApiVersions],
+    listenerType: ListenerType
+  ): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
-      maxMagic,
+      minRecordVersion,
       latestSupportedFeatures,
       Features.emptyFinalizedFeatures,
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-      controllerApiVersions
+      controllerApiVersions,
+      listenerType
     )
   }
 
-  def apiVersionsResponse(throttleTimeMs: Int,
-                          maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange],
-                          finalizedFeatures: Features[FinalizedVersionRange],
-                          finalizedFeaturesEpoch: Long,
-                          controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
+  def apiVersionsResponse(
+    throttleTimeMs: Int,
+    minRecordVersion: RecordVersion,
+    latestSupportedFeatures: Features[SupportedVersionRange],
+    finalizedFeatures: Features[FinalizedVersionRange],
+    finalizedFeaturesEpoch: Long,
+    controllerApiVersions: Option[NodeApiVersions],
+    listenerType: ListenerType
+  ): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
-      case None => ApiVersionsResponse.defaultApiKeys(maxMagic)
-      case Some(controllerApiVersion) => ApiVersionsResponse.intersectControllerApiVersions(
-        maxMagic, controllerApiVersion.allSupportedApiVersions())
+      case None => ApiVersionsResponse.filterApis(minRecordVersion, listenerType)
+      case Some(controllerApiVersion) => ApiVersionsResponse.intersectForwardableApis(
+        listenerType, minRecordVersion, controllerApiVersion.allSupportedApiVersions())
     }
 
-    if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
-      throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME) {
-      new ApiVersionsResponse(
-        ApiVersionsResponse.createApiVersionsResponseData(
-          DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs,
-          Errors.forCode(DEFAULT_API_VERSIONS_RESPONSE.data.errorCode),
-          apiKeys,
-          latestSupportedFeatures,
-          finalizedFeatures,
-          finalizedFeaturesEpoch))
-    } else {
-      new ApiVersionsResponse(
-        ApiVersionsResponse.createApiVersionsResponseData(
-          throttleTimeMs,
-          Errors.NONE,
-          apiKeys,
-          latestSupportedFeatures,
-          finalizedFeatures,
-          finalizedFeaturesEpoch))
-    }
+    ApiVersionsResponse.createApiVersionsResponse(
+      throttleTimeMs,
+      apiKeys,
+      latestSupportedFeatures,
+      finalizedFeatures,
+      finalizedFeaturesEpoch
+    )
   }
 }
 
@@ -203,6 +203,8 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   def id: Int
 
   def isAlterIsrSupported: Boolean = this >= KAFKA_2_7_IV2
+
+  def isAllocateProducerIdsSupported: Boolean = this >= KAFKA_3_0_IV0
 
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
@@ -452,6 +454,27 @@ case object KAFKA_2_8_IV1 extends DefaultApiVersion {
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 32
+}
+
+case object KAFKA_3_0_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "3.0"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 33
+}
+
+case object KAFKA_3_0_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "3.0"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 34
+}
+
+case object KAFKA_3_1_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "3.1"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 35
 }
 
 object ApiVersionValidator extends Validator {

@@ -41,7 +41,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -54,14 +54,14 @@ import scala.jdk.CollectionConverters._
   * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
   * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
   * brokers, but first it initializes a ZooKeeper server and client, which happens
-  * in ZooKeeperTestHarness.
+  * in QuorumTestHarness.
   *
   * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
   * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
-  * SaslTestHarness here directly because it extends ZooKeeperTestHarness, and we
-  * would end up with ZooKeeperTestHarness twice.
+  * SaslTestHarness here directly because it extends QuorumTestHarness, and we
+  * would end up with QuorumTestHarness twice.
   */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 3
@@ -198,8 +198,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Starts MiniKDC and only then sets up the parent trait.
     */
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAndClusterAlterAcls, s.dataPlaneRequestProcessor.authorizer.get, clusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.dataPlaneRequestProcessor.authorizer.get, new ResourcePattern(TOPIC, "*", LITERAL))
@@ -346,7 +346,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.assign(List(tp).asJava)
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer, numRecords, topic = tp.topic))
     val adminClient = createAdminClient()
-    val e1 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).all().get())
+    val e1 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).allTopicNames().get())
     assertTrue(e1.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e1.getCause)
 
     // Verify successful produce/consume/describe on another topic using the same producer, consumer and adminClient
@@ -356,9 +356,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     sendRecords(producer, numRecords, tp2)
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = topic2)
-    val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).values
+    val describeResults = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues()
     assertEquals(1, describeResults.get(topic2).get().partitions().size())
-    val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).all().get())
+    val e2 = assertThrows(classOf[ExecutionException], () => adminClient.describeTopics(Set(topic).asJava).allTopicNames().get())
     assertTrue(e2.getCause.isInstanceOf[TopicAuthorizationException], "Unexpected exception " + e2.getCause)
 
     // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume
@@ -382,7 +382,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     sendRecords(producer, numRecords, tp)
     consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 0, topic)
-    val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
+    val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).topicNameValues
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
   }

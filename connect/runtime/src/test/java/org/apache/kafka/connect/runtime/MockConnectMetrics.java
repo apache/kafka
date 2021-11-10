@@ -49,8 +49,6 @@ public class MockConnectMetrics extends ConnectMetrics {
     static {
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_WORKER_CONFIG.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
     }
 
@@ -89,7 +87,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      */
     public double currentMetricValueAsDouble(MetricGroup metricGroup, String name) {
         Object value = currentMetricValue(metricGroup, name);
-        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+        return value instanceof Double ? (Double) value : Double.NaN;
     }
 
     /**
@@ -135,7 +133,7 @@ public class MockConnectMetrics extends ConnectMetrics {
      */
     public static double currentMetricValueAsDouble(ConnectMetrics metrics, MetricGroup metricGroup, String name) {
         Object value = currentMetricValue(metrics, metricGroup, name);
-        return value instanceof Double ? ((Double) value).doubleValue() : Double.NaN;
+        return value instanceof Double ? (Double) value : Double.NaN;
     }
 
     /**

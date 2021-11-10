@@ -71,6 +71,7 @@ public class KTableMapValuesTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -85,6 +86,7 @@ public class KTableMapValuesTest {
         doTestKTable(builder, topic1, supplier);
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();

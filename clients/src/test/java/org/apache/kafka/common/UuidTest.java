@@ -18,8 +18,11 @@ package org.apache.kafka.common;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Base64;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UuidTest {
 
@@ -72,11 +75,9 @@ public class UuidTest {
     @Test
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
-        // reservedSentinel is based on the value of SENTINEL_ID_INTERNAL in Uuid.
-        Uuid reservedSentinel = new Uuid(0L, 1L);
 
         assertNotEquals(randomID, Uuid.ZERO_UUID);
-        assertNotEquals(randomID, reservedSentinel);
+        assertNotEquals(randomID, Uuid.METADATA_TOPIC_ID);
     }
 
     @Test
@@ -94,4 +95,14 @@ public class UuidTest {
         assertEquals(-1, id01.compareTo(id10));
         assertEquals(1, id10.compareTo(id01));
     }
+
+    @Test
+    public void testFromStringWithInvalidInput() {
+        String oversizeString = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
+        assertThrows(IllegalArgumentException.class, () -> Uuid.fromString(oversizeString));
+
+        String undersizeString = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[4]);
+        assertThrows(IllegalArgumentException.class, () -> Uuid.fromString(undersizeString));
+    }
+
 }

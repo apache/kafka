@@ -126,7 +126,7 @@ public class SetSchemaMetadataTest {
 
     @Test
     public void updateSchemaOfNonStruct() {
-        Object value = Integer.valueOf(1);
+        Object value = 1;
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(value, Schema.INT32_SCHEMA);
         assertSame(value, updatedValue);
     }

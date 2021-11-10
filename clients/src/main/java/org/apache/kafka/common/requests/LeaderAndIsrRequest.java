@@ -145,24 +145,21 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         .setErrorCode(error.code()));
             }
             responseData.setPartitionErrors(partitions);
-            return new LeaderAndIsrResponse(responseData, version());
-        }
-
-        List<LeaderAndIsrTopicError> topics = new ArrayList<>(data.topicStates().size());
-        Map<String, Uuid> topicIds = topicIds();
-        for (LeaderAndIsrTopicState topicState : data.topicStates()) {
-            LeaderAndIsrTopicError topicError = new LeaderAndIsrTopicError();
-            topicError.setTopicId(topicIds.get(topicState.topicName()));
-            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(topicState.partitionStates().size());
-            for (LeaderAndIsrPartitionState partition : topicState.partitionStates()) {
-                partitions.add(new LeaderAndIsrPartitionError()
+        } else {
+            for (LeaderAndIsrTopicState topicState : data.topicStates()) {
+                List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(
+                    topicState.partitionStates().size());
+                for (LeaderAndIsrPartitionState partition : topicState.partitionStates()) {
+                    partitions.add(new LeaderAndIsrPartitionError()
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(error.code()));
+                }
+                responseData.topics().add(new LeaderAndIsrTopicError()
+                    .setTopicId(topicState.topicId())
+                    .setPartitionErrors(partitions));
             }
-            topicError.setPartitionErrors(partitions);
-            topics.add(topicError);
         }
-        responseData.setTopics(topics);
+
         return new LeaderAndIsrResponse(responseData, version());
     }
 

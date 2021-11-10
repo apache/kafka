@@ -1,7 +1,4 @@
 /*
- * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
- * Copyright (C) 2017-2018 Alexis Seigneurin.
- *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -61,8 +58,10 @@ object Serdes {
       }
     )
 
-  def fromFn[T >: Null](serializer: (String, T) => Array[Byte],
-                        deserializer: (String, Array[Byte]) => Option[T]): Serde[T] =
+  def fromFn[T >: Null](
+    serializer: (String, T) => Array[Byte],
+    deserializer: (String, Array[Byte]) => Option[T]
+  ): Serde[T] =
     JSerdes.serdeFrom(
       new Serializer[T] {
         override def serialize(topic: String, data: T): Array[Byte] = serializer(topic, data)

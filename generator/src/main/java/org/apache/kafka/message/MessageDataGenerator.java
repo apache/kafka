@@ -628,8 +628,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 String boxedArrayType =
                     arrayType.elementType().getBoxedJavaType(headerGenerator);
-                buffer.printf("ArrayList<%s> newCollection = new ArrayList<%s>(%s);%n",
-                    boxedArrayType, boxedArrayType, lengthVar);
+                buffer.printf("ArrayList<%s> newCollection = new ArrayList<>(%s);%n", boxedArrayType, lengthVar);
             }
             buffer.printf("for (int i = 0; i < %s; i++) {%n", lengthVar);
             buffer.incrementIndent();
@@ -1157,7 +1156,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 buffer.printf("int _stringPrefixSize = " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
                                 buffer.printf("_size.addBytes(_stringBytes.length + _stringPrefixSize + " +
-                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize));%n");
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize + _stringBytes.length));%n");
+
                             } else {
                                 buffer.printf("_size.addBytes(_stringBytes.length + " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
@@ -1579,7 +1579,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.printf("if (v < 0 || v > 65535) {%n");
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
-                    "\"for unsigned short field.\");%n");
+                    "\" for unsigned short field.\");%n");
             buffer.decrementIndent();
             buffer.printf("}%n");
         }

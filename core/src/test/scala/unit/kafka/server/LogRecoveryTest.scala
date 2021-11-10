@@ -22,17 +22,17 @@ import scala.collection.Seq
 
 import kafka.utils.TestUtils
 import TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import java.io.File
 
 import kafka.server.checkpoints.OffsetCheckpointFile
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 
-class LogRecoveryTest extends ZooKeeperTestHarness {
+class LogRecoveryTest extends QuorumTestHarness {
 
   val replicaLagTimeMaxMs = 5000L
   val replicaLagMaxMessages = 10L
@@ -75,8 +75,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
@@ -149,7 +149,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       * is that server1 has caught up on the topicPartition, and has joined the ISR.
       * In the line below, we wait until the condition is met before shutting down server2
       */
-    waitUntilTrue(() => server2.replicaManager.nonOfflinePartition(topicPartition).get.inSyncReplicaIds.size == 2,
+    waitUntilTrue(() => server2.replicaManager.onlinePartition(topicPartition).get.inSyncReplicaIds.size == 2,
       "Server 1 is not able to join the ISR after restart")
 
 

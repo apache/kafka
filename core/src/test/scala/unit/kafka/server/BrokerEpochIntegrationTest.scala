@@ -24,8 +24,8 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createTopic
-import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import kafka.server.QuorumTestHarness
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
@@ -36,19 +36,19 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
-class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
+class BrokerEpochIntegrationTest extends QuorumTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val configs = Seq(
       TestUtils.createBrokerConfig(brokerId1, zkConnect),
       TestUtils.createBrokerConfig(brokerId2, zkConnect))
@@ -112,10 +112,10 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
   private def testControlRequestWithBrokerEpoch(epochInRequestDiffFromCurrentEpoch: Long): Unit = {
     val tp = new TopicPartition("new-topic", 0)
-    val topicIds = Collections.singletonMap("new-topic", Uuid.randomUuid)
 
     // create topic with 1 partition, 2 replicas, one on each broker
     createTopic(zkClient, tp.topic(), partitionReplicaAssignment = Map(0 -> Seq(brokerId1, brokerId2)), servers = servers)
+    val topicIds = getController.kafkaController.controllerContext.topicIds.toMap.asJava
 
     val controllerId = 2
     val controllerEpoch = zkClient.getControllerEpoch.get._1
@@ -207,7 +207,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         else {
           // broker epoch in UPDATE_METADATA >= current broker epoch
           sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
-          TestUtils.waitUntilMetadataIsPropagated(Seq(broker2), tp.topic, tp.partition, 10000)
+          TestUtils.waitForPartitionMetadata(Seq(broker2), tp.topic, tp.partition, 10000)
           assertEquals(brokerId2,
             broker2.metadataCache.getPartitionInfo(tp.topic, tp.partition).get.leader)
         }

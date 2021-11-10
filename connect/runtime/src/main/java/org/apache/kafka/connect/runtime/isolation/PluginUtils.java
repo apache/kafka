@@ -142,13 +142,8 @@ public class PluginUtils {
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
 
-    private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
-            .Filter<Path>() {
-        @Override
-        public boolean accept(Path path) {
-            return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
-        }
-    };
+    private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = path ->
+        Files.isDirectory(path) || isArchive(path) || isClassFile(path);
 
     /**
      * Return whether the class with the given name should be loaded in isolation using a plugin

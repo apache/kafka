@@ -25,7 +25,8 @@ import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumE
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{RaftRequest, RaftUtil}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -40,7 +41,8 @@ class KafkaNetworkChannelTest {
   private val time = new MockTime()
   private val client = new MockClient(time, new StubMetadataUpdater)
   private val topicPartition = new TopicPartition("topic", 0)
-  private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs)
+  private val topicId = Uuid.randomUuid()
+  private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs, threadNamePrefix = "test-raft")
 
   @BeforeEach
   def setupSupportedApis(): Unit = {
@@ -58,7 +60,8 @@ class KafkaNetworkChannelTest {
   def testSendToBlackedOutDestination(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
     client.backoff(destinationNode, 500)
     assertBrokerNotAvailable(destinationId)
   }
@@ -67,7 +70,8 @@ class KafkaNetworkChannelTest {
   def testWakeupClientOnSend(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
 
     client.enableBlockingUntilWakeup(1)
 
@@ -95,7 +99,8 @@ class KafkaNetworkChannelTest {
   def testSendAndDisconnect(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
 
     for (apiKey <- RaftApis) {
       val response = buildResponse(buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST))
@@ -108,11 +113,12 @@ class KafkaNetworkChannelTest {
   def testSendAndFailAuthentication(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
 
     for (apiKey <- RaftApis) {
       client.createPendingAuthenticationError(destinationNode, 100)
-      sendAndAssertErrorResponse(apiKey, destinationId, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      sendAndAssertErrorResponse(apiKey, destinationId, Errors.NETWORK_EXCEPTION)
 
       // reset to clear backoff time
       client.reset()
@@ -129,13 +135,27 @@ class KafkaNetworkChannelTest {
   def testSendAndReceiveOutboundRequest(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
 
     for (apiKey <- RaftApis) {
       val expectedError = Errors.INVALID_REQUEST
       val response = buildResponse(buildTestErrorResponse(apiKey, expectedError))
       client.prepareResponseFrom(response, destinationNode)
       sendAndAssertErrorResponse(apiKey, destinationId, expectedError)
+    }
+  }
+
+  @Test
+  def testUnsupportedVersionError(): Unit = {
+    val destinationId = 2
+    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
+
+    for (apiKey <- RaftApis) {
+      client.prepareUnsupportedVersionResponse(request => request.apiKey == apiKey)
+      sendAndAssertErrorResponse(apiKey, destinationId, Errors.UNSUPPORTED_VERSION)
     }
   }
 
@@ -190,7 +210,7 @@ class KafkaNetworkChannelTest {
         VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329)
 
       case ApiKeys.FETCH =>
-        val request = RaftUtil.singletonFetchRequest(topicPartition, fetchPartition => {
+        val request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition => {
           fetchPartition
             .setCurrentLeaderEpoch(5)
             .setFetchOffset(333)

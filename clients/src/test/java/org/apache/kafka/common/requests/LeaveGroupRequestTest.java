@@ -67,7 +67,7 @@ public class LeaveGroupRequestTest {
                                                        .setGroupId(groupId)
                                                        .setMembers(members);
 
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             try {
                 LeaveGroupRequest request = builder.build(version);
                 if (version <= 2) {

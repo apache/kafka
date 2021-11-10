@@ -20,10 +20,13 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -38,6 +41,9 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
+
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
@@ -87,6 +93,7 @@ public class RepartitionTopicsTest {
         mkMap(mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1)),
         Collections.emptyMap()
     );
+    final  StreamsConfig config = new DummyStreamsConfig();
 
     final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
     final InternalTopicManager internalTopicManager = mock(InternalTopicManager.class);
@@ -95,8 +102,9 @@ public class RepartitionTopicsTest {
 
     @Test
     public void shouldSetupRepartitionTopics() {
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
-            .andReturn(mkMap(mkEntry(0, TOPICS_INFO1), mkEntry(1, TOPICS_INFO2)));
+            .andReturn(mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1), mkEntry(SUBTOPOLOGY_1, TOPICS_INFO2)));
         final Set<String> coPartitionGroup1 = mkSet(SOURCE_TOPIC_NAME1, SOURCE_TOPIC_NAME2);
         final Set<String> coPartitionGroup2 = mkSet(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_NAME2);
         final List<Set<String>> coPartitionGroups = Arrays.asList(coPartitionGroup1, coPartitionGroup2);
@@ -112,7 +120,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -134,8 +142,9 @@ public class RepartitionTopicsTest {
 
     @Test
     public void shouldThrowMissingSourceTopicException() {
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
-            .andReturn(mkMap(mkEntry(0, TOPICS_INFO1), mkEntry(1, TOPICS_INFO2)));
+            .andReturn(mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1), mkEntry(SUBTOPOLOGY_1, TOPICS_INFO2)));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptyList());
         copartitionedTopicsEnforcer.enforce(eq(Collections.emptySet()), anyObject(), eq(clusterMetadata));
         expect(internalTopicManager.makeReady(
@@ -146,7 +155,7 @@ public class RepartitionTopicsTest {
         setupClusterWithMissingTopics(mkSet(SOURCE_TOPIC_NAME1));
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -160,10 +169,11 @@ public class RepartitionTopicsTest {
     public void shouldThrowTaskAssignmentExceptionIfPartitionCountCannotBeComputedForAllRepartitionTopics() {
         final RepartitionTopicConfig repartitionTopicConfigWithoutPartitionCount =
             new RepartitionTopicConfig(REPARTITION_WITHOUT_PARTITION_COUNT, TOPIC_CONFIG5);
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
             .andReturn(mkMap(
-                mkEntry(0, TOPICS_INFO1),
-                mkEntry(1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
+                mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1),
+                mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptyList());
         copartitionedTopicsEnforcer.enforce(eq(Collections.emptySet()), anyObject(), eq(clusterMetadata));
@@ -175,7 +185,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -183,7 +193,7 @@ public class RepartitionTopicsTest {
         );
 
         final TaskAssignmentException exception = assertThrows(TaskAssignmentException.class, repartitionTopics::setup);
-        assertThat(exception.getMessage(), is("Failed to compute number of partitions for all repartition topics"));
+        assertThat(exception.getMessage(), is("Failed to compute number of partitions for all repartition topics, make sure all user input topics are created and all Pattern subscriptions match at least one topic in the cluster"));
     }
 
     @Test
@@ -198,10 +208,11 @@ public class RepartitionTopicsTest {
             ),
             Collections.emptyMap()
         );
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
             .andReturn(mkMap(
-                mkEntry(0, topicsInfo),
-                mkEntry(1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
+                mkEntry(SUBTOPOLOGY_0, topicsInfo),
+                mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptyList());
         copartitionedTopicsEnforcer.enforce(eq(Collections.emptySet()), anyObject(), eq(clusterMetadata));
@@ -213,7 +224,7 @@ public class RepartitionTopicsTest {
         setupClusterWithMissingPartitionCounts(mkSet(SOURCE_TOPIC_NAME1));
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -241,10 +252,11 @@ public class RepartitionTopicsTest {
             ),
             Collections.emptyMap()
         );
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
             .andReturn(mkMap(
-                mkEntry(0, topicsInfo),
-                mkEntry(1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
+                mkEntry(SUBTOPOLOGY_0, topicsInfo),
+                mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptyList());
         copartitionedTopicsEnforcer.enforce(eq(Collections.emptySet()), anyObject(), eq(clusterMetadata));
@@ -258,7 +270,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -295,10 +307,11 @@ public class RepartitionTopicsTest {
             ),
             Collections.emptyMap()
         );
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
             .andReturn(mkMap(
-                mkEntry(0, topicsInfo),
-                mkEntry(1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
+                mkEntry(SUBTOPOLOGY_0, topicsInfo),
+                mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptyList());
         copartitionedTopicsEnforcer.enforce(eq(Collections.emptySet()), anyObject(), eq(clusterMetadata));
@@ -312,7 +325,7 @@ public class RepartitionTopicsTest {
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,
@@ -344,14 +357,15 @@ public class RepartitionTopicsTest {
             Collections.emptyMap(),
             Collections.emptyMap()
         );
+        expect(internalTopologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(internalTopologyBuilder.topicGroups())
-            .andReturn(mkMap(mkEntry(0, topicsInfo)));
+            .andReturn(mkMap(mkEntry(SUBTOPOLOGY_0, topicsInfo)));
         expect(internalTopologyBuilder.copartitionGroups()).andReturn(Collections.emptySet());
         expect(internalTopicManager.makeReady(Collections.emptyMap())).andReturn(Collections.emptySet());
         setupCluster();
         replay(internalTopicManager, internalTopologyBuilder, clusterMetadata);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            internalTopologyBuilder,
+            new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
             copartitionedTopicsEnforcer,
             clusterMetadata,

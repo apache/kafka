@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
+import java.util.HashSet;
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -35,7 +37,7 @@ import java.util.stream.Collectors;
 
 class Tasks {
     private final Logger log;
-    private final InternalTopologyBuilder builder;
+    private final TopologyMetadata topologyMetadata;
     private final StreamsMetricsImpl streamsMetrics;
 
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
@@ -64,7 +66,7 @@ class Tasks {
     private Consumer<byte[], byte[]> mainConsumer;
 
     Tasks(final String logPrefix,
-          final InternalTopologyBuilder builder,
+          final TopologyMetadata topologyMetadata,
           final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
@@ -72,7 +74,7 @@ class Tasks {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        this.builder = builder;
+        this.topologyMetadata = topologyMetadata;
         this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
@@ -80,6 +82,27 @@ class Tasks {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    void handleNewAssignmentAndCreateTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                           final Set<TaskId> assignedActiveTasks,
+                                           final Set<TaskId> assignedStandbyTasks) {
+        activeTaskCreator.removeRevokedUnknownTasks(assignedActiveTasks);
+        standbyTaskCreator.removeRevokedUnknownTasks(assignedStandbyTasks);
+        createTasks(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    void maybeCreateTasksFromNewTopologies() {
+        final Set<String> currentNamedTopologies = topologyMetadata.namedTopologiesView();
+        createTasks(
+            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
+            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+        );
+    }
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -166,7 +189,7 @@ class Tasks {
                     activeTasksPerPartition.put(topicPartition, task);
                 }
             }
-            task.updateInputPartitions(topicPartitions, builder.nodeToSourceTopics());
+            task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
         }
         task.resume();
     }
@@ -232,6 +255,14 @@ class Tasks {
             throw new IllegalStateException("Task unknown: " + taskId);
         }
         return allTasksPerId.get(taskId);
+    }
+
+    Collection<Task> tasks(final Collection<TaskId> taskIds) {
+        final Set<Task> tasks = new HashSet<>();
+        for (final TaskId taskId : taskIds) {
+            tasks.add(task(taskId));
+        }
+        return tasks;
     }
 
     // TODO: change return type to `StreamTask`

@@ -132,6 +132,7 @@ public abstract class AbstractTask implements Task {
     @Override
     public void revive() {
         if (state == CLOSED) {
+            clearTaskTimeout();
             transitionTo(CREATED);
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
@@ -168,9 +169,9 @@ public abstract class AbstractTask implements Task {
             );
 
             if (cause != null) {
-                throw new TimeoutException(errorMessage, cause);
+                throw new StreamsException(new TimeoutException(errorMessage, cause), id);
             } else {
-                throw new TimeoutException(errorMessage);
+                throw new StreamsException(new TimeoutException(errorMessage), id);
             }
         }
 

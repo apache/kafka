@@ -85,7 +85,7 @@ public class OffsetCommitResponseTest {
             ))
             .setThrottleTimeMs(throttleTimeMs);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
             OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, response.errorCounts());

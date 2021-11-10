@@ -24,6 +24,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
@@ -59,18 +61,40 @@ public class LeaderAndIsrRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        Uuid id = Uuid.randomUuid();
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
-            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
-                    Collections.emptyList(), Collections.singletonMap("topic", id), Collections.emptySet());
-            LeaderAndIsrRequest request = builder.build();
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic";
+        int partition = 0;
+        for (short version : LEADER_AND_ISR.allVersions()) {
+            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
+                Collections.singletonList(new LeaderAndIsrPartitionState()
+                    .setTopicName(topicName)
+                    .setPartitionIndex(partition)),
+                Collections.singletonMap(topicName, topicId),
+                Collections.emptySet()
+            ).build(version);
+
             LeaderAndIsrResponse response = request.getErrorResponse(0,
-                    new ClusterAuthorizationException("Not authorized"));
+                new ClusterAuthorizationException("Not authorized"));
+
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+
             if (version < 5) {
-                assertEquals(0, response.topics().size());
+                assertEquals(
+                    Collections.singletonList(new LeaderAndIsrPartitionError()
+                        .setTopicName(topicName)
+                        .setPartitionIndex(partition)
+                        .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())),
+                    response.data().partitionErrors());
+                assertEquals(0, response.data().topics().size());
             } else {
-                assertEquals(id, response.topics().get(0).topicId());
+                LeaderAndIsrTopicError topicState = response.topics().find(topicId);
+                assertEquals(topicId, topicState.topicId());
+                assertEquals(
+                    Collections.singletonList(new LeaderAndIsrPartitionError()
+                        .setPartitionIndex(partition)
+                        .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())),
+                    topicState.partitionErrors());
+                assertEquals(0, response.data().partitionErrors().size());
             }
         }
     }
@@ -83,7 +107,7 @@ public class LeaderAndIsrRequestTest {
      */
     @Test
     public void testVersionLogic() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version <= LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             List<LeaderAndIsrPartitionState> partitionStates = asList(
                 new LeaderAndIsrPartitionState()
                     .setTopicName("topic0")

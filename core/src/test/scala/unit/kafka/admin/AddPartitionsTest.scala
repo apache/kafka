@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -49,8 +49,8 @@ class AddPartitionsTest extends BaseRequestTest {
   val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     createTopic(topic1, partitionReplicaAssignment = topic1Assignment.map { case (k, v) => k -> v.replicas })
     createTopic(topic2, partitionReplicaAssignment = topic2Assignment.map { case (k, v) => k -> v.replicas })
@@ -83,8 +83,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic1, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic1, 2)
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
@@ -116,8 +116,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(leader2, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 2)
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
@@ -137,12 +137,12 @@ class AddPartitionsTest extends BaseRequestTest {
     adminZkClient.addPartitions(topic3, topic3Assignment, adminZkClient.getBrokerMetadatas(), 7)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 3)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 4)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 5)
+    TestUtils.waitForPartitionMetadata(servers, topic3, 6)
 
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
@@ -162,8 +162,8 @@ class AddPartitionsTest extends BaseRequestTest {
     adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic2, 2)
 
     val response = connectAndReceive[MetadataResponse](
       new MetadataRequest.Builder(Seq(topic2).asJava, false).build)

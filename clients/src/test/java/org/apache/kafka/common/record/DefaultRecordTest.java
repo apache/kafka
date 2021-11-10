@@ -481,4 +481,14 @@ public class DefaultRecordTest {
         assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
     }
 
+    @Test
+    public void testInvalidSizeOfBodyInBytes() {
+        int sizeOfBodyInBytes = 10;
+        ByteBuffer buf = ByteBuffer.allocate(5);
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf);
+
+        buf.flip();
+        assertThrows(InvalidRecordException.class,
+            () -> DefaultRecord.readFrom(buf, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+    }
 }

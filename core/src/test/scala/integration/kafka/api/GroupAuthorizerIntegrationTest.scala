@@ -14,8 +14,9 @@ package kafka.api
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+
 import kafka.api.GroupAuthorizerIntegrationTest._
-import kafka.security.auth.SimpleAclAuthorizer
+import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -27,9 +28,10 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -40,7 +42,7 @@ object GroupAuthorizerIntegrationTest {
   val BrokerListenerName = "BROKER"
   val ClientListenerName = "CLIENT"
 
-  class GroupPrincipalBuilder extends KafkaPrincipalBuilder {
+  class GroupPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
         case BrokerListenerName => BrokerPrincipal
@@ -63,7 +65,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   def clientPrincipal: KafkaPrincipal = ClientPrincipal
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -74,8 +76,8 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
     TestUtils.addAndVerifyAcls(servers.head,

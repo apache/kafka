@@ -79,12 +79,12 @@ public class HasHeaderKeyTest {
     }
 
     private SimpleConfig config(Map<String, String> props) {
-        return new SimpleConfig(new HasHeaderKey().config(), props);
+        return new SimpleConfig(new HasHeaderKey<>().config(), props);
     }
 
     private SourceRecord recordWithHeaders(String... headers) {
         return new SourceRecord(null, null, null, null, null, null, null, null, null,
-                Arrays.stream(headers).map(header -> new TestHeader(header)).collect(Collectors.toList()));
+                Arrays.stream(headers).map(TestHeader::new).collect(Collectors.toList()));
     }
 
     private static class TestHeader implements Header {

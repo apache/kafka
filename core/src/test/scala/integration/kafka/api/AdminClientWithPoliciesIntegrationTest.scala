@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationE
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -43,8 +43,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   val brokerCount = 3
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
   }
 

@@ -472,6 +472,12 @@ public class WorkerConnector implements Runnable {
             delegate.onDeletion(connector);
         }
 
+        @Override
+        public void onRestart(String connector) {
+            state = AbstractStatus.State.RESTARTING;
+            delegate.onRestart(connector);
+        }
+
         boolean isUnassigned() {
             return state == AbstractStatus.State.UNASSIGNED;
         }

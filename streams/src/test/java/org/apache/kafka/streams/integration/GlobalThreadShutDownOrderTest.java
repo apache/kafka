@@ -30,7 +30,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -39,13 +38,15 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,8 +81,18 @@ public class GlobalThreadShutDownOrderTest {
 
     private final AtomicInteger closeCounter = new AtomicInteger(0);
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+
+    @BeforeClass
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterClass
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
 
     private final MockTime mockTime = CLUSTER.time;
     private final String globalStore = "globalStore";
@@ -96,6 +107,7 @@ public class GlobalThreadShutDownOrderTest {
     @Rule
     public TestName testName = new TestName();
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
@@ -107,7 +119,7 @@ public class GlobalThreadShutDownOrderTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
@@ -184,7 +196,8 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private class GlobalStoreProcessor extends AbstractProcessor<String, Long> {
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
+    private class GlobalStoreProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, Long> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;

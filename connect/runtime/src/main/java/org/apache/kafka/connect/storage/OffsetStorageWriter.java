@@ -89,9 +89,8 @@ public class OffsetStorageWriter {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    @SuppressWarnings("unchecked")
-    public synchronized void offset(Map<String, ?> partition, Map<String, ?> offset) {
-        data.put((Map<String, Object>) partition, (Map<String, Object>) offset);
+    public synchronized void offset(Map<String, Object> partition, Map<String, Object> offset) {
+        data.put(partition, offset);
     }
 
     private boolean flushing() {
@@ -166,13 +165,10 @@ public class OffsetStorageWriter {
             log.debug("Submitting {} entries to backing store. The offsets are: {}", offsetsSerialized.size(), toFlush);
         }
 
-        return backingStore.set(offsetsSerialized, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                boolean isCurrent = handleFinishWrite(flushId, error, result);
-                if (isCurrent && callback != null) {
-                    callback.onCompletion(error, result);
-                }
+        return backingStore.set(offsetsSerialized, (error, result) -> {
+            boolean isCurrent = handleFinishWrite(flushId, error, result);
+            if (isCurrent && callback != null) {
+                callback.onCompletion(error, result);
             }
         });
     }

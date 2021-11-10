@@ -58,7 +58,7 @@ class CachingWindowStore
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
-    private AtomicLong maxObservedTimestamp;
+    private final AtomicLong maxObservedTimestamp;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final long windowSize,
@@ -84,7 +84,7 @@ class CachingWindowStore
 
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name(),  context.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
             topic,
@@ -142,12 +142,6 @@ class CachingWindowStore
         return true;
     }
 
-    @Deprecated
-    @Override
-    public synchronized void put(final Bytes key,
-                                 final byte[] value) {
-        put(key, value, context.timestamp());
-    }
 
     @Override
     public synchronized void put(final Bytes key,
@@ -189,7 +183,6 @@ class CachingWindowStore
         }
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                           final long timeFrom,
@@ -246,13 +239,12 @@ class CachingWindowStore
         return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, false);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        if (keyFrom.compareTo(keyTo) > 0) {
+        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -274,8 +266,8 @@ class CachingWindowStore
             new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, true) :
             context.cache().range(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
+                keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
@@ -297,7 +289,7 @@ class CachingWindowStore
                                                                    final Bytes keyTo,
                                                                    final long timeFrom,
                                                                    final long timeTo) {
-        if (keyFrom.compareTo(keyTo) > 0) {
+        if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
@@ -318,8 +310,8 @@ class CachingWindowStore
             new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, false) :
             context.cache().reverseRange(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
+                keyFrom == null ? null : cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
@@ -336,7 +328,6 @@ class CachingWindowStore
         );
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
@@ -582,12 +573,14 @@ class CachingWindowStore
                 throw new IllegalStateException("Error iterating over segments: segment interval has changed");
             }
 
-            if (keyFrom.equals(keyTo)) {
+            if (keyFrom != null && keyTo != null && keyFrom.equals(keyTo)) {
                 cacheKeyFrom = cacheFunction.cacheKey(segmentLowerRangeFixedSize(keyFrom, lowerRangeEndTime));
                 cacheKeyTo = cacheFunction.cacheKey(segmentUpperRangeFixedSize(keyTo, upperRangeEndTime));
             } else {
-                cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, lowerRangeEndTime), currentSegmentId);
-                cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo), currentSegmentId);
+                cacheKeyFrom = keyFrom == null ? null :
+                    cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, lowerRangeEndTime), currentSegmentId);
+                cacheKeyTo = keyTo == null ? null :
+                    cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo), currentSegmentId);
             }
         }
 

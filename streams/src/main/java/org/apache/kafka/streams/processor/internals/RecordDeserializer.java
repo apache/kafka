@@ -25,15 +25,17 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.slf4j.Logger;
 
+import java.util.Optional;
+
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
     private final Logger log;
-    private final SourceNode<?, ?, ?, ?> sourceNode;
+    private final SourceNode<?, ?> sourceNode;
     private final Sensor droppedRecordsSensor;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    RecordDeserializer(final SourceNode<?, ?, ?, ?> sourceNode,
+    RecordDeserializer(final SourceNode<?, ?> sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
                        final Sensor droppedRecordsSensor) {
@@ -48,7 +50,6 @@ class RecordDeserializer {
      *                          {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL}
      *                          or throws an exception itself
      */
-    @SuppressWarnings("deprecation")
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
                                                final ConsumerRecord<byte[], byte[]> rawRecord) {
 
@@ -59,12 +60,12 @@ class RecordDeserializer {
                 rawRecord.offset(),
                 rawRecord.timestamp(),
                 TimestampType.CREATE_TIME,
-                rawRecord.checksum(),
                 rawRecord.serializedKeySize(),
                 rawRecord.serializedValueSize(),
                 sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),
                 sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()),
-                rawRecord.headers()
+                rawRecord.headers(),
+                Optional.empty()
             );
         } catch (final Exception deserializationException) {
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;
@@ -98,7 +99,7 @@ class RecordDeserializer {
         }
     }
 
-    SourceNode<?, ?, ?, ?> sourceNode() {
+    SourceNode<?, ?> sourceNode() {
         return sourceNode;
     }
 }

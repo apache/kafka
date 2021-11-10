@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.slf4j.Logger;
 
@@ -39,18 +40,18 @@ import java.util.stream.Collectors;
 public class RepartitionTopics {
 
     private final InternalTopicManager internalTopicManager;
-    private final InternalTopologyBuilder internalTopologyBuilder;
+    private final TopologyMetadata topologyMetadata;
     private final Cluster clusterMetadata;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final Logger log;
     private final Map<TopicPartition, PartitionInfo> topicPartitionInfos = new HashMap<>();
 
-    public RepartitionTopics(final InternalTopologyBuilder internalTopologyBuilder,
+    public RepartitionTopics(final TopologyMetadata topologyMetadata,
                              final InternalTopicManager internalTopicManager,
                              final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
                              final Cluster clusterMetadata,
                              final String logPrefix) {
-        this.internalTopologyBuilder = internalTopologyBuilder;
+        this.topologyMetadata = topologyMetadata;
         this.internalTopicManager = internalTopicManager;
         this.clusterMetadata = clusterMetadata;
         this.copartitionedTopicsEnforcer = copartitionedTopicsEnforcer;
@@ -59,13 +60,13 @@ public class RepartitionTopics {
     }
 
     public void setup() {
-        final Map<Integer, TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
+        final Map<Subtopology, TopicsInfo> topicGroups = topologyMetadata.topicGroups();
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicConfig(topicGroups, clusterMetadata);
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
-        ensureCopartitioning(internalTopologyBuilder.copartitionGroups(), repartitionTopicMetadata, clusterMetadata);
+        ensureCopartitioning(topologyMetadata.copartitionGroups(), repartitionTopicMetadata, clusterMetadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary
@@ -90,7 +91,7 @@ public class RepartitionTopics {
         return Collections.unmodifiableMap(topicPartitionInfos);
     }
 
-    private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Integer, TopicsInfo> topicGroups,
+    private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Subtopology, TopicsInfo> topicGroups,
                                                                            final Cluster clusterMetadata) {
 
         final Map<String, InternalTopicConfig> repartitionTopicConfigs = new HashMap<>();
@@ -129,7 +130,7 @@ public class RepartitionTopics {
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
     private void setRepartitionSourceTopicPartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                                         final Map<Integer, TopicsInfo> topicGroups,
+                                                         final Map<Subtopology, TopicsInfo> topicGroups,
                                                          final Cluster clusterMetadata) {
         boolean partitionCountNeeded;
         do {
@@ -154,6 +155,7 @@ public class RepartitionTopics {
                             log.trace("Unable to determine number of partitions for {}, another iteration is needed",
                                 repartitionSourceTopic);
                         } else {
+                            log.trace("Determined number of partitions for {} to be {}", repartitionSourceTopic, numPartitions);
                             repartitionTopicMetadata.get(repartitionSourceTopic).setNumberOfPartitions(numPartitions);
                             progressMadeThisIteration = true;
                         }
@@ -161,13 +163,17 @@ public class RepartitionTopics {
                 }
             }
             if (!progressMadeThisIteration && partitionCountNeeded) {
-                throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
+                log.error("Unable to determine the number of partitions of all repartition topics, most likely a source topic is missing or pattern doesn't match any topics\n" +
+                    "topic groups: {}\n" +
+                    "cluster topics: {}.", topicGroups, clusterMetadata.topics());
+                throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics, " +
+                    "make sure all user input topics are created and all Pattern subscriptions match at least one topic in the cluster");
             }
         } while (partitionCountNeeded);
     }
 
     private Integer computePartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                          final Map<Integer, TopicsInfo> topicGroups,
+                                          final Map<Subtopology, TopicsInfo> topicGroups,
                                           final Cluster clusterMetadata,
                                           final String repartitionSourceTopic) {
         Integer partitionCount = null;

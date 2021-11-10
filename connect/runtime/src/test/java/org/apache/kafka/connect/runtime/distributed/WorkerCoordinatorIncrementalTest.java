@@ -302,23 +302,24 @@ public class WorkerCoordinatorIncrementalTest {
 
         result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
+        //Equally distributing tasks across member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 2,
-                leaderAssignment);
+            Collections.emptyList(), 0,
+            Collections.emptyList(), 1,
+            leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
-                memberAssignment);
+            Collections.emptyList(), 0,
+            Collections.emptyList(), 1,
+            memberAssignment);
 
         ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
-                anotherMemberAssignment);
+            Collections.emptyList(), 0,
+            Collections.emptyList(), 0,
+            anotherMemberAssignment);
 
         verify(configStorage, times(configStorageCalls)).snapshot();
     }

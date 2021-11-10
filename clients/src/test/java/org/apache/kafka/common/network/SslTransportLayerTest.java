@@ -22,7 +22,9 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
@@ -58,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
@@ -588,7 +591,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connection success with the default TLS version.
+     * Tests that connection succeeds with the default TLS version.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -608,12 +611,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
         selector.close();
-
-        checkAuthenticationFailed(args, "1", "TLSv1.1");
-        server.verifyAuthenticationMetrics(1, 1);
-
-        checkAuthenticationFailed(args, "2", "TLSv1");
-        server.verifyAuthenticationMetrics(1, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
@@ -626,19 +623,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
 
         selector.close();
-    }
-
-    /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    public void testUnsupportedTLSVersion(Args args) throws Exception {
-        args.sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(args, SecurityProtocol.SSL);
-
-        checkAuthenticationFailed(args, "0", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -1018,7 +1002,8 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                true, securityProtocol, config, null, null, time, new LogContext());
+            true, securityProtocol, config, null, null, time, new LogContext(),
+            defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1040,8 +1025,9 @@ public class SslTransportLayerTest {
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config,
-                null, null, time, new LogContext()));
+        assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(
+            listenerName, true, securityProtocol, config,
+            null, null, time, new LogContext(), defaultApiVersionsSupplier()));
     }
 
     /**
@@ -1055,7 +1041,8 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null, time, new LogContext());
+            false, securityProtocol, config, null, null, time, new LogContext(),
+            defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1111,7 +1098,8 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-            false, securityProtocol, config, null, null, time, new LogContext());
+            false, securityProtocol, config, null, null, time, new LogContext(),
+            defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
             "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1176,7 +1164,8 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null, time, new LogContext());
+            false, securityProtocol, config, null, null, time, new LogContext(),
+            defaultApiVersionsSupplier());
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1334,6 +1323,10 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
+    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+    }
+
     static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
@@ -1356,9 +1349,9 @@ public class SslTransportLayerTest {
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                        String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                                        ChannelMetadataRegistry metadataRegistry) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
-            SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
+            SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
             return newTransportLayer(id, key, sslEngine);
         }
 

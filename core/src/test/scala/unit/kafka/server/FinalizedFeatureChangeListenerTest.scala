@@ -19,7 +19,8 @@ package kafka.server
 
 import java.util.concurrent.{CountDownLatch, TimeoutException}
 
-import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion, ZooKeeperTestHarness}
+import kafka.server.QuorumTestHarness
+import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
-class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
+class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
 
   private def createBrokerFeatures(): BrokerFeatures = {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](

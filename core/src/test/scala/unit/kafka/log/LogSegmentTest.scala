@@ -43,7 +43,7 @@ class LogSegmentTest {
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+    val seg = LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
@@ -389,7 +389,7 @@ class LogSegmentTest {
       override def read(): Seq[EpochEntry] = this.epochs
     }
 
-    val cache = new LeaderEpochFileCache(topicPartition, () => seg.readNextOffset, checkpoint)
+    val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
     seg.append(largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 104L, records = MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
@@ -564,7 +564,7 @@ class LogSegmentTest {
 
     // create a log file in a separate directory to avoid conflicting with created segments
     val tempDir = TestUtils.tempDir()
-    val fileRecords = FileRecords.open(Log.logFile(tempDir, 0))
+    val fileRecords = FileRecords.open(UnifiedLog.logFile(tempDir, 0))
 
     // Simulate a scenario where we have a single log with an offset range exceeding Int.MaxValue
     fileRecords.append(records(0, 1024))

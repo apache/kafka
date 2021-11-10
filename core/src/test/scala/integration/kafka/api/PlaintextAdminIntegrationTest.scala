@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.io.File
+import java.net.InetAddress
 import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.Arrays.asList
@@ -31,6 +32,7 @@ import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -40,16 +42,17 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 /**
@@ -68,8 +71,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private val changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
@@ -100,6 +103,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
+    val config = createConfig
+    config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
+    val returnBadAddressFirst = new HostResolver {
+      override def resolve(host: String): Array[InetAddress] = {
+        Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
+      }
+    }
+    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
+    // simply check that a call, e.g. describeCluster, returns normally
+    client.describeCluster().nodes().get()
+  }
+
+  @Test
   def testCreateExistingTopicsThrowTopicExistsException(): Unit = {
     client = Admin.create(createConfig)
     val topic = "mytopic"
@@ -116,6 +133,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testDeleteTopicsWithIds(): Unit = {
+    client = Admin.create(createConfig)
+    val topics = Seq("mytopic", "mytopic2", "mytopic3")
+    val newTopics = Seq(
+      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+      new NewTopic("mytopic2", 3, 3.toShort),
+      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+    )
+    val createResult = client.createTopics(newTopics.asJava)
+    createResult.all.get()
+    waitForTopics(client, topics, List())
+    val topicIds = getTopicIds().values.toSet
+
+    client.deleteTopics(TopicCollection.ofTopicIds(topicIds.asJava)).all.get()
+    waitForTopics(client, List(), topics)
+  }
+
+  @Test
   def testMetadataRefresh(): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic")
@@ -126,7 +161,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
     controller.shutdown()
     controller.awaitShutdown()
-    val topicDesc = client.describeTopics(topics.asJava).all.get()
+    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
@@ -142,10 +177,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, Seq(existingTopic), List())
 
     val nonExistingTopic = "non-existing"
-    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).values
+    val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).topicNameValues()
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
     assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
+  }
+
+  @Test
+  def testDescribeTopicsWithIds(): Unit = {
+    client = Admin.create(createConfig)
+
+    val existingTopic = "existing-topic"
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
+    waitForTopics(client, Seq(existingTopic), List())
+    val existingTopicId = zkClient.getTopicIdsForTopics(Set(existingTopic)).values.head
+
+    val nonExistingTopicId = Uuid.randomUuid()
+
+    val results = client.describeTopics(TopicCollection.ofTopicIds(Seq(existingTopicId, nonExistingTopicId).asJava)).topicIdValues()
+    assertEquals(existingTopicId, results.get(existingTopicId).get.topicId())
+    assertThrows(classOf[ExecutionException], () => results.get(nonExistingTopicId).get).getCause.isInstanceOf[UnknownTopicIdException]
   }
 
   @Test
@@ -170,7 +221,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDescribeLogDirs(): Unit = {
     client = Admin.create(createConfig)
     val topic = "topic"
-    val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
+    val leaderByPartition = createTopic(topic, numPartitions = 10)
     val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.map { case (k, v) =>
       k -> v.keys.toSeq
     }
@@ -198,7 +249,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDescribeReplicaLogDirs(): Unit = {
     client = Admin.create(createConfig)
     val topic = "topic"
-    val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
+    val leaderByPartition = createTopic(topic, numPartitions = 10)
     val replicas = leaderByPartition.map { case (partition, brokerId) =>
       new TopicPartitionReplica(topic, partition, brokerId)
     }.toSeq
@@ -236,7 +287,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertTrue(exception.getCause.isInstanceOf[UnknownTopicOrPartitionException])
     }
 
-    createTopic(topic, numPartitions = 1, replicationFactor = brokerCount)
+    createTopic(topic, replicationFactor = brokerCount)
     servers.foreach { server =>
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
@@ -313,7 +364,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopic(topic2, numPartitions = 1, replicationFactor = 1)
+    createTopic(topic2)
 
     // Describe topics and broker
     val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
@@ -376,10 +427,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Create topics
     val topic1 = "create-partitions-topic-1"
-    createTopic(topic1, numPartitions = 1, replicationFactor = 1)
+    createTopic(topic1)
 
     val topic2 = "create-partitions-topic-2"
-    createTopic(topic2, numPartitions = 1, replicationFactor = 2)
+    createTopic(topic2, replicationFactor = 2)
 
     // assert that both the topics have 1 partition
     val topic1_metadata = getTopicMetadata(client, topic1)
@@ -564,7 +615,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // finally, try to add partitions to a topic queued for deletion
     val deleteResult = client.deleteTopics(asList(topic1))
-    deleteResult.values.get(topic1).get
+    deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4)).asJava, validateOnly)
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
@@ -664,7 +715,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
-    val leaders = createTopic(topic, numPartitions = 1, replicationFactor = brokerCount)
+    val leaders = createTopic(topic, replicationFactor = brokerCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
@@ -712,7 +763,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testAlterLogDirsAfterDeleteRecords(): Unit = {
     client = Admin.create(createConfig)
-    createTopic(topic, numPartitions = 1, replicationFactor = brokerCount)
+    createTopic(topic, replicationFactor = brokerCount)
     val expectedLEO = 100
     val producer = createProducer()
     sendRecords(producer, expectedLEO, topicPartition)
@@ -929,6 +980,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testCallInFlightTimeouts(): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
+    config.put(AdminClientConfig.RETRIES_CONFIG, "0")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
@@ -1609,7 +1661,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Create topics
     val topic = "list-reassignments-no-reassignments"
-    createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    createTopic(topic, replicationFactor = 3)
     val tp = new TopicPartition(topic, 0)
 
     val reassignmentsMap = client.listPartitionReassignments(Set(tp).asJava).reassignments().get()
@@ -1968,13 +2020,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val logConfig = zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
 
       assertEquals(compressionType, logConfig.originals.get(LogConfig.CompressionTypeProp))
-      assertNull(logConfig.originals.get(LogConfig.MessageFormatVersionProp))
-      assertEquals(ApiVersion.latestVersion, logConfig.messageFormatVersion)
+      assertNull(logConfig.originals.get(LogConfig.RetentionBytesProp))
+      assertEquals(Defaults.LogRetentionBytes, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)
-    val invalidConfigs = Map[String, String](LogConfig.MessageFormatVersionProp -> null,
-      LogConfig.CompressionTypeProp -> "producer").asJava
+    val invalidConfigs = Map[String, String](
+      LogConfig.RetentionBytesProp -> null,
+      LogConfig.CompressionTypeProp -> "producer"
+    ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
     val e1 = assertThrows(classOf[ExecutionException],
       () => client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all.get())
@@ -1988,7 +2042,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val alterOps = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.MessageFormatVersionProp, null), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionBytesProp, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
     )
     val e2 = assertThrows(classOf[ExecutionException],

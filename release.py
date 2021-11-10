@@ -71,6 +71,7 @@ REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
 # Remote name, which points to Github by default
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
+PUBLIC_HTML = "public_html"
 
 delete_gitrefs = False
 work_dir = None
@@ -165,18 +166,24 @@ def user_ok(msg):
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
-    basedir, dirname = os.path.split(dir)
-    if not basedir:
-       basedir = "."
     try:
        cmd_str  = """
-cd %s
--mkdir %s
-""" % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+mkdir %s
+""" % dir
+       cmd("Creating '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % dir, "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
+
+def sftp_upload(dir):
+    try:
+       cmd_str  = """
+cd %s
+put -r %s
+""" % (PUBLIC_HTML, dir)
+       cmd("Uploading '%s' under %s in your Apache home directory" % (dir, PUBLIC_HTML), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True, num_retries=3)
+    except subprocess.CalledProcessError:
+        fail("Failed uploading %s to your Apache home directory" % dir)
 
 def get_pref(prefs, name, request_fn):
     "Get a preference from existing preference dictionary or invoke a function that can collect it from the user"
@@ -207,8 +214,11 @@ def get_jdk(prefs, version):
     jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ) if jdk_java_home.strip() else None
     if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
-    if "1.%d.0" % version not in cmd_output("java -version", env=jdk_env):
-        fail("JDK %s is required" % version)
+    java_version = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
+    if version == 8 and "1.8.0" not in java_version:
+      fail("JDK 8 is required")
+    elif "%d.0" % version not in java_version or '"%d"' % version not in java_version:
+      fail("JDK %s is required" % version)
     return jdk_env
 
 def get_version(repo=REPO_HOME):
@@ -253,7 +263,7 @@ def command_stage_docs():
         sys.exit("%s doesn't exist or does not appear to be the kafka-site repository" % kafka_site_repo_path)
 
     prefs = load_prefs()
-    jdk8_env = get_jdk(prefs, 8)
+    jdk17_env = get_jdk(prefs, 17)
     save_prefs(prefs)
 
     version = get_version()
@@ -262,7 +272,7 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk17_env)
 
     docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 
@@ -343,7 +353,7 @@ https://kafka.apache.org/downloads#%(release_version)s
 Apache Kafka is a distributed streaming platform with four core APIs:
 
 
-** The Producer API allows an application to publish a stream records to
+** The Producer API allows an application to publish a stream of records to
 one or more Kafka topics.
 
 ** The Consumer API allows an application to subscribe to one or more
@@ -423,7 +433,7 @@ prefs = load_prefs()
 
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 compilers and libraries
+2. JDK8 and JDK17 compilers and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -444,7 +454,7 @@ if not user_ok("""Requirements:
         </server>
         <server>
             <id>your-gpgkeyId</id>
-            <passphrase>your-gpg-passphase</passphrase>
+            <passphrase>your-gpg-passphrase</passphrase>
         </server>
         <profile>
             <id>gpg-signing</id>
@@ -508,7 +518,7 @@ if not rc:
 apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
-
+jdk17_env = get_jdk(prefs, 17)
 
 def select_gpg_key():
     print("Here are the available GPG keys:")
@@ -597,7 +607,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
-cmd("Building docs", "./gradlew aggregatedJavadoc", cwd=kafka_dir, env=jdk8_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
 cmd("Copying docs", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
 for filename in os.listdir(artifacts_dir):
@@ -616,22 +626,18 @@ for filename in os.listdir(artifacts_dir):
     cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
-if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
-    fail("Quitting")
 
 cmd("Zipping artifacts", "tar -czf %s.tar.gz %s" % (artifact_name, artifact_name), cwd=work_dir)
-cmd("Uploading artifacts in %s to your Apache home directory" % artifacts_dir, "rsync %s.tar.gz %s@home.apache.org:%s.tar.gz" % (artifact_name, apache_id, artifact_name), cwd=work_dir)
-cmd("Extracting artifacts in Apache public_html directory",
-    ["ssh",
-     "%s@home.apache.org" % (apache_id),
-     "mkdir -p public_html && rm -rf public_html/%s && mv %s.tar.gz public_html/ && cd public_html/ && tar -xf %s.tar.gz && rm %s.tar.gz" % (artifact_name, artifact_name, artifact_name, artifact_name)
-     ])
+sftp_mkdir(PUBLIC_HTML)
+sftp_upload(artifacts_dir)
+if not user_ok("Confirm the artifact is present under %s in your Apache home directory: https://home.apache.org/~%s/ (y/n)?: " % (PUBLIC_HTML, apache_id)):
+    fail("Ok, giving up")
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
-cmd("Building and uploading archives", "./gradlewAll uploadArchives", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env, shell=True)
 
 release_notification_props = { 'release_version': release_version,
@@ -728,7 +734,7 @@ https://kafka.apache.org/%(docs_version)s/documentation.html
 https://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
-Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk8/<BUILD NUMBER>/
+Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
 
 /**************************************

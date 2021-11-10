@@ -17,20 +17,22 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, TimeUnit}
+
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.OperationNotAttemptedException
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -48,14 +50,16 @@ trait AlterIsrManager {
 
   def shutdown(): Unit = {}
 
-  def submit(alterIsrItem: AlterIsrItem): Boolean
-
-  def clearPending(topicPartition: TopicPartition): Unit
+  def submit(
+    topicPartition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    controllerEpoch: Int
+  ): CompletableFuture[LeaderAndIsr]
 }
 
 case class AlterIsrItem(topicPartition: TopicPartition,
                         leaderAndIsr: LeaderAndIsr,
-                        callback: Either[Errors, LeaderAndIsr] => Unit,
+                        future: CompletableFuture[LeaderAndIsr],
                         controllerEpoch: Int) // controllerEpoch needed for Zk impl
 
 object AlterIsrManager {
@@ -70,14 +74,17 @@ object AlterIsrManager {
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
-    brokerEpochSupplier: () => Long
+    brokerEpochSupplier: () => Long,
+    brokerId: Int
   ): AlterIsrManager = {
-    val channelManager = new BrokerToControllerChannelManager(
-      metadataCache = metadataCache,
+    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+
+    val channelManager = BrokerToControllerChannelManager(
+      controllerNodeProvider = nodeProvider,
       time = time,
       metrics = metrics,
       config = config,
-      channelName = "alterIsrChannel",
+      channelName = "alterIsr",
       threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = Long.MaxValue
     )
@@ -85,7 +92,7 @@ object AlterIsrManager {
       controllerChannelManager = channelManager,
       scheduler = scheduler,
       time = time,
-      brokerId = config.brokerId,
+      brokerId = brokerId,
       brokerEpochSupplier = brokerEpochSupplier
     )
   }
@@ -125,14 +132,21 @@ class DefaultAlterIsrManager(
     controllerChannelManager.shutdown()
   }
 
-  override def submit(alterIsrItem: AlterIsrItem): Boolean = {
+  override def submit(
+    topicPartition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    controllerEpoch: Int
+  ): CompletableFuture[LeaderAndIsr] = {
+    val future = new CompletableFuture[LeaderAndIsr]()
+    val alterIsrItem = AlterIsrItem(topicPartition, leaderAndIsr, future, controllerEpoch)
     val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
-    maybePropagateIsrChanges()
-    enqueued
-  }
-
-  override def clearPending(topicPartition: TopicPartition): Unit = {
-    unsentIsrUpdates.remove(topicPartition)
+    if (enqueued) {
+      maybePropagateIsrChanges()
+    } else {
+      future.completeExceptionally(new OperationNotAttemptedException(
+        s"Failed to enqueue ISR change state $leaderAndIsr for partition $topicPartition"))
+    }
+    future
   }
 
   private[server] def maybePropagateIsrChanges(): Unit = {
@@ -162,9 +176,19 @@ class DefaultAlterIsrManager(
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
           debug(s"Received AlterIsr response $response")
-          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
           val error = try {
-            handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+            if (response.authenticationException != null) {
+              // For now we treat authentication errors as retriable. We use the
+              // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+              // Note that `BrokerToControllerChannelManager` will still log the
+              // authentication errors so that users have a chance to fix the problem.
+              Errors.NETWORK_EXCEPTION
+            } else if (response.versionMismatch != null) {
+              Errors.UNSUPPORTED_VERSION
+            } else {
+              val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+              handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+            }
           } finally {
             // clear the flag so future requests can proceed
             clearInFlightRequest()
@@ -243,19 +267,24 @@ class DefaultAlterIsrManager(
         // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
         // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
         // the leaderIsrUpdateLock write lock in Partition#sendAlterIsrRequest
-        inflightAlterIsrItems.foreach(inflightAlterIsr =>
-          if (partitionResponses.contains(inflightAlterIsr.topicPartition)) {
-            try {
-              inflightAlterIsr.callback.apply(partitionResponses(inflightAlterIsr.topicPartition))
-            } finally {
-              // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-              unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
-            }
-          } else {
-            // Don't remove this partition from the update map so it will get re-sent
-            warn(s"Partition ${inflightAlterIsr.topicPartition} was sent but not included in the response")
+        inflightAlterIsrItems.foreach { inflightAlterIsr =>
+          partitionResponses.get(inflightAlterIsr.topicPartition) match {
+            case Some(leaderAndIsrOrError) =>
+              try {
+                leaderAndIsrOrError match {
+                  case Left(error) => inflightAlterIsr.future.completeExceptionally(error.exception)
+                  case Right(leaderAndIsr) => inflightAlterIsr.future.complete(leaderAndIsr)
+                }
+              } finally {
+                // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
+                unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              }
+            case None =>
+              // Don't remove this partition from the update map so it will get re-sent
+              warn(s"Partition ${inflightAlterIsr.topicPartition} was sent but not included in the response")
           }
-        )
+        }
+
       case e: Errors =>
         warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
     }

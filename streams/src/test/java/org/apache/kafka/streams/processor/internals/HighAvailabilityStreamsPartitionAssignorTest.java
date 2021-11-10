@@ -47,6 +47,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +108,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private Admin adminClient;
     private StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
     private final StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
 
@@ -133,6 +135,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         configMap.putAll(props);
 
         streamsConfig = new StreamsConfig(configMap);
+        topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
@@ -146,11 +149,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andReturn(builder).anyTimes();
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
         expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
-        builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        topologyMetadata.buildAndRewriteTopology();
     }
 
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
@@ -230,7 +232,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks = newConsumerUserData.activeTasks();
 
         // The tasks were returned to their prior owner
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         // There is a rebalance scheduled
@@ -281,7 +285,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final List<TaskId> newConsumerActiveTasks =
             AssignmentInfo.decode(assignments.get(newConsumer).userData()).activeTasks();
 
-        assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
+        final ArrayList<TaskId> sortedExpectedTasks = new ArrayList<>(allTasks);
+        Collections.sort(sortedExpectedTasks);
+        assertThat(firstConsumerActiveTasks, equalTo(sortedExpectedTasks));
         assertThat(newConsumerActiveTasks, empty());
 
         assertThat(referenceContainer.assignmentErrorCode.get(), equalTo(AssignorError.NONE.code()));

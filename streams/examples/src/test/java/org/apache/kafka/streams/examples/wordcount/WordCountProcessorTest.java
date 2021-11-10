@@ -48,11 +48,11 @@ public class WordCountProcessorTest {
         store.init(context.getStateStoreContext(), store);
 
         // Create and initialize the processor under test
-        final Processor<String, String, String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
+        final Processor<String, String, String, String> processor = new WordCountProcessorDemo.WordCountProcessor();
         processor.init(context);
 
         // send a record to the processor
-        processor.process(new Record<>("key", "alpha beta gamma alpha", 0L));
+        processor.process(new Record<>("key", "alpha beta\tgamma\n\talpha", 0L));
 
         // note that the processor does not forward during process()
         assertTrue(context.forwarded().isEmpty());

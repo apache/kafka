@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -58,8 +59,8 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<KOut, VOut>
+    extends AbstractProcessorContext<KOut, VOut>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -73,6 +74,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
@@ -82,7 +84,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -100,7 +103,8 @@ public class InternalMockProcessorContext
             ),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -112,7 +116,8 @@ public class InternalMockProcessorContext
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -131,7 +136,8 @@ public class InternalMockProcessorContext
             ),
             config,
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -146,7 +152,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -165,7 +172,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -181,7 +189,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            cache
+            cache,
+            Time.SYSTEM
         );
     }
 
@@ -191,9 +200,22 @@ public class InternalMockProcessorContext
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache) {
+                                        final ThreadCache cache,
+                                        final Time time) {
+        this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsMetricsImpl metrics,
+                                        final StreamsConfig config,
+                                        final RecordCollector.Supplier collectorSupplier,
+                                        final ThreadCache cache,
+                                        final Time time,
+                                        final TaskId taskId) {
         super(
-            new TaskId(0, 0),
+            taskId,
             config,
             metrics,
             cache
@@ -203,6 +225,7 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.time = time;
     }
 
     @Override
@@ -269,12 +292,6 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("schedule() not supported.");
-    }
-
-    @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
@@ -285,13 +302,13 @@ public class InternalMockProcessorContext
     public void commit() {}
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
         forward(record, null);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
         if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
             setTime(record.timestamp());
         }
@@ -309,18 +326,6 @@ public class InternalMockProcessorContext
     @Override
     public void forward(final Object key, final Object value) {
         forward(key, value, To.all());
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final int childIndex) {
-        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final String childName) {
-        forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
@@ -370,6 +375,16 @@ public class InternalMockProcessorContext
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        return time.milliseconds();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
+    }
+
+    @Override
     public String topic() {
         if (recordContext == null) {
             return null;
@@ -416,7 +431,7 @@ public class InternalMockProcessorContext
             key,
             value,
             null,
-            taskId().partition,
+            taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
             BYTEARRAY_VALUE_SERIALIZER);

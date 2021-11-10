@@ -75,6 +75,8 @@ public class TimestampedSegmentTest {
         segment.destroy();
         assertFalse(new File(directoryPath + File.separator + "window", "segment").exists());
         assertTrue(new File(directoryPath, "window").exists());
+
+        segment.close();
     }
 
     @Test
@@ -90,6 +92,10 @@ public class TimestampedSegmentTest {
         assertThat(segment, not(equalTo(segmentDifferentId)));
         assertThat(segment, not(equalTo(null)));
         assertThat(segment, not(equalTo("anyName")));
+
+        segment.close();
+        segmentSameId.close();
+        segmentDifferentId.close();
     }
 
     @Test
@@ -104,6 +110,10 @@ public class TimestampedSegmentTest {
         assertTrue(set.add(segment));
         assertFalse(set.add(segmentSameId));
         assertTrue(set.add(segmentDifferentId));
+
+        segment.close();
+        segmentSameId.close();
+        segmentDifferentId.close();
     }
 
     @Test
@@ -119,5 +129,9 @@ public class TimestampedSegmentTest {
         assertThat(segment3.compareTo(segment1), equalTo(-1));
         assertThat(segment2.compareTo(segment3), equalTo(1));
         assertThat(segment3.compareTo(segment2), equalTo(-1));
+
+        segment1.close();
+        segment2.close();
+        segment3.close();
     }
 }

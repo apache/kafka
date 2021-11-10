@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
@@ -32,11 +33,12 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProduceRequestTest {
 
@@ -45,7 +47,7 @@ public class ProduceRequestTest {
                                                                "value".getBytes());
 
     @Test
-    public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() throws Exception {
+    public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() {
         final MemoryRecords memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
 
@@ -63,19 +65,19 @@ public class ProduceRequestTest {
     }
 
     @Test
-    public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() throws Exception {
+    public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
-    public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() throws Exception {
+    public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
-    public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() throws Exception {
+    public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() {
         final MemoryRecords memoryRecords = MemoryRecords.withIdempotentRecords(1, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -151,7 +153,7 @@ public class ProduceRequestTest {
                                     .setRecords(MemoryRecords.readableRecords(buffer))))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -166,7 +168,7 @@ public class ProduceRequestTest {
                                                 .setRecords(MemoryRecords.EMPTY)))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -186,7 +188,7 @@ public class ProduceRequestTest {
                                                 .setRecords(builder.build())))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -206,7 +208,7 @@ public class ProduceRequestTest {
                         .iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -230,7 +232,7 @@ public class ProduceRequestTest {
         for (short version = 3; version < 7; version++) {
 
             ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
-            assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+            assertThrowsForAllVersions(requestBuilder, UnsupportedCompressionTypeException.class);
         }
 
         // Works fine with current version (>= 7)
@@ -242,7 +244,6 @@ public class ProduceRequestTest {
         final long producerId = 15L;
         final short producerEpoch = 5;
         final int sequence = 10;
-        final String transactionalId = "txnlId";
 
         final MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
                 new SimpleRecord("foo".getBytes()));
@@ -291,20 +292,10 @@ public class ProduceRequestTest {
         assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
-    private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
-        for (short version = builder.oldestAllowedVersion(); version < builder.latestAllowedVersion(); version++) {
-            assertThrowsInvalidRecordException(builder, version);
-        }
-    }
-
-    private void assertThrowsInvalidRecordException(ProduceRequest.Builder builder, short version) {
-        try {
-            builder.build(version).serialize();
-            fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
-        } catch (RuntimeException e) {
-            assertTrue(InvalidRecordException.class.isAssignableFrom(e.getClass()),
-                "Unexpected exception type " + e.getClass().getName());
-        }
+    private static <T extends Throwable> void assertThrowsForAllVersions(ProduceRequest.Builder builder,
+                                                                         Class<T> expectedType) {
+        IntStream.range(builder.oldestAllowedVersion(), builder.latestAllowedVersion() + 1)
+            .forEach(version -> assertThrows(expectedType, () -> builder.build((short) version).serialize()));
     }
 
     private ProduceRequest createNonIdempotentNonTransactionalRecords() {

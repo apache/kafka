@@ -173,7 +173,7 @@ public class TransformationIntegrationTest {
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // Assert that we didn't see any baz
-        Map<String, Long> expectedRecordCounts = singletonMap(fooTopic, Long.valueOf(numFooRecords));
+        Map<String, Long> expectedRecordCounts = singletonMap(fooTopic, (long) numFooRecords);
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector
@@ -258,7 +258,7 @@ public class TransformationIntegrationTest {
         // wait for the connector tasks to commit all records.
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
-        Map<String, Long> expectedRecordCounts = singletonMap(topic, Long.valueOf(numRecords / 2));
+        Map<String, Long> expectedRecordCounts = singletonMap(topic, (long) (numRecords / 2));
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector

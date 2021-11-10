@@ -21,11 +21,11 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
@@ -40,7 +40,7 @@ import java.util.Objects;
  * @param <VO> Type of foreign value
  */
 public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
-    implements ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
+    implements ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> {
 
     private final KTableValueGetterSupplier<KO, VO> foreignValueGetterSupplier;
 
@@ -49,24 +49,24 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     }
 
     @Override
-    public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> get() {
+    public Processor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>> get() {
 
-        return new AbstractProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>>() {
+        return new ContextualProcessor<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>, K, SubscriptionResponseWrapper<VO>>() {
 
             private KTableValueGetter<KO, VO> foreignValues;
 
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final ProcessorContext<K, SubscriptionResponseWrapper<VO>> context) {
                 super.init(context);
                 foreignValues = foreignValueGetterSupplier.get();
                 foreignValues.init(context);
             }
 
             @Override
-            public void process(final CombinedKey<KO, K> combinedKey, final Change<ValueAndTimestamp<SubscriptionWrapper<K>>> change) {
-                Objects.requireNonNull(combinedKey, "This processor should never see a null key.");
-                Objects.requireNonNull(change, "This processor should never see a null value.");
-                final ValueAndTimestamp<SubscriptionWrapper<K>> valueAndTimestamp = change.newValue;
+            public void process(final Record<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> record) {
+                Objects.requireNonNull(record.key(), "This processor should never see a null key.");
+                Objects.requireNonNull(record.value(), "This processor should never see a null value.");
+                final ValueAndTimestamp<SubscriptionWrapper<K>> valueAndTimestamp = record.value().newValue;
                 Objects.requireNonNull(valueAndTimestamp, "This processor should never see a null newValue.");
                 final SubscriptionWrapper<K> value = valueAndTimestamp.value();
 
@@ -77,7 +77,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
 
-                final ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(combinedKey.getForeignKey());
+                final ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(record.key().getForeignKey());
 
                 final long resultTimestamp =
                     foreignValueAndTime == null ?
@@ -87,9 +87,9 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                 switch (value.getInstruction()) {
                     case DELETE_KEY_AND_PROPAGATE:
                         context().forward(
-                            combinedKey.getPrimaryKey(),
-                            new SubscriptionResponseWrapper<VO>(value.getHash(), null),
-                            To.all().withTimestamp(resultTimestamp)
+                            record.withKey(record.key().getPrimaryKey())
+                                .withValue(new SubscriptionResponseWrapper<VO>(value.getHash(), null))
+                                .withTimestamp(resultTimestamp)
                         );
                         break;
                     case PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE:
@@ -99,17 +99,17 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                         final VO valueToSend = foreignValueAndTime == null ? null : foreignValueAndTime.value();
 
                         context().forward(
-                            combinedKey.getPrimaryKey(),
-                            new SubscriptionResponseWrapper<>(value.getHash(), valueToSend),
-                            To.all().withTimestamp(resultTimestamp)
+                            record.withKey(record.key().getPrimaryKey())
+                                .withValue(new SubscriptionResponseWrapper<>(value.getHash(), valueToSend))
+                                .withTimestamp(resultTimestamp)
                         );
                         break;
                     case PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE:
                         if (foreignValueAndTime != null) {
                             context().forward(
-                                combinedKey.getPrimaryKey(),
-                                new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value()),
-                                To.all().withTimestamp(resultTimestamp)
+                                record.withKey(record.key().getPrimaryKey())
+                                   .withValue(new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value()))
+                                   .withTimestamp(resultTimestamp)
                             );
                         }
                         break;

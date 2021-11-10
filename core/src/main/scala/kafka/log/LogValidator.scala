@@ -17,14 +17,13 @@
 package kafka.log
 
 import java.nio.ByteBuffer
-
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -58,6 +57,11 @@ private[kafka] object AppendOrigin {
    * The log append came from the client, which implies full validation.
    */
   case object Client extends AppendOrigin
+
+  /**
+   * The log append come from the raft leader, which implies the offsets has been assigned
+   */
+  case object RaftLeader extends AppendOrigin
 }
 
 private[log] object LogValidator extends Logging {
@@ -91,7 +95,8 @@ private[log] object LogValidator extends Logging {
                                                     partitionLeaderEpoch: Int,
                                                     origin: AppendOrigin,
                                                     interBrokerProtocolVersion: ApiVersion,
-                                                    brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
+                                                    brokerTopicStats: BrokerTopicStats,
+                                                    requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
@@ -102,8 +107,9 @@ private[log] object LogValidator extends Logging {
         assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch, origin, magic, brokerTopicStats)
     } else {
-      validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats)
+      validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec,
+        targetCodec, compactedTopic, magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin,
+        interBrokerProtocolVersion, brokerTopicStats, requestLocal)
     }
   }
 
@@ -228,6 +234,8 @@ private[log] object LogValidator extends Logging {
       (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
     }
 
+    // The current implementation of BufferSupplier is naive and works best when the buffer size
+    // cardinality is low, so don't use it here
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
@@ -286,7 +294,9 @@ private[log] object LogValidator extends Logging {
       var offsetOfMaxBatchTimestamp = -1L
 
       val recordErrors = new ArrayBuffer[ApiRecordError](0)
-      // this is a hot path and we want to avoid any unnecessary allocations.
+      // This is a hot path and we want to avoid any unnecessary allocations.
+      // That said, there is no benefit in using `skipKeyValueIterator` for the uncompressed
+      // case since we don't do key/value copies in this path (we just slice the ByteBuffer)
       var batchIndex = 0
       batch.forEach { record =>
         validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
@@ -356,7 +366,8 @@ private[log] object LogValidator extends Logging {
                                                  partitionLeaderEpoch: Int,
                                                  origin: AppendOrigin,
                                                  interBrokerProtocolVersion: ApiVersion,
-                                                 brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
+                                                 brokerTopicStats: BrokerTopicStats,
+                                                 requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
     if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
@@ -400,9 +411,9 @@ private[log] object LogValidator extends Logging {
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
       // then we can optimize the iterator to skip key / value / headers since they would not be used at all
       val recordsIterator = if (inPlaceAssignment && firstBatch.magic >= RecordBatch.MAGIC_VALUE_V2)
-        batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)
+        batch.skipKeyValueIterator(requestLocal.bufferSupplier)
       else
-        batch.streamingIterator(BufferSupplier.NO_CACHING)
+        batch.streamingIterator(requestLocal.bufferSupplier)
 
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
@@ -495,6 +506,8 @@ private[log] object LogValidator extends Logging {
     val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
+    // The current implementation of BufferSupplier is naive and works best when the buffer size
+    // cardinality is low, so don't use it here
     val buffer = ByteBuffer.allocate(estimatedSize)
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
       logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)

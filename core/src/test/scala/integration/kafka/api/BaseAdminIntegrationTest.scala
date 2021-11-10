@@ -24,12 +24,13 @@ import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -50,8 +51,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   var client: Admin = _
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     waitUntilBrokerMetadataIsPropagated(servers)
   }
 
@@ -90,6 +91,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
+    val topicIds = getTopicIds()
+    topics.foreach { topic =>
+      assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
+      assertEquals(topicIds(topic), createResult.topicId(topic).get())
+    }
+    
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -103,7 +110,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
     assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
-    val topicToDescription = client.describeTopics(topics.asJava).all.get()
+    val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
 
     val topic0 = topicToDescription.get("mytopic")
@@ -218,7 +225,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
                        expectedNumPartitionsOpt: Option[Int] = None): TopicDescription = {
     var result: TopicDescription = null
     waitUntilTrue(() => {
-      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).values.get(topic)
+      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).topicNameValues().get(topic)
       try {
         result = topicResult.get
         expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.Properties;
+import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -28,15 +28,16 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
-import kafka.zk.KafkaZkClient;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -55,7 +56,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -105,39 +105,31 @@ public class CheckpointBench {
         final List<File> files =
             JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                LogConfig.apply(), new MockConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, ApiVersion.latestVersion());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                new MetadataCache(this.brokerProperties.brokerId());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
                         this.time, "");
 
-        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
-            @Override
-            public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
-                return new Properties();
-            }
-        };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
-        this.replicaManager = new ReplicaManager(
-                this.brokerProperties,
-                this.metrics,
-                this.time,
-                zkClient,
-                this.scheduler,
-                this.logManager,
-                new AtomicBoolean(false),
-                this.quotaManagers,
-                brokerTopicStats,
-                metadataCache,
-                this.failureChannel,
-                alterIsrManager,
-                Option.empty());
+        this.replicaManager = new ReplicaManagerBuilder().
+            setConfig(brokerProperties).
+            setMetrics(metrics).
+            setTime(time).
+            setScheduler(scheduler).
+            setLogManager(logManager).
+            setQuotaManagers(quotaManagers).
+            setBrokerTopicStats(brokerTopicStats).
+            setMetadataCache(metadataCache).
+            setLogDirFailureChannel(failureChannel).
+            setAlterIsrManager(alterIsrManager).
+            build();
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -151,7 +143,7 @@ public class CheckpointBench {
         OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
-            partition.createLogIfNotExists(true, false, checkpoints);
+            partition.createLogIfNotExists(true, false, checkpoints, Option.apply(Uuid.randomUuid()));
         }
 
         replicaManager.checkpointHighWatermarks();

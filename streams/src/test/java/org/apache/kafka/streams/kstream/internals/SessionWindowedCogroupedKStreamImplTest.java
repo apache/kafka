@@ -50,7 +50,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-
+@SuppressWarnings("deprecation")
 public class SessionWindowedCogroupedKStreamImplTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();

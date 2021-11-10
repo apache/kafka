@@ -60,12 +60,10 @@ public class FileOffsetBackingStoreTest {
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
-        props = new HashMap<String, String>();
+        props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         props.put(StandaloneConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        props.put(StandaloneConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        props.put(StandaloneConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         config = new StandaloneConfig(props);
         store.configure(config);
         store.start();

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -25,8 +26,11 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 
 public class FindCoordinatorRequest extends AbstractRequest {
+
+    public static final short MIN_BATCHED_VERSION = 4;
 
     public static class Builder extends AbstractRequest.Builder<FindCoordinatorRequest> {
         private final FindCoordinatorRequestData data;
@@ -42,6 +46,19 @@ public class FindCoordinatorRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
                         "because we require features supported only in 2 or later.");
             }
+            int batchedKeys = data.coordinatorKeys().size();
+            if (version < MIN_BATCHED_VERSION) {
+                if (batchedKeys > 1)
+                    throw new NoBatchedFindCoordinatorsException("Cannot create a v" + version + " FindCoordinator request " +
+                        "because we require features supported only in " + MIN_BATCHED_VERSION + " or later.");
+                if (batchedKeys == 1) {
+                    data.setKey(data.coordinatorKeys().get(0));
+                    data.setCoordinatorKeys(Collections.emptyList());
+                }
+            } else if (batchedKeys == 0 && data.key() != null) {
+                data.setCoordinatorKeys(Collections.singletonList(data.key()));
+                data.setKey(""); // default value
+            }
             return new FindCoordinatorRequest(data, version);
         }
 
@@ -52,6 +69,22 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
         public FindCoordinatorRequestData data() {
             return data;
+        }
+    }
+
+    /**
+     * Indicates that it is not possible to lookup coordinators in batches with FindCoordinator. Instead
+     * coordinators must be looked up one by one.
+     */
+    public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
+        private static final long serialVersionUID = 1L;
+
+        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
+            super(message, cause);
+        }
+
+        public NoBatchedFindCoordinatorsException(String message) {
+            super(message);
         }
     }
 
@@ -69,7 +102,11 @@ public class FindCoordinatorRequest extends AbstractRequest {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         Errors error = Errors.forException(e);
-        return FindCoordinatorResponse.prepareResponse(error, Node.noNode());
+        if (version() < MIN_BATCHED_VERSION) {
+            return FindCoordinatorResponse.prepareOldResponse(error, Node.noNode());
+        } else {
+            return FindCoordinatorResponse.prepareErrorResponse(error, data.coordinatorKeys());
+        }
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
@@ -102,7 +139,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
                 case 1:
                     return TRANSACTION;
                 default:
-                    throw new IllegalArgumentException("Unknown coordinator type received: " + id);
+                    throw new InvalidRequestException("Unknown coordinator type received: " + id);
             }
         }
     }

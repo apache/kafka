@@ -30,25 +30,6 @@ public class SslConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String PRINCIPAL_BUILDER_CLASS_DOC = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release. In recent versions,
-     *   the config is optional and there is no default.
-     */
-    // use FQN to avoid import deprecation warning
-    @Deprecated
-    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS =
-            org.apache.kafka.common.security.auth.DefaultPrincipalBuilder.class.getName();
-
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
         + "The default is 'TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. "
@@ -111,10 +92,10 @@ public class SslConfigs {
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
     public static final String SSL_KEYSTORE_PASSWORD_DOC = "The store password for the key store file. "
         + "This is optional for client and only needed if 'ssl.keystore.location' is configured. "
-        + " Key store password is not supported for PEM format.";
+        + "Key store password is not supported for PEM format.";
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
-    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or"
+    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or "
         + "the PEM key specified in `ssl.keystore.key'. This is required for clients only if two-way authentication is configured.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
@@ -122,7 +103,7 @@ public class SslConfigs {
     public static final String DEFAULT_SSL_TRUSTSTORE_TYPE = "JKS";
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
-    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
+    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file.";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. "
@@ -148,17 +129,6 @@ public class SslConfigs {
 
     public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = "ssl.engine.factory.class";
     public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
-
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SSL_CLIENT_AUTH_CONFIG = BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG;
-    /**
-     * @deprecated As of 1.0.0. This field will be removed in a future major release.
-     */
-    @Deprecated
-    public static final String SSL_CLIENT_AUTH_DOC = BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC;
 
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)

@@ -87,7 +87,9 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                   taskManager.activeTaskIds(),
                   taskManager.standbyTaskIds());
 
-        if (streamThread.setState(State.PARTITIONS_REVOKED) != null && !partitions.isEmpty()) {
+        // We need to still invoke handleRevocation if the thread has been told to shut down, but we shouldn't ever
+        // transition away from PENDING_SHUTDOWN once it's been initiated (to anything other than DEAD)
+        if ((streamThread.setState(State.PARTITIONS_REVOKED) != null || streamThread.state() == State.PENDING_SHUTDOWN) && !partitions.isEmpty()) {
             final long start = time.milliseconds();
             try {
                 taskManager.handleRevocation(partitions);

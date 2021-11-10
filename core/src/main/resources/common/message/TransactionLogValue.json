@@ -17,6 +17,7 @@
   "type": "data",
   "name": "TransactionLogValue",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ProducerId", "type": "int64", "versions": "0",
       "about": "Producer id in use by the transactional id"},

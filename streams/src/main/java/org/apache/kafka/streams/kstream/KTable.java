@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -138,7 +139,7 @@ public interface KTable<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -177,7 +178,7 @@ public interface KTable<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -263,7 +264,7 @@ public interface KTable<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -301,7 +302,7 @@ public interface KTable<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -466,7 +467,7 @@ public interface KTable<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -512,7 +513,7 @@ public interface KTable<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -560,7 +561,7 @@ public interface KTable<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters)}  KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -607,7 +608,7 @@ public interface KTable<K, V> {
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -1061,40 +1062,6 @@ public interface KTable<K, V> {
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
      */
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector);
-
-    /**
-     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
-     * and {@link Serde}s as specified by {@link Serialized}.
-     * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
-     * provided {@link KeyValueMapper}.
-     * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
-     * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value (with both maybe being the same type or a new type).
-     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
-     * <p>
-     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
-     *
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * <p>
-     * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
-     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
-     * on the new key.
-     *
-     * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
-     * @param serialized    the {@link Serialized} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
-     * @param <KR>          the key type of the result {@link KGroupedTable}
-     * @param <VR>          the value type of the result {@link KGroupedTable}
-     * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
-     *
-     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KTable#groupBy(KeyValueMapper, Grouped)} instead
-     */
-    @Deprecated
-    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
-                                           final Serialized<KR, VR> serialized);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
@@ -2151,11 +2118,37 @@ public interface KTable<K, V> {
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     *
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined)} instead.
      */
+    @Deprecated
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
                                     final Named named);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                    final Function<V, KO> foreignKeyExtractor,
+                                    final ValueJoiner<V, VO, VR> joiner,
+                                    final TableJoined<K, KO> tableJoined);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
@@ -2194,11 +2187,40 @@ public interface KTable<K, V> {
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     *
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #join(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
      */
+    @Deprecated
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
                                     final Named named,
+                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                            should be materialized. Cannot be {@code null}
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                    final Function<V, KO> foreignKeyExtractor,
+                                    final ValueJoiner<V, VO, VR> joiner,
+                                    final TableJoined<K, KO> tableJoined,
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
@@ -2233,11 +2255,37 @@ public interface KTable<K, V> {
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     *
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined)} instead.
      */
+    @Deprecated
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                         final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
                                         final Named named);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                        final Function<V, KO> foreignKeyExtractor,
+                                        final ValueJoiner<V, VO, VR> joiner,
+                                        final TableJoined<K, KO> tableJoined);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
@@ -2276,11 +2324,40 @@ public interface KTable<K, V> {
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
      * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     *
+     * @deprecated since 3.1, removal planned for 4.0. Use {@link #leftJoin(KTable, Function, ValueJoiner, TableJoined, Materialized)} instead.
      */
+    @Deprecated
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                         final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
                                         final Named named,
+                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                            should be materialized. Cannot be {@code null}
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                        final Function<V, KO> foreignKeyExtractor,
+                                        final ValueJoiner<V, VO, VR> joiner,
+                                        final TableJoined<K, KO> tableJoined,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**

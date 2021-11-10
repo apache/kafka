@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -61,7 +62,7 @@ final class StateManagerUtil {
         if (enforceCheckpoint)
             return true;
 
-        // we can checkpoint if the the difference between the current and the previous snapshot is large enough
+        // we can checkpoint if the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
         for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
             totalOffsetDelta += entry.getValue() - oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L);
@@ -86,15 +87,8 @@ final class StateManagerUtil {
         }
 
         final TaskId id = stateMgr.taskId();
-        try {
-            if (!stateDirectory.lock(id)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
-            }
-        } catch (final IOException e) {
-            throw new StreamsException(
-                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
-                e
-            );
+        if (!stateDirectory.lock(id)) {
+            throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
         }
         log.debug("Acquired state directory lock");
 
@@ -158,5 +152,35 @@ final class StateManagerUtil {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    /**
+     *  Parse the task directory name (of the form topicGroupId_partition) and construct the TaskId with the
+     *  optional namedTopology (may be null)
+     *
+     *  @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
+     */
+    static TaskId parseTaskDirectoryName(final String taskIdStr, final String namedTopology) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+
+        try {
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+
+            return new TaskId(topicGroupId, partition, namedTopology);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+    }
+
+    /**
+     * @return The string representation of the subtopology and partition metadata, ie the task id string without
+     *         the named topology, which defines the innermost task directory name of this task's state
+     */
+    static String toTaskDirString(final TaskId taskId) {
+        return taskId.subtopology() + "_" + taskId.partition();
     }
 }

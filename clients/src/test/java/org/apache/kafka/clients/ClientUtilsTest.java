@@ -19,13 +19,13 @@ package org.apache.kafka.clients;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
+import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -33,9 +33,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientUtilsTest {
 
+    private final HostResolver hostResolver = new DefaultHostResolver();
 
     @Test
-    public void testParseAndValidateAddresses() throws UnknownHostException {
+    public void testParseAndValidateAddresses() {
         checkWithoutLookup("127.0.0.1:8000");
         checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
@@ -56,11 +57,11 @@ public class ClientUtilsTest {
 
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(asList("example.com:10000"));
         assertTrue(validatedAddresses.size() >= 1, "Unexpected addresses " + validatedAddresses);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
-        List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
+        List<String> expectedHostNames = asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
         assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
@@ -102,29 +103,20 @@ public class ClientUtilsTest {
     @Test
     public void testResolveUnknownHostException() {
         assertThrows(UnknownHostException.class,
-            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS));
+            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", hostResolver));
     }
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
-    }
-
-    @Test
-    public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
-    }
-
-    @Test
-    public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size() > 1);
+        InetAddress[] addresses = new InetAddress[] {
+            InetAddress.getByName("198.51.100.0"), InetAddress.getByName("198.51.100.5")
+        };
+        HostResolver hostResolver = new AddressChangeHostResolver(addresses, addresses);
+        assertEquals(asList(addresses), ClientUtils.resolve("kafka.apache.org", hostResolver));
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
+        return ClientUtils.parseAndValidateAddresses(asList(url), ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {

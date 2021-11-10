@@ -20,30 +20,70 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Represents the state of a single task running within a {@link KafkaStreams} application.
+ * @deprecated since 3.0, use {@link org.apache.kafka.streams.TaskMetadata} instead.
  */
+@Deprecated
 public class TaskMetadata {
 
     private final String taskId;
 
     private final Set<TopicPartition> topicPartitions;
 
+    private final Map<TopicPartition, Long> committedOffsets;
+
+    private final Map<TopicPartition, Long> endOffsets;
+
+    private final Optional<Long> timeCurrentIdlingStarted;
+
     public TaskMetadata(final String taskId,
-                        final Set<TopicPartition> topicPartitions) {
+                        final Set<TopicPartition> topicPartitions,
+                        final Map<TopicPartition, Long> committedOffsets,
+                        final Map<TopicPartition, Long> endOffsets,
+                        final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+        this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
+        this.endOffsets = Collections.unmodifiableMap(endOffsets);
+        this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
+    /**
+     * @return the basic task metadata such as subtopology and partition id
+     */
     public String taskId() {
         return taskId;
     }
 
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
+    }
+
+    /**
+     * This function will return a map of TopicPartitions and the highest committed offset seen so far
+     */
+    public Map<TopicPartition, Long> committedOffsets() {
+        return committedOffsets;
+    }
+
+    /**
+     * This function will return a map of TopicPartitions and the highest offset seen so far in the Topic
+     */
+    public Map<TopicPartition, Long> endOffsets() {
+        return endOffsets;
+    }
+
+    /**
+     * This function will return the time task idling started, if the task is not currently idling it will return empty
+     */
+    public Optional<Long> timeCurrentIdlingStarted() {
+        return timeCurrentIdlingStarted;
     }
 
     @Override
@@ -69,6 +109,9 @@ public class TaskMetadata {
         return "TaskMetadata{" +
                 "taskId=" + taskId +
                 ", topicPartitions=" + topicPartitions +
+                ", committedOffsets=" + committedOffsets +
+                ", endOffsets=" + endOffsets +
+                ", timeCurrentIdlingStarted=" + timeCurrentIdlingStarted +
                 '}';
     }
 }

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
  * {@code KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
@@ -123,7 +124,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<Long> countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>
@@ -169,7 +170,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-word";
      * ValueAndTimestamp<Long> countForWord = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>
@@ -273,7 +274,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-key";
      * ValueAndTimestamp<V> reduceForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>
@@ -337,7 +338,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-key";
      * ValueAndTimestamp<V> reduceForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>
@@ -442,7 +443,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-key";
      * ValueAndTimestamp<VR> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>
@@ -501,7 +502,7 @@ public interface KGroupedStream<K, V> {
      * K key = "some-key";
      * ValueAndTimestamp<VR> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * <p>

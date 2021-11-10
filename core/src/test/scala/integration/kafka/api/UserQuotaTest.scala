@@ -16,10 +16,10 @@ package kafka.api
 
 import java.io.File
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.KafkaServer
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
@@ -31,11 +31,9 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
-    this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
-    this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
-    super.setUp()
+    super.setUp(testInfo)
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
         quotaTestClients.clientQuotaEntity(Some(QuotaTestClients.DefaultEntity), None),
