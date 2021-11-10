@@ -148,14 +148,11 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     val fetchBackOffMs = 250
 
-    class ErrorMockFetcherThread(fetchBackOffMs: Int)
-      extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
-
+    val fetcher = new MockFetcherThread(fetchBackOffMs = fetchBackOffMs) {
       override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-         throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
+        throw new UnknownTopicIdException("Topic ID was unknown as expected for this test")
       }
     }
-    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = fetchBackOffMs)
 
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> initialFetchState(Some(Uuid.randomUuid()), 0L, leaderEpoch = 0)))
@@ -190,16 +187,13 @@ class AbstractFetcherThreadTest {
     val partition3 = new TopicPartition("topic3", 0)
     val fetchBackOffMs = 250
 
-    class ErrorMockFetcherThread(fetchBackOffMs: Int)
-      extends MockFetcherThread(fetchBackOffMs =  fetchBackOffMs) {
-
+    val fetcher = new MockFetcherThread(fetchBackOffMs = fetchBackOffMs) {
       override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         Map(partition1 -> new FetchData().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
-            partition2 -> new FetchData().setErrorCode(Errors.INCONSISTENT_TOPIC_ID.code),
-            partition3 -> new FetchData().setErrorCode(Errors.NONE.code))
+          partition2 -> new FetchData().setErrorCode(Errors.INCONSISTENT_TOPIC_ID.code),
+          partition3 -> new FetchData().setErrorCode(Errors.NONE.code))
       }
     }
-    val fetcher = new ErrorMockFetcherThread(fetchBackOffMs = fetchBackOffMs)
 
     fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition1 -> initialFetchState(Some(Uuid.randomUuid()), 0L, leaderEpoch = 0)))

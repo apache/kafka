@@ -2442,6 +2442,57 @@ class KafkaApisTest {
     assertNull(partitionData.abortedTransactions)
   }
 
+  /**
+   * Verifies that partitions with unknown topic ID errors are added to the erroneous set and there is not an attempt to fetch them.
+   */
+  @Test
+  def testFetchRequestErroneousPartitions(): Unit = {
+    val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val tp = tidp.topicPartition
+    val nullTp = new TopicPartition(null, tp.partition)
+    addTopicToMetadataCache(tp.topic, 1, topicId = tidp.topicId)
+
+    expect(replicaManager.getLogConfig(EasyMock.eq(nullTp))).andReturn(None)
+
+    // Simulate unknown topic ID in the context
+    val fetchData = Map(new TopicIdPartition(tidp.topicId(), new TopicPartition(null, tidp.partition)) ->
+      new FetchRequest.PartitionData(tidp.topicId, 0, 0, 1000, Optional.empty())).asJava
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(tidp.topicId, 0, 0, 1000,
+      Optional.empty())).asJava
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+      fetchMetadata, fetchData, false, false)
+    expect(fetchManager.newContext(
+      anyObject[Short],
+      anyObject[JFetchMetadata],
+      anyObject[Boolean],
+      anyObject[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
+      anyObject[util.List[TopicIdPartition]],
+      anyObject[util.Map[Uuid, String]])).andReturn(fetchContext)
+
+    EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+      anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
+
+    val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
+      -1, 100, 0, fetchDataBuilder).build()
+    val request = buildRequest(fetchRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
+    createKafkaApis().handleFetchRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[FetchResponse]
+    val responseData = response.responseData(metadataCache.topicIdsToNames(), ApiKeys.FETCH.latestVersion)
+    assertTrue(responseData.containsKey(tp))
+
+    val partitionData = responseData.get(tp)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, partitionData.errorCode)
+    assertEquals(-1, partitionData.highWatermark)
+    assertEquals(-1, partitionData.lastStableOffset)
+    assertEquals(-1, partitionData.logStartOffset)
+    assertEquals(MemoryRecords.EMPTY, FetchResponse.recordsOrFail(partitionData))
+  }
+
   @Test
   def testJoinGroupProtocolsOrder(): Unit = {
     val protocols = List(
@@ -3472,7 +3523,7 @@ class KafkaApisTest {
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers)
+    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers, topicId)
     MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
   }
 

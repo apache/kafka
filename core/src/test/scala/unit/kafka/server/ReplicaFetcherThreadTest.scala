@@ -984,11 +984,12 @@ class ReplicaFetcherThreadTest {
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
 
-    val partitionDataMap = partitionMap.map{ case (tp, state) =>
+    val partitionDataMap = partitionMap.map { case (tp, state) =>
       (tp, new FetchRequest.PartitionData(state.topicId.get, state.fetchOffset, 0L,
-        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))}
+        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))
+    }
 
-    assertMapEquals(partitionDataMap.asJava, fetchRequestBuilder.fetchData())
+    assertEquals(partitionDataMap.asJava, fetchRequestBuilder.fetchData())
     assertEquals(0, fetchRequestBuilder.replaced().size)
     assertEquals(0, fetchRequestBuilder.removed().size)
 
@@ -1008,34 +1009,16 @@ class ReplicaFetcherThreadTest {
     val ResultWithPartitions(fetchRequestOpt2, _) = thread.buildFetch(partitionMap2)
 
     // Since t1p1 didn't change, we drop that one
-    val partitionDataMap2 = partitionMap2.drop(1).map{ case (tp, state) =>
+    val partitionDataMap2 = partitionMap2.drop(1).map { case (tp, state) =>
       (tp, new FetchRequest.PartitionData(state.topicId.get, state.fetchOffset, 0L,
-        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))}
+        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))
+    }
 
     assertTrue(fetchRequestOpt2.isDefined)
     val fetchRequestBuilder2 = fetchRequestOpt2.get.fetchRequest
-    assertMapEquals(partitionDataMap2.asJava, fetchRequestBuilder2.fetchData())
-    assertEquals(1, fetchRequestBuilder2.replaced().size)
+    assertEquals(partitionDataMap2.asJava, fetchRequestBuilder2.fetchData())
     assertEquals(Collections.singletonList(tid2p1), fetchRequestBuilder2.replaced())
-    assertEquals(1, fetchRequestBuilder2.removed().size)
     assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())
-  }
-
-  private def assertMapEquals(expected: java.util.Map[TopicPartition, FetchRequest.PartitionData], actual: java.util.Map[TopicPartition, FetchRequest.PartitionData]): Unit = {
-    val expectedIter = expected.entrySet.iterator
-    val actualIter = actual.entrySet.iterator
-    var i = 1
-    while ( {
-      expectedIter.hasNext
-    }) {
-      val expectedEntry = expectedIter.next
-      if (!actualIter.hasNext) fail("Element " + i + " not found.")
-      val actuaLEntry = actualIter.next
-      assertEquals(expectedEntry.getKey, actuaLEntry.getKey, "Element " + i + " had a different TopicPartition than expected.")
-      assertEquals(expectedEntry.getValue, actuaLEntry.getValue, "Element " + i + " had different PartitionData than expected.")
-      i += 1
-    }
-    if (actualIter.hasNext) fail("Unexpected element " + i + " found.")
   }
 
   private def newOffsetForLeaderPartitionResult(

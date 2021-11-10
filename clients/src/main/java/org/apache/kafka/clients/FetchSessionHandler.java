@@ -299,7 +299,8 @@ public class FetchSessionHandler {
                 PartitionData nextData = next.remove(topicPartition);
                 if (nextData != null) {
                     // We basically check if the new partition had the same topic ID. If not,
-                    // we add it to the "replaced" set.
+                    // we add it to the "replaced" set. If the request is version 13 or higher, the replaced
+                    // partition will be forgotten. In any case, we will send the new partition in the request.
                     if (!prevData.topicId.equals(nextData.topicId)
                             && !prevData.topicId.equals(Uuid.ZERO_UUID)
                             && !nextData.topicId.equals(Uuid.ZERO_UUID)) {

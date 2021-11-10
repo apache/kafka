@@ -35,7 +35,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class FetchRequestTest {
 
@@ -46,15 +45,13 @@ public class FetchRequestTest {
     @ParameterizedTest
     @MethodSource("fetchVersions")
     public void testToReplaceWithDifferentVersions(short version) {
-
-        Uuid topicId = Uuid.randomUuid();
-        TopicPartition tp = new TopicPartition("topic", 0);
-        TopicIdPartition tidp = new TopicIdPartition(topicId, tp);
-
-        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp,
-                new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
-        List<TopicIdPartition> toReplace = Collections.singletonList(tidp);
         boolean fetchRequestUsesTopicIds = version >= 13;
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition tp = new TopicIdPartition("topic", topicId, 0);
+
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
+                new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
+        List<TopicIdPartition> toReplace = Collections.singletonList(tp);
 
         FetchRequest fetchRequest = FetchRequest.Builder
                 .forReplica(version, 0, 1, 1, partitionData)
@@ -65,7 +62,18 @@ public class FetchRequestTest {
         // If version < 13, we should not see any partitions in forgottenTopics. This is because we can not
         // distinguish different topic IDs on versions earlier than 13.
         assertEquals(fetchRequestUsesTopicIds, fetchRequest.data().forgottenTopicsData().size() > 0);
+        fetchRequest.data().forgottenTopicsData().forEach(forgottenTopic -> {
+            // Since we didn't serialize, we should see the topic name and ID regardless of the version.
+            assertEquals(tp.topic(), forgottenTopic.topic());
+            assertEquals(topicId, forgottenTopic.topicId());
+        });
+
         assertEquals(1, fetchRequest.data().topics().size());
+        fetchRequest.data().topics().forEach(topic -> {
+            // Since we didn't serialize, we should see the topic name and ID regardless of the version.
+            assertEquals(tp.topic(), topic.topic());
+            assertEquals(topicId, topic.topicId());
+        });
     }
 
     @ParameterizedTest
@@ -96,11 +104,11 @@ public class FetchRequestTest {
 
         // For versions < 13, we will be provided a topic name and a zero UUID in FetchRequestData.
         // Versions 13+ will contain a valid topic ID but an empty topic name.
-        List<TopicIdPartition> expectedFetchData = new LinkedList<>();
+        List<TopicIdPartition> expectedData = new LinkedList<>();
         topicIdPartitions.forEach(tidp -> {
             String expectedName = fetchRequestUsesTopicIds ? "" : tidp.topic();
             Uuid expectedTopicId = fetchRequestUsesTopicIds ? tidp.topicId() : Uuid.ZERO_UUID;
-            expectedFetchData.add(new TopicIdPartition(expectedName, expectedTopicId, tidp.partition()));
+            expectedData.add(new TopicIdPartition(expectedName, expectedTopicId, tidp.partition()));
         });
 
         // Build the list of TopicIdPartitions based on the FetchRequestData that was serialized and parsed.
@@ -111,20 +119,21 @@ public class FetchRequestTest {
                 )
         );
         // The TopicIdPartitions built from the request data should match what we expect.
-        assertListEquals(expectedFetchData, convertedFetchData);
-
-        // Get the fetchData map from the request data.
-        Map<TopicIdPartition, FetchRequest.PartitionData> fetchData = fetchRequest.fetchData(topicNames);
+        assertEquals(expectedData, convertedFetchData);
 
         // For fetch request version 13+ we expect topic names to be filled in for all topics in the topicNames map.
         // Otherwise, the topic name should be null.
         // For earlier request versions, we expect topic names and zero Uuids.
-        assertEquals(expectedFetchData.size(), fetchData.size());
-        expectedFetchData.forEach(tidp -> {
+        Map<TopicIdPartition, FetchRequest.PartitionData> expectedFetchData = new LinkedHashMap<>();
+        // Build the expected map based on fetchRequestUsesTopicIds.
+        expectedData.forEach(tidp -> {
             String expectedName = fetchRequestUsesTopicIds ? topicNames.get(tidp.topicId()) : tidp.topic();
             TopicIdPartition tpKey = new TopicIdPartition(tidp.topicId(), new TopicPartition(expectedName, tidp.partition()));
-            assertEquals(tidp.topicId(), fetchData.get(tpKey).topicId);
+            // logStartOffset was not a valid field in versions 4 and earlier.
+            int logStartOffset = version > 4 ? 0 : -1;
+            expectedFetchData.put(tpKey, new FetchRequest.PartitionData(tidp.topicId(), 0, logStartOffset, 0, Optional.empty()));
         });
+        assertEquals(expectedFetchData, fetchRequest.fetchData(topicNames));
     }
 
     @ParameterizedTest
@@ -169,7 +178,7 @@ public class FetchRequestTest {
                     )
             );
             // The TopicIdPartitions built from the request data should match what we expect.
-            assertListEquals(expectedForgottenTopicData, convertedForgottenTopicData);
+            assertEquals(expectedForgottenTopicData, convertedForgottenTopicData);
 
             // Get the forgottenTopics from the request data.
             List<TopicIdPartition> forgottenTopics = fetchRequest.forgottenTopics(topicNames);
@@ -185,7 +194,7 @@ public class FetchRequestTest {
                 String expectedName = fetchRequestUsesTopicIds ? topicNames.get(tidp.topicId()) : tidp.topic();
                 expectedForgottenTopics.add(new TopicIdPartition(tidp.topicId(), new TopicPartition(expectedName, tidp.partition())));
             });
-            assertListEquals(expectedForgottenTopics, forgottenTopics);
+            assertEquals(expectedForgottenTopics, forgottenTopics);
         }
     }
 
@@ -196,19 +205,6 @@ public class FetchRequestTest {
 
         assertNotEquals(new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)),
             new FetchRequest.PartitionData(Uuid.randomUuid(), 300, 0L, 300, Optional.of(300)));
-    }
-
-    private static void assertListEquals(List<TopicIdPartition> expected, List<TopicIdPartition> actual) {
-        for (TopicIdPartition expectedPart : expected) {
-            if (!actual.contains(expectedPart)) {
-                fail("Failed to find expected partition " + expectedPart);
-            }
-        }
-        for (TopicIdPartition actualPart : actual) {
-            if (!expected.contains(actualPart)) {
-                fail("Found unexpected partition " + actualPart);
-            }
-        }
     }
 
 }

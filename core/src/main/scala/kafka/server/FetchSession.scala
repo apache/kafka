@@ -90,11 +90,11 @@ class CachedPartition(var topic: String,
   override def prev: Int = cachedPrev
   override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
-  def this(topic: String, partition: Int, topicId: Uuid) =
+  def this(topic: String, topicId: Uuid, partition: Int) =
     this(topic, topicId, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
 
   def this(part: TopicIdPartition) = {
-    this(part.topic, part.partition, part.topicId)
+    this(part.topic, part.topicId, part.partition)
   }
 
   def this(part: TopicIdPartition, reqData: FetchRequest.PartitionData) =

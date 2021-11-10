@@ -93,7 +93,7 @@ public class FetchRequest extends AbstractRequest {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             PartitionData that = (PartitionData) o;
-            return topicId == that.topicId &&
+            return Objects.equals(topicId, that.topicId) &&
                 fetchOffset == that.fetchOffset &&
                 logStartOffset == that.logStartOffset &&
                 maxBytes == that.maxBytes &&

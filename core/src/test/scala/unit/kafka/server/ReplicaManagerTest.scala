@@ -792,16 +792,15 @@ class ReplicaManagerTest {
       assertEquals(Some(topicId), replicaManager.getPartitionOrException(tp).topicId)
 
       // We receive one valid request from the follower and replica state is updated
-      var successfulFetch: Option[FetchPartitionData] = None
+      var successfulFetch: Seq[(TopicIdPartition, FetchPartitionData)] = Seq()
 
       val validFetchPartitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, maxFetchBytes,
         Optional.of(leaderEpoch))
 
       // Fetch messages simulating a different ID than the one in the log.
       val inconsistentTidp = new TopicIdPartition(Uuid.randomUuid(), tidp.topicPartition)
-      def callback1(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter(_._1 == inconsistentTidp).map(_._2)
+      def callback(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        successfulFetch = response
       }
       replicaManager.fetchMessages(
         timeout = 0L,
@@ -812,20 +811,17 @@ class ReplicaManagerTest {
         fetchInfos = Seq(inconsistentTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback1,
+        responseCallback = callback,
         clientMetadata = None
       )
-      assertTrue(successfulFetch.isDefined)
-      assertEquals(Errors.INCONSISTENT_TOPIC_ID, successfulFetch.get.error)
+      val fetch1 = successfulFetch.headOption.filter(_._1 == inconsistentTidp).map(_._2)
+      assertTrue(fetch1.isDefined)
+      assertEquals(Errors.INCONSISTENT_TOPIC_ID, fetch1.get.error)
 
       // Simulate where the fetch request did not use topic IDs
       // Fetch messages simulating an ID in the log.
       // We should not see topic ID errors.
       val zeroTidp = new TopicIdPartition(Uuid.ZERO_UUID, tidp.topicPartition)
-      def callback2(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter(_._1 == zeroTidp).map(_._2)
-      }
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
@@ -835,11 +831,12 @@ class ReplicaManagerTest {
         fetchInfos = Seq(zeroTidp -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback2,
+        responseCallback = callback,
         clientMetadata = None
       )
-      assertTrue(successfulFetch.isDefined)
-      assertEquals(Errors.NONE, successfulFetch.get.error)
+      val fetch2 = successfulFetch.headOption.filter(_._1 == zeroTidp).map(_._2)
+      assertTrue(fetch2.isDefined)
+      assertEquals(Errors.NONE, fetch2.get.error)
 
       // Next create a topic without a topic ID written in the log.
       val tp2 = new TopicPartition("noIdTopic", 0)
@@ -865,10 +862,6 @@ class ReplicaManagerTest {
 
       assertEquals(None, replicaManager.getPartitionOrException(tp2).topicId)
 
-      def callback3(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter(_._1 == tidp2).map(_._2)
-      }
       // Fetch messages simulating the request containing a topic ID. We should not have an error.
       replicaManager.fetchMessages(
         timeout = 0L,
@@ -879,18 +872,15 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback3,
+        responseCallback = callback,
         clientMetadata = None
       )
-      assertTrue(successfulFetch.isDefined)
-      assertEquals(Errors.NONE, successfulFetch.get.error)
+      val fetch3 = successfulFetch.headOption.filter(_._1 == tidp2).map(_._2)
+      assertTrue(fetch3.isDefined)
+      assertEquals(Errors.NONE, fetch3.get.error)
 
       // Fetch messages simulating the request not containing a topic ID. We should not have an error.
       val zeroTidp2 = new TopicIdPartition(Uuid.ZERO_UUID, tidp2.topicPartition)
-      def callback4(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-        // Check the topic partition only since we are reusing this callback on different TopicIdPartitions.
-        successfulFetch = response.headOption.filter(_._1 == zeroTidp2).map(_._2)
-      }
       replicaManager.fetchMessages(
         timeout = 0L,
         replicaId = 1,
@@ -900,11 +890,12 @@ class ReplicaManagerTest {
         fetchInfos = Seq(zeroTidp2 -> validFetchPartitionData),
         quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        responseCallback = callback4,
+        responseCallback = callback,
         clientMetadata = None
       )
-      assertTrue(successfulFetch.isDefined)
-      assertEquals(Errors.NONE, successfulFetch.get.error)
+      val fetch4 = successfulFetch.headOption.filter(_._1 == zeroTidp2).map(_._2)
+      assertTrue(fetch4.isDefined)
+      assertEquals(Errors.NONE, fetch4.get.error)
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
