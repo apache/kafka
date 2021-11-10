@@ -90,7 +90,7 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
             So before you can write your first events, you must create a topic.  Open another terminal session and run:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --create --topic quickstart-events --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092</code></pre>
 
         <p>
             All of Kafka's command line tools have additional options: run the <code>kafka-topics.sh</code> command without any
