@@ -37,19 +37,19 @@ public class TimestampedCacheFlushListenerTest {
         context.setCurrentNode(null);
         context.forward(
             new Record<>(
-            "key",
-            new Change<>("newValue", "oldValue"),
+                "key",
+                new Change<>("newValue", "oldValue"),
                 42L));
         expectLastCall();
         replay(context);
 
         new TimestampedCacheFlushListener<>(context).apply(
             new Record<>(
-            "key",
-            new Change<>(
-                ValueAndTimestamp.make("newValue", 42L),
-                ValueAndTimestamp.make("oldValue", 21L)),
-            73L));
+                "key",
+                new Change<>(
+                    ValueAndTimestamp.make("newValue", 42L),
+                    ValueAndTimestamp.make("oldValue", 21L)),
+                73L));
 
         verify(context);
     }
@@ -70,9 +70,9 @@ public class TimestampedCacheFlushListenerTest {
 
         new TimestampedCacheFlushListener<>(context).apply(
             new Record<>(
-            "key",
-            new Change<>(null, ValueAndTimestamp.make("oldValue", 21L)),
-            73L));
+                "key",
+                new Change<>(null, ValueAndTimestamp.make("oldValue", 21L)),
+                73L));
 
         verify(context);
     }
