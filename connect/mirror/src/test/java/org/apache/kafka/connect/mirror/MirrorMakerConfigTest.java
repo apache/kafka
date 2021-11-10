@@ -32,6 +32,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorMakerConfigTest {
 
@@ -50,7 +52,18 @@ public class MirrorMakerConfigTest {
             "a.bootstrap.servers", "servers-one",
             "b.bootstrap.servers", "servers-two",
             "security.protocol", "SASL",
-            "replication.factor", "4"));
+            "replication.factor", "4",
+            "a.security.protocol", "SSL",           // default: PLAINTEXT
+            "a.producer.client.id", "a-b-producer", // default: null
+            "a.consumer.security.providers", "custom_security", // default: null
+            "b.producer.compression.type", "zstd",  // default: null
+            "a->b.producer.acks", "all",            // default: 1
+            "a->b.consumer.client.id", "a-b-consumer",  // default: null
+            "a->b.admin.retry.backoff.ms", "150",   // default: 100
+            "b.consumer.bootstrap.servers", "servers-two?",     // error!
+            "a->b.producer.bootstrap.servers", "servers-two_",  // error!
+            "producer.batch.size", "8192"   // default: 16384
+        ));
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(new SourceAndTarget("a", "b"),
             MirrorSourceConnector.class);
         assertEquals("servers-one", connectorProps.get("source.cluster.bootstrap.servers"),
@@ -58,7 +71,41 @@ public class MirrorMakerConfigTest {
         assertEquals("servers-two", connectorProps.get("target.cluster.bootstrap.servers"),
             "target.cluster.bootstrap.servers is set");
         assertEquals("SASL", connectorProps.get("security.protocol"),
-            "top-level security.protocol is passed through to connector config");
+            "top-level security properties should be passed through to connector config");
+
+        assertEquals("SSL", connectorProps.get("source.cluster.security.protocol"), "cluster-level client props should be passed through to cluster config");
+        assertEquals("SSL", connectorProps.get("source.producer.security.protocol"), "cluster-level client props should be passed through to client config");
+        assertEquals("SSL", connectorProps.get("source.consumer.security.protocol"), "cluster-level client props should be passed through to client config");
+        assertEquals("SSL", connectorProps.get("source.admin.security.protocol"), "cluster-level client props should be passed through to client config");
+        assertEquals("SASL", connectorProps.get("target.cluster.security.protocol"), "top-level client props should be passed through to cluster config");
+        assertEquals("SASL", connectorProps.get("target.producer.security.protocol"), "top-level client props should be passed through to client config");
+        assertEquals("SASL", connectorProps.get("target.consumer.security.protocol"), "top-level client props should be passed through to client config");
+        assertEquals("SASL", connectorProps.get("target.admin.security.protocol"), "top-level client props should be passed through to client config");
+
+        assertEquals("custom_security", connectorProps.get("source.consumer.security.providers"),
+            "cluster-level client props should be passed through to client config");    // cluster-level consumer prop is working.
+        assertEquals("zstd", connectorProps.get("target.producer.compression.type"),
+            "cluster-level client props should be passed through to client config");    // cluster-level producer prop is working.
+        // replication-level producer, admin configs are applied to target; consumer config is applied to source.
+        assertEquals("a-b-consumer", connectorProps.get("source.consumer.client.id"),
+            "replication-level client props should be passed through to producer config");  // replication-level consumer prop is working.
+        assertEquals("all", connectorProps.get("target.producer.acks"),
+            "replication-level client props should be passed through to producer config");  // replication-level producer prop is working.
+        assertEquals("150", connectorProps.get("target.admin.retry.backoff.ms"),
+            "replication-level client props should be passed through to producer config");  // replication-level producer prop is working.
+
+        // to acknowledge the Herder about the producer configuration, replicate the 'target.producer.' prefixed props into 'producer.override.' prefixed props.
+        assertEquals("SASL", connectorProps.get("producer.override.security.protocol"), "target producer props should be passed to 'producer.override.' config");
+        assertEquals("zstd", connectorProps.get("producer.override.compression.type"), "target producer props should be passed to 'producer.override.' config");
+        assertEquals("all", connectorProps.get("producer.override.acks"), "target producer props should be passed to 'producer.override.' config");
+
+        assertNull(connectorProps.get("producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored"); // replication-level client overriding is ignored.
+        assertNull(connectorProps.get("consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored"); // cluster-level client overriding is ignored.
+        assertEquals("servers-two", connectorProps.get("target.consumer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // cluster-level client overriding is ignored.
+        assertEquals("servers-two", connectorProps.get("target.producer.bootstrap.servers"), "non-cluster level bootstrap.servers override should be ignored");  // replication-level client overriding is ignored.
+        // only the connector overridden client props, cluster-level client props, and replication-level client props are allowed.
+        assertNotEquals("8192", connectorProps.get("producer.batch.size"),
+            "top-level client props are only supported in MirrorClient; should be ignored in connector configs.");
     }
 
     @Test
@@ -104,7 +151,7 @@ public class MirrorMakerConfigTest {
         assertFalse(aClientConfig.adminConfig().containsKey("xxx"),
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
-            "top-leve metrics reporters aren't included in client configs");
+            "top-level metrics reporters aren't included in client configs");
         assertEquals("secret1", aClientConfig.getPassword("ssl.truststore.password").value(),
             "security properties are picked up in MirrorClientConfig");
         assertEquals("secret1", ((Password) aClientConfig.adminConfig().get("ssl.truststore.password")).value(),
@@ -236,18 +283,20 @@ public class MirrorMakerConfigTest {
         SourceAndTarget b = new SourceAndTarget("a", "b");
         Map<String, String> aProps = mirrorConfig.workerConfig(a);
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
+        assertEquals(null, aProps.get("xxx"), "b's replication-level prop is ignored in a");
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
         assertEquals("456", bProps.get("status.storage.replication.factor"));
+        assertEquals("yyy", bProps.get("xxx")); // should be null?
         assertEquals("client-one", bProps.get("producer.client.id"),
             "producer props should be passed through to worker producer config: " + bProps);
-        assertEquals("SASL", bProps.get("producer.security.protocol"),
+        assertEquals("PLAINTEXT", bProps.get("security.protocol"),
             "replication-level security props should be passed through to worker producer config");
         assertEquals("SASL", bProps.get("producer.security.protocol"),
-            "replication-level security props should be passed through to worker producer config");
+            "producer props should be passed through to worker producer config: " + bProps);
         assertEquals("PLAINTEXT", bProps.get("consumer.security.protocol"),
             "replication-level security props should be passed through to worker consumer config");
         assertEquals("secret1", bProps.get("ssl.truststore.password"),
-            "security properties should be passed through to worker config: " + bProps);
+            "top-level security properties should be passed through to worker config: " + bProps);
         assertEquals("secret1", bProps.get("producer.ssl.truststore.password"),
             "security properties should be passed through to worker producer config: " + bProps);
         assertEquals("secret2", bProps.get("ssl.key.password"),
