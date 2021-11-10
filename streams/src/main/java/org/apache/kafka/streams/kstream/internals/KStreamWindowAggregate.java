@@ -148,7 +148,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
                     tupleForwarder.maybeForward(
                         record.withKey(new Windowed<>(record.key(), entry.getValue()))
-                            .withValue(new Change<>(newAgg, oldAgg))
+                            .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
                             .withTimestamp(newTimestamp));
                 } else {
                     if (context().recordMetadata().isPresent()) {
