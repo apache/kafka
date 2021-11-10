@@ -1074,7 +1074,7 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context3.getClass)
     assertPartitionsOrder(context3, Seq(foo, bar, zarUnresolved))
 
-    updateAndGenerateResponseData(context2)
+    updateAndGenerateResponseData(context3)
 
     // The metadata cache knows about all topics.
     val context4 = newContext(
@@ -1085,6 +1085,19 @@ class FetchSessionTest {
 
     // So all topics are resolved.
     assertEquals(classOf[IncrementalFetchContext], context4.getClass)
+    assertPartitionsOrder(context4, Seq(foo, bar, zar))
+
+    updateAndGenerateResponseData(context4)
+
+    // The metadata cache does not know about the topics anymore (e.g. deleted).
+    val context5 = newContext(
+      new JFetchMetadata(sessionId, 4),
+      Seq.empty,
+      Map.empty
+    )
+
+    // All topics remain resolved.
+    assertEquals(classOf[IncrementalFetchContext], context5.getClass)
     assertPartitionsOrder(context4, Seq(foo, bar, zar))
   }
 
