@@ -71,6 +71,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -786,6 +787,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         EasyMock.expect(context.appConfigs())
             .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty());
         EasyMock.replay(context);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -818,6 +820,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         EasyMock.expect(context.appConfigs())
                 .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty());
         EasyMock.replay(context);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
