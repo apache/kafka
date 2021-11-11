@@ -482,7 +482,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 tupleForwarder.maybeForward(
                     new Record<>(
                         new Windowed<>(record.key(), window),
-                        new Change<>(newAgg, oldAgg),
+                        new Change<>(newAgg, sendOldValues ? oldAgg : null),
                         newTimestamp));
             } else {
                 if (context().recordMetadata().isPresent()) {
