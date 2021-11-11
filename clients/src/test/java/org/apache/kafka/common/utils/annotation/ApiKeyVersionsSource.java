@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-@Target({ElementType.ANNOTATION_TYPE, ElementType.METHOD})
+@Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @ArgumentsSource(ApiKeyVersionsProvider.class)
 public @interface ApiKeyVersionsSource {

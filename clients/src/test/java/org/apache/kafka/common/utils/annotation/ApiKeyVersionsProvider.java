@@ -26,8 +26,6 @@ import org.junit.jupiter.params.support.AnnotationConsumer;
 public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationConsumer<ApiKeyVersionsSource> {
     private ApiKeys apiKey;
 
-    ApiKeyVersionsProvider() { }
-
     public void accept(ApiKeyVersionsSource source) {
         apiKey = source.apiKey();
     }
