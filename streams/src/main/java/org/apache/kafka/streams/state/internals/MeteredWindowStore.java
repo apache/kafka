@@ -25,13 +25,13 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -151,10 +151,10 @@ public class MeteredWindowStore<K, V>
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 record -> listener.apply(
                     record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
-                          .withValue(new Change<>(
-                              record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                              record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
-                          ))
+                        .withValue(new Change<>(
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null
+                        ))
                 ),
                 sendOldValues);
         }
