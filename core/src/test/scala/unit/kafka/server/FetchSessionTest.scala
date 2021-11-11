@@ -1157,7 +1157,6 @@ class FetchSessionTest {
     val fooUnresolved = new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition))
     val barUnresolved = new TopicIdPartition(bar.topicId, new TopicPartition(null, bar.partition))
 
-
     // Create a new context where foo's resolution depends on fooStartsResolved and bar is unresolved.
     val context1Names = if (fooStartsResolved) Map(foo.topicId -> foo.topic) else Map.empty[Uuid, String]
     val fooContext1 = if (fooStartsResolved) foo else fooUnresolved

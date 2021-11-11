@@ -2470,8 +2470,9 @@ class KafkaApisTest {
       fetchMetadata,
       replicaId >= 0,
       Collections.singletonMap(foo, new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000, Optional.empty())),
-      Collections.emptyList,
-      metadataCache.topicIdsToNames())).andReturn(fetchContext)
+      Collections.emptyList[TopicIdPartition],
+      metadataCache.topicIdsToNames())
+    ).andReturn(fetchContext)
 
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
