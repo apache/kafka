@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.clients.producer.internals.InterceptorCallback;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -962,7 +963,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+            InterceptorCallback<K, V> interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
@@ -1366,28 +1367,5 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return true;
         }
 
-    }
-
-    /**
-     * A callback called when producer request is complete. It in turn calls user-supplied callback (if given) and
-     * notifies producer interceptors about the request completion.
-     */
-    private static class InterceptorCallback<K, V> implements Callback {
-        private final Callback userCallback;
-        private final ProducerInterceptors<K, V> interceptors;
-        private final TopicPartition tp;
-
-        private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
-            this.userCallback = userCallback;
-            this.interceptors = interceptors;
-            this.tp = tp;
-        }
-
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
-            this.interceptors.onAcknowledgement(metadata, exception);
-            if (this.userCallback != null)
-                this.userCallback.onCompletion(metadata, exception);
-        }
     }
 }

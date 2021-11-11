@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
@@ -102,7 +101,7 @@ public final class ProducerBatch {
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, InterceptorCallback<?, ?> callback, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
@@ -358,10 +357,10 @@ public final class ProducerBatch {
      * A callback and the associated FutureRecordMetadata argument to pass to it.
      */
     final private static class Thunk {
-        final Callback callback;
+        final InterceptorCallback<?, ?> callback;
         final FutureRecordMetadata future;
 
-        Thunk(Callback callback, FutureRecordMetadata future) {
+        Thunk(InterceptorCallback<?, ?> callback, FutureRecordMetadata future) {
             this.callback = callback;
             this.future = future;
         }

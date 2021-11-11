@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -62,16 +61,23 @@ public class ProducerBatchTest {
 
     @Test
     public void testBatchAbort() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        ProducerBatch batch = new ProducerBatch(tp, memoryRecordsBuilder, now);
+
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(callback, new ProducerInterceptors<>(java.util.Collections.emptyList()), tp);
+
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, interceptorCallback, now);
 
         KafkaException exception = new KafkaException();
         batch.abort(exception);
         assertTrue(future.isDone());
         assertEquals(1, callback.invocations);
         assertEquals(exception, callback.exception);
-        assertNull(callback.metadata);
+        assertNotNull(callback.metadata);
+        assertEquals(callback.metadata.offset(), -1);
+        assertEquals(callback.metadata.topic(), tp.topic());
+        assertEquals(callback.metadata.partition(), tp.partition());
 
         // subsequent completion should be ignored
         assertFalse(batch.complete(500L, 2342342341L));
@@ -89,14 +95,21 @@ public class ProducerBatchTest {
 
     @Test
     public void testBatchCannotAbortTwice() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        ProducerBatch batch = new ProducerBatch(tp, memoryRecordsBuilder, now);
+
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(callback, new ProducerInterceptors<>(java.util.Collections.emptyList()), tp);
+
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, interceptorCallback, now);
         KafkaException exception = new KafkaException();
         batch.abort(exception);
         assertEquals(1, callback.invocations);
         assertEquals(exception, callback.exception);
-        assertNull(callback.metadata);
+        assertNotNull(callback.metadata);
+        assertEquals(callback.metadata.offset(), -1);
+        assertEquals(callback.metadata.topic(), tp.topic());
+        assertEquals(callback.metadata.partition(), tp.partition());
 
         try {
             batch.abort(new KafkaException());
@@ -117,9 +130,13 @@ public class ProducerBatchTest {
 
     @Test
     public void testBatchCannotCompleteTwice() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        ProducerBatch batch = new ProducerBatch(tp, memoryRecordsBuilder, now);
+
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(callback, new ProducerInterceptors<>(java.util.Collections.emptyList()), tp);
+
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, interceptorCallback, now);
         batch.complete(500L, 10L);
         assertEquals(1, callback.invocations);
         assertNull(callback.exception);

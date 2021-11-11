@@ -480,9 +480,11 @@ public class SenderTest {
                 unexpectedException.compareAndSet(null, exception);
         };
 
+        InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(callback, new ProducerInterceptors<>(java.util.Collections.emptyList()), tp1);
+
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1, 0L, key, value, null, callback, maxBlockTimeMs, false, nowMs);
+            accumulator.append(tp1, 0L, key, value, null, interceptorCallback, maxBlockTimeMs, false, nowMs);
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);

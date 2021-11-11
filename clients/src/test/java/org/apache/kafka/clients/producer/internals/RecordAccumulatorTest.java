@@ -449,8 +449,13 @@ public class RecordAccumulatorTest {
                 numExceptionReceivedInCallback.incrementAndGet();
             }
         }
-        for (int i = 0; i < numRecords; i++)
-            accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs, false, time.milliseconds());
+        for (int i = 0; i < numRecords; i++) {
+            TopicPartition tp = new TopicPartition(topic, i % 3);
+            InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(new TestCallback(), new ProducerInterceptors<>(java.util.Collections.emptyList()), tp);
+
+            accum.append(tp, 0L, key, value, null, interceptorCallback, maxBlockTimeMs, false, time.milliseconds());
+        }
+
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertFalse(result.readyNodes.isEmpty());
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
@@ -490,8 +495,14 @@ public class RecordAccumulatorTest {
                 numExceptionReceivedInCallback.incrementAndGet();
             }
         }
-        for (int i = 0; i < numRecords; i++)
-            accum.append(new TopicPartition(topic, i % 3), 0L, key, value, null, new TestCallback(), maxBlockTimeMs, false, time.milliseconds());
+
+
+        for (int i = 0; i < numRecords; i++) {
+            TopicPartition tp = new TopicPartition(topic, i % 3);
+            InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(new TestCallback(), new ProducerInterceptors<>(java.util.Collections.emptyList()), tp);
+
+            accum.append(tp, 0L, key, value, null, interceptorCallback, maxBlockTimeMs, false, time.milliseconds());
+        }
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertFalse(result.readyNodes.isEmpty());
         Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE,
@@ -780,9 +791,11 @@ public class RecordAccumulatorTest {
                 acked.incrementAndGet();
             }
         };
+        InterceptorCallback<?, ?> interceptorCallback = new InterceptorCallback<>(cb, new ProducerInterceptors<>(java.util.Collections.emptyList()), batch.topicPartition);
+
         // Append two messages so the batch is too big.
-        Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
-        Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
+        Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, interceptorCallback, now);
+        Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, interceptorCallback, now);
         assertNotNull(future1);
         assertNotNull(future2);
         batch.close();

@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -171,7 +170,7 @@ public final class RecordAccumulator {
      * @param key The key for the record
      * @param value The value for the record
      * @param headers the Headers for the record
-     * @param callback The user-supplied callback to execute when the request is complete
+     * @param callback An InterceptorCallback that wraps the user-supplied callback to be executed when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
      * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
      *                        running the partitioner's onNewBatch method before trying to append again
@@ -182,7 +181,7 @@ public final class RecordAccumulator {
                                      byte[] key,
                                      byte[] value,
                                      Header[] headers,
-                                     Callback callback,
+                                     InterceptorCallback<?, ?> callback,
                                      long maxTimeToBlock,
                                      boolean abortOnNewBatch,
                                      long nowMs) throws InterruptedException {
@@ -262,7 +261,7 @@ public final class RecordAccumulator {
      *  if it is expired, or when the producer is closed.
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
-                                         Callback callback, Deque<ProducerBatch> deque, long nowMs) {
+                                         InterceptorCallback<?, ?> callback, Deque<ProducerBatch> deque, long nowMs) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, nowMs);
