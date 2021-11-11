@@ -27,16 +27,27 @@ public class TopicIdPartition {
     private final Uuid topicId;
     private final TopicPartition topicPartition;
 
+    /**
+     * Create an instance with the provided parameters.
+     *
+     * @param topicId the topic id
+     * @param topicPartition the topic partition
+     */
     public TopicIdPartition(Uuid topicId, TopicPartition topicPartition) {
         this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
     }
 
-    public TopicIdPartition(String topic, Uuid topicId, int partition) {
+    /**
+     * Create an instance with the provided parameters.
+     *
+     * @param topicId the topic id
+     * @param partition the partition id
+     * @param topic the topic name or null
+     */
+    public TopicIdPartition(Uuid topicId, int partition, String topic) {
         this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
-        this.topicPartition = new TopicPartition(
-            Objects.requireNonNull(topic, "topic can not be null"),
-            partition);
+        this.topicPartition = new TopicPartition(topic, partition);
     }
 
     /**
@@ -47,7 +58,7 @@ public class TopicIdPartition {
     }
 
     /**
-     * @return the topic name.
+     * @return the topic name or null if it is unknown.
      */
     public String topic() {
         return topicPartition.topic();

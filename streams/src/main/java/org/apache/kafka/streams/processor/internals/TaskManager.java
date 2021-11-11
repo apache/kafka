@@ -1250,7 +1250,7 @@ public class TaskManager {
 
     /**
      * Handle any added or removed NamedTopologies. Check if any uncreated assigned tasks belong to a newly
-     * added NamedTopology and create them if so, then freeze any tasks whose named topology no longer exists
+     * added NamedTopology and create them if so, then close any tasks whose named topology no longer exists
      */
     void handleTopologyUpdates() {
         tasks.maybeCreateTasksFromNewTopologies();

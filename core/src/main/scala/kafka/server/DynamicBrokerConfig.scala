@@ -204,16 +204,19 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val reconfigurables = mutable.Buffer[Reconfigurable]()
   private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var currentConfig = kafkaConfig
+  private var currentConfig: KafkaConfig = null
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
-  private[server] def initialize(zkClient: KafkaZkClient): Unit = {
+  private[server] def initialize(zkClientOpt: Option[KafkaZkClient]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
-    val adminZkClient = new AdminZkClient(zkClient)
-    updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
-    val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-    updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+
+    zkClientOpt.foreach { zkClient =>
+      val adminZkClient = new AdminZkClient(zkClient)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
+      val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
+      val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
+      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+    }
   }
 
   /**
@@ -516,6 +519,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false)
     if (newConfig ne currentConfig) {
@@ -719,7 +723,7 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
     if (newConfig.numNetworkThreads != oldConfig.numNetworkThreads)
       server.socketServer.resizeThreadPool(oldConfig.numNetworkThreads, newConfig.numNetworkThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
-      server.replicaManager.replicaFetcherManager.resizeThreadPool(newConfig.numReplicaFetchers)
+      server.replicaManager.resizeFetcherThreadPool(newConfig.numReplicaFetchers)
     if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)
       server.logManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
     if (newConfig.backgroundThreads != oldConfig.backgroundThreads)
@@ -955,6 +959,3 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     listeners.map(e => (e.listenerName, e)).toMap
 
 }
-
-
-

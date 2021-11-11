@@ -181,6 +181,8 @@ class BrokerServer(
     try {
       info("Starting broker")
 
+      config.dynamicConfig.initialize(zkClientOpt = None)
+
       lifecycleManager = new BrokerLifecycleManager(config, time, threadNamePrefix)
 
       /* start scheduler */
