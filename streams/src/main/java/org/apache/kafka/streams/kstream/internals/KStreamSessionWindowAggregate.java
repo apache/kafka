@@ -186,7 +186,8 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         store.remove(session.key);
                         tupleForwarder.maybeForward(
                             record.withKey(session.key)
-                                .withValue(new Change<>(null, sendOldValues ? session.value : null)));
+                                .withValue(new Change<>(null, sendOldValues ? session.value : null))
+                                .withTimestamp(session.key.window().end()));
                     }
                 }
 
@@ -194,7 +195,9 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
                 store.put(sessionKey, agg);
                 tupleForwarder.maybeForward(
-                    record.withKey(sessionKey).withValue(new Change<>(agg, null)));
+                    record.withKey(sessionKey)
+                        .withValue(new Change<>(agg, null))
+                        .withTimestamp(sessionKey.window().end()));
             }
         }
     }

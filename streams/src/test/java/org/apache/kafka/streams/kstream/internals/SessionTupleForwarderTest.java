@@ -77,8 +77,7 @@ public class SessionTupleForwarderTest {
         expectLastCall();
         replay(store, context);
 
-        new SessionTupleForwarder<>(store, context, null,
-            sendOldValued)
+        new SessionTupleForwarder<>(store, context, null, sendOldValued)
             .maybeForward(
                 new Record<>(
                     new Windowed<>("key", new SessionWindow(21L, 42L)),
