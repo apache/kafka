@@ -2469,7 +2469,7 @@ class KafkaApisTest {
       ApiKeys.FETCH.latestVersion,
       fetchMetadata,
       replicaId >= 0,
-      Map(foo -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000, Optional.empty())).asJava,
+      Collections.singletonMap(foo, new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000, Optional.empty())),
       Collections.emptyList,
       metadataCache.topicIdsToNames())).andReturn(fetchContext)
 
