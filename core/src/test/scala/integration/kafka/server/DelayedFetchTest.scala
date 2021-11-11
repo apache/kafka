@@ -38,7 +38,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
   @Test
   def testFetchWithFencedEpoch(): Unit = {
-    val topicIdPartition = new TopicIdPartition("topic", Uuid.randomUuid(), 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val fetchOffset = 500L
     val logStartOffset = 0L
     val currentLeaderEpoch = Optional.of[Integer](10)
@@ -86,7 +86,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
   @Test
   def testNotLeaderOrFollower(): Unit = {
-    val topicIdPartition = new TopicIdPartition("topic", Uuid.randomUuid(), 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val fetchOffset = 500L
     val logStartOffset = 0L
     val currentLeaderEpoch = Optional.of[Integer](10)
@@ -124,7 +124,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
   @Test
   def testDivergingEpoch(): Unit = {
-    val topicIdPartition = new TopicIdPartition("topic", Uuid.randomUuid(), 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val fetchOffset = 500L
     val logStartOffset = 0L
     val currentLeaderEpoch = Optional.of[Integer](10)

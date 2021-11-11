@@ -30,13 +30,13 @@ class TopicIdPartitionTest {
     private final int partition1 = 1;
     private final TopicPartition topicPartition0 = new TopicPartition(topicName0, partition1);
     private final TopicIdPartition topicIdPartition0 = new TopicIdPartition(topicId0, topicPartition0);
-    private final TopicIdPartition topicIdPartition1 = new TopicIdPartition(topicName0, topicId0,
-        partition1);
+    private final TopicIdPartition topicIdPartition1 = new TopicIdPartition(topicId0, partition1, topicName0
+    );
 
     private final Uuid topicId1 = new Uuid(7759286116672424028L, -5081215629859775948L);
     private final String topicName1 = "another_topic_name";
-    private final TopicIdPartition topicIdPartition2 = new TopicIdPartition(topicName1, topicId1,
-        partition1);
+    private final TopicIdPartition topicIdPartition2 = new TopicIdPartition(topicId1, partition1, topicName1
+    );
 
     @Test
     public void testEquals() {

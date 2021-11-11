@@ -32,7 +32,7 @@ public class TopicIdPartition {
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
     }
 
-    public TopicIdPartition(String topic, Uuid topicId, int partition) {
+    public TopicIdPartition(Uuid topicId, int partition, String topic) {
         this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
         this.topicPartition = new TopicPartition(
             Objects.requireNonNull(topic, "topic can not be null"),

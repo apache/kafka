@@ -47,7 +47,7 @@ public class FetchRequestTest {
     public void testToReplaceWithDifferentVersions(short version) {
         boolean fetchRequestUsesTopicIds = version >= 13;
         Uuid topicId = Uuid.randomUuid();
-        TopicIdPartition tp = new TopicIdPartition("topic", topicId, 0);
+        TopicIdPartition tp = new TopicIdPartition(topicId, 0, "topic");
 
         Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
                 new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
@@ -108,14 +108,14 @@ public class FetchRequestTest {
         topicIdPartitions.forEach(tidp -> {
             String expectedName = fetchRequestUsesTopicIds ? "" : tidp.topic();
             Uuid expectedTopicId = fetchRequestUsesTopicIds ? tidp.topicId() : Uuid.ZERO_UUID;
-            expectedData.add(new TopicIdPartition(expectedName, expectedTopicId, tidp.partition()));
+            expectedData.add(new TopicIdPartition(expectedTopicId, tidp.partition(), expectedName));
         });
 
         // Build the list of TopicIdPartitions based on the FetchRequestData that was serialized and parsed.
         List<TopicIdPartition> convertedFetchData = new LinkedList<>();
         fetchRequest.data().topics().forEach(topic ->
                 topic.partitions().forEach(partition ->
-                        convertedFetchData.add(new TopicIdPartition(topic.topic(), topic.topicId(), partition.partition()))
+                        convertedFetchData.add(new TopicIdPartition(topic.topicId(), partition.partition(), topic.topic()))
                 )
         );
         // The TopicIdPartitions built from the request data should match what we expect.
@@ -167,14 +167,14 @@ public class FetchRequestTest {
             toForgetTopics.forEach(tidp -> {
                 String expectedName = fetchRequestUsesTopicIds ? "" : tidp.topic();
                 Uuid expectedTopicId = fetchRequestUsesTopicIds ? tidp.topicId() : Uuid.ZERO_UUID;
-                expectedForgottenTopicData.add(new TopicIdPartition(expectedName, expectedTopicId, tidp.partition()));
+                expectedForgottenTopicData.add(new TopicIdPartition(expectedTopicId, tidp.partition(), expectedName));
             });
 
             // Build the list of TopicIdPartitions based on the FetchRequestData that was serialized and parsed.
             List<TopicIdPartition> convertedForgottenTopicData = new LinkedList<>();
             fetchRequest.data().forgottenTopicsData().forEach(forgottenTopic ->
                     forgottenTopic.partitions().forEach(partition ->
-                            convertedForgottenTopicData.add(new TopicIdPartition(forgottenTopic.topic(), forgottenTopic.topicId(), partition))
+                            convertedForgottenTopicData.add(new TopicIdPartition(forgottenTopic.topicId(), partition, forgottenTopic.topic()))
                     )
             );
             // The TopicIdPartitions built from the request data should match what we expect.
