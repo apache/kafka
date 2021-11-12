@@ -902,7 +902,6 @@ class ReplicaManager(val config: KafkaConfig,
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
       // Every time appending to a local log fails, collect the topic names into the set.
       failedTopicSet.add(topicPartition.topic)
-      brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
       error(s"Error processing append operation on partition $topicPartition", t)
 
       logStartOffset
@@ -915,7 +914,6 @@ class ReplicaManager(val config: KafkaConfig,
     val resultPerTopicPartition = entriesPerPartition.map { case (topicPartition, records) =>
       // Every time produce request arrives, collect the topic names into the set.
       requestedTopicSet.add(topicPartition.topic())
-      brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
 
       // reject appending to internal topics if it is not allowed
       if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
@@ -961,12 +959,14 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    requestedTopicSet.foreach { case topic =>
+    requestedTopicSet.foreach { topic =>
       brokerTopicStats.topicStats(topic).totalProduceRequestRate.mark()
+      brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
     }
 
-    failedTopicSet.foreach { case topic =>
+    failedTopicSet.foreach { topic =>
       brokerTopicStats.topicStats(topic).failedProduceRequestRate.mark()
+      brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
     }
 
     resultPerTopicPartition
@@ -1041,7 +1041,6 @@ class ReplicaManager(val config: KafkaConfig,
     logReadResults.foreach { case (topicIdPartition, logReadResult) =>
       // Every time fetch request arrives, collect the topic names into the set.
       requestedTopicSet.add(topicIdPartition.topicPartition.topic)
-      brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
 
       if (logReadResult.error != Errors.NONE)
         errorReadingData = true
@@ -1051,8 +1050,9 @@ class ReplicaManager(val config: KafkaConfig,
       logReadResultMap.put(topicIdPartition, logReadResult)
     }
 
-    requestedTopicSet.foreach { case topic =>
+    requestedTopicSet.foreach { topic =>
       brokerTopicStats.topicStats(topic).totalFetchRequestRate.mark()
+      brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
     }
 
     // respond immediately if 1) fetch request does not want to wait
@@ -1201,7 +1201,6 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           // Every time reading from a local log fails, collect the topic names into the set.
           failedTopicSet.add(tp.topic)
-          brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
 
           val fetchSource = Request.describeReplicaId(replicaId)
           error(s"Error processing fetch with max size $adjustedMaxBytes from $fetchSource " +
@@ -1231,8 +1230,9 @@ class ReplicaManager(val config: KafkaConfig,
       limitBytes = math.max(0, limitBytes - recordBatchSize)
       result += (tp -> readResult)
     }
-    failedTopicSet.foreach { case topic =>
+    failedTopicSet.foreach { topic =>
       brokerTopicStats.topicStats(topic).failedFetchRequestRate.mark()
+      brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
     }
     result
   }
