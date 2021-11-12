@@ -1407,7 +1407,8 @@ public abstract class ConsumerCoordinatorTest {
         // then let the full join/sync finish successfully
         client.prepareResponse(body -> {
             JoinGroupRequest joinRequest = (JoinGroupRequest) body;
-            return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            // member ID should not be reset under ILLEGAL_GENERATION error
+            return joinRequest.data().memberId().equals(consumerId);
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -2191,7 +2192,30 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetIllegalGenerationWithResetGenearion() {
+    public void testCommitOffsetIllegalGenerationShouldResetGenerationId() {
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.NONE));
+
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.ILLEGAL_GENERATION);
+        RequestFuture<Void> future = coordinator.sendOffsetCommitRequest(singletonMap(t1p,
+            new OffsetAndMetadata(100L, "metadata")));
+
+        assertTrue(consumerClient.poll(future, time.timer(30000)));
+
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION.generationId, coordinator.generation().generationId);
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION.protocolName, coordinator.generation().protocolName);
+        // member ID should not be reset
+        assertEquals(consumerId, coordinator.generation().memberId);
+    }
+
+    @Test
+    public void testCommitOffsetIllegalGenerationWithResetGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2216,7 +2240,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetUnknownMemberWithNewGenearion() {
+    public void testCommitOffsetUnknownMemberWithNewGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2246,7 +2270,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetUnknownMemberWithResetGenearion() {
+    public void testCommitOffsetUnknownMemberWithResetGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2266,12 +2290,32 @@ public abstract class ConsumerCoordinatorTest {
         assertTrue(consumerClient.poll(future, time.timer(30000)));
         assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
 
-        // the generation should not be reset
+        // the generation should be reset
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
     }
 
     @Test
-    public void testCommitOffsetFencedInstanceWithRebalancingGenearion() {
+    public void testCommitOffsetUnknownMemberShouldResetToNoGeneration() {
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.NONE));
+
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_MEMBER_ID);
+        RequestFuture<Void> future = coordinator.sendOffsetCommitRequest(singletonMap(t1p,
+            new OffsetAndMetadata(100L, "metadata")));
+
+        assertTrue(consumerClient.poll(future, time.timer(30000)));
+
+        assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+    }
+
+    @Test
+    public void testCommitOffsetFencedInstanceWithRebalancingGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2301,7 +2345,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testCommitOffsetFencedInstanceWithNewGenearion() {
+    public void testCommitOffsetFencedInstanceWithNewGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
@@ -2938,6 +2982,40 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(lost.isEmpty() ? null : lost, rebalanceListener.lost);
     }
 
+    @Test
+    public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterResettingGenerationId() {
+        final List<TopicPartition> partitions = singletonList(t1p);
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            final SystemTime realTime = new SystemTime();
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
+
+            assertThrows(RebalanceInProgressException.class, () -> coordinator.commitOffsetsSync(
+                singletonMap(t1p, new OffsetAndMetadata(100L)),
+                time.timer(Long.MAX_VALUE)));
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.ILLEGAL_GENERATION));
+
+            boolean res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+
+            assertFalse(res);
+            assertEquals(AbstractCoordinator.Generation.NO_GENERATION.generationId, coordinator.generation().generationId);
+            assertEquals(AbstractCoordinator.Generation.NO_GENERATION.protocolName, coordinator.generation().protocolName);
+            // member ID should not be reset
+            assertEquals(memberId, coordinator.generation().memberId);
+
+            res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+            assertFalse(res);
+        }
+        Collection<TopicPartition> lost = getLost(partitions);
+        assertEquals(lost.isEmpty() ? 0 : 1, rebalanceListener.lostCount);
+        assertEquals(lost.isEmpty() ? null : lost, rebalanceListener.lost);
+    }
 
     @Test
     public void testThrowOnUnsupportedStableFlag() {
