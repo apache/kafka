@@ -103,7 +103,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
-import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignTasksToThreads;
+import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignStatefulTasksToThreads;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
@@ -317,11 +317,11 @@ public class StreamsPartitionAssignorTest {
 
         assertEquivalentAssignment(
             previousAssignment,
-            assignTasksToThreads(
+            assignStatefulTasksToThreads(
                 allTasks,
-                emptySet(),
                 consumers,
-                state
+                state,
+                new HashMap<>()
             )
         );
     }
@@ -351,11 +351,11 @@ public class StreamsPartitionAssignorTest {
         state.assignActiveTasks(allTasks);
 
         final Map<String, List<TaskId>> newAssignment =
-            assignTasksToThreads(
+            assignStatefulTasksToThreads(
                 allTasks,
-                emptySet(),
                 consumers,
-                state
+                state,
+                new HashMap<>()
             );
 
         previousAssignment.get(CONSUMER_2).add(newTask);
@@ -384,11 +384,11 @@ public class StreamsPartitionAssignorTest {
         // Consumer 3 leaves the group
         consumers.remove(CONSUMER_3);
 
-        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
+        final Map<String, List<TaskId>> assignment = assignStatefulTasksToThreads(
             allTasks,
-            emptySet(),
             consumers,
-            state
+            state,
+            new HashMap<>()
         );
 
         // Each member should have all of its previous tasks reassigned plus some of consumer 3's tasks
@@ -424,11 +424,11 @@ public class StreamsPartitionAssignorTest {
         state.initializePrevTasks(emptyMap());
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
-        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
+        final Map<String, List<TaskId>> assignment = assignStatefulTasksToThreads(
             allTasks,
-            emptySet(),
             consumers,
-            state
+            state,
+            new HashMap<>()
         );
 
         // we should move one task each from consumer 1 and consumer 3 to the new member, and none from consumer 2
@@ -464,11 +464,11 @@ public class StreamsPartitionAssignorTest {
         Collections.shuffle(allTasks);
 
         final Map<String, List<TaskId>> interleavedTaskIds =
-            assignTasksToThreads(
+            assignStatefulTasksToThreads(
                 allTasks,
-                emptySet(),
                 consumers,
-                state
+                state,
+                new HashMap<>()
             );
 
         assertThat(interleavedTaskIds, equalTo(assignment));
@@ -995,6 +995,77 @@ public class StreamsPartitionAssignorTest {
         assertEquals(partitionsByHost, info20.partitionsByHost());
         assertEquals(standbyPartitionsByHost, info11.standbyPartitionByHost());
         assertEquals(standbyPartitionsByHost, info20.standbyPartitionByHost());
+    }
+
+    @Test
+    public void testAssignWithStandbyReplicasBalance() {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source1");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor");
+
+        final List<String> topics = asList("topic1");
+
+        final Set<TaskId> prevTasks00 = mkSet(TASK_0_0);
+        final Set<TaskId> standbyTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+
+        createMockTaskManager(prevTasks00, standbyTasks);
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
+                singletonList(APPLICATION_ID + "-store1-changelog"),
+                singletonList(3))
+        );
+        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
+
+        subscriptions.put("consumer10",
+                new Subscription(
+                        topics,
+                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        subscriptions.put("consumer11",
+                new Subscription(
+                        emptyList(),
+                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        subscriptions.put("consumer12",
+                new Subscription(
+                        emptyList(),
+                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        subscriptions.put("consumer13",
+                new Subscription(
+                        emptyList(),
+                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        subscriptions.put("consumer20",
+                new Subscription(
+                        topics,
+                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
+        subscriptions.put("consumer21",
+                new Subscription(
+                        topics,
+                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
+        subscriptions.put("consumer22",
+                new Subscription(
+                        topics,
+                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
+
+
+        final Map<String, Assignment> assignments =
+                partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        // Consumers
+        final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
+        final AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
+        final AssignmentInfo info12 = AssignmentInfo.decode(assignments.get("consumer12").userData());
+        final AssignmentInfo info13 = AssignmentInfo.decode(assignments.get("consumer13").userData());
+        final AssignmentInfo info20 = AssignmentInfo.decode(assignments.get("consumer20").userData());
+        final AssignmentInfo info21 = AssignmentInfo.decode(assignments.get("consumer21").userData());
+        final AssignmentInfo info22 = AssignmentInfo.decode(assignments.get("consumer22").userData());
+
+        // Check each consumer has no more than 1 task
+        // (client 1 has more consumers than needed so consumer13 won't get a task)
+        assertEquals(1, info10.activeTasks().size() + info10.standbyTasks().size());
+        assertEquals(1, info11.activeTasks().size() + info11.standbyTasks().size());
+        assertEquals(1, info12.activeTasks().size() + info12.standbyTasks().size());
+        assertEquals(0, info13.activeTasks().size() + info13.standbyTasks().size());
+        assertEquals(1, info20.activeTasks().size() + info20.standbyTasks().size());
+        assertEquals(1, info21.activeTasks().size() + info21.standbyTasks().size());
+        assertEquals(1, info22.activeTasks().size() + info22.standbyTasks().size());
     }
 
     @Test
