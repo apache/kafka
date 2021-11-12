@@ -198,7 +198,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
 
-        final KTableNewProcessorSupplier<K, V, K, V> processorSupplier =
+        final KTableProcessorSupplier<K, V, K, V> processorSupplier =
             new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
@@ -311,7 +311,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPVALUES_NAME);
 
-        final KTableNewProcessorSupplier<K, V, K, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
+        final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -464,7 +464,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(
+        final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableTransformValues<>(
             this,
             transformerSupplier,
             queryableStoreName);
@@ -726,8 +726,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             ((KTableImpl<?, ?, ?>) other).enableSendingOldValues(true);
         }
 
-        final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
-        final KTableKTableAbstractJoin<K, VR, VO, V> joinOther;
+        final KTableKTableAbstractJoin<K, V, VO, VR> joinThis;
+        final KTableKTableAbstractJoin<K, VO, V, VR> joinOther;
 
         if (!leftOuter) { // inner
             joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
@@ -808,7 +808,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final GroupedInternal<K1, V1> groupedInternal = new GroupedInternal<>(grouped);
         final String selectName = new NamedInternal(groupedInternal.name()).orElseGenerateWithPrefix(builder, SELECT_NAME);
 
-        final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        final KTableRepartitionMapSupplier<K, V, KeyValue<K1, V1>, K1, V1> selectSupplier = new KTableRepartitionMap<>(this, selector);
         final ProcessorParameters<K, Change<V>, ?, ?> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
@@ -835,10 +835,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
             return ((KStreamAggProcessorSupplier<?, S, K, V>) processorSupplier).view();
-        } else if (processorSupplier instanceof KTableNewProcessorSupplier) {
-            return ((KTableNewProcessorSupplier<?, ?, K, V>) processorSupplier).view();
         } else {
-            return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
+            return ((KTableProcessorSupplier<?, ?, K, V>) processorSupplier).view();
         }
     }
 
@@ -853,14 +851,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
-            } else if (processorSupplier instanceof KTableNewProcessorSupplier) {
-                final KTableNewProcessorSupplier<?, ?, ?, ?> tableProcessorSupplier =
-                    (KTableNewProcessorSupplier<?, ?, ?, ?>) processorSupplier;
-                if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
-                    return false;
-                }
-            } else {
-                final KTableProcessorSupplier<K, S, V> tableProcessorSupplier = (KTableProcessorSupplier<K, S, V>) processorSupplier;
+            } else if (processorSupplier instanceof KTableProcessorSupplier) {
+                final KTableProcessorSupplier<?, ?, ?, ?> tableProcessorSupplier =
+                    (KTableProcessorSupplier<?, ?, ?, ?>) processorSupplier;
                 if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
                     return false;
                 }

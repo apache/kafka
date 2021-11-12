@@ -280,6 +280,10 @@ class ReplicaManager(val config: KafkaConfig,
     replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
   }
 
+  def resizeFetcherThreadPool(newSize: Int): Unit = {
+    replicaFetcherManager.resizeThreadPool(newSize)
+  }
+
   def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition)
 
   def hasDelayedElectionOperations: Boolean = delayedElectLeaderPurgatory.numDelayed != 0
