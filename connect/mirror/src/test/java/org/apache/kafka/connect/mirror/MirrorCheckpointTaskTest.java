@@ -38,7 +38,7 @@ public class MirrorCheckpointTaskTest {
         assertEquals(new TopicPartition("source1.topic3", 4),
             mirrorCheckpointTask.renameTopicPartition(new TopicPartition("topic3", 4)),
                 "Renaming source1.topic3 failed");
-        assertEquals(new TopicPartition("topic3", 5),
+        assertEquals(new TopicPartition("source1.target2.topic3", 5),
             mirrorCheckpointTask.renameTopicPartition(new TopicPartition("target2.topic3", 5)),
                 "Renaming target2.topic3 failed");
         assertEquals(new TopicPartition("source1.source6.topic7", 8),
@@ -52,7 +52,6 @@ public class MirrorCheckpointTaskTest {
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 2), 3L, 4L);
-        offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
         Checkpoint checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
             new OffsetAndMetadata(10, null));
         SourceRecord sourceRecord1 = mirrorCheckpointTask.checkpointRecord(checkpoint1, 123L);
@@ -71,7 +70,7 @@ public class MirrorCheckpointTaskTest {
         Checkpoint checkpoint2 = mirrorCheckpointTask.checkpoint("group11", new TopicPartition("target2.topic5", 6),
             new OffsetAndMetadata(12, null));
         SourceRecord sourceRecord2 = mirrorCheckpointTask.checkpointRecord(checkpoint2, 234L);
-        assertEquals(new TopicPartition("topic5", 6), checkpoint2.topicPartition(),
+        assertEquals(new TopicPartition("source1.target2.topic5", 6), checkpoint2.topicPartition(),
                 "checkpoint group11 topic5 failed");
         assertEquals("group11", checkpoint2.consumerGroupId(),
                 "checkpoint group11 consumerGroupId failed");
@@ -79,7 +78,7 @@ public class MirrorCheckpointTaskTest {
                 "checkpoint group11 sourcePartition failed");
         assertEquals(12, checkpoint2.upstreamOffset(),
                 "checkpoint group11 upstreamOffset failed");
-        assertEquals(13, checkpoint2.downstreamOffset(),
+        assertEquals(12, checkpoint2.downstreamOffset(),
                 "checkpoint group11 downstreamOffset failed");
         assertEquals(234L, sourceRecord2.timestamp().longValue(),
                     "checkpoint group11 timestamp failed");

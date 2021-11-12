@@ -320,7 +320,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("backup.test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated downstream to primary cluster.");
 
         waitForCondition(() -> primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
-            Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated upstream to primary cluster.");
+            Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("backup.primary.test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated upstream to primary cluster.");
 
         Map<TopicPartition, OffsetAndMetadata> primaryOffsets = primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
                 Duration.ofMillis(CHECKPOINT_DURATION_MS));
@@ -335,10 +335,10 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
             backupConsumer.commitAsync();
         
-            assertTrue(backupConsumer.position(new TopicPartition("test-topic-1", 0)) > 0, "Consumer failedback to zero upstream offset.");
+            assertTrue(backupConsumer.position(new TopicPartition("backup.primary.test-topic-1", 0)) > 0, "Consumer failedback to zero upstream offset.");
             assertTrue(backupConsumer.position(new TopicPartition("backup.test-topic-1", 0)) > 0, "Consumer failedback to zero downstream offset.");
             assertTrue(backupConsumer.position(
-                new TopicPartition("test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected upstream offset.");
+                new TopicPartition("backup.primary.test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected upstream offset.");
             assertTrue(backupConsumer.position(
                 new TopicPartition("backup.test-topic-1", 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
         }

@@ -185,7 +185,13 @@ public class MirrorCheckpointTask extends SourceTask {
     Checkpoint checkpoint(String group, TopicPartition topicPartition,
             OffsetAndMetadata offsetAndMetadata) {
         long upstreamOffset = offsetAndMetadata.offset();
-        long downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+        long downstreamOffset;
+        if (isReplicaFromTarget(topicPartition.topic())) {
+            // We don't have a reverse offset mapping for replica topics, let's copy offset as-is
+            downstreamOffset = upstreamOffset;
+        } else {
+            downstreamOffset = offsetSyncStore.translateDownstream(topicPartition, upstreamOffset);
+        }
         return new Checkpoint(group, renameTopicPartition(topicPartition),
             upstreamOffset, downstreamOffset, offsetAndMetadata.metadata());
     }
@@ -200,19 +206,17 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     TopicPartition renameTopicPartition(TopicPartition upstreamTopicPartition) {
-        if (targetClusterAlias.equals(replicationPolicy.topicSource(upstreamTopicPartition.topic()))) {
-            // this topic came from the target cluster, so we rename like us-west.topic1 -> topic1
-            return new TopicPartition(replicationPolicy.originalTopic(upstreamTopicPartition.topic()),
-                upstreamTopicPartition.partition());
-        } else {
-            // rename like topic1 -> us-west.topic1
-            return new TopicPartition(replicationPolicy.formatRemoteTopic(sourceClusterAlias,
-                upstreamTopicPartition.topic()), upstreamTopicPartition.partition());
-        }
+        // rename like topic1 -> us-west.topic1
+        return new TopicPartition(replicationPolicy.formatRemoteTopic(sourceClusterAlias,
+            upstreamTopicPartition.topic()), upstreamTopicPartition.partition());
     }
 
     boolean shouldCheckpointTopic(String topic) {
         return topicFilter.shouldReplicateTopic(topic);
+    }
+
+    boolean isReplicaFromTarget(String topic) {
+        return targetClusterAlias.equals(replicationPolicy.topicSource(topic));
     }
 
     @Override

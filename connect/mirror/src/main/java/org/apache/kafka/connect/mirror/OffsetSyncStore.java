@@ -49,6 +49,10 @@ class OffsetSyncStore implements AutoCloseable {
 
     long translateDownstream(TopicPartition sourceTopicPartition, long upstreamOffset) {
         OffsetSync offsetSync = latestOffsetSync(sourceTopicPartition);
+        if (offsetSync == null) {
+            // Offset mapping is not available for the topic partition
+            return -1;
+        }
         if (offsetSync.upstreamOffset() > upstreamOffset) {
             // Offset is too far in the past to translate accurately
             return -1;
@@ -78,7 +82,6 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private OffsetSync latestOffsetSync(TopicPartition topicPartition) {
-        return offsetSyncs.computeIfAbsent(topicPartition, x -> new OffsetSync(topicPartition,
-            -1, -1));
+        return offsetSyncs.get(topicPartition);
     }
 }
