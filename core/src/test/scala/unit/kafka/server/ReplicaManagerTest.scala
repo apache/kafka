@@ -1386,26 +1386,44 @@ class ReplicaManagerTest {
     val mockTimer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
+    // 1 topic, 2 partitions
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
+    val tp1 = new TopicPartition(topic, 1)
+    val tidp1 = new TopicIdPartition(topicId, tp1)
     val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
     replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-    val partition0Replicas = Seq[Integer](0, 1).asJava
+    replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    val partitionReplicas = Seq[Integer](0, 1).asJava
 
-    val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+    val becomeLeaderRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp0.topic)
         .setPartitionIndex(tp0.partition)
         .setControllerEpoch(0)
         .setLeader(0)
         .setLeaderEpoch(1)
-        .setIsr(partition0Replicas)
+        .setIsr(partitionReplicas)
         .setZkVersion(0)
-        .setReplicas(partition0Replicas)
+        .setReplicas(partitionReplicas)
         .setIsNew(true)).asJava,
       topicIds.asJava,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest0, (_, _) => ())
+    val becomeLeaderRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp1.topic)
+        .setPartitionIndex(tp1.partition)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(partitionReplicas)
+        .setZkVersion(0)
+        .setReplicas(partitionReplicas)
+        .setIsNew(true)).asJava,
+      topicIds.asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest1, (_, _) => ())
 
     def assertMetricCount(expected: Int): Unit = {
       assertEquals(expected, replicaManager.brokerTopicStats.allTopicsStats.totalFetchRequestRate.count)
@@ -1415,16 +1433,22 @@ class ReplicaManagerTest {
     val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.empty())
 
-    val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None)
+    val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData), (tidp1, partitionData)), None)
     assertNotNull(nonPurgatoryFetchResult.get.get(tidp0).get)
     assertEquals(Errors.NONE, nonPurgatoryFetchResult.get.get(tidp0).get.error)
+    assertNotNull(nonPurgatoryFetchResult.get.get(tidp1).get)
+    assertEquals(Errors.NONE, nonPurgatoryFetchResult.get.get(tidp1).get.error)
+    // since we fetched 1 topic with 2 partitions, metrics are increased by the topic count (i.e., 1) only.
     assertMetricCount(1)
 
-    val purgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None, timeout = 10)
+    val purgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData), (tidp1, partitionData)), None, timeout = 10)
     assertNull(purgatoryFetchResult.get)
     mockTimer.advanceClock(11)
-    assertNotNull(purgatoryFetchResult.get)
+    assertNotNull(nonPurgatoryFetchResult.get.get(tidp0).get)
     assertEquals(Errors.NONE, purgatoryFetchResult.get.get(tidp0).get.error)
+    assertNotNull(nonPurgatoryFetchResult.get.get(tidp1).get)
+    assertEquals(Errors.NONE, purgatoryFetchResult.get.get(tidp1).get.error)
+    // since we fetched 1 topic with 2 partitions, metrics are increased by the topic count (i.e., 1) only.
     assertMetricCount(2)
   }
 
