@@ -1364,16 +1364,16 @@ class ReplicaManagerTest {
       val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
       var partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(0))
-      var fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
-      assertNotNull(fetchResult.get)
-      assertEquals(Errors.NONE, fetchResult.get.error)
+      var fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), Some(clientMetadata))
+      assertNotNull(fetchResult.get.get(tidp0).get)
+      assertEquals(Errors.NONE, fetchResult.get.get(tidp0).get.error)
 
       // Fetch from follower, with empty ClientMetadata (which implies an older version)
       partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(0))
-      fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None)
-      assertNotNull(fetchResult.get)
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+      fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None)
+      assertNotNull(fetchResult.get.get(tidp0).get)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.get(tidp0).get.error)
     } finally {
       replicaManager.shutdown()
     }
@@ -1415,16 +1415,16 @@ class ReplicaManagerTest {
     val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.empty())
 
-    val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 0)
-    assertNotNull(nonPurgatoryFetchResult.get)
-    assertEquals(Errors.NONE, nonPurgatoryFetchResult.get.error)
+    val nonPurgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None)
+    assertNotNull(nonPurgatoryFetchResult.get.get(tidp0).get)
+    assertEquals(Errors.NONE, nonPurgatoryFetchResult.get.get(tidp0).get.error)
     assertMetricCount(1)
 
-    val purgatoryFetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 10)
+    val purgatoryFetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None, timeout = 10)
     assertNull(purgatoryFetchResult.get)
     mockTimer.advanceClock(11)
     assertNotNull(purgatoryFetchResult.get)
-    assertEquals(Errors.NONE, purgatoryFetchResult.get.error)
+    assertEquals(Errors.NONE, purgatoryFetchResult.get.get(tidp0).get.error)
     assertMetricCount(2)
   }
 
@@ -1457,7 +1457,7 @@ class ReplicaManagerTest {
 
       val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.empty())
-      val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 10)
+      val fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None, timeout = 10)
       assertNull(fetchResult.get)
 
       // Become a follower and ensure that the delayed fetch returns immediately
@@ -1477,7 +1477,7 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
       assertNotNull(fetchResult.get)
-      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.get(tidp0).get.error)
     } finally {
       replicaManager.shutdown()
     }
@@ -1515,7 +1515,7 @@ class ReplicaManagerTest {
       val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
       val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
         Optional.of(1))
-      val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata), timeout = 10)
+      val fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), Some(clientMetadata), timeout = 10)
       assertNull(fetchResult.get)
 
       // Become a follower and ensure that the delayed fetch returns immediately
@@ -1535,7 +1535,7 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
       assertNotNull(fetchResult.get)
-      assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResult.get.error)
+      assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResult.get.get(tidp0).get.error)
     } finally {
       replicaManager.shutdown()
     }
@@ -1571,15 +1571,15 @@ class ReplicaManagerTest {
     val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
     var partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.of(1))
-    var fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.NONE, fetchResult.get.error)
+    var fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), Some(clientMetadata))
+    assertNotNull(fetchResult.get.get(tidp0).get)
+    assertEquals(Errors.NONE, fetchResult.get.get(tidp0).get.error)
 
     partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.empty())
-    fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, Some(clientMetadata))
-    assertNotNull(fetchResult.get)
-    assertEquals(Errors.NONE, fetchResult.get.error)
+    fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), Some(clientMetadata))
+    assertNotNull(fetchResult.get.get(tidp0).get)
+    assertEquals(Errors.NONE, fetchResult.get.get(tidp0).get.error)
   }
 
   @Test
@@ -1614,7 +1614,7 @@ class ReplicaManagerTest {
 
     val partitionData = new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0L, 0L, 100,
       Optional.of(1))
-    val fetchResult = sendConsumerFetch(replicaManager, tidp0, partitionData, None, timeout = 10)
+    val fetchResult = sendConsumerFetch(replicaManager, Seq((tidp0, partitionData)), None, timeout = 10)
     assertNull(fetchResult.get)
     Mockito.when(replicaManager.metadataCache.contains(ArgumentMatchers.eq(tp0))).thenReturn(true)
 
@@ -1627,7 +1627,7 @@ class ReplicaManagerTest {
         .setLeaderEpoch(LeaderAndIsr.EpochDuringDelete)))
 
     assertNotNull(fetchResult.get)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.error)
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, fetchResult.get.get(tidp0).get.error)
   }
 
   @Test
@@ -1700,13 +1700,12 @@ class ReplicaManagerTest {
   }
 
   private def sendConsumerFetch(replicaManager: ReplicaManager,
-                                topicIdPartition: TopicIdPartition,
-                                partitionData: FetchRequest.PartitionData,
+                                topicPartitionData: Seq[(TopicIdPartition, FetchRequest.PartitionData)],
                                 clientMetadataOpt: Option[ClientMetadata],
-                                timeout: Long = 0L): AtomicReference[FetchPartitionData] = {
-    val fetchResult = new AtomicReference[FetchPartitionData]()
+                                timeout: Long = 0L): AtomicReference[Map[TopicIdPartition, FetchPartitionData]] = {
+    val fetchResult = new AtomicReference[Map[TopicIdPartition, FetchPartitionData]]()
     def callback(response: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
-      fetchResult.set(response.toMap.apply(topicIdPartition))
+      fetchResult.set(response.toMap)
     }
     replicaManager.fetchMessages(
       timeout = timeout,
@@ -1714,7 +1713,7 @@ class ReplicaManagerTest {
       fetchMinBytes = 1,
       fetchMaxBytes = 100,
       hardMaxBytesLimit = false,
-      fetchInfos = Seq(topicIdPartition -> partitionData),
+      fetchInfos = topicPartitionData,
       quota = UnboundedQuota,
       isolationLevel = IsolationLevel.READ_UNCOMMITTED,
       responseCallback = callback,
