@@ -2962,6 +2962,64 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testProduceRequestRateMetrics(): Unit = {
+    val localId = 1
+    val otherId = localId + 1
+    val numOfRecords = 3
+    // 1 topic, 2 partitions
+    val tp0 = new TopicPartition("foo", 0)
+    val tidp0 = new TopicIdPartition(topicId, tp0)
+    val tp1 = new TopicPartition("foo", 1)
+    val tidp1 = new TopicIdPartition(topicId, tp1)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    try {
+      // Make the local replica the leader
+      val leaderTopicsDelta0 = topicsCreateDelta(localId, true, 0)
+      val leaderMetadataImage0 = imageFromTopics(leaderTopicsDelta0.apply())
+      replicaManager.applyDelta(leaderTopicsDelta0, leaderMetadataImage0)
+      val leaderTopicsDelta1 = topicsCreateDelta(localId, true, 1)
+      val leaderMetadataImage1 = imageFromTopics(leaderTopicsDelta1.apply())
+      replicaManager.applyDelta(leaderTopicsDelta1, leaderMetadataImage1)
+
+      def assertMetricCount(expected: Int): Unit = {
+        assertEquals(expected, replicaManager.brokerTopicStats.allTopicsStats.totalProduceRequestRate.count)
+        assertEquals(expected, replicaManager.brokerTopicStats.topicStats(tp0.topic).totalProduceRequestRate.count)
+      }
+
+      // Send a produce request and advance the highwatermark
+      val leaderResponse = sendProducerAppend(replicaManager, Seq((tp0, numOfRecords), (tp1, numOfRecords)))
+      fetchMessages(
+        replicaManager,
+        otherId,
+        tidp0,
+        new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        Int.MaxValue,
+        IsolationLevel.READ_UNCOMMITTED,
+        None
+      )
+      fetchMessages(
+        replicaManager,
+        otherId,
+        tidp1,
+        new PartitionData(Uuid.ZERO_UUID, numOfRecords, 0, Int.MaxValue, Optional.empty()),
+        Int.MaxValue,
+        IsolationLevel.READ_UNCOMMITTED,
+        None
+      )
+      assertEquals(Errors.NONE, leaderResponse.get.get(tp0).get.error)
+      assertEquals(Errors.NONE, leaderResponse.get.get(tp1).get.error)
+
+      // since we produced 1 topic with 2 partitions, metrics are increased by the topic count (i.e., 1) only.
+      assertMetricCount(1)
+    } finally {
+      replicaManager.shutdown()
+    }
+
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+  }
+
+  @Test
   def testDeltaFromLeaderToFollower(): Unit = {
     val localId = 1
     val otherId = localId + 1
@@ -3468,13 +3526,13 @@ class ReplicaManagerTest {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
+  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitionId: Int = 0): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
     delta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
     delta.replay(
       new PartitionRecord()
-        .setPartitionId(0)
+        .setPartitionId(partitionId)
         .setTopicId(FOO_UUID)
         .setReplicas(util.Arrays.asList(startId, startId + 1))
         .setIsr(util.Arrays.asList(startId, startId + 1))
