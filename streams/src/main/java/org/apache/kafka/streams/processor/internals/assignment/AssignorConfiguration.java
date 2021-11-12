@@ -105,13 +105,15 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
+                    log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
+                    log.warn("Eagar rebalancing protocol is deprecated in Kafka Stream since V3.1, and will not get supported" +
+                        "in future release. Please remove the 'upgrade.from' setting soon.");
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        log.info("Cooperative rebalancing enabled now");
+        log.info("Cooperative rebalancing protocol is enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 

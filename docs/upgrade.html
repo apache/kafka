@@ -26,6 +26,8 @@
         and <code>iotime-total</code>. Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>,
         and <code>io-time-ns-total</code> instead. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-773%3A+Differentiate+consistently+metric+latency+measured+in+millis+and+nanos">KIP-773</a>
         for more details.</li>
+    <li>Eagar rebalancing protocol is deprecated in Kafka Stream since V3.1, and will not get supported in future release.
+        Please remove the <code>upgrade.from</code> setting soon.</li>
 </ul>
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
