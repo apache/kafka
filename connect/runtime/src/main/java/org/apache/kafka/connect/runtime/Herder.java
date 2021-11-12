@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -200,6 +201,13 @@ public interface Herder {
     default void validateConnectorConfig(Map<String, String> connectorConfig, Callback<ConfigInfos> callback, boolean doLog) {
         validateConnectorConfig(connectorConfig, callback);
     }
+
+    /**
+     * Fetches the config definition of a given connector type.
+     * @param connectorClass is the class name of the connector type we want to fetch.
+     * @return the config definition of the connector.
+     */
+    ConfigKeyInfos getConfigKeyInfos(String connectorClass);
 
     /**
      * Restart the task with the given id.

@@ -21,6 +21,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.tools.MockConnector;
@@ -74,6 +75,9 @@ public class ConnectorPluginsResource {
         final @PathParam("connectorType") String connType,
         final Map<String, String> connectorConfig
     ) throws Throwable {
+        if (connectorConfig == null) {
+            throw new IllegalArgumentException("A valid connector config must be provided as the body of the request");
+        }
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (includedConnType != null
             && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(connType))) {
@@ -115,6 +119,16 @@ public class ConnectorPluginsResource {
         }
 
         return Collections.unmodifiableList(connectorPlugins);
+    }
+
+    @GET
+    @Path("/{connectorClass}/config")
+    public ConfigKeyInfos listConfigInfos(final @PathParam("connectorClass") String connectorClass) {
+        if (connectorClass == null || connectorClass.isEmpty()) {
+            throw new IllegalArgumentException("A valid connector class name must be provided as the body of the request");
+        }
+
+        return herder.getConfigKeyInfos(connectorClass);
     }
 
     private String normalizedPluginName(String pluginName) {

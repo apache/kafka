@@ -37,6 +37,7 @@ public class FileStreamSinkConnector extends SinkConnector {
 
     public static final String FILE_CONFIG = "file";
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define("password", Type.PASSWORD, "alma", Importance.LOW, "Just testing the password config type")
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Destination filename. If not specified, the standard output will be used");
 
     private String filename;

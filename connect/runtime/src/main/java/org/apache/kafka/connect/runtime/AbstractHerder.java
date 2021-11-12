@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
@@ -34,6 +35,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -344,6 +346,34 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
+    @Override
+    public ConfigKeyInfos getConfigKeyInfos(String connectorClass) {
+        Connector connector = getConnector(connectorClass);
+
+        ConfigDef baseConfigDef = connector instanceof SourceConnector
+            ? SourceConnectorConfig.configDef()
+            : SinkConnectorConfig.configDef();
+        Map<String, ConfigKey> configKeys = new LinkedHashMap<>(baseConfigDef.configKeys());
+        Set<String> allGroups = new LinkedHashSet<>(baseConfigDef.groups());
+
+        // do custom connector-specific validation
+        ConfigDef configDef = connector.config();
+        if (null == configDef) {
+            throw new BadRequestException(
+                String.format(
+                    "%s.config() must return a ConfigDef that is not null.",
+                    connector.getClass().getName()
+                )
+            );
+        }
+        configKeys.putAll(configDef.configKeys());
+        allGroups.addAll(configDef.groups());
+
+        return new ConfigKeyInfos(connectorClass, new ArrayList<>(allGroups),
+            configKeys.values().stream().map(AbstractHerder::convertConfigKey).collect(Collectors.toList()));
+    }
+
+
     protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
                                                                     ConfigDef configDef,
                                                                     Map<String, String> config) {
@@ -489,7 +519,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 consumerConfigInfos = validateClientOverrides(connName,
                                                               ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                                                               connectorConfig,
-                                                              ProducerConfig.configDef(),
+                                                              ConsumerConfig.configDef(),
                                                               connector.getClass(),
                                                               connectorType,
                                                               ConnectorClientConfigRequest.ClientType.CONSUMER,

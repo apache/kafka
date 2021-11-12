@@ -35,6 +35,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
@@ -369,6 +370,20 @@ public class AbstractHerderTest {
         assertTrue(restartPlan.taskIdsToRestart().isEmpty());
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testGetConfigKeyInfos() {
+        TestSourceConnector connector = new TestSourceConnector();
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
+        EasyMock.expect(plugins.newConnector(TestSourceConnector.class.getName())).andReturn(connector);
+        replayAll();
+
+        ConfigKeyInfos configKeyInfos = herder.getConfigKeyInfos(TestSourceConnector.class.getName());
+        int expectedSize = SourceConnectorConfig.configDef().configKeys().size() + connector.config().configKeys().size();
+        assertEquals(expectedSize, configKeyInfos.configKeys().size());
+
+        verifyAll();
     }
 
     @Test
