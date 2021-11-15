@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn, VIn> {
+class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final KTableImpl<KIn, ?, VIn> parent;
     private final Predicate<? super KIn, ? super VIn> predicate;
     private final boolean filterNot;
@@ -166,7 +166,7 @@ class KTableFilter<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn
         }
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             // This is the old processor context for compatibility with the other KTable processors.
             // Once we migrte them all, we can swap this out.
             parentGetter.init(context);

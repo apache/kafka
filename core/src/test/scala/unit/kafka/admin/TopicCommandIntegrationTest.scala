@@ -80,7 +80,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   }
 
   @BeforeEach
-  def setup(info: TestInfo): Unit = {
+  override def setUp(info: TestInfo): Unit = {
+    super.setUp(info)
+
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)

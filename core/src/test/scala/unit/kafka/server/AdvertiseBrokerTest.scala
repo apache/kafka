@@ -19,13 +19,13 @@ package kafka.server
 
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
-class AdvertiseBrokerTest extends ZooKeeperTestHarness {
+class AdvertiseBrokerTest extends QuorumTestHarness {
   val servers = ArrayBuffer[KafkaServer]()
 
   val brokerId = 0

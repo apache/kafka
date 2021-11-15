@@ -17,11 +17,10 @@
 
 package kafka.server
 
-import java.util
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
@@ -49,8 +48,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchIsolation: FetchIsolation,
                          isFromFollower: Boolean,
                          replicaId: Int,
-                         topicIds: util.Map[String, Uuid],
-                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
+                         fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +
@@ -68,7 +66,7 @@ class DelayedFetch(delayMs: Long,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
                    clientMetadata: Option[ClientMetadata],
-                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
+                   responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -87,12 +85,12 @@ class DelayedFetch(delayMs: Long,
   override def tryComplete(): Boolean = {
     var accumulatedSize = 0
     fetchMetadata.fetchPartitionStatus.foreach {
-      case (topicPartition, fetchStatus) =>
+      case (topicIdPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            val partition = replicaManager.getPartitionOrException(topicPartition)
+            val partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
             val endOffset = fetchMetadata.fetchIsolation match {
@@ -107,7 +105,7 @@ class DelayedFetch(delayMs: Long,
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case F, this can happen when the new fetch operation is on a truncated leader
-                debug(s"Satisfying fetch $fetchMetadata since it is fetching later segments of partition $topicPartition.")
+                debug(s"Satisfying fetch $fetchMetadata since it is fetching later segments of partition $topicIdPartition.")
                 return forceComplete()
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
@@ -130,27 +128,27 @@ class DelayedFetch(delayMs: Long,
               if (epochEndOffset.errorCode != Errors.NONE.code()
                   || epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET
                   || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
-                debug(s"Could not obtain last offset for leader epoch for partition $topicPartition, epochEndOffset=$epochEndOffset.")
+                debug(s"Could not obtain last offset for leader epoch for partition $topicIdPartition, epochEndOffset=$epochEndOffset.")
                 return forceComplete()
               } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {
                 debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition " +
-                  s"$topicPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
+                  s"$topicIdPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
                 return forceComplete()
               }
             }
           }
         } catch {
           case _: NotLeaderOrFollowerException =>  // Case A or Case B
-            debug(s"Broker is no longer the leader or follower of $topicPartition, satisfy $fetchMetadata immediately")
+            debug(s"Broker is no longer the leader or follower of $topicIdPartition, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: UnknownTopicOrPartitionException => // Case C
-            debug(s"Broker no longer knows of partition $topicPartition, satisfy $fetchMetadata immediately")
+            debug(s"Broker no longer knows of partition $topicIdPartition, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: KafkaStorageException => // Case D
-            debug(s"Partition $topicPartition is in an offline log directory, satisfy $fetchMetadata immediately")
+            debug(s"Partition $topicIdPartition is in an offline log directory, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: FencedLeaderEpochException => // Case E
-            debug(s"Broker is the leader of partition $topicPartition, but the requested epoch " +
+            debug(s"Broker is the leader of partition $topicIdPartition, but the requested epoch " +
               s"$fetchLeaderEpoch is fenced by the latest leader epoch, satisfy $fetchMetadata immediately")
             return forceComplete()
         }
@@ -181,13 +179,12 @@ class DelayedFetch(delayMs: Long,
       fetchMaxBytes = fetchMetadata.fetchMaxBytes,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
       readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
-      topicIds = fetchMetadata.topicIds,
       clientMetadata = clientMetadata,
       quota = quota)
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       val isReassignmentFetch = fetchMetadata.isFromFollower &&
-        replicaManager.isAddingReplica(tp, fetchMetadata.replicaId)
+        replicaManager.isAddingReplica(tp.topicPartition, fetchMetadata.replicaId)
 
       tp -> result.toFetchPartitionData(isReassignmentFetch)
     }

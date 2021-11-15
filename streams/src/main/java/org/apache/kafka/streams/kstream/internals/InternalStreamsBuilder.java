@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -51,7 +50,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.PriorityQueue;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
@@ -270,13 +268,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(null);
+        buildAndOptimizeTopology(false);
     }
 
-    public void buildAndOptimizeTopology(final Properties props) {
+    public void buildAndOptimizeTopology(final boolean optimizeTopology) {
 
         mergeDuplicateSourceNodes();
-        maybePerformOptimizations(props);
+        if (optimizeTopology) {
+            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            optimizeKTableSourceTopics();
+            maybeOptimizeRepartitionOperations();
+        }
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
 
@@ -343,15 +345,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                     }
                 }
             }
-        }
-    }
-
-    private void maybePerformOptimizations(final Properties props) {
-
-        if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG))) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
-            optimizeKTableSourceTopics();
-            maybeOptimizeRepartitionOperations();
         }
     }
 
