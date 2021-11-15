@@ -690,6 +690,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else None
         if controller_sec_protocol:
             protocol_map.append("%s:%s" % (self.controller_listener_name(controller_sec_protocol), controller_sec_protocol))
+            # we need the controller listener name to appear as a listener
+            listeners.append("%s://:%s" % (
+                self.controller_listener_name(controller_sec_protocol),
+                config_property.FIRST_CONTROLLER_PORT + KafkaService.SECURITY_PROTOCOLS.index(controller_sec_protocol)))
 
         self.listeners = ','.join(listeners)
         self.advertised_listeners = ','.join(advertised_listeners)

@@ -257,18 +257,34 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerListenerDefined(): Unit = {
+  def testControllerListenerDefinedForKRaftController(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "controller")
-    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
-    props.put(KafkaConfig.NodeIdProp, "1")
-    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9093")
+    props.put(KafkaConfig.NodeIdProp, "2")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
     val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    assertTrue(caught.getMessage.contains("controller.listener.names cannot be empty if the server has the controller role"))
+    assertTrue(caught.getMessage.contains("controller.listener.names must contain at least one value appearing in the 'listeners' configuration when running a KRaft node"))
 
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testControllerListenerDefinedForKRaftBroker(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+
+    assertFalse(isValidKafkaConfig(props))
+    val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("controller.listener.names must contain at least one value appearing in the 'listeners' configuration when running a KRaft node"))
+
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     assertTrue(isValidKafkaConfig(props))
   }
 
@@ -1107,6 +1123,8 @@ class KafkaConfigTest {
     val largeBrokerId = 2000
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
     assertTrue(isValidKafkaConfig(props))
@@ -1209,7 +1227,8 @@ class KafkaConfigTest {
   def testZookeeperConnectNotRequiredIfNonEmptyProcessRoles(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.NodeIdProp, "1")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     assertTrue(isValidKafkaConfig(props))
@@ -1222,6 +1241,8 @@ class KafkaConfigTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
     props.put(KafkaConfig.LogDirProp, dataDir)
     props.put(KafkaConfig.NodeIdProp, "1")
@@ -1240,6 +1261,8 @@ class KafkaConfigTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
     props.put(KafkaConfig.NodeIdProp, "1")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
@@ -1298,6 +1321,8 @@ class KafkaConfigTest {
   def testNodeIdIsInferredByBrokerIdWithKraft(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.setProperty(KafkaConfig.BrokerIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     val config = KafkaConfig.fromProps(props)
@@ -1312,6 +1337,8 @@ class KafkaConfigTest {
   def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.setProperty(KafkaConfig.NodeIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
     val config = KafkaConfig.fromProps(props)
