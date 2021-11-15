@@ -1101,6 +1101,84 @@ public abstract class ConsumerCoordinatorTest {
         }
     }
 
+    @Test
+    public void testJoinPrepareWithDisableAutoCommit() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+
+            assertTrue(res);
+            assertTrue(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitCompleted() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitWithCoordinatorNotAvailable() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_NOT_AVAILABLE);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertTrue(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitWithUnknownMemberId() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_MEMBER_ID);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
     /**
      * Verifies that the consumer re-joins after a metadata change. If JoinGroup fails
      * and metadata reverts to its original value, the consumer should still retry JoinGroup.

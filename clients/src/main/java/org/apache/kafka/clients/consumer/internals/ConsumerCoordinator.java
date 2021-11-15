@@ -696,21 +696,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         boolean onJoinPrepareAsyncCommitCompleted = false;
         // async commit offsets prior to rebalance if auto-commit enabled
-        // and if auto-commit disable or the coordinatorUnknown is true, the future will be null,
-        // the asynchronous commit operation will not do.
         RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
-        if (future == null)
+        // return true when
+        // 1. future is null, which means no commit request sent, so it is still considered completed
+        // 2. offset commit completed
+        // 3. offset commit failed with non-retriable error
+        if (future == null || future.succeeded() || (future.failed() && !future.isRetriable()))
             onJoinPrepareAsyncCommitCompleted = true;
-        else {
-            if (future.succeeded()) {
-                onJoinPrepareAsyncCommitCompleted = true;
-            } else if (future.failed()) {
-                // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Asynchronous auto-commit offsets failed: {}", future.exception().getMessage());
-                if (!future.isRetriable())
-                    onJoinPrepareAsyncCommitCompleted = true;
-            }
-        }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -1098,8 +1090,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             client.pollNoWakeup();
             invokeCompletedOffsetCommitCallbacks();
             return future;
-        } else
-            return null;
+        }
+        return null;    
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
