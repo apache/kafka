@@ -59,11 +59,11 @@ object DumpLogSegments {
       suffix match {
         case UnifiedLog.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.maxMessageSize, opts.messageParser, opts.skipRecordMetadata)
+            opts.messageParser, opts.skipRecordMetadata)
         case UnifiedLog.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
-          dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors, opts.maxMessageSize)
+          dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors)
         case UnifiedLog.ProducerSnapshotFileSuffix =>
           dumpProducerIdSnapshot(file)
         case UnifiedLog.TxnIndexFileSuffix =>
