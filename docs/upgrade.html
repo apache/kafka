@@ -237,8 +237,8 @@
         The 2.7.0 release includes the core Raft implementation specified in
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum">KIP-595</a>.
         There is a separate "raft" module containing most of the logic. Until integration with the
-        controller is complete, there is a standalone server that users can use for testing the p
-        erformance of the Raft implementation.  See the README.md in the raft module for details
+        controller is complete, there is a standalone server that users can use for testing the
+        performance of the Raft implementation. See the README.md in the raft module for details
     </li>
     <li>
         KIP-651 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-651+-+Support+PEM+format+for+SSL+certificates+and+private+key">adds support</a>
@@ -438,8 +438,8 @@
         <a href="https://github.com/apache/kafka/tree/2.5/examples">examples</a> folder. Check out
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>
         for the full details.</li>
-    <li>Added a new public api <code>KafkaStreams.queryMetadataForKey(String, K, Serializer) to get detailed information on the key being queried.
-        It provides information about the partition number where the key resides in addition to hosts containing the active and standby partitions for the key.</code></li>
+    <li>Added a new public api <code>KafkaStreams.queryMetadataForKey(String, K, Serializer)</code> to get detailed information on the key being queried.
+        It provides information about the partition number where the key resides in addition to hosts containing the active and standby partitions for the key.</li>
     <li>Provided support to query stale stores (for high availability) and the stores belonging to a specific partition by deprecating <code>KafkaStreams.store(String, QueryableStoreType)</code> and replacing it with <code>KafkaStreams.store(StoreQueryParameters)</code>.</li>
     <li>Added a new public api to access lag information for stores local to an instance with <code>KafkaStreams.allLocalStorePartitionLags()</code>.</li>
     <li>Scala 2.11 is no longer supported. See
@@ -521,11 +521,11 @@
         if there are no snapshot files in 3.4 data directory. For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
     </li>
     <li>
-        An embedded Jetty based <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
+        An embedded Jetty based <a href="https://zookeeper.apache.org/doc/r3.5.9/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
         AdminServer is enabled by default in ZooKeeper and is started on port 8080.
         AdminServer is disabled by default in the ZooKeeper config (<code>zookeeper.properties</code>) provided by the Apache Kafka distribution.
         Make sure to update your local <code>zookeeper.properties</code> file with <code>admin.enableServer=false</code> if you wish to disable the AdminServer.
-        Please refer <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer config</a> to configure the AdminServer.
+        Please refer <a href="https://zookeeper.apache.org/doc/r3.5.9/zookeeperAdmin.html#sc_adminserver">AdminServer config</a> to configure the AdminServer.
     </li>
 </ol>
 
