@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.stream.Collectors;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -36,6 +37,8 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
+import static java.util.Comparator.comparingLong;
+
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
@@ -327,6 +330,21 @@ public class ClientState {
         return totalLag;
     }
 
+    /**
+     * @return the previous tasks assigned to this consumer ordered by lag, filtered for any tasks that don't exist in this assignment
+     */
+    public SortedSet<TaskId> prevTasksByLag(final String consumer) {
+        final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(this::lagFor).thenComparing(TaskId::compareTo));
+        for (final TaskId task : prevOwnedStatefulTasksByConsumer(consumer)) {
+            if (taskLagTotals.containsKey(task)) {
+                prevTasksByLag.add(task);
+            } else {
+                LOG.debug("Skipping previous task {} since it's not part of the current assignment", task);
+            }
+        }
+        return prevTasksByLag;
+    }
+
     public Set<TaskId> statefulActiveTasks() {
         return assignedActiveTasks.taskIds().stream().filter(this::isStateful).collect(Collectors.toSet());
     }
@@ -358,6 +376,10 @@ public class ClientState {
         } else {
             return capacity > other.capacity;
         }
+    }
+
+    public String consumers() {
+        return consumerToPreviousStatefulTaskIds.keySet().toString();
     }
 
     public String currentAssignment() {

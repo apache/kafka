@@ -16,12 +16,11 @@ import java.time.Duration
 import java.util
 import java.util.Arrays.asList
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Optional, Properties}
-
+import java.util.{Locale, Optional, Properties}
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
@@ -1216,95 +1215,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testOffsetsForTimes(): Unit = {
-    val numParts = 2
-    val topic1 = "part-test-topic-1"
-    val topic2 = "part-test-topic-2"
-    val topic3 = "part-test-topic-3"
-    val props = new Properties()
-    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    createTopic(topic1, numParts, 1)
-    // Topic2 is in old message format.
-    createTopic(topic2, numParts, 1, props)
-    createTopic(topic3, numParts, 1)
-
-    val consumer = createConsumer()
-
-    // Test negative target time
-    assertThrows(classOf[IllegalArgumentException],
-      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
-
-    val producer = createProducer()
-    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
-    var i = 0
-    for (topic <- List(topic1, topic2, topic3)) {
-      for (part <- 0 until numParts) {
-        val tp = new TopicPartition(topic, part)
-        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
-        sendRecords(producer, numRecords = 100, tp, startingTimestamp = 0)
-        timestampsToSearch.put(tp, (i * 20).toLong)
-        i += 1
-      }
-    }
-    // The timestampToSearch map should contain:
-    // (topic1Partition0 -> 0,
-    //  topic1Partitoin1 -> 20,
-    //  topic2Partition0 -> 40,
-    //  topic2Partition1 -> 60,
-    //  topic3Partition0 -> 80,
-    //  topic3Partition1 -> 100)
-    val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
-
-    val timestampTopic1P0 = timestampOffsets.get(new TopicPartition(topic1, 0))
-    assertEquals(0, timestampTopic1P0.offset)
-    assertEquals(0, timestampTopic1P0.timestamp)
-    assertEquals(Optional.of(0), timestampTopic1P0.leaderEpoch)
-
-    val timestampTopic1P1 = timestampOffsets.get(new TopicPartition(topic1, 1))
-    assertEquals(20, timestampTopic1P1.offset)
-    assertEquals(20, timestampTopic1P1.timestamp)
-    assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
-
-    assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
-    assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
-
-    val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
-    assertEquals(80, timestampTopic3P0.offset)
-    assertEquals(80, timestampTopic3P0.timestamp)
-    assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
-
-    assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
-  }
-
-  @Test
-  def testEarliestOrLatestOffsets(): Unit = {
-    val topic0 = "topicWithNewMessageFormat"
-    val topic1 = "topicWithOldMessageFormat"
-    val producer = createProducer()
-    createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
-    val props = new Properties()
-    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    createTopic(topic1, numPartitions = 1, replicationFactor = 1, props)
-    sendRecords(producer, numRecords = 100, new TopicPartition(topic1, 0))
-
-    val t0p0 = new TopicPartition(topic0, 0)
-    val t0p1 = new TopicPartition(topic0, 1)
-    val t1p0 = new TopicPartition(topic1, 0)
-    val partitions = Set(t0p0, t0p1, t1p0).asJava
-    val consumer = createConsumer()
-
-    val earliests = consumer.beginningOffsets(partitions)
-    assertEquals(0L, earliests.get(t0p0))
-    assertEquals(0L, earliests.get(t0p1))
-    assertEquals(0L, earliests.get(t1p0))
-
-    val latests = consumer.endOffsets(partitions)
-    assertEquals(100L, latests.get(t0p0))
-    assertEquals(100L, latests.get(t0p1))
-    assertEquals(100L, latests.get(t1p0))
-  }
-
-  @Test
   def testUnsubscribeTopic(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
@@ -1703,24 +1613,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (consumer <- consumerGroup)
       consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
     consumerPollers
-  }
-
-  /**
-   * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
-   * records to each partition
-   */
-  def createTopicAndSendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                topicName: String,
-                                numPartitions: Int,
-                                recordsPerPartition: Int): Set[TopicPartition] = {
-    createTopic(topicName, numPartitions, brokerCount)
-    var parts = Set[TopicPartition]()
-    for (partition <- 0 until numPartitions) {
-      val tp = new TopicPartition(topicName, partition)
-      sendRecords(producer, recordsPerPartition, tp)
-      parts = parts + tp
-    }
-    parts
   }
 
   /**

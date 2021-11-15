@@ -21,6 +21,8 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Objects;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Encapsulates an error code (via the Errors enum) and an optional message. Generally, the optional message is only
@@ -36,10 +38,18 @@ public class ApiError {
     private final String message;
 
     public static ApiError fromThrowable(Throwable t) {
+        Throwable throwableToBeEncoded = t;
+        // Get the underlying cause for common exception types from the concurrent library.
+        // This is useful to handle cases where exceptions may be raised from a future or a
+        // completion stage (as might be the case for requests sent to the controller in `ControllerApis`)
+        if (t instanceof CompletionException || t instanceof ExecutionException) {
+            throwableToBeEncoded = t.getCause();
+        }
         // Avoid populating the error message if it's a generic one. Also don't populate error
         // message for UNKNOWN_SERVER_ERROR to ensure we don't leak sensitive information.
-        Errors error = Errors.forException(t);
-        String message = error == Errors.UNKNOWN_SERVER_ERROR || error.message().equals(t.getMessage()) ? null : t.getMessage();
+        Errors error = Errors.forException(throwableToBeEncoded);
+        String message = error == Errors.UNKNOWN_SERVER_ERROR ||
+            error.message().equals(throwableToBeEncoded.getMessage()) ? null : throwableToBeEncoded.getMessage();
         return new ApiError(error, message);
     }
 

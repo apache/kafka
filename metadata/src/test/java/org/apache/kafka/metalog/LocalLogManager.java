@@ -43,23 +43,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
@@ -259,6 +264,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             append(new LeaderChangeBatch(newLeader));
         }
 
+        synchronized LeaderAndEpoch leaderAndEpoch() {
+            return leader;
+        }
+
         synchronized Entry<Long, LocalBatch> nextBatch(long offset) {
             Entry<Long, LocalBatch> entry = batches.higherEntry(offset);
             if (entry == null) {
@@ -357,6 +366,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             return offset;
         }
 
+        void setOffset(long offset) {
+            this.offset = offset;
+        }
+
         LeaderAndEpoch notifiedLeader() {
             return notifiedLeader;
         }
@@ -418,12 +431,19 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The listener objects attached to this local log manager.
      */
-    private final List<MetaLogListenerData> listeners = new ArrayList<>();
+    private final Map<Listener<ApiMessageAndVersion>, MetaLogListenerData> listeners = new IdentityHashMap<>();
 
     /**
      * The current leader, as seen by this log manager.
      */
     private volatile LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
+
+    /*
+     * If this variable is true the next non-atomic append with more than 1 record will
+     * result is half the records getting appended with leader election following that.
+     * This is done to emulate having some of the records not getting committed.
+     */
+    private AtomicBoolean resignAfterNonAtomicCommit = new AtomicBoolean(false);
 
     public LocalLogManager(LogContext logContext,
                            int nodeId,
@@ -441,7 +461,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             try {
                 log.debug("Node {}: running log check.", nodeId);
                 int numEntriesFound = 0;
-                for (MetaLogListenerData listenerData : listeners) {
+                for (MetaLogListenerData listenerData : listeners.values()) {
                     while (true) {
                         // Load the snapshot if needed and we are not the leader
                         LeaderAndEpoch notifiedLeader = listenerData.notifiedLeader();
@@ -477,9 +497,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             LeaderChangeBatch batch = (LeaderChangeBatch) entry.getValue();
                             log.trace("Node {}: handling LeaderChange to {}.",
                                 nodeId, batch.newLeader);
-                            listenerData.handleLeaderChange(entryOffset, batch.newLeader);
-                            if (batch.newLeader.epoch() > leader.epoch()) {
-                                leader = batch.newLeader;
+                            // Only notify the listener if it equals the shared leader state
+                            LeaderAndEpoch sharedLeader = shared.leaderAndEpoch();
+                            if (batch.newLeader.equals(sharedLeader)) {
+                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
+                                if (batch.newLeader.epoch() > leader.epoch()) {
+                                    leader = batch.newLeader;
+                                }
+                            } else {
+                                log.debug("Node {}: Ignoring {} since it doesn't match the latest known leader {}",
+                                        nodeId, batch.newLeader, sharedLeader);
+                                listenerData.setOffset(entryOffset);
                             }
                         } else if (entry.getValue() instanceof LocalRecordBatch) {
                             LocalRecordBatch batch = (LocalRecordBatch) entry.getValue();
@@ -526,7 +554,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 if (initialized && !shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
                     resign(leader.epoch());
-                    for (MetaLogListenerData listenerData : listeners) {
+                    for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
                     shared.unregisterLogManager(this);
@@ -586,8 +614,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     "already been shut down.", nodeId);
                 future.complete(null);
             } else if (initialized) {
-                log.info("Node {}: registered MetaLogListener.", nodeId);
-                listeners.add(new MetaLogListenerData(listener));
+                int id = System.identityHashCode(listener);
+                if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) != null) {
+                    log.error("Node {}: can't register because listener {} already exists", nodeId, id);
+                } else {
+                    log.info("Node {}: registered MetaLogListener {}", nodeId, id);
+                }
                 shared.electLeaderIfNeeded();
                 scheduleLogCheck();
                 future.complete(null);
@@ -609,12 +641,55 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
-        return scheduleAtomicAppend(epoch, batch);
+    public void unregister(RaftClient.Listener<ApiMessageAndVersion> listener) {
+        eventQueue.append(() -> {
+            if (shutdown) {
+                log.info("Node {}: can't unregister because local log manager is shutdown", nodeId);
+            } else {
+                int id = System.identityHashCode(listener);
+                if (listeners.remove(listener) == null) {
+                    log.error("Node {}: can't unregister because the listener {} doesn't exists", nodeId, id);
+                } else {
+                    log.info("Node {}: unregistered MetaLogListener {}", nodeId, id);
+                }
+            }
+        });
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
+    public long scheduleAppend(int epoch, List<ApiMessageAndVersion> batch) {
+        if (batch.isEmpty()) {
+            throw new IllegalArgumentException("Batch cannot be empty");
+        }
+
+        List<ApiMessageAndVersion> first = batch.subList(0, batch.size() / 2);
+        List<ApiMessageAndVersion> second = batch.subList(batch.size() / 2, batch.size());
+
+        assertEquals(batch.size(), first.size() + second.size());
+        assertFalse(second.isEmpty());
+
+        OptionalLong firstOffset = first
+            .stream()
+            .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+            .max();
+
+        if (firstOffset.isPresent() && resignAfterNonAtomicCommit.getAndSet(false)) {
+            // Emulate losing leadership in the middle of a non-atomic append by not writing
+            // the rest of the batch and instead writing a leader change message
+            resign(leader.epoch());
+
+            return firstOffset.getAsLong() + second.size();
+        } else {
+            return second
+                .stream()
+                .mapToLong(record -> scheduleAtomicAppend(epoch, Collections.singletonList(record)))
+                .max()
+                .getAsLong();
+        }
+    }
+
+    @Override
+    public long scheduleAtomicAppend(int epoch, List<ApiMessageAndVersion> batch) {
         return shared.tryAppend(nodeId, leader.epoch(), batch);
     }
 
@@ -664,7 +739,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() -> {
-            future.complete(listeners.stream().map(l -> l.listener).collect(Collectors.toList()));
+            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()));
         });
         try {
             return future.get();
@@ -686,5 +761,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void resignAfterNonAtomicCommit() {
+        resignAfterNonAtomicCommit.set(true);
     }
 }

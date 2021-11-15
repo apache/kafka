@@ -43,6 +43,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.AlwaysContinueProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -133,7 +134,8 @@ public class RecordCollectorTest {
             clientSupplier,
             null,
             processId,
-            logContext
+            logContext,
+            Time.SYSTEM
         );
         mockProducer = clientSupplier.producers.get(0);
         collector = new RecordCollectorImpl(
@@ -792,7 +794,8 @@ public class RecordCollectorTest {
                 },
                 taskId,
                 processId,
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             productionExceptionHandler,
             streamsMetrics
@@ -823,7 +826,8 @@ public class RecordCollectorTest {
                 },
                 null,
                 null,
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             productionExceptionHandler,
             streamsMetrics
@@ -857,7 +861,8 @@ public class RecordCollectorTest {
                 },
                 taskId,
                 processId,
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             productionExceptionHandler,
             streamsMetrics
@@ -895,7 +900,8 @@ public class RecordCollectorTest {
             },
             null,
             null,
-            logContext
+            logContext,
+            Time.SYSTEM
         );
     }
 
@@ -916,7 +922,8 @@ public class RecordCollectorTest {
             },
             null,
             null,
-            logContext
+            logContext,
+            Time.SYSTEM
         );
     }
 

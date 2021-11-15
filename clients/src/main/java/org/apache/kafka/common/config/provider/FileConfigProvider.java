@@ -62,7 +62,7 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
-            throw new ConfigException("Could not read properties from file " + path);
+            throw new ConfigException("Could not read properties from file " + path, e);
         }
     }
 
@@ -89,7 +89,7 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
-            throw new ConfigException("Could not read properties from file " + path);
+            throw new ConfigException("Could not read properties from file " + path, e);
         }
     }
 

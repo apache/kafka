@@ -467,6 +467,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
 
                 resetJoinGroupFuture();
+                rejoinNeeded = true;
 
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof IllegalGenerationException ||
@@ -476,7 +477,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
-                resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
@@ -548,8 +548,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
         // Note that we override the request timeout using the rebalance timeout since that is the
         // maximum time that it may block on the coordinator. We add an extra 5 seconds for small delays.
-        int joinGroupTimeoutMs = Math.max(client.defaultRequestTimeoutMs(),
-            rebalanceConfig.rebalanceTimeoutMs + JOIN_GROUP_TIMEOUT_LAPSE);
+        int joinGroupTimeoutMs = Math.max(
+            client.defaultRequestTimeoutMs(),
+            Math.max(
+                rebalanceConfig.rebalanceTimeoutMs + JOIN_GROUP_TIMEOUT_LAPSE,
+                rebalanceConfig.rebalanceTimeoutMs) // guard against overflow since rebalance timeout can be MAX_VALUE
+            );
         return client.send(coordinator, requestBuilder, joinGroupTimeoutMs)
                 .compose(new JoinGroupResponseHandler(generation));
     }
@@ -921,8 +925,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
             // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
             // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
-            if (!isDisconnected)
+            if (!isDisconnected) {
+                log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
                 client.disconnectAsync(oldCoordinator);
+            }
 
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
@@ -972,6 +978,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private synchronized void resetStateAndRejoin(final String reason) {
         resetStateAndGeneration(reason);
         requestRejoin(reason);
+        needsJoinPrepare = true;
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
@@ -981,6 +988,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
     synchronized void resetGenerationOnLeaveGroup() {
         resetStateAndRejoin("consumer pro-actively leaving the group");
+    }
+
+    public synchronized void requestRejoinIfNecessary(final String reason) {
+        if (!this.rejoinNeeded) {
+            requestRejoin(reason);
+        }
     }
 
     public synchronized void requestRejoin(final String reason) {

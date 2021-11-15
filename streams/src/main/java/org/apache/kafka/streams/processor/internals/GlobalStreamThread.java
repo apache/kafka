@@ -262,7 +262,7 @@ public class GlobalStreamThread extends Thread {
                 stateMaintainer.update(record);
             }
             final long now = time.milliseconds();
-            if (now >= lastFlush + flushInterval) {
+            if (now - flushInterval >= lastFlush) {
                 stateMaintainer.flushState();
                 lastFlush = now;
             }
@@ -296,6 +296,7 @@ public class GlobalStreamThread extends Thread {
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
             streamsMetrics.removeAllThreadLevelSensors(getName());
+            streamsMetrics.removeAllThreadLevelMetrics(getName());
 
             return;
         }
@@ -338,6 +339,7 @@ public class GlobalStreamThread extends Thread {
             }
 
             streamsMetrics.removeAllThreadLevelSensors(getName());
+            streamsMetrics.removeAllThreadLevelMetrics(getName());
 
             setState(DEAD);
 

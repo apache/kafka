@@ -104,13 +104,13 @@ public class DescribeConsumerGroupsHandlerTest {
 
     @Test
     public void testUnmappedHandleResponse() {
+        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE, ""));
         assertUnmapped(handleWithError(Errors.NOT_COORDINATOR, ""));
     }
 
     @Test
     public void testRetriableHandleResponse() {
         assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS, ""));
-        assertRetriable(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE, ""));
     }
 
     @Test

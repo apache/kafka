@@ -93,13 +93,16 @@ public final class SlidingWindows {
     }
 
     /**
-     * Return a window definition with the window size
-     * Using the method implicitly sets the grace period to zero which means that
-     * out of order records arriving after the window end will be dropped
+     * Return a window definition with the window size based on the given maximum time difference (inclusive) between
+     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code grace}.
+     * A window is closed when {@code stream-time > window-end + grace-period}.
+     * <p>
+     * CAUTION: Using this method implicitly sets the grace period to zero, which means that any out-of-order
+     * records arriving after the window ends are considered late and will be dropped.
      *
      * @param timeDifference the max time difference (inclusive) between two records in a window
-     * @return a new window definition with no grace period. Note that this means out of order records arriving after the window end will be dropped
-     * @throws IllegalArgumentException if the timeDifference is negative
+     * @return a new window definition with no grace period. Note that this means out-of-order records arriving after the window end will be dropped
+     * @throws IllegalArgumentException if the timeDifference is negative or can't be represented as {@code long milliseconds}
      */
     public static SlidingWindows ofTimeDifferenceWithNoGrace(final Duration timeDifference) throws IllegalArgumentException {
         return ofTimeDifferenceAndGrace(timeDifference, ofMillis(NO_GRACE_PERIOD));
@@ -113,12 +116,13 @@ public final class SlidingWindows {
      * @param timeDifference the max time difference (inclusive) between two records in a window
      * @param afterWindowEnd  the grace period to admit out-of-order events to a window
      * @return a new window definition with the specified grace period
-     * @throws IllegalArgumentException if the timeDifference or afterWindowEnd (grace period) is negative
+     * @throws IllegalArgumentException if the timeDifference or afterWindowEnd (grace period) is negative or can't be represented as {@code long milliseconds}
      */
     public static SlidingWindows ofTimeDifferenceAndGrace(final Duration timeDifference, final Duration afterWindowEnd) throws IllegalArgumentException {
-
-        final long timeDifferenceMs = timeDifference.toMillis();
-        final long afterWindowEndMs = afterWindowEnd.toMillis();
+        final String timeDifferenceMsgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
+        final long timeDifferenceMs = validateMillisecondDuration(timeDifference, timeDifferenceMsgPrefix);
+        final String afterWindowEndMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, afterWindowEndMsgPrefix);
 
         return new SlidingWindows(timeDifferenceMs, afterWindowEndMs);
     }
@@ -132,7 +136,7 @@ public final class SlidingWindows {
      * @param grace the grace period to admit out-of-order events to a window
      * @return a new window definition
      * @throws IllegalArgumentException if the specified window size is &lt; 0 or grace &lt; 0, or either can't be represented as {@code long milliseconds}
-     * @deprecated since 3.0 Use {@link #ofTimeDifferenceWithNoGrace(Duration)} or {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
+     * @deprecated since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)} or {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
      */
     @Deprecated
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {

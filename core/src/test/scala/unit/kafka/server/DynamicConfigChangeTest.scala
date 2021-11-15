@@ -16,6 +16,8 @@
   */
 package kafka.server
 
+import kafka.api.KAFKA_3_0_IV1
+
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Properties
@@ -32,10 +34,12 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -89,6 +93,33 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
     // Verify that the new config is used for all segments
     assertTrue(log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
+  }
+
+  @nowarn("cat=deprecation")
+  @Test
+  def testMessageFormatVersionChange(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val logProps = new Properties()
+    logProps.put(MessageFormatVersionProp, "0.10.2")
+    createTopic(tp.topic, 1, 1, logProps)
+    val server = servers.head
+    TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined,
+      "Topic metadata propagation failed")
+    val log = server.logManager.getLog(tp).get
+    // message format version should always be 3.0 if inter-broker protocol is 3.0 or higher
+    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(RecordVersion.V2, log.config.recordVersion)
+
+    val compressionType = CompressionType.LZ4.name
+    logProps.put(MessageFormatVersionProp, "0.11.0")
+    // set compression type so that we can detect when the config change has propagated
+    logProps.put(CompressionTypeProp, compressionType)
+    adminZkClient.changeTopicConfig(tp.topic, logProps)
+    TestUtils.waitUntilTrue(() =>
+      server.logManager.getLog(tp).get.config.compressionType == compressionType,
+      "Topic config change propagation failed")
+    assertEquals(KAFKA_3_0_IV1, log.config.messageFormatVersion)
+    assertEquals(RecordVersion.V2, log.config.recordVersion)
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {

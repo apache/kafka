@@ -26,7 +26,7 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.InvalidPidMappingException
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -46,8 +46,8 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     producer = TestUtils.createTransactionalProducer("transactionalProducer", servers)
     consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),

@@ -37,7 +37,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   var cleaner: LogCleaner = _
   val logDir = TestUtils.tempDir()
 
-  private val logs = ListBuffer.empty[Log]
+  private val logs = ListBuffer.empty[UnifiedLog]
   private val defaultMaxMessageSize = 128
   private val defaultMinCleanableDirtyRatio = 0.0F
   private val defaultMinCompactionLagMS = 0L
@@ -89,7 +89,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
-    val logMap = new Pool[TopicPartition, Log]()
+    val logMap = new Pool[TopicPartition, UnifiedLog]()
     for (partition <- partitions) {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
@@ -101,7 +101,7 @@ abstract class AbstractLogCleanerIntegrationTest {
         deleteDelay = deleteDelay,
         segmentSize = segmentSize,
         maxCompactionLagMs = maxCompactionLagMs))
-      val log = Log(dir,
+      val log = UnifiedLog(dir,
         logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,
@@ -133,12 +133,14 @@ abstract class AbstractLogCleanerIntegrationTest {
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 
-  def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                        startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
+  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
+                startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       incCounter()
       (key, value, appendInfo.firstOffset.get.messageOffset)
     }

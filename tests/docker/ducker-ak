@@ -480,7 +480,7 @@ ducker_test() {
     (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
     must_popd
     if [[ "${debug}" -eq 1 ]]; then
-        local ducktape_cmd="python3.7 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
+        local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
     else
         local ducktape_cmd="ducktape"
     fi

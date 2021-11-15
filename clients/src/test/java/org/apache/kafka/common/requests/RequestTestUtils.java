@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.HashMap;
+import java.util.Set;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Topic;
@@ -149,6 +152,20 @@ public class RequestTestUtils {
         return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
                 topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
                 topicIds);
+    }
+
+    public static MetadataResponse metadataUpdateWithIds(final int numNodes,
+                                                         final Set<TopicIdPartition> partitions,
+                                                         final Function<TopicPartition, Integer> epochSupplier) {
+        final Map<String, Integer> topicPartitionCounts = new HashMap<>();
+        final Map<String, Uuid> topicIds = new HashMap<>();
+
+        partitions.forEach(partition -> {
+            topicPartitionCounts.compute(partition.topic(), (key, value) -> value == null ? 1 : value + 1);
+            topicIds.putIfAbsent(partition.topic(), partition.topicId());
+        });
+
+        return metadataUpdateWithIds(numNodes, topicPartitionCounts, epochSupplier, topicIds);
     }
 
     public static MetadataResponse metadataUpdateWithIds(final int numNodes,

@@ -256,6 +256,7 @@ public class BatchBuilder<T> {
             RecordBatch.NO_SEQUENCE,
             false,
             isControlBatch,
+            false,
             leaderEpoch,
             numRecords()
         );

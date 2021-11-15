@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,8 +91,38 @@ public class ReplicasTest {
     }
 
     @Test
+    public void testCopyWithout2() {
+        assertArrayEquals(new int[] {}, Replicas.copyWithout(new int[] {}, new int[] {}));
+        assertArrayEquals(new int[] {}, Replicas.copyWithout(new int[] {1}, new int[] {1}));
+        assertArrayEquals(new int[] {1, 3},
+            Replicas.copyWithout(new int[] {1, 2, 3}, new int[]{2, 4}));
+        assertArrayEquals(new int[] {4},
+            Replicas.copyWithout(new int[] {4, 2, 2, 1}, new int[]{2, 1}));
+    }
+
+    @Test
     public void testCopyWith() {
         assertArrayEquals(new int[] {-1}, Replicas.copyWith(new int[] {}, -1));
         assertArrayEquals(new int[] {1, 2, 3, 4}, Replicas.copyWith(new int[] {1, 2, 3}, 4));
+    }
+
+    @Test
+    public void testToSet() {
+        assertEquals(Collections.emptySet(), Replicas.toSet(new int[] {}));
+        assertEquals(new HashSet<>(Arrays.asList(3, 1, 5)),
+            Replicas.toSet(new int[] {1, 3, 5}));
+        assertEquals(new HashSet<>(Arrays.asList(1, 2, 10)),
+            Replicas.toSet(new int[] {1, 1, 2, 10, 10}));
+    }
+
+    @Test
+    public void testContains2() {
+        assertTrue(Replicas.contains(Collections.emptyList(), Replicas.NONE));
+        assertFalse(Replicas.contains(Collections.emptyList(), new int[] {1}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3), new int[] {3, 2, 1}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1}));
+        assertFalse(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {3, 1, 7}));
+        assertTrue(Replicas.contains(Arrays.asList(1, 2, 3, 4), new int[] {}));
     }
 }

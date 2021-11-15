@@ -84,7 +84,14 @@ public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>
      */
     public long lastContainedLogTimestamp() {
         if (!lastContainedLogTimestamp.isPresent()) {
-            // nextBatch is expected to be empty
+            nextBatch.ifPresent(batch -> {
+                throw new IllegalStateException(
+                    String.format(
+                        "nextBatch was present when last contained log timestamp was not present",
+                        batch
+                    )
+                );
+            });
             nextBatch = nextBatch();
         }
 

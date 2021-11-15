@@ -47,6 +47,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
@@ -188,12 +189,18 @@ public class TaskManagerTest {
             new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            topologyBuilder,
+            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig()),
             adminClient,
             stateDirectory,
             processingMode
         );
         taskManager.setMainConsumer(consumer);
+        reset(topologyBuilder);
+        expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
+        activeTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
+        standbyTaskCreator.removeRevokedUnknownTasks(anyObject());
+        expectLastCall().asStub();
     }
 
     @Test
@@ -202,8 +209,10 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(emptyList());
+
         topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
         expectLastCall();
+
         replay(activeTaskCreator, topologyBuilder);
 
         taskManager.handleAssignment(assignment, emptyMap());
@@ -577,9 +586,10 @@ public class TaskManagerTest {
     public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
-        replay(activeTaskCreator);
 
         setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+
+        replay(activeTaskCreator);
 
         taskManager.handleLostAll();
 
@@ -725,8 +735,10 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
         expectRestoreToBeCompleted(consumer, changeLogReader);
-        consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
+        // check that we should not commit empty map either
+        consumer.commitSync(eq(emptyMap()));
+        expectLastCall().andStubThrow(new AssertionError("should not invoke commitSync when offset map is empty"));
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignment, emptyMap());
@@ -2623,7 +2635,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPropagateRuntimeExceptionsInProcessActiveTasks() {
+    public void shouldWrapRuntimeExceptionsInProcessActiveTasksAndSetTaskId() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
             public boolean process(final long wallClockTime) {
@@ -2645,8 +2657,10 @@ public class TaskManagerTest {
         final TopicPartition partition = taskId00Partitions.iterator().next();
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.process(1, time));
-        assertThat(exception.getMessage(), is("oops"));
+        final StreamsException exception = assertThrows(StreamsException.class, () -> taskManager.process(1, time));
+        assertThat(exception.taskId().isPresent(), is(true));
+        assertThat(exception.taskId().get(), is(taskId00));
+        assertThat(exception.getCause().getMessage(), is("oops"));
     }
 
     @Test
@@ -2761,6 +2775,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
+            LogCaptureAppender.setClassLoggerToDebug(TaskManager.class);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2771,8 +2786,8 @@ public class TaskManagerTest {
             final List<String> messages = appender.getMessages();
             assertThat(
                 messages,
-                hasItem("taskManagerTestThe following partitions [unknown-0] are missing " +
-                    "from the task partitions. It could potentially due to race " +
+                hasItem("taskManagerTestThe following revoked partitions [unknown-0] are missing " +
+                    "from the current task partitions. It could potentially be due to race " +
                     "condition of consumer detecting the heartbeat failure, or the " +
                     "tasks have been cleaned up by the handleAssignment callback.")
             );
@@ -2862,15 +2877,16 @@ public class TaskManagerTest {
         taskManager.addTask(migratedTask01);
         taskManager.addTask(migratedTask02);
 
-        final KafkaException thrown = assertThrows(
-            KafkaException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
 
-        // Expecting the original Kafka exception instead of a wrapped one.
-        assertThat(thrown.getMessage(), equalTo("Kaboom for t2!"));
+        assertThat(thrown.taskId().isPresent(), is(true));
+        assertThat(thrown.taskId().get(), is(taskId02));
 
-        assertThat(thrown.getCause().getMessage(), equalTo(null));
+        // Expecting the original Kafka exception wrapped in the StreamsException.
+        assertThat(thrown.getCause().getMessage(), equalTo("Kaboom for t2!"));
     }
 
     @Test
@@ -2994,6 +3010,9 @@ public class TaskManagerTest {
     public void shouldNotFailForTimeoutExceptionOnConsumerCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+
+        task00.setCommittableOffsetsAndMetadata(taskId00Partitions.stream().collect(Collectors.toMap(p -> p, p -> new OffsetAndMetadata(0))));
+        task01.setCommittableOffsetsAndMetadata(taskId00Partitions.stream().collect(Collectors.toMap(p -> p, p -> new OffsetAndMetadata(0))));
 
         consumer.commitSync(anyObject(Map.class));
         expectLastCall().andThrow(new TimeoutException("KABOOM!"));

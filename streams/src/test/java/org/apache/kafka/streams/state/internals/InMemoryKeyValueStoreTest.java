@@ -127,15 +127,17 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("prefix", stringSerializer);
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("prefix", stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(3));
         assertThat(valuesWithPrefix.get(0), is("f"));
         assertThat(valuesWithPrefix.get(1), is("d"));
@@ -160,15 +162,16 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = byteStore.prefixScan("abcd", stringSerializer);
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = byteStore.prefixScan("abcd", stringSerializer)) {
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefixAsabcd.hasNext()) {
-            keysWithPrefixAsabcd.next().key.get();
-            numberOfKeysReturned++;
+            while (keysWithPrefixAsabcd.hasNext()) {
+                keysWithPrefixAsabcd.next().key.get();
+                numberOfKeysReturned++;
+            }
+
+            assertThat(numberOfKeysReturned, is(1));
         }
-
-        assertThat(numberOfKeysReturned, is(1));
     }
 
     @Test
@@ -188,14 +191,15 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan(prefix, stringSerializer);
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan(prefix, stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
 
         assertThat(numberOfKeysReturned, is(1));
@@ -217,13 +221,15 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("bb", stringSerializer);
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            keysWithPrefix.next();
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("bb", stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                keysWithPrefix.next();
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(0));
     }
 

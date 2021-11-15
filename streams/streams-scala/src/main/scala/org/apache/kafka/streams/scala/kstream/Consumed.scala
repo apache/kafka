@@ -61,8 +61,9 @@ object Consumed {
    * @tparam V                 value type
    * @return a new instance of [[Consumed]]
    */
-  def `with`[K, V](timestampExtractor: TimestampExtractor)(implicit keySerde: Serde[K],
-                                                           valueSerde: Serde[V]): ConsumedJ[K, V] =
+  def `with`[K, V](
+    timestampExtractor: TimestampExtractor
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
     ConsumedJ.`with`(timestampExtractor).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
@@ -73,7 +74,8 @@ object Consumed {
    * @param resetPolicy the offset reset policy to be used. If `null` the default reset policy from config will be used
    * @return a new instance of [[Consumed]]
    */
-  def `with`[K, V](resetPolicy: Topology.AutoOffsetReset)(implicit keySerde: Serde[K],
-                                                          valueSerde: Serde[V]): ConsumedJ[K, V] =
+  def `with`[K, V](
+    resetPolicy: Topology.AutoOffsetReset
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
     ConsumedJ.`with`(resetPolicy).withKeySerde(keySerde).withValueSerde(valueSerde)
 }

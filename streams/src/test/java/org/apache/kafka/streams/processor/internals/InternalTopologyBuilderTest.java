@@ -16,18 +16,21 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -46,6 +49,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -87,8 +91,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
         builder.initializeSubscription();
 
-        assertTrue(builder.earliestResetTopicsPattern().matcher(earliestTopic).matches());
-        assertTrue(builder.latestResetTopicsPattern().matcher(latestTopic).matches());
+        assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(OffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy(latestTopic), equalTo(OffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -100,8 +104,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
         builder.initializeSubscription();
 
-        assertTrue(builder.earliestResetTopicsPattern().matcher("earliestTestTopic").matches());
-        assertTrue(builder.latestResetTopicsPattern().matcher("latestTestTopic").matches());
+        assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(OffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(OffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -110,8 +114,8 @@ public class InternalTopologyBuilderTest {
         builder.initializeSubscription();
 
         assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
-        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
-        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
 
     @Test
@@ -121,9 +125,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
         builder.initializeSubscription();
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
-        assertEquals(builder.earliestResetTopicsPattern().pattern(), "");
-        assertEquals(builder.latestResetTopicsPattern().pattern(), "");
+        assertThat(expectedPattern.pattern(), builder.sourceTopicsPatternString(), equalTo("test-.*"));
+
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
 
     @Test
@@ -303,8 +307,9 @@ public class InternalTopologyBuilderTest {
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
+        final String patternString = builder.sourceTopicsPatternString();
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -326,7 +331,9 @@ public class InternalTopologyBuilderTest {
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
 
-        assertThat(builder.sourceTopicPattern().pattern(), equalTo(expectedPattern.pattern()));
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -354,7 +361,9 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topic-\\d");
         builder.addSource(null, "source-1", null, null, null, expectedPattern);
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -363,7 +372,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topics[A-Z]"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -372,7 +383,9 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-foo", "topic-bar");
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
         builder.initializeSubscription();
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        final String patternString = builder.sourceTopicsPatternString();
+
+        assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
     }
 
     @Test
@@ -616,9 +629,9 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
-        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1");
-        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2");
-        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3");
+        final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1", builder.topologyName());
+        final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2", builder.topologyName());
+        final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3", builder.topologyName());
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
             Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),
@@ -917,10 +930,64 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldSetStreamsConfigOnRewriteTopology() {
+    public void shouldSetTopologyConfigOnRewriteTopology() {
+        final Properties globalProps = StreamsTestUtils.getStreamsConfig();
+        globalProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 100L);
+        final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
+        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
+        assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(100L));
+    }
+
+    @Test
+    public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
+        topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
+        topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
+        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
-        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(config);
-        assertThat(topologyBuilder.getStreamsConfig(), equalTo(config));
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
+
+        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, equalTo(500L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, equalTo(1000L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, equalTo(15));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), equalTo(MockTimestampExtractor.class));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
+    }
+
+    @Test
+    public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
+        streamsProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
+        streamsProps.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
+        streamsProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        streamsProps.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        streamsProps.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+
+        final StreamsConfig config = new StreamsConfig(streamsProps);
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                new Properties())
+        );
+        assertThat(topologyBuilder.topologyConfigs().cacheSize, is(12345L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxTaskIdleMs, is(500L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().taskTimeoutMs, is(1000L));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().timestampExtractor.getClass(), is(MockTimestampExtractor.class));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), is(LogAndContinueExceptionHandler.class));
     }
 
     @Test

@@ -782,18 +782,22 @@ public interface KStream<K, V> {
     KStream<K, V>[] branch(final Named named, final Predicate<? super K, ? super V>... predicates);
 
     /**
-     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
-     * on evaluation against the supplied predicates.
-     * Stream branching is a stateless record-by-record operation.
+     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
+     * the records to different branches depending on evaluation against the supplied predicates.
+     * <p>
+     *     Note: Stream branching is a stateless record-by-record operation.
+     *     Please check {@link BranchedKStream} for detailed description and usage example
      *
      * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
      */
     BranchedKStream<K, V> split();
 
     /**
-     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
-     * on evaluation against the supplied predicates.
-     * Stream branching is a stateless record-by-record operation.
+     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
+     * the records to different branches depending on evaluation against the supplied predicates.
+     * <p>
+     *     Note: Stream branching is a stateless record-by-record operation.
+     *     Please check {@link BranchedKStream} for detailed description and usage example
      *
      * @param named  a {@link Named} config used to name the processor in the topology and also to set the name prefix
      *               for the resulting branches (see {@link BranchedKStream})

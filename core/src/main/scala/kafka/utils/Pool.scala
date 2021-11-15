@@ -80,7 +80,16 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
   def foreachEntry(f: (K, V) => Unit): Unit = {
     pool.forEach((k, v) => f(k, v))
   }
-  
+
+  def foreachWhile(f: (K, V) => Boolean): Unit = {
+    val iter = pool.entrySet().iterator()
+    var finished = false
+    while (!finished && iter.hasNext) {
+      val entry = iter.next
+      finished = !f(entry.getKey, entry.getValue)
+    }
+  }
+
   override def size: Int = pool.size
   
   override def iterator: Iterator[(K, V)] = new Iterator[(K,V)]() {

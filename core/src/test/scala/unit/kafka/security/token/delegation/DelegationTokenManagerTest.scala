@@ -24,9 +24,9 @@ import java.util.{Base64, Properties}
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig}
+import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
-import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
@@ -41,12 +41,12 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
 import org.apache.kafka.server.authorizer._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 
-class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
+class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   val time = new MockTime()
   val owner = SecurityUtils.parseKafkaPrincipal("User:owner")
@@ -64,8 +64,8 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   var expiryTimeStamp: Long = 0
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
     props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
     props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)

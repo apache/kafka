@@ -43,7 +43,7 @@ import java.util.function.Supplier;
  * topic partition from offset 0 up to but not including the end offset in the snapshot
  * id.
  *
- * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch)
+ * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
  */
 final public class SnapshotWriter<T> implements AutoCloseable {
     final private RawSnapshotWriter snapshot;

@@ -68,6 +68,7 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -858,5 +859,47 @@ public class UtilsTest {
         assertTrue(Utils.isBlank(" "));
         assertFalse(Utils.isBlank("bob"));
         assertFalse(Utils.isBlank(" bob "));
+    }
+
+    @Test
+    public void testCharacterArrayEquality() {
+        assertCharacterArraysAreNotEqual(null, "abc");
+        assertCharacterArraysAreNotEqual(null, "");
+        assertCharacterArraysAreNotEqual("abc", null);
+        assertCharacterArraysAreNotEqual("", null);
+        assertCharacterArraysAreNotEqual("", "abc");
+        assertCharacterArraysAreNotEqual("abc", "abC");
+        assertCharacterArraysAreNotEqual("abc", "abcd");
+        assertCharacterArraysAreNotEqual("abc", "abcdefg");
+        assertCharacterArraysAreNotEqual("abcdefg", "abc");
+        assertCharacterArraysAreEqual("abc", "abc");
+        assertCharacterArraysAreEqual("a", "a");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual("", "");
+        assertCharacterArraysAreEqual(null, null);
+    }
+
+    private void assertCharacterArraysAreNotEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNotNull(b);
+        } else {
+            assertFalse(a.equals(b));
+        }
+        assertFalse(Utils.isEqualConstantTime(first, second));
+        assertFalse(Utils.isEqualConstantTime(second, first));
+    }
+
+    private void assertCharacterArraysAreEqual(String a, String b) {
+        char[] first = a != null ? a.toCharArray() : null;
+        char[] second = b != null ? b.toCharArray() : null;
+        if (a == null) {
+            assertNull(b);
+        } else {
+            assertTrue(a.equals(b));
+        }
+        assertTrue(Utils.isEqualConstantTime(first, second));
+        assertTrue(Utils.isEqualConstantTime(second, first));
     }
 }

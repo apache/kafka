@@ -675,7 +675,7 @@ public class KStreamRepartitionIntegrationTest {
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
-                                                                 .values()
+                                                                 .topicNameValues()
                                                                  .get(topic)
                                                                  .get();
 

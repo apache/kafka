@@ -20,6 +20,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
+import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
@@ -69,6 +70,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -329,6 +331,42 @@ public final class Utils {
      */
     public static byte[] copyArray(byte[] src) {
         return Arrays.copyOf(src, src.length);
+    }
+
+    /**
+     * Compares two character arrays for equality using a constant-time algorithm, which is needed
+     * for comparing passwords. Two arrays are equal if they have the same length and all
+     * characters at corresponding positions are equal.
+     *
+     * All characters in the first array are examined to determine equality.
+     * The calculation time depends only on the length of this first character array; it does not
+     * depend on the length of the second character array or the contents of either array.
+     *
+     * @param first the first array to compare
+     * @param second the second array to compare
+     * @return true if the arrays are equal, or false otherwise
+     */
+    public static boolean isEqualConstantTime(char[] first, char[] second) {
+        if (first == second) {
+            return true;
+        }
+        if (first == null || second == null) {
+            return false;
+        }
+
+        if (second.length == 0) {
+            return first.length == 0;
+        }
+
+        // time-constant comparison that always compares all characters in first array
+        boolean matches = first.length == second.length;
+        for (int i = 0; i < first.length; ++i) {
+            int j = i < second.length ? i : 0;
+            if (first[i] != second[j]) {
+                matches = false;
+            }
+        }
+        return matches;
     }
 
     /**
@@ -910,17 +948,14 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      *
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     *
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null) {
-            FileChannel dir = null;
-            try {
-                dir = FileChannel.open(path, StandardOpenOption.READ);
+        if (path != null && !OperatingSystem.IS_WINDOWS) {
+            try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
-            } finally {
-                if (dir != null)
-                    dir.close();
             }
         }
     }
@@ -1165,6 +1200,17 @@ public final class Utils {
         return res;
     }
 
+    public static <T> List<T> toList(Iterator<T> iterator, Predicate<T> predicate) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext()) {
+            T e = iterator.next();
+            if (predicate.test(e)) {
+                res.add(e);
+            }
+        }
+        return res;
+    }
+
     public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
         return concatLists(left, right, Collections::unmodifiableList);
     }
@@ -1283,6 +1329,10 @@ public final class Utils {
         result.addAll(left);
         result.removeAll(right);
         return result;
+    }
+
+    public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
+        return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
     }
 
     /**

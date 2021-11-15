@@ -1161,6 +1161,22 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 6, createTopics);
     }
 
+    @Test
+    public void testLongTaggedString() throws Exception {
+        char[] chars = new char[1024];
+        Arrays.fill(chars, 'a');
+        String longString = new String(chars);
+        SimpleExampleMessageData message = new SimpleExampleMessageData()
+                .setMyString(longString);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        short version = 1;
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        message.write(byteBufferAccessor, cache, version);
+        assertEquals(size, buf.position());
+    }
+
     private void verifyWriteRaisesNpe(short version, Message message) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         assertThrows(NullPointerException.class, () -> {

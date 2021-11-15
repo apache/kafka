@@ -30,8 +30,6 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.util.Properties;
-
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({InternalTopologyBuilder.class})
 public class TableSourceNodeTest {
@@ -73,6 +71,6 @@ public class TableSourceNodeTest {
             .build();
         tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
 
-        tableSourceNode.writeToTopology(topologyBuilder, new Properties());
+        tableSourceNode.writeToTopology(topologyBuilder);
     }
 }

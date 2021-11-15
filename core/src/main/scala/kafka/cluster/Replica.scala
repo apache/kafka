@@ -17,7 +17,7 @@
 
 package kafka.cluster
 
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.server.LogOffsetMetadata
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -28,7 +28,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
   // the log start offset value, kept in all replicas;
   // for local replica it is the log's start offset, for remote replicas its value is only updated by follower fetch
-  @volatile private[this] var _logStartOffset = Log.UnknownOffset
+  @volatile private[this] var _logStartOffset = UnifiedLog.UnknownOffset
 
   // The log end offset value at the time the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
