@@ -45,7 +45,6 @@ import org.junit.jupiter.api.Test;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,11 +76,6 @@ public class MetadataTest {
                 null,
                 -1,
                 Collections.emptyList());
-    }
-
-    private <T> void assertEqualCollections(Collection<T> expected, Collection<T> actual) {
-        assertTrue(expected.containsAll(actual));
-        assertTrue(actual.containsAll(expected));
     }
 
     @Test
@@ -314,7 +308,6 @@ public class MetadataTest {
             "MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster");
     }
 
-
     @Test
     public void testRequestUpdate() {
         assertFalse(metadata.updateRequested());
@@ -419,7 +412,6 @@ public class MetadataTest {
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 20, newTopicIds2);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 6L);
         assertEquals(Optional.of(20), metadata.lastSeenLeaderEpoch(tp));
-
     }
 
     @Test
@@ -900,7 +892,7 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("oldValidTopic", "keepValidTopic")));
         assertEquals(cluster.partitionsForTopic("oldValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 3);
-        assertEqualCollections(cluster.topicIds(), topicIds.values());
+        assertEquals(new HashSet<>(cluster.topicIds()), new HashSet<>(topicIds.values()));
 
         String newClusterId = "newClusterId";
         int newNodes = oldNodes + 1;
@@ -934,7 +926,7 @@ public class MetadataTest {
         assertEquals(cluster.topics(), new HashSet<>(Arrays.asList("keepValidTopic", "newValidTopic")));
         assertEquals(cluster.partitionsForTopic("keepValidTopic").size(), 2);
         assertEquals(cluster.partitionsForTopic("newValidTopic").size(), 4);
-        assertEqualCollections(cluster.topicIds(), topicIds.values());
+        assertEquals(new HashSet<>(cluster.topicIds()), new HashSet<>(topicIds.values()));
 
         // Perform another metadata update, but this time all topic metadata should be cleared.
         retainTopics.set(Collections.emptySet());
@@ -993,7 +985,7 @@ public class MetadataTest {
         // We still have the topic, but it just doesn't have an ID.
         assertEquals(Utils.mkSet("validTopic1", "validTopic2"), cluster.topics());
         assertEquals(2, cluster.partitionsForTopic("validTopic1").size());
-        assertEqualCollections(topicIds.values(), cluster.topicIds());
+        assertEquals(new HashSet<>(topicIds.values()), new HashSet<>(cluster.topicIds()));
         assertEquals(Uuid.ZERO_UUID, cluster.topicId("validTopic1"));
     }
 

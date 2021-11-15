@@ -146,16 +146,13 @@ public class MetadataCache {
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
-        Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
 
         // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
         // update with newest information from the MetadataResponse. We always take the latest state, removing existing
         // topic IDs if the latest state contains the topic name but not a topic ID.
-        this.topicIds.forEach((topicName, topicId) -> {
-            if (shouldRetainTopic.test(topicName)) {
-                newTopicIds.put(topicName, topicId);
-            }
-        });
+        Map<String, Uuid> newTopicIds = topicIds.entrySet().stream()
+                .filter(entry -> shouldRetainTopic.test(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
