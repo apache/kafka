@@ -39,13 +39,13 @@ public class AccessTokenBuilder {
 
     private String subject = "jdoe";
 
-    private String subjectClaimName = ReservedClaimNames.SUBJECT;
+    private final String subjectClaimName = ReservedClaimNames.SUBJECT;
 
     private Object scope = "engineering";
 
-    private String scopeClaimName = "scope";
+    private final String scopeClaimName = "scope";
 
-    private Long issuedAtSeconds;
+    private final Long issuedAtSeconds;
 
     private Long expirationSeconds;
 
@@ -69,10 +69,6 @@ public class AccessTokenBuilder {
         return this;
     }
 
-    public String audience() {
-        return audience;
-    }
-
     public AccessTokenBuilder audience(String audience) {
         this.audience = audience;
         return this;
@@ -89,11 +85,6 @@ public class AccessTokenBuilder {
 
     public String subjectClaimName() {
         return subjectClaimName;
-    }
-
-    public AccessTokenBuilder subjectClaimName(String subjectClaimName) {
-        this.subjectClaimName = subjectClaimName;
-        return this;
     }
 
     public Object scope() {
@@ -120,18 +111,8 @@ public class AccessTokenBuilder {
         return scopeClaimName;
     }
 
-    public AccessTokenBuilder scopeClaimName(String scopeClaimName) {
-        this.scopeClaimName = scopeClaimName;
-        return this;
-    }
-
     public Long issuedAtSeconds() {
         return issuedAtSeconds;
-    }
-
-    public AccessTokenBuilder issuedAtSeconds(Long issuedAtSeconds) {
-        this.issuedAtSeconds = issuedAtSeconds;
-        return this;
     }
 
     public Long expirationSeconds() {

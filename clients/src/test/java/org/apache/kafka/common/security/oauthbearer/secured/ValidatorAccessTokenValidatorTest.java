@@ -21,7 +21,6 @@ import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
-import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
@@ -63,14 +62,7 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
         AccessTokenValidator validator = createAccessTokenValidator(builder);
-
-        JsonWebSignature jws = new JsonWebSignature();
-        jws.setKey(builder.jwk().getPrivateKey());
-        jws.setKeyIdHeaderValue(builder.jwk().getKeyId());
-        jws.setAlgorithmHeaderValue(alg);
-        jws.setPayload("{}");
         String accessToken = builder.build();
-
         OAuthBearerToken token = validator.validate(accessToken);
 
         assertEquals(builder.subject(), token.principalName());
