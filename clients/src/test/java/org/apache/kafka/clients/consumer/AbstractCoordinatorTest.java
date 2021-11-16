@@ -14,11 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -1549,12 +1550,12 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected String protocolType() {
+        public String protocolType() {
             return PROTOCOL_TYPE;
         }
 
         @Override
-        protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
+        public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
             return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                     Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                             .setName(PROTOCOL_NAME)
@@ -1563,7 +1564,7 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected Map<String, ByteBuffer> performAssignment(String leaderId,
+        public Map<String, ByteBuffer> performAssignment(String leaderId,
                                                             String protocol,
                                                             List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
             Map<String, ByteBuffer> assignment = new HashMap<>();
@@ -1574,12 +1575,12 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected void onJoinPrepare(int generation, String memberId) {
+        public void onJoinPrepare(int generation, String memberId) {
             onJoinPrepareInvokes++;
         }
 
         @Override
-        protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
+        public void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
             if (wakeupOnJoinComplete)
                 throw new WakeupException();
             onJoinCompleteInvokes++;

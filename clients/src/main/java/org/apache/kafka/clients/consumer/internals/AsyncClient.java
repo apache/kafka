@@ -17,6 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.RequestFuture;
+import org.apache.kafka.clients.consumer.RequestFutureAdapter;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;

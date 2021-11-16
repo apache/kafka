@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.RequestFuture;
+import org.apache.kafka.clients.consumer.RequestFutureAdapter;
+import org.apache.kafka.clients.consumer.RequestFutureListener;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;

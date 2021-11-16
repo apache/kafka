@@ -357,7 +357,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <!-- Suppress warnings about synchronizing on the UnsentRequests
              ConcurrentHashMap.  This is done deliberately. -->
-        <Package name="org.apache.kafka.clients.consumer.internals"/>
+        <Package name="org.apache.kafka.clients.consumer"/>
         <Source name="ConsumerNetworkClient.java"/>
         <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
     </Match>
@@ -365,7 +365,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <!-- Suppress inconsistent synchronization warnings about
              AbstractCoordinator#coordinator.  See KAFKA-4992 for details.-->
-        <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
+        <Class name="org.apache.kafka.clients.consumer.AbstractCoordinator"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
 

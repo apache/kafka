@@ -18,7 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.RequestFuture;
+import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -55,7 +58,7 @@ public class OffsetForLeaderEpochClientTest {
     @Test
     public void testEmptyResponse() {
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), Collections.emptyMap());
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(

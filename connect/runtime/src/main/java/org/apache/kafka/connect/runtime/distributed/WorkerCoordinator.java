@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
-import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.AbstractCoordinator;
+import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -181,7 +181,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
+    public void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         ExtendedAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
         log.debug("Deserialized new assignment: {}", newAssignment);
         currentConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
@@ -211,14 +211,14 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
+    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    public void onJoinPrepare(int generation, String memberId) {
         log.info("Rebalance started");
         leaderState(null);
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;

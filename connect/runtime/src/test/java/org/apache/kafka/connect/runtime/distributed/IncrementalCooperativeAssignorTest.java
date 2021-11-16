@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.clients.consumer.internals.RequestFuture;
+import org.apache.kafka.clients.consumer.RequestFuture;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;

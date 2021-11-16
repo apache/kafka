@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.utils.LogContext;
@@ -97,7 +97,7 @@ public final class Heartbeat {
         update(now);
         return heartbeatTimer.isExpired();
     }
-    
+
     long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
@@ -119,17 +119,17 @@ public final class Heartbeat {
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
-    void resetSessionTimeout() {
+    public void resetSessionTimeout() {
         update(time.milliseconds());
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
-    boolean pollTimeoutExpired(long now) {
+    public boolean pollTimeoutExpired(long now) {
         update(now);
         return pollTimer.isExpired();
     }
 
-    long lastPollTime() {
+    public long lastPollTime() {
         return pollTimer.currentTimeMs();
     }
 }

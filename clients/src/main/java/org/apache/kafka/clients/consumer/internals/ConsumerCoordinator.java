@@ -17,17 +17,22 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.Heartbeat;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RequestFuture;
+import org.apache.kafka.clients.consumer.RequestFutureListener;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -213,7 +218,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
@@ -344,7 +349,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinComplete(int generation,
+    public void onJoinComplete(int generation,
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
@@ -532,6 +537,72 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return true;
     }
 
+    // Visible for testing
+    @Override
+    protected synchronized void markCoordinatorUnknown(String cause) {
+        super.markCoordinatorUnknown(cause);
+    }
+
+    // Visible for testing
+    @Override
+    protected boolean ensureActiveGroup(Timer timer) {
+        return super.ensureActiveGroup(timer);
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized boolean ensureCoordinatorReady(Timer timer) {
+        return super.ensureCoordinatorReady(timer);
+    }
+
+    // Visible for testing
+    @Override
+    protected boolean joinGroupIfNeeded(Timer timer) {
+        return super.joinGroupIfNeeded(timer);
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized void setNewGeneration(Generation generation) {
+        super.setNewGeneration(generation);
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized Generation generation() {
+        return super.generation();
+    }
+
+    // Visible for testing
+    @Override
+    protected Heartbeat heartbeat() {
+        return super.heartbeat();
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized void setNewState(MemberState state) {
+        super.setNewState(state);
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized Generation generationIfStable() {
+        return super.generationIfStable();
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized RequestFuture<Void> sendHeartbeatRequest() {
+        return super.sendHeartbeatRequest();
+    }
+
+    // Visible for testing
+    @Override
+    protected synchronized Node checkAndGetCoordinator() {
+        return super.checkAndGetCoordinator();
+    }
+
     /**
      * Return the time to the next needed invocation of {@link ConsumerNetworkClient#poll(Timer)}.
      * @param now current time in milliseconds
@@ -606,7 +677,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId,
+    public Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
                                                         List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
@@ -692,7 +763,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    public void onJoinPrepare(int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));

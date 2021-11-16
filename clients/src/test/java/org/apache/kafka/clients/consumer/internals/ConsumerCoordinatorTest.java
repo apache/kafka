@@ -20,12 +20,16 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.RequestFuture;
+import org.apache.kafka.clients.consumer.RequestFutureAdapter;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -1305,7 +1309,7 @@ public abstract class ConsumerCoordinatorTest {
 
     /**
      * This test checks if a consumer that has a valid member ID but an invalid generation
-     * ({@link org.apache.kafka.clients.consumer.internals.AbstractCoordinator.Generation#NO_GENERATION})
+     * ({@link AbstractCoordinator.Generation#NO_GENERATION})
      * can still execute a leave group request. Such a situation may arise when a consumer has initiated a JoinGroup
      * request without a memberId, but is shutdown or restarted before it has a chance to initiate and complete the
      * second request.

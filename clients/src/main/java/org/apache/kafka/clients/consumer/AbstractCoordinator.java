@@ -14,10 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -32,10 +41,9 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
+import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -70,16 +78,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
  * a designated Kafka broker (the coordinator). Group semantics are provided by extending this class.
@@ -109,11 +107,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * before reading or writing the state of the group (e.g. generation, memberId) and holding the lock
  * when sending a request that affects the state of the group (e.g. JoinGroup, LeaveGroup).
  */
-public abstract class AbstractCoordinator implements Closeable {
+public abstract class AbstractCoordinator implements Coordinator {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     public static final int JOIN_GROUP_TIMEOUT_LAPSE = 5000;
 
-    protected enum MemberState {
+    public enum MemberState {
         UNJOINED,             // the client is not part of a group
         PREPARING_REBALANCE,  // the client has sent the join group request, but have not received response
         COMPLETING_REBALANCE, // the client has received join group response, but have not received assignment
@@ -165,64 +163,6 @@ public abstract class AbstractCoordinator implements Closeable {
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
     }
-
-    /**
-     * Unique identifier for the class of supported protocols (e.g. "consumer" or "connect").
-     * @return Non-null protocol type name
-     */
-    protected abstract String protocolType();
-
-    /**
-     * Get the current list of protocols and their associated metadata supported
-     * by the local member. The order of the protocols in the list indicates the preference
-     * of the protocol (the first entry is the most preferred). The coordinator takes this
-     * preference into account when selecting the generation protocol (generally more preferred
-     * protocols will be selected as long as all members support them and there is no disagreement
-     * on the preference).
-     * @return Non-empty map of supported protocols and metadata
-     */
-    protected abstract JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata();
-
-    /**
-     * Invoked prior to each group join or rejoin. This is typically used to perform any
-     * cleanup from the previous generation (such as committing offsets for the consumer)
-     * @param generation The previous generation or -1 if there was none
-     * @param memberId The identifier of this member in the previous group or "" if there was none
-     */
-    protected abstract void onJoinPrepare(int generation, String memberId);
-
-    /**
-     * Perform assignment for the group. This is used by the leader to push state to all the members
-     * of the group (e.g. to push partition assignments in the case of the new consumer)
-     * @param leaderId The id of the leader (which is this member)
-     * @param protocol The protocol selected by the coordinator
-     * @param allMemberMetadata Metadata from all members of the group
-     * @return A map from each member to their state assignment
-     */
-    protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                                 String protocol,
-                                                                 List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);
-
-    /**
-     * Invoked when a group member has successfully joined a group. If this call fails with an exception,
-     * then it will be retried using the same assignment state on the next call to {@link #ensureActiveGroup()}.
-     *
-     * @param generation The generation that was joined
-     * @param memberId The identifier for the local member in the group
-     * @param protocol The protocol selected by the coordinator
-     * @param memberAssignment The assignment propagated from the group leader
-     */
-    protected abstract void onJoinComplete(int generation,
-                                           String memberId,
-                                           String protocol,
-                                           ByteBuffer memberAssignment);
-
-    /**
-     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions;
-     * note it is triggered by the consumer's API caller thread (i.e. background heartbeat thread would
-     * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
-     */
-    protected void onLeavePrepare() {}
 
     /**
      * Visible for testing.
@@ -355,7 +295,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the callback throws exception
      * @return true iff the group is active
      */
-    boolean ensureActiveGroup(final Timer timer) {
+    protected boolean ensureActiveGroup(final Timer timer) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         if (!ensureCoordinatorReady(timer)) {
@@ -405,7 +345,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the callback throws exception
      * @return true iff the operation succeeded
      */
-    boolean joinGroupIfNeeded(final Timer timer) {
+    protected boolean joinGroupIfNeeded(final Timer timer) {
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(timer)) {
                 return false;
@@ -827,18 +767,19 @@ public abstract class AbstractCoordinator implements Closeable {
                 .compose(new FindCoordinatorResponseHandler());
     }
 
-    private class FindCoordinatorResponseHandler extends RequestFutureAdapter<ClientResponse, Void> {
+    private class FindCoordinatorResponseHandler extends
+        RequestFutureAdapter<ClientResponse, Void> {
 
         @Override
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received FindCoordinator response {}", resp);
 
-            List<Coordinator> coordinators = ((FindCoordinatorResponse) resp.responseBody()).coordinators();
+            List<FindCoordinatorResponseData.Coordinator> coordinators = ((FindCoordinatorResponse) resp.responseBody()).coordinators();
             if (coordinators.size() != 1) {
                 log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
                 future.raise(new IllegalStateException("Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
             }
-            Coordinator coordinatorData = coordinators.get(0);
+            FindCoordinatorResponseData.Coordinator coordinatorData = coordinators.get(0);
             Errors error = Errors.forCode(coordinatorData.errorCode());
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
@@ -981,7 +922,7 @@ public abstract class AbstractCoordinator implements Closeable {
         needsJoinPrepare = true;
     }
 
-    synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
+    protected synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         final String reason = String.format("encountered %s from %s response", error, api);
         resetStateAndRejoin(reason);
     }
@@ -1102,7 +1043,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     // visible for testing
-    synchronized RequestFuture<Void> sendHeartbeatRequest() {
+    protected synchronized RequestFuture<Void> sendHeartbeatRequest() {
         log.debug("Sending Heartbeat request with generation {} and member id {} to coordinator {}",
             generation.generationId, generation.memberId, coordinator);
         HeartbeatRequest.Builder requestBuilder =
@@ -1169,12 +1110,12 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
-        CoordinatorResponseHandler(final Generation generation) {
+        protected CoordinatorResponseHandler(final Generation generation) {
             this.sentGeneration = generation;
         }
 
-        final Generation sentGeneration;
-        ClientResponse response;
+        protected final Generation sentGeneration;
+        protected ClientResponse response;
 
         public abstract void handle(R response, RequestFuture<T> future);
 
@@ -1200,7 +1141,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         }
 
-        boolean generationUnchanged() {
+        protected boolean generationUnchanged() {
             synchronized (AbstractCoordinator.this) {
                 return generation.equals(sentGeneration);
             }
@@ -1473,7 +1414,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    protected static class Generation {
+    public static class Generation {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
                 JoinGroupRequest.UNKNOWN_MEMBER_ID,
@@ -1528,7 +1469,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     // For testing only below
-    final Heartbeat heartbeat() {
+    protected Heartbeat heartbeat() {
         return heartbeat;
     }
 
@@ -1557,11 +1498,11 @@ public abstract class AbstractCoordinator implements Closeable {
         return !hasUnknownGeneration() && generation.hasMemberId();
     }
 
-    final synchronized void setNewGeneration(final Generation generation) {
+    protected synchronized void setNewGeneration(final Generation generation) {
         this.generation = generation;
     }
 
-    final synchronized void setNewState(final MemberState state) {
+    protected synchronized void setNewState(final MemberState state) {
         this.state = state;
     }
 }

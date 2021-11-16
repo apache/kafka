@@ -14,14 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer;
 
 /**
- * Listener interface to hook into RequestFuture completion.
+ * Adapt from a request future of one type to another.
+ *
+ * @param <F> Type to adapt from
+ * @param <T> Type to adapt to
  */
-public interface RequestFutureListener<T> {
+public abstract class RequestFutureAdapter<F, T> {
 
-    void onSuccess(T value);
+    public abstract void onSuccess(F value, RequestFuture<T> future);
 
-    void onFailure(RuntimeException e);
+    public void onFailure(RuntimeException e, RequestFuture<T> future) {
+        future.raise(e);
+    }
 }
