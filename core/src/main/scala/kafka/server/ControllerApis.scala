@@ -20,8 +20,8 @@ package kafka.server
 import java.util
 import java.util.Collections
 import java.util.Map.Entry
-import java.util.concurrent.{CompletableFuture, ExecutionException}
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
+import java.util.concurrent.{CompletableFuture, ExecutionException}
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
@@ -36,11 +36,10 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message._
+import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
@@ -108,6 +107,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
+        case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -486,6 +486,24 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
+  }
+
+  def handleElectLeaders(request: RequestChannel.Request): Unit = {
+    authHelper.authorizeClusterOperation(request, ALTER)
+
+    val electLeadersRequest = request.body[ElectLeadersRequest]
+    val future = controller.electLeaders(electLeadersRequest.data)
+    future.whenComplete { (responseData, exception) =>
+      if (exception != null) {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          electLeadersRequest.getErrorResponse(throttleMs, exception)
+        })
+      } else {
+        requestHelper.sendResponseMaybeThrottle(request, throttleMs => {
+          new ElectLeadersResponse(responseData.setThrottleTimeMs(throttleMs))
+        })
+      }
+    }
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {

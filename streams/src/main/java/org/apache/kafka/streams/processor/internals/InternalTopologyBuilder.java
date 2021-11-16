@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -63,6 +64,15 @@ import static org.apache.kafka.clients.consumer.OffsetResetStrategy.LATEST;
 import static org.apache.kafka.clients.consumer.OffsetResetStrategy.NONE;
 
 public class InternalTopologyBuilder {
+
+    public InternalTopologyBuilder() {
+        this.topologyName = null;
+    }
+
+    public InternalTopologyBuilder(final TopologyConfig topologyConfigs) {
+        this.topologyConfigs = topologyConfigs;
+        this.topologyName = topologyConfigs.topologyName;
+    }
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
     private static final String[] NO_PREDECESSORS = {};
@@ -133,11 +143,14 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    private StreamsConfig config = null;
-
-    // The name of the topology this builder belongs to, or null if none
-    private String topologyName;
+    // The name of the topology this builder belongs to, or null if this is not a NamedTopology
+    private final String topologyName;
+    // TODO KAFKA-13336: we can remove this referance once we make the Topology/NamedTopology class into an interface and implement it
     private NamedTopology namedTopology;
+
+    // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
+    //  this up front and make it final, but for now we have to wait for the global app configs passed in to rewriteTopology
+    private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
 
     private boolean hasPersistentStores = false;
 
@@ -338,19 +351,6 @@ public class InternalTopologyBuilder {
         }
     }
 
-
-    public void setNamedTopology(final NamedTopology topology) {
-        final String topologyName = topology.name();
-        Objects.requireNonNull(topologyName, "topology name can't be null");
-        Objects.requireNonNull(topology, "named topology can't be null");
-        if (this.topologyName != null) {
-            log.error("Tried to reset the topologyName to {} but it was already set to {}", topologyName, this.topologyName);
-            throw new IllegalStateException("The topologyName has already been set to " + this.topologyName);
-        }
-        this.namedTopology = topology;
-        this.topologyName = topologyName;
-    }
-
     // public for testing only
     public final InternalTopologyBuilder setApplicationId(final String applicationId) {
         Objects.requireNonNull(applicationId, "applicationId can't be null");
@@ -359,15 +359,17 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final InternalTopologyBuilder setStreamsConfig(final StreamsConfig config) {
-        Objects.requireNonNull(config, "config can't be null");
-        this.config = config;
-
-        return this;
+    public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
+        Objects.requireNonNull(applicationConfig, "config can't be null");
+        topologyConfigs = new TopologyConfig(applicationConfig);
     }
 
-    public synchronized final StreamsConfig getStreamsConfig() {
-        return config;
+    public synchronized  final void setNamedTopology(final NamedTopology namedTopology) {
+        this.namedTopology = namedTopology;
+    }
+
+    public synchronized TopologyConfig topologyConfigs() {
+        return topologyConfigs;
     }
 
     public String topologyName() {
@@ -381,11 +383,11 @@ public class InternalTopologyBuilder {
     public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
-        // set application id
         setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        setStreamsConfig(config);
 
         // maybe strip out caching layers
-        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) == 0L) {
+        if (topologyConfigs.cacheSize == 0L) {
             for (final StateStoreFactory<?> storeFactory : stateFactories.values()) {
                 storeFactory.builder.withCachingDisabled();
             }
@@ -399,9 +401,6 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder<?> storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
-
-        // set streams config
-        setStreamsConfig(config);
 
         return this;
     }
@@ -1987,7 +1986,7 @@ public class InternalTopologyBuilder {
             if (namedTopology == null) {
                 sb.append("Topologies:\n ");
             } else {
-                sb.append("Topology - ").append(namedTopology).append(":\n ");
+                sb.append("Topology: ").append(namedTopology).append(":\n ");
             }
             final TopologyDescription.Subtopology[] sortedSubtopologies =
                 subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[0]);

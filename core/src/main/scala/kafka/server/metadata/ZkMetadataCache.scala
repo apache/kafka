@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.server.metadata
 
 import java.util
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.admin.BrokerMetadata
 
 import scala.collection.{Seq, Set, mutable}
@@ -28,6 +27,7 @@ import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger
+import kafka.server.MetadataCache
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
@@ -232,6 +232,14 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
     metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
+  }
+
+  def getTopicId(topicName: String): Uuid = {
+    metadataSnapshot.topicIds.getOrElse(topicName, Uuid.ZERO_UUID)
+  }
+
+  def getTopicName(topicId: Uuid): Option[String] = {
+    metadataSnapshot.topicNames.get(topicId)
   }
 
   private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],

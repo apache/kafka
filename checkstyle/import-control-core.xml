@@ -72,6 +72,13 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
+  <subpackage name="server">
+    <subpackage name="builders">
+      <allow pkg="kafka" />
+      <allow pkg="org.apache.kafka" />
+    </subpackage>
+  </subpackage>
+
   <subpackage name="test">
     <allow pkg="org.apache.kafka.controller"/>
     <allow pkg="org.apache.kafka.metadata"/>

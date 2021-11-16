@@ -126,7 +126,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                           partitionReplicaAssignment: Map[Int, Seq[Int]],
                           config: Properties): Unit = {
     Topic.validate(topic)
-
+    if (zkClient.isTopicMarkedForDeletion(topic)) {
+      throw new TopicExistsException(s"Topic '$topic' is marked for deletion.")
+    }
     if (zkClient.topicExists(topic))
       throw new TopicExistsException(s"Topic '$topic' already exists.")
     else if (Topic.hasCollisionChars(topic)) {

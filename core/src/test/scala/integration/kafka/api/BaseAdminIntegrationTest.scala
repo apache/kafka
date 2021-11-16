@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrParti
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -51,8 +51,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   var client: Admin = _
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     waitUntilBrokerMetadataIsPropagated(servers)
   }
 
@@ -110,7 +110,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
     assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
-    val topicToDescription = client.describeTopics(topics.asJava).all.get()
+    val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
 
     val topic0 = topicToDescription.get("mytopic")
@@ -225,7 +225,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
                        expectedNumPartitionsOpt: Option[Int] = None): TopicDescription = {
     var result: TopicDescription = null
     waitUntilTrue(() => {
-      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).values.get(topic)
+      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).topicNameValues().get(topic)
       try {
         result = topicResult.get
         expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)

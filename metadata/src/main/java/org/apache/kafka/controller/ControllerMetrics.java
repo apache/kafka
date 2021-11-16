@@ -27,6 +27,14 @@ public interface ControllerMetrics extends AutoCloseable {
 
     void updateEventQueueProcessingTime(long durationMs);
 
+    void setFencedBrokerCount(int brokerCount);
+
+    int fencedBrokerCount();
+
+    void setActiveBrokerCount(int brokerCount);
+
+    int activeBrokerCount();
+
     void setGlobalTopicsCount(int topicCount);
 
     int globalTopicsCount();

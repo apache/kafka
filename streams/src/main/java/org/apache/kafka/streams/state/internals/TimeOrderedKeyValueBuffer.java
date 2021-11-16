@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -47,6 +48,10 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
             return value;
         }
 
+        public Record<K, Change<V>> record() {
+            return new Record<>(key, value, recordContext.timestamp());
+        }
+
         public ProcessorRecordContext recordContext() {
             return recordContext;
         }
@@ -70,6 +75,7 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
         public int hashCode() {
             return Objects.hash(key, value, recordContext);
         }
+
     }
 
     void setSerdesIfNull(final SerdeGetter getter);
@@ -78,7 +84,7 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
     Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
 
-    void put(long time, K key, Change<V> value, ProcessorRecordContext recordContext);
+    void put(long time, Record<K, Change<V>> record, ProcessorRecordContext recordContext);
 
     int numRecords();
 

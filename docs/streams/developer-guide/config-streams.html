@@ -143,12 +143,6 @@ settings.put(... , ...);</code></pre>
           <blockquote>
             <div><p>(Required) The Kafka bootstrap servers. This is the same <a class="reference external" href="http://kafka.apache.org/documentation.html#producerconfigs">setting</a> that is used by the underlying producer and consumer clients to connect to the Kafka cluster.
               Example: <code class="docutils literal"><span class="pre">&quot;kafka-broker1:9092,kafka-broker2:9092&quot;</span></code>.</p>
-              <dl class="docutils">
-                <dt>Tip:</dt>
-                <dd>Kafka Streams applications can only communicate with a single Kafka cluster specified by this config value.
-                  Future versions of Kafka Streams will support connecting to different Kafka clusters for reading input
-                  streams and writing output streams.</dd>
-              </dl>
             </div></blockquote>
         </div>
       </div>
@@ -742,7 +736,15 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
               and <code class="docutils literal"><span class="pre">transaction.state.log.min.isr</span></code>
               to the number of brokers you want to use.
               For more details see <a href="../core-concepts#streams_processing_guarantee">Processing Guarantees</a>.
-            </div></blockquote>
+
+              <dl class="docutils">
+                <dt>Recommendation:</dt>
+                <dd>While it is technically possible to use EOS with any replication factor, using a replication factor lower
+                  than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with
+                  <code>min.in.sync.replicas=2</code>). This recommendation applies to all topics (i.e. <code>__transaction_state</code>,
+                  <code>__consumer_offsets</code>, Kafka Streams internal topics, and user topics).</dd>
+              </dl>
+	          </div></blockquote>
         </div>
         <div class="section" id="replication-factor">
           <span id="replication-factor-parm"></span><h4><a class="toc-backref" href="#id13">replication.factor</a><a class="headerlink" href="#replication-factor" title="Permalink to this headline"></a></h4>

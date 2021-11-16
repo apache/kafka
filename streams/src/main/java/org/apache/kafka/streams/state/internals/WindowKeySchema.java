@@ -29,12 +29,13 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.List;
 
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
+
 public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     private static final Logger LOG = LoggerFactory.getLogger(WindowKeySchema.class);
 
     private static final int SEQNUM_SIZE = 4;
-    private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 

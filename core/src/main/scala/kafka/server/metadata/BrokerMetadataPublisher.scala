@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigType
 import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -64,7 +64,7 @@ object BrokerMetadataPublisher extends Logging {
    */
   def findStrayPartitions(brokerId: Int,
                           newTopicsImage: TopicsImage,
-                          logs: Iterable[Log]): Iterable[TopicPartition] = {
+                          logs: Iterable[UnifiedLog]): Iterable[TopicPartition] = {
     logs.flatMap { log =>
       val topicId = log.topicId.getOrElse {
         throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
@@ -113,32 +113,34 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
-  override def publish(newHighestMetadataOffset: Long,
-                       delta: MetadataDelta,
-                       newImage: MetadataImage): Unit = {
+  override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+    val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
+
     try {
+      trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset ${newHighestMetadataOffset}.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset ${newHighestMetadataOffset}.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
       }
 
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, newHighestMetadataOffset)
+        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
       }
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
         // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(newImage, topicsDelta)
+        replicaManager.applyDelta(topicsDelta, newImage)
 
         // Handle the case where the old consumer offsets topic was deleted.
         if (topicsDelta.topicWasDeleted(Topic.GROUP_METADATA_TOPIC_NAME)) {
@@ -152,11 +154,16 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // Handle the case where we have new local leaders or followers for the consumer
         // offsets topic.
         getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => groupCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.localChanges(brokerId)
+
+          changes.deletes.forEach { topicPartition =>
+            groupCoordinator.onResignation(topicPartition.partition, None)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+          }
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            groupCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
         }
 
@@ -172,11 +179,16 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // If the transaction state topic changed in a way that's relevant to this broker,
         // notify the transaction coordinator.
         getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => txnCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
+          val changes = topicDelta.localChanges(brokerId)
+
+          changes.deletes.forEach { topicPartition =>
+            txnCoordinator.onResignation(topicPartition.partition, None)
           }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
+          changes.leaders.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+          }
+          changes.followers.forEach { (topicPartition, partitionInfo) =>
+            txnCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
           }
         }
 
@@ -204,7 +216,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
             val maybeDefaultName = configResource.name() match {
-              case "" => ConfigEntityName.Default 
+              case "" => ConfigEntityName.Default
               case k => k
             }
             dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
@@ -221,7 +233,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         finishInitializingReplicaManager(newImage)
       }
     } catch {
-      case t: Throwable => error(s"Error publishing broker metadata at ${newHighestMetadataOffset}", t)
+      case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
     } finally {
       _firstPublish = false

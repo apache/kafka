@@ -150,7 +150,31 @@ public class CachingInMemorySessionStoreTest {
 
         assertEquals(3, cache.size());
 
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.findSessions(keyA, keyB, 0, 0)) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.fetch(keyA, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyFrom fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.fetch(null, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyTo fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.fetch(null, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyFrom and keyTo fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.fetch(null, keyB)) {
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
@@ -166,7 +190,31 @@ public class CachingInMemorySessionStoreTest {
 
         assertEquals(3, cache.size());
 
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFindSessions(keyA, keyB, 0, 0)) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFetch(keyA, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyFrom fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFetch(null, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyTo fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFetch(null, keyB)) {
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            assertFalse(all.hasNext());
+        }
+
+        // infinite keyFrom and keyTo fetch
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFetch(null, null)) {
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
@@ -241,7 +289,33 @@ public class CachingInMemorySessionStoreTest {
 
         assertEquals(3, cache.size());
 
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some = cachingStore.findSessions(keyAA, keyB, 0, 0)) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.findSessions(keyAA, keyB, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyFrom case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.findSessions(null, keyAA, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyTo case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.findSessions(keyAA, keyB, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyFrom and keyTo case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.findSessions(null, null, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
             assertFalse(some.hasNext());
@@ -256,9 +330,35 @@ public class CachingInMemorySessionStoreTest {
 
         assertEquals(3, cache.size());
 
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some = cachingStore.backwardFindSessions(keyAA, keyB, 0, 0)) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.backwardFindSessions(keyAA, keyB, 0, 0)) {
             verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
             verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyFrom case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.backwardFindSessions(null, keyAA, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyTo case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.backwardFindSessions(keyAA, keyB, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            assertFalse(some.hasNext());
+        }
+
+        // infinite keyFrom and keyTo case
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> some =
+                 cachingStore.backwardFindSessions(null, null, 0, 0)) {
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+            verifyWindowedKeyValue(some.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
             assertFalse(some.hasNext());
         }
     }
@@ -316,13 +416,11 @@ public class CachingInMemorySessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(
-            Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
-            0,
-            added.size() * 10L)) {
-            final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(iterator);
-            verifyKeyValueList(added, actual);
-        }
+        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(cachingStore.findSessions(
+                Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
+                0,
+                added.size() * 10L));
+        verifyKeyValueList(added, actual);
     }
 
     @Test
@@ -334,7 +432,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.remove(a);
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
-            cachingStore.findSessions(keyA, 0, 0)) {
+                 cachingStore.findSessions(keyA, 0, 0)) {
             assertFalse(rangeIter.hasNext());
 
             assertNull(cachingStore.fetchSession(keyA, 0, 0));
@@ -644,26 +742,6 @@ public class CachingInMemorySessionStoreTest {
     @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         assertThrows(NullPointerException.class, () -> cachingStore.findSessions(null, 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.findSessions(null, keyA, 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.findSessions(keyA, null, 1L, 2L));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, keyA));
-    }
-
-    @Test
-    public void shouldThrowNullPointerExceptionOnFetchNullToKey() {
-        assertThrows(NullPointerException.class, () -> cachingStore.fetch(keyA, null));
     }
 
     @Test

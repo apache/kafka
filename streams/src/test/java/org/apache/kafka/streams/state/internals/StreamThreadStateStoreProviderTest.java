@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -423,7 +425,8 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             streamsConfig.defaultProductionExceptionHandler(),
             new MockStreamsMetrics(metrics));
@@ -440,7 +443,7 @@ public class StreamThreadStateStoreProviderTest {
             partitions,
             topology,
             clientSupplier.consumer,
-            streamsConfig,
+            new TopologyConfig(null, streamsConfig, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             EasyMock.createNiceMock(ThreadCache.class),

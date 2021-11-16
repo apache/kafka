@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -27,6 +28,9 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertFalse;
@@ -62,13 +66,16 @@ public class WorkerErrantRecordReporterTest {
     }
 
     @Test
-    public void testGetAllFutures() {
+    public void testGetFutures() {
+        Collection<TopicPartition> topicPartitions = new ArrayList<>();
         assertTrue(reporter.futures.isEmpty());
         for (int i = 0; i < 4; i++) {
-            reporter.futures.add(CompletableFuture.completedFuture(null));
+            TopicPartition topicPartition = new TopicPartition("topic", i);
+            topicPartitions.add(topicPartition);
+            reporter.futures.put(topicPartition, Collections.singletonList(CompletableFuture.completedFuture(null)));
         }
         assertFalse(reporter.futures.isEmpty());
-        reporter.awaitAllFutures();
+        reporter.awaitFutures(topicPartitions);
         assertTrue(reporter.futures.isEmpty());
     }
 }

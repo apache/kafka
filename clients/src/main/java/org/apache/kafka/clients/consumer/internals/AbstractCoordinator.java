@@ -467,6 +467,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
 
                 resetJoinGroupFuture();
+                rejoinNeeded = true;
 
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof IllegalGenerationException ||
@@ -476,7 +477,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
-                resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
@@ -925,8 +925,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
             // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
             // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
-            if (!isDisconnected)
+            if (!isDisconnected) {
+                log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
                 client.disconnectAsync(oldCoordinator);
+            }
 
             lastTimeOfConnectionMs = time.milliseconds();
         } else {

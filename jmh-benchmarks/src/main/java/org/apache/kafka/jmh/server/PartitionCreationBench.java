@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.Properties;
-
 import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
@@ -28,13 +26,14 @@ import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
-import kafka.server.ZkMetadataCache;
+import kafka.server.builders.LogManagerBuilder;
+import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.ConfigRepository;
 import kafka.server.metadata.MockConfigRepository;
+import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
@@ -62,13 +61,13 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-
-import scala.collection.JavaConverters;
 import scala.Option;
+import scala.collection.JavaConverters;
 
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
@@ -92,6 +91,7 @@ public class PartitionCreationBench {
 
     private ReplicaManager replicaManager;
     private QuotaFactory.QuotaManagers quotaManagers;
+    private KafkaZkClient zkClient;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
@@ -122,52 +122,47 @@ public class PartitionCreationBench {
                 Double.MAX_VALUE, 15 * 1000, true, "MD5");
 
         ConfigRepository configRepository = new MockConfigRepository();
-        this.logManager = new LogManager(JavaConverters.asScalaIteratorConverter(files.iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                configRepository,
-                createLogConfig(),
-                cleanerConfig,
-                1,
-                1000L,
-                10000L,
-                10000L,
-                1000L,
-                60000,
-                ApiVersion.latestVersion(),
-                scheduler,
-                brokerTopicStats,
-                failureChannel,
-                Time.SYSTEM,
-                true);
+        this.logManager = new LogManagerBuilder().
+            setLogDirs(files).
+            setInitialOfflineDirs(Collections.emptyList()).
+            setConfigRepository(configRepository).
+            setInitialDefaultConfig(createLogConfig()).
+            setCleanerConfig(cleanerConfig).
+            setRecoveryThreadsPerDataDir(1).
+            setFlushCheckMs(1000L).
+            setFlushRecoveryOffsetCheckpointMs(10000L).
+            setFlushStartOffsetCheckpointMs(10000L).
+            setRetentionCheckMs(1000L).
+            setMaxPidExpirationMs(60000).
+            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setScheduler(scheduler).
+            setBrokerTopicStats(brokerTopicStats).
+            setLogDirFailureChannel(failureChannel).
+            setTime(Time.SYSTEM).
+            setKeepPartitionMetadataFile(true).
+            build();
         scheduler.startup();
-        final MetadataCache metadataCache =
-                new ZkMetadataCache(this.brokerProperties.brokerId());
-        this.quotaManagers =
-                QuotaFactory.instantiate(this.brokerProperties,
-                        this.metrics,
-                        this.time, "");
-
-        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
+        this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
+        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();
             }
         };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
-        this.replicaManager = new ReplicaManager(
-                this.brokerProperties,
-                this.metrics,
-                this.time,
-                Option.apply(zkClient),
-                this.scheduler,
-                this.logManager,
-                new AtomicBoolean(false),
-                this.quotaManagers,
-                brokerTopicStats,
-                metadataCache,
-                this.failureChannel,
-                alterIsrManager,
-                Option.empty());
+        this.replicaManager = new ReplicaManagerBuilder().
+            setConfig(brokerProperties).
+            setMetrics(metrics).
+            setTime(time).
+            setZkClient(zkClient).
+            setScheduler(scheduler).
+            setLogManager(logManager).
+            setQuotaManagers(quotaManagers).
+            setBrokerTopicStats(brokerTopicStats).
+            setMetadataCache(new ZkMetadataCache(this.brokerProperties.brokerId())).
+            setLogDirFailureChannel(failureChannel).
+            setAlterIsrManager(alterIsrManager).
+            build();
         replicaManager.startup();
         replicaManager.checkpointHighWatermarks();
     }
@@ -182,6 +177,7 @@ public class PartitionCreationBench {
         for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
+        this.zkClient.close();
     }
 
     private static LogConfig createLogConfig() {

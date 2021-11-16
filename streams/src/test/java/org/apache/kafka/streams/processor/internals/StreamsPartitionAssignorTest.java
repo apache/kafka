@@ -1310,7 +1310,7 @@ public class StreamsPartitionAssignorTest {
             .groupByKey()
 
             // Task 2 (should get created):
-            // create repartioning and changelog topic as task 1 exists
+            // create repartitioning and changelog topic as task 1 exists
             .count(Materialized.as("count"))
 
             // force repartitioning for join, but second join input topic unknown

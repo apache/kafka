@@ -452,7 +452,7 @@ public class TopicAdmin implements AutoCloseable {
         String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
-                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).values();
+                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).topicNameValues();
 
         // Iterate over each future so that we can handle individual failures like when some topics don't exist
         Map<String, TopicDescription> existingTopics = new HashMap<>();

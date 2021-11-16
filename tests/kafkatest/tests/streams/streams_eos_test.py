@@ -39,7 +39,7 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @parametrize(processing_guarantee="exactly_once")
-    @parametrize(processing_guarantee="exactly_once_beta")
+    @parametrize(processing_guarantee="exactly_once_v2")
     def test_rebalance_simple(self, processing_guarantee):
         self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -48,7 +48,7 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @parametrize(processing_guarantee="exactly_once")
-    @parametrize(processing_guarantee="exactly_once_beta")
+    @parametrize(processing_guarantee="exactly_once_v2")
     def test_rebalance_complex(self, processing_guarantee):
         self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -83,7 +83,7 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @parametrize(processing_guarantee="exactly_once")
-    @parametrize(processing_guarantee="exactly_once_beta")
+    @parametrize(processing_guarantee="exactly_once_v2")
     def test_failure_and_recovery(self, processing_guarantee):
         self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -92,7 +92,7 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @parametrize(processing_guarantee="exactly_once")
-    @parametrize(processing_guarantee="exactly_once_beta")
+    @parametrize(processing_guarantee="exactly_once_v2")
     def test_failure_and_recovery_complex(self, processing_guarantee):
         self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),

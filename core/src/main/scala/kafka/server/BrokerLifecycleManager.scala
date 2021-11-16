@@ -166,12 +166,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  var _channelManager: BrokerToControllerChannelManager = _
+  private var _channelManager: BrokerToControllerChannelManager = _
 
   /**
    * The event queue.
    */
-  val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
+  private[server] val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
   /**
    * Start the BrokerLifecycleManager.
@@ -193,9 +193,9 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     eventQueue.append(new SetReadyToUnfenceEvent())
   }
 
-  def brokerEpoch(): Long = _brokerEpoch
+  def brokerEpoch: Long = _brokerEpoch
 
-  def state(): BrokerState = _state
+  def state: BrokerState = _state
 
   private class BeginControlledShutdownEvent extends EventQueue.Event {
     override def run(): Unit = {
@@ -208,7 +208,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _state = BrokerState.PENDING_CONTROLLED_SHUTDOWN
           // Send the next heartbeat immediately in order to let the controller
           // begin processing the controlled shutdown as soon as possible.
-          scheduleNextCommunication(0)
+          scheduleNextCommunicationImmediately()
 
         case _ =>
           info(s"Skipping controlled shutdown because we are in state ${_state}.")
@@ -284,8 +284,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
         setRack(rack.orNull)
-    if (isTraceEnabled) {
-      trace(s"Sending broker registration ${data}")
+    if (isDebugEnabled) {
+      debug(s"Sending broker registration ${data}")
     }
     _channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())
@@ -406,7 +406,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
                   scheduleNextCommunicationAfterSuccess()
                 }
               } else {
-                info(s"The controlled has asked us to exit controlled shutdown.")
+                info(s"The controller has asked us to exit controlled shutdown.")
                 beginShutdown()
               }
               gotControlledShutdownResponse = true

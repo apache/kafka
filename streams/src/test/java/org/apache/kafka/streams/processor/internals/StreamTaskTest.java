@@ -57,6 +57,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
@@ -83,6 +84,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -111,6 +113,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1592,7 +1595,7 @@ public class StreamTaskTest {
             mkSet(partition1, repartition),
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -1659,7 +1662,8 @@ public class StreamTaskTest {
     public void shouldSkipCheckpointingSuspendedCreatedTask() {
         stateManager.checkpoint();
         EasyMock.expectLastCall().andThrow(new AssertionError("Should not have tried to checkpoint"));
-        EasyMock.replay(stateManager);
+        EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig("100"), true);
         task.suspend();
@@ -1672,7 +1676,8 @@ public class StreamTaskTest {
         EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
                 .andReturn(singletonMap(partition1, 1L));
-        EasyMock.replay(stateManager);
+        EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -2176,7 +2181,7 @@ public class StreamTaskTest {
                 partitions,
                 topology,
                 consumer,
-                createConfig("100"),
+                new TopologyConfig(null, createConfig("100"), new Properties()).getTaskConfig(),
                 metrics,
                 stateDirectory,
                 cache,
@@ -2200,10 +2205,12 @@ public class StreamTaskTest {
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
 
-        assertThrows(
-            TimeoutException.class,
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
             () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
+
+        assertThat(thrown.getCause(), isA(TimeoutException.class));
     }
 
     @Test
@@ -2241,7 +2248,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2282,7 +2289,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2315,7 +2322,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2353,7 +2360,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -2393,7 +2400,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, time),
             stateDirectory,
             cache,
@@ -2434,7 +2441,7 @@ public class StreamTaskTest {
             partitions,
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
@@ -2473,7 +2480,7 @@ public class StreamTaskTest {
             singleton(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
@@ -2507,7 +2514,7 @@ public class StreamTaskTest {
             mkSet(partition1),
             topology,
             consumer,
-            config,
+            new TopologyConfig(null, config, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             cache,

@@ -872,9 +872,9 @@ class ProducerStateManagerTest {
     // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
 
     // Create 3 snapshot files at different offsets.
-    Log.producerSnapshotFile(logDir, 5).createNewFile() // not stray
-    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
-    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+    UnifiedLog.producerSnapshotFile(logDir, 5).createNewFile() // not stray
+    UnifiedLog.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    UnifiedLog.producerSnapshotFile(logDir, 42).createNewFile() // not stray
 
     // claim that we only have one segment with a base offset of 5
     stateManager.removeStraySnapshots(Seq(5))
@@ -892,9 +892,9 @@ class ProducerStateManagerTest {
     // Snapshots associated with an offset in the list of segment base offsets should remain.
 
     // Create 3 snapshot files at different offsets.
-    Log.producerSnapshotFile(logDir, 5).createNewFile() // stray
-    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
-    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+    UnifiedLog.producerSnapshotFile(logDir, 5).createNewFile() // stray
+    UnifiedLog.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    UnifiedLog.producerSnapshotFile(logDir, 42).createNewFile() // not stray
 
     stateManager.removeStraySnapshots(Seq(42))
     assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
@@ -906,11 +906,11 @@ class ProducerStateManagerTest {
    */
   @Test
   def testRemoveAndMarkSnapshotForDeletion(): Unit = {
-    Log.producerSnapshotFile(logDir, 5).createNewFile()
+    UnifiedLog.producerSnapshotFile(logDir, 5).createNewFile()
     val manager = new ProducerStateManager(partition, logDir, time = time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
     val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
-    assertTrue(snapshot.file.toPath.toString.endsWith(Log.DeletedFileSuffix))
+    assertTrue(snapshot.file.toPath.toString.endsWith(UnifiedLog.DeletedFileSuffix))
     assertTrue(manager.latestSnapshotOffset.isEmpty)
   }
 
@@ -923,7 +923,7 @@ class ProducerStateManagerTest {
    */
   @Test
   def testRemoveAndMarkSnapshotForDeletionAlreadyDeleted(): Unit = {
-    val file = Log.producerSnapshotFile(logDir, 5)
+    val file = UnifiedLog.producerSnapshotFile(logDir, 5)
     file.createNewFile()
     val manager = new ProducerStateManager(partition, logDir, time = time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
@@ -945,7 +945,7 @@ class ProducerStateManagerTest {
     // Truncate the last snapshot
     val latestSnapshotOffset = stateManager.latestSnapshotOffset
     assertEquals(Some(2L), latestSnapshotOffset)
-    val snapshotToTruncate = Log.producerSnapshotFile(logDir, latestSnapshotOffset.get)
+    val snapshotToTruncate = UnifiedLog.producerSnapshotFile(logDir, latestSnapshotOffset.get)
     val channel = FileChannel.open(snapshotToTruncate.toPath, StandardOpenOption.WRITE)
     try {
       makeFileCorrupt(channel)
@@ -1005,6 +1005,6 @@ class ProducerStateManagerTest {
   }
 
   private def currentSnapshotOffsets: Set[Long] =
-    logDir.listFiles.map(Log.offsetFromFile).toSet
+    logDir.listFiles.map(UnifiedLog.offsetFromFile).toSet
 
 }

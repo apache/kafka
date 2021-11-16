@@ -22,14 +22,13 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
-
 import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
@@ -76,14 +75,20 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
-    val (topicIds, topicNames) = replicaMgr.metadataCache.topicIdInfo()
+    // We can build the map from the request since it contains topic IDs and names.
+    // Only one ID can be associated with a name and vice versa.
+    val topicNames = new mutable.HashMap[Uuid, String]()
+    request.data.topics.forEach { topic =>
+      topicNames.put(topic.topicId, topic.topic)
+    }
 
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+
+    def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new FetchResponseData.PartitionData()
-          .setPartitionIndex(tp.partition)
+        tp.topicPartition -> new FetchResponseData.PartitionData()
+          .setPartitionIndex(tp.topicPartition.partition)
           .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
@@ -93,8 +98,7 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
-    // Will throw UnknownTopicIdException if a topic ID is unknown.
-    val fetchData = request.fetchData(topicNames)
+    val fetchData = request.fetchData(topicNames.asJava)
 
     replicaMgr.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
@@ -103,7 +107,6 @@ class ReplicaAlterLogDirsThread(name: String,
       request.maxBytes,
       false,
       fetchData.asScala.toSeq,
-      topicIds,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
@@ -262,7 +265,6 @@ class ReplicaAlterLogDirsThread(name: String,
   private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
-    val topicIds = replicaMgr.metadataCache.topicNamesToIds()
 
     try {
       val logStartOffset = replicaMgr.futureLocalLogOrException(tp).logStartOffset
@@ -270,7 +272,8 @@ class ReplicaAlterLogDirsThread(name: String,
         fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
       else
         Optional.empty[Integer]
-      requestMap.put(tp, new FetchRequest.PartitionData(fetchState.fetchOffset, logStartOffset,
+      val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)
+      requestMap.put(tp, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))
     } catch {
       case e: KafkaStorageException =>
@@ -281,14 +284,13 @@ class ReplicaAlterLogDirsThread(name: String,
     val fetchRequestOpt = if (requestMap.isEmpty) {
       None
     } else {
-      val version: Short = if (topicIds.containsKey(tp.topic()))
+      val version: Short = if (fetchState.topicId.isEmpty)
         12
       else
         ApiKeys.FETCH.latestVersion
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
-      val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap,
-        topicIds).setMaxBytes(maxBytes)
+      val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))
     }
 

@@ -95,25 +95,25 @@ object AclAuthorizer {
     }
   }
 
-  private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
+  private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
     val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
       map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
-      None
+      new ZKClientConfig
     else {
       // start with the base config from the Kafka configuration
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
-      KafkaConfig.ZkSslConfigToSystemPropertyMap.foreach{ case (kafkaProp, sysProp) => {
-        val prefixedValue = configMap.get(AclAuthorizer.configPrefix + kafkaProp)
-        if (prefixedValue.isDefined)
-          zkClientConfig.get.setProperty(sysProp,
+      KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
+        configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
+          zkClientConfig.setProperty(sysProp,
             if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
-              (prefixedValue.get.toString.toUpperCase == "HTTPS").toString
+              (prefixedValue.toString.toUpperCase == "HTTPS").toString
             else
-              prefixedValue.get.toString)
-      }}
+              prefixedValue.toString)
+        }
+      }
       zkClientConfig
     }
   }
@@ -178,8 +178,8 @@ class AclAuthorizer extends Authorizer with Logging {
     // createChrootIfNecessary=true is necessary in case we are running in a KRaft cluster
     // because such a cluster will not create any chroot path in ZooKeeper (it doesn't connect to ZooKeeper)
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
-      zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),
-      zkClientConfig = zkClientConfig, createChrootIfNecessary = true)
+      zkMaxInFlightRequests, time, name = "ACL authorizer", zkClientConfig = zkClientConfig,
+      metricGroup = "kafka.security", metricType = "AclAuthorizer", createChrootIfNecessary = true)
     zkClient.createAclPaths()
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
@@ -538,11 +538,34 @@ class AclAuthorizer extends Authorizer with Logging {
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
         (operation == acl.operation || acl.operation == AclOperation.ALL) &&
-        (acl.host == host || acl.host == AclEntry.WildcardHost)
+        hostAuthorize(host,acl.host)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  private def hostAuthorize(sourceIp: String, hostPrincipal: String): Boolean = {
+    if (hostPrincipal.contains("/")) {
+      val authorize = isIPCidrRange(sourceIp, hostPrincipal)
+      if (!authorize) {
+        authorizerLogger.debug(s"Acl ip network segment verification failed,sourceIP= $sourceIp ,hostPrincipal= $hostPrincipal")
+      }
+      authorize || hostPrincipal == AclEntry.WildcardHost
+    } else {
+      sourceIp == hostPrincipal || hostPrincipal == AclEntry.WildcardHost
+    }
+  }
+
+  private def isIPCidrRange(ip: String, cidr: String): Boolean = {
+    val ips = ip.split("\\.")
+    val ipAddr = (ips(0).toInt << 24) | (ips(1).toInt << 16) | (ips(2).toInt << 8) | ips(3).toInt
+    val cidrType = cidr.replaceAll(".*/", "").toInt
+    val mask = 0xFFFFFFFF << (32 - cidrType)
+    val cidrIp = cidr.replaceAll("/.*", "")
+    val cidrIps = cidrIp.split("\\.")
+    val cidrIpAddr = (cidrIps(0).toInt << 24) | (cidrIps(1).toInt << 16) | (cidrIps(2).toInt << 8) | cidrIps(3).toInt
+    (ipAddr & mask) == (cidrIpAddr & mask)
   }
 
   private def loadCache(): Unit = {

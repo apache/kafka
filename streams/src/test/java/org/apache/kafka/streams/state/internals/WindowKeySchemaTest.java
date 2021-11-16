@@ -128,7 +128,7 @@ public class WindowKeySchemaTest {
         final Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[] {0xC, 0xC, 0x9}), 0x0AffffffffffffffL);
 
         assertThat(
-            "shorter key with max timestamp should be in range",
+            "shorter key with customized timestamp should be in range",
             upper.compareTo(
                 WindowKeySchema.toStoreKeyBinary(
                     new byte[] {0xC, 0xC},
