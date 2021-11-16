@@ -511,7 +511,7 @@ object AclCommand extends Logging {
 
     val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "DEPRECATED: The " +
       "properties required to configure an instance of the Authorizer specified by --authorizer. " +
-      "These are key=val pairs. For the default authorizer, example values are: zookeeper.connect=localhost:2181." +
+      "These are key=val pairs. For the default authorizer, example values are: zookeeper.connect=localhost:2181. " +
       AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer-properties")
