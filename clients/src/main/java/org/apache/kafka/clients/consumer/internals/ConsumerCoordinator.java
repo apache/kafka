@@ -82,6 +82,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
+import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -612,6 +613,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+        String assignorName = assignor.name();
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
@@ -633,15 +635,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
-        log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
+        log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
 
-        if (protocol == RebalanceProtocol.COOPERATIVE) {
+        // skip the validation for built-in cooperative sticky assignor since we've considered
+        // the "generation" of ownedPartition inside the assignor
+        if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
             validateCooperativeAssignment(ownedPartitions, assignments);
         }
 
-        maybeUpdateGroupSubscription(assignor.name(), assignments, allSubscribedTopics);
+        maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
 
         assignmentSnapshot = metadataSnapshot;
 
