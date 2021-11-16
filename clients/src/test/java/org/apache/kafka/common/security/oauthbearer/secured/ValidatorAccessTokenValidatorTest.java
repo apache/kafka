@@ -19,8 +19,9 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 
 import java.util.Collections;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
-import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,16 +39,30 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
     }
 
     @Test
-    public void testBasicEncryption() throws Exception {
-        AccessTokenBuilder builder = new AccessTokenBuilder();
+    public void testRsaEncryptionAlgorithm() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        testEncryptionAlgorithm(jwk, AlgorithmIdentifiers.RSA_USING_SHA256);
+    }
+
+    @Test
+    public void testEcdsaEncryptionAlgorithm() throws Exception {
+        PublicJsonWebKey jwk = createEcJwk();
+        testEncryptionAlgorithm(jwk, AlgorithmIdentifiers.ECDSA_USING_P256_CURVE_AND_SHA256);
+    }
+
+    @Test
+    public void testInvalidEncryptionAlgorithm() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+
+        assertThrowsWithMessage(InvalidAlgorithmException.class,
+            () -> testEncryptionAlgorithm(jwk, "fake"),
+            "fake is an unknown, unsupported or unavailable alg algorithm");
+    }
+
+    private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
+        AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
         AccessTokenValidator validator = createAccessTokenValidator(builder);
-
-        JsonWebSignature jws = new JsonWebSignature();
-        jws.setKey(builder.jwk().getPrivateKey());
-        jws.setKeyIdHeaderValue(builder.jwk().getKeyId());
-        jws.setAlgorithmHeaderValue(AlgorithmIdentifiers.RSA_USING_SHA256);
         String accessToken = builder.build();
-
         OAuthBearerToken token = validator.validate(accessToken);
 
         assertEquals(builder.subject(), token.principalName());
