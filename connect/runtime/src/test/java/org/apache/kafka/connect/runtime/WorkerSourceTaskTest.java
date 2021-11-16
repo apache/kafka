@@ -1121,14 +1121,15 @@ public class WorkerSourceTaskTest {
 
         LogCaptureAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
         LogCaptureAppender.setClassLoggerToTrace(WorkerSourceTask.class);
-        try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
-            try (LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
-                SourceTaskOffsetCommitter.commit(workerTask);
-                assertEquals(Collections.emptyList(), taskAppender.getMessages());
-            }
+        try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class);
+             LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
+            SourceTaskOffsetCommitter.commit(workerTask);
+            assertEquals(Collections.emptyList(), taskAppender.getMessages());
+
             List<String> committerMessages = committerAppender.getMessages();
             assertEquals(1, committerMessages.size());
             assertTrue(committerMessages.get(0).contains("Skipping offset commit"));
         }
+    }
     }
 }
