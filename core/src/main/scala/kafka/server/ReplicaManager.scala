@@ -1401,11 +1401,13 @@ class ReplicaManager(val config: KafkaConfig,
                     if (partitionState.leader != localBrokerId)
                       topicIdUpdateFollowerPartitions.add(partition)
                     Errors.NONE
-                  case None if logTopicId.isDefined =>
+                  case None if logTopicId.isDefined && partitionState.leader != localBrokerId =>
                     // If we have a topic ID in the log but not in the request, we must have previously had topic IDs but
                     // are now downgrading. If we are a follower, remove the topic ID from the PartitionFetchState.
-                    if (partitionState.leader != localBrokerId)
-                      topicIdUpdateFollowerPartitions.add(partition)
+                    stateChangeLogger.info(s"Updating PartitionFetchState for $topicPartition to remove log topic ID " +
+                      s"${logTopicId.get} since LeaderAndIsr request from controller $controllerId with correlation " +
+                      s"id $correlationId epoch $controllerEpoch did not contain a topic ID")
+                    topicIdUpdateFollowerPartitions.add(partition)
                     Errors.NONE
                   case _ =>
                     stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +

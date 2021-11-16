@@ -33,40 +33,36 @@ import scala.collection.{Map, Seq}
 
 class FetchRequestTestDowngrade extends BaseRequestTest {
 
-    override def brokerCount: Int = 3
+    override def brokerCount: Int = 2
     override def generateConfigs: Seq[KafkaConfig] = {
-        // Brokers should start with newer IBP and downgrade to the older one.
+        // Controller should start with newer IBP and downgrade to the older one.
         Seq(
-                createConfig(0, KAFKA_3_1_IV0),
-                createConfig(1, KAFKA_3_1_IV0),
-                createConfig(2, KAFKA_2_7_IV0)
+            createConfig(0, KAFKA_3_1_IV0),
+            createConfig(1, KAFKA_2_7_IV0)
         )
     }
 
     @Test
-    def testTopicIdsInFetcherOldController(): Unit = {
-        val topic = "topic"
+    def testTopicIdIsRemovedFromFetcherWhenControllerDowngrades(): Unit = {
+        val tp = new TopicPartition("topic", 0)
         val producer = createProducer()
         val consumer = createConsumer()
 
         ensureControllerIn(Seq(0))
         assertEquals(0, controllerSocketServer.config.brokerId)
-        val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
-        TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
-        ensureControllerIn(Seq(2))
-        assertEquals(2, controllerSocketServer.config.brokerId)
+        val partitionLeaders = createTopic(tp.topic, Map(tp.partition -> Seq(1, 0)))
+        TestUtils.waitForAllPartitionsMetadata(servers, tp.topic, 1)
+        ensureControllerIn(Seq(1))
+        assertEquals(1, controllerSocketServer.config.brokerId)
 
         assertEquals(1, partitionLeaders(0))
-        assertEquals(0, partitionLeaders(1))
 
-        val record1 = new ProducerRecord(topic, 0, null, "key".getBytes, "value".getBytes)
-        val record2 = new ProducerRecord(topic, 1, null, "key".getBytes, "value".getBytes)
+        val record1 = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
         producer.send(record1)
-        producer.send(record2)
 
-        consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-        val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
-        assertEquals(2, count)
+        consumer.assign(asList(tp))
+        val count = consumer.poll(Duration.ofMillis(5000)).count()
+        assertEquals(1, count)
     }
 
     private def ensureControllerIn(brokerIds: Seq[Int]): Unit = {
@@ -82,4 +78,4 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
         KafkaConfig.fromProps(props)
     }
 
-} 
+}
