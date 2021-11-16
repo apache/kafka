@@ -262,11 +262,12 @@ public class Fetcher<K, V> implements Closeable {
                 maxVersion = ApiKeys.FETCH.latestVersion();
             }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.topicIds())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
-                    .toForget(data.toForget())
+                    .removed(data.toForget())
+                    .replaced(data.toReplace())
                     .rackId(clientRackId);
 
             if (log.isDebugEnabled()) {
@@ -291,15 +292,13 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
                             if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
-                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR
-                                        || response.error() == Errors.UNKNOWN_TOPIC_ID
-                                        || response.error() == Errors.INCONSISTENT_TOPIC_ID) {
+                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
                                     metadata.requestUpdate();
                                 }
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
@@ -314,8 +313,8 @@ public class Fetcher<K, V> implements Closeable {
                                                 new Object[]{partition, data.metadata()}).getMessage();
                                     } else {
                                         message = MessageFormatter.arrayFormat(
-                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}",
-                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget()}).getMessage();
+                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
+                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
                                     }
 
                                     // Received fetch response for missing session partition
@@ -1238,9 +1237,9 @@ public class Fetcher<K, V> implements Closeable {
                     builder = handler.newBuilder();
                     fetchable.put(node, builder);
                 }
-
-                builder.add(partition, topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(position.offset,
-                    FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                builder.add(partition, new FetchRequest.PartitionData(
+                    topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID),
+                    position.offset, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
@@ -1352,6 +1351,12 @@ public class Fetcher<K, V> implements Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                log.warn("Received unknown topic ID error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
+                log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);

@@ -18,14 +18,14 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.metadata.BrokerState
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
-class ServerStartupTest extends ZooKeeperTestHarness {
+class ServerStartupTest extends QuorumTestHarness {
 
   private var server: KafkaServer = null
 

@@ -1126,7 +1126,8 @@ class GroupCoordinator(val brokerId: Int,
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
       assert(group.is(Stable) || group.is(Empty))
       if (groupIsOverCapacity(group)) {
-        prepareRebalance(group, s"Freshly-loaded group is over capacity ($groupConfig.groupMaxSize). Rebalacing in order to give a chance for consumers to commit offsets")
+        prepareRebalance(group, s"Freshly-loaded group is over capacity (${groupConfig.groupMaxSize}). " +
+          "Rebalancing in order to give a chance for consumers to commit offsets")
       }
 
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))

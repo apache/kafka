@@ -50,7 +50,7 @@ import org.apache.kafka.common._
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -85,9 +85,9 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
-    super.setUp()
+    super.setUp(testInfo)
 
     createTopic(topic, numPartitions)
     leaderNode = servers.head
@@ -226,8 +226,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.FETCH =>
           val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-          partitionMap.put(tp, new FetchRequest.PartitionData(0, 0, 100, Optional.of(15)))
-          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap, getTopicIds().asJava)
+          partitionMap.put(tp, new FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), 0, 0, 100, Optional.of(15)))
+          FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
           new MetadataRequest.Builder(List(topic).asJava, true)

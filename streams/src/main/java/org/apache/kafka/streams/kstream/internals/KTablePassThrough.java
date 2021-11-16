@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
-public class KTablePassThrough<KIn, VIn> implements KTableNewProcessorSupplier<KIn, VIn, KIn, VIn> {
+public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;
 
@@ -82,7 +82,7 @@ public class KTablePassThrough<KIn, VIn> implements KTableNewProcessorSupplier<K
         private TimestampedKeyValueStore<KIn, VIn> store;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);
         }
 

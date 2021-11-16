@@ -87,6 +87,7 @@ public class SessionWindowsTest {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0)));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void graceShouldNotCalledAfterGraceSet() {
         assertThrows(IllegalStateException.class, () -> SessionWindows.ofInactivityGapAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));

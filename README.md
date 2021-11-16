@@ -132,7 +132,7 @@ The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as 
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
 
-### Publishing the jar for all version of Scala and for all projects to maven ###
+### Publishing the jar for all versions of Scala and for all projects to maven ###
 The recommended command is:
 
     ./gradlewAll publish
