@@ -819,10 +819,8 @@ object KafkaConfig {
     "records for at least the " + LogCleanerMinCompactionLagMsProp + " duration, or (ii) if the log has had " +
     "dirty (uncompacted) records for at most the " + LogCleanerMaxCompactionLagMsProp + " period."
   val LogCleanerEnableDoc = "Enable the log cleaner process to run on the server. Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size."
-  val LogCleanerDeleteRetentionMsDoc = "The amount of time to retain delete tombstone markers " +
-    "for log compacted topics. This setting also gives a bound " +
-    "on the time in which a consumer must complete a read if they begin from offset 0 " +
-    "to ensure that they get a valid snapshot of the final stage (otherwise delete " +
+  val LogCleanerDeleteRetentionMsDoc = "The amount of time to retain delete tombstone markers for log compacted topics. This setting also gives a bound " +
+    "on the time in which a consumer must complete a read if they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise delete " +
     "tombstones may be collected before they complete their scan).";
   val LogCleanerMinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted."
   val LogCleanerMaxCompactionLagMsDoc = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted."
