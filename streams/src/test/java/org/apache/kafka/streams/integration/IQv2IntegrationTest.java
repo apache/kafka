@@ -25,12 +25,17 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.InteractiveQueryRequest;
 import org.apache.kafka.streams.query.InteractiveQueryResult;
@@ -42,8 +47,11 @@ import org.apache.kafka.streams.query.RawKeyQuery;
 import org.apache.kafka.streams.query.RawScanQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -60,6 +68,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -80,7 +89,9 @@ public class IQv2IntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
+    private static final String INPUT2_TOPIC_NAME = "input2-topic";
     private static final String UNCACHED_TABLE = "uncached-table";
+    private static final String UNCACHED_COUNTS_TABLE = "uncached-counts-table";
     private static final String CACHED_TABLE = "cached-table";
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -93,6 +104,7 @@ public class IQv2IntegrationTest {
     public static void before() throws InterruptedException, IOException {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC_NAME, 2, 1);
+        CLUSTER.createTopic(INPUT2_TOPIC_NAME, 2, 1);
 
         final Semaphore semaphore = new Semaphore(0);
 
@@ -111,6 +123,24 @@ public class IQv2IntegrationTest {
             .toStream()
             .peek((k, v) -> semaphore.release());
 
+        builder
+            .stream(
+                INPUT2_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer())
+            )
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeAndGrace(
+                Duration.ofMillis(100),
+                Duration.ZERO
+            ))
+            .count(
+                Materialized
+                    .<Integer, Long, WindowStore<Bytes, byte[]>>as(UNCACHED_COUNTS_TABLE)
+                    .withCachingDisabled()
+            )
+            .toStream()
+            .peek((k, v) -> semaphore.release());
+
         kafkaStreams =
             IntegrationTestUtils.getRunningStreams(streamsConfiguration(), builder, true);
 
@@ -125,9 +155,23 @@ public class IQv2IntegrationTest {
             producerProps,
             Time.SYSTEM
         );
-
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(3, 60, TimeUnit.SECONDS), is(equalTo(true)));
+
+        IntegrationTestUtils.produceSynchronously(
+            producerProps,
+            false,
+            INPUT2_TOPIC_NAME,
+            Optional.empty(),
+            Arrays.asList(
+                new KeyValueTimestamp<>(1, 1, 0),
+                new KeyValueTimestamp<>(1, 1, 10)
+            )
+        );
+
+        // Assert that we processed the second batch (should see both updates, since caching is disabled)
+        assertThat(semaphore.tryAcquire(2, 60, TimeUnit.SECONDS), is(equalTo(true)));
+
 
     }
 
@@ -184,7 +228,6 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldQueryTypedKeyFromUncachedTable() {
-
         final Integer key = 1;
 
         final InteractiveQueryRequest<ValueAndTimestamp<Integer>> query =
@@ -198,6 +241,20 @@ public class IQv2IntegrationTest {
         assertThat(result.getPosition(),
             is(Position.fromMap(
                 mkMap(mkEntry("input-topic", mkMap(mkEntry(0, 0L), mkEntry(1, 1L)))))));
+    }
+
+    @Test
+    public void exampleKeyQueryIntoWindowStore() {
+        final Windowed<Integer> key = new Windowed<>(1, new TimeWindow(0L, 99L));
+
+        final InteractiveQueryRequest<ValueAndTimestamp<Long>> query =
+            inStore(UNCACHED_COUNTS_TABLE).withQuery(KeyQuery.withKey(key));
+
+        final InteractiveQueryResult<ValueAndTimestamp<Long>> result = kafkaStreams.query(query);
+
+        final ValueAndTimestamp<Long> value = result.getOnlyPartitionResult().getResult();
+
+        assertThat(value.value(), is(2L));
     }
 
     @Test

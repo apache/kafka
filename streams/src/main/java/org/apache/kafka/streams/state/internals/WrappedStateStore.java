@@ -112,8 +112,8 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         final boolean collectExecutionInfo) {
         final long start = System.nanoTime();
         final QueryResult<R> result = wrapped().query(query, positionBound, collectExecutionInfo);
-        final long end = System.nanoTime();
         if (collectExecutionInfo) {
+            final long end = System.nanoTime();
             result.addExecutionInfo(
                 "Handled in " + getClass() + " via WrappedStateStore" + " in " + (end - start)
                     + "ns");
