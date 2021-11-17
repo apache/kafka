@@ -173,7 +173,10 @@ public class TopologyMetadata {
     public void waitUntilTopologyChange() throws InterruptedException {
         try {
             lock();
-            version.topologyCV.await();
+            final long oldVersion = topologyVersion();
+            while (oldVersion == topologyVersion()) {
+                version.topologyCV.await();
+            }
         } finally {
             unlock();
         }
