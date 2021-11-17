@@ -36,6 +36,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -581,7 +582,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldCLearTaskTimeout() {
+    public void shouldClearTaskTimeout() {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
@@ -611,7 +612,7 @@ public class StandbyTaskTest {
             taskId,
             Collections.singleton(partition),
             topology,
-            config,
+            new TopologyConfig(config).getTaskConfig(),
             streamsMetrics,
             stateManager,
             stateDirectory,

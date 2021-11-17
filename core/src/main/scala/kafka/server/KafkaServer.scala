@@ -114,9 +114,9 @@ class KafkaServer(
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
-  var logManager: LogManager = null
+  @volatile private var _logManager: LogManager = null
 
-  @volatile private[this] var _replicaManager: ReplicaManager = null
+  @volatile private var _replicaManager: ReplicaManager = null
   var adminManager: ZkAdminManager = null
   var tokenManager: DelegationTokenManager = null
 
@@ -129,7 +129,7 @@ class KafkaServer(
 
   var transactionCoordinator: TransactionCoordinator = null
 
-  var kafkaController: KafkaController = null
+  @volatile private var _kafkaController: KafkaController = null
 
   var forwardingManager: Option[ForwardingManager] = None
 
@@ -173,7 +173,11 @@ class KafkaServer(
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
-  def replicaManager: ReplicaManager = _replicaManager
+  override def replicaManager: ReplicaManager = _replicaManager
+
+  override def logManager: LogManager = _logManager
+
+  def kafkaController: KafkaController = _kafkaController
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -230,7 +234,7 @@ class KafkaServer(
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after DynamicConfigManager starts.
-        config.dynamicConfig.initialize(zkClient)
+        config.dynamicConfig.initialize(Some(zkClient))
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -250,7 +254,7 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs,
+        _logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
         _brokerState = BrokerState.RECOVERY
@@ -327,7 +331,7 @@ class KafkaServer(
         tokenManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
+        _kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)

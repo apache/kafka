@@ -237,8 +237,8 @@
         The 2.7.0 release includes the core Raft implementation specified in
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum">KIP-595</a>.
         There is a separate "raft" module containing most of the logic. Until integration with the
-        controller is complete, there is a standalone server that users can use for testing the p
-        erformance of the Raft implementation.  See the README.md in the raft module for details
+        controller is complete, there is a standalone server that users can use for testing the
+        performance of the Raft implementation.  See the README.md in the raft module for details
     </li>
     <li>
         KIP-651 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-651+-+Support+PEM+format+for+SSL+certificates+and+private+key">adds support</a>
@@ -1078,7 +1078,7 @@
         caused by hardware failure. Users need to monitor the per-broker metric <code>offlineLogDirectoryCount</code> to check
         whether there is offline log directory. </li>
     <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
-        if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+        if the version of the client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
     <li>-XX:+DisableExplicitGC was replaced by -XX:+ExplicitGCInvokesConcurrent in the default JVM settings. This helps
         avoid out of memory exceptions during allocation of native memory by direct buffers in some cases.</li>
     <li>The overridden <code>handleError</code> method implementations have been removed from the following deprecated classes in

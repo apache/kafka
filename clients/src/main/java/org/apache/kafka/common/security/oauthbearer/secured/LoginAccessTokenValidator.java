@@ -84,7 +84,6 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
 
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
-        log.debug("validate - accessToken: {}", accessToken);
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
         Map<String, Object> payload;
 
@@ -120,8 +119,6 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
             expiration,
             subject,
             issuedAt);
-
-        log.debug("validate - token: {}", token);
 
         return token;
     }
