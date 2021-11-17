@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
@@ -198,5 +199,10 @@ public abstract class AbstractTask implements Task {
             log.debug("Clearing task timeout.");
             deadlineMs = NO_DEADLINE;
         }
+    }
+
+    @Override
+    public Optional<RuntimeException> getException() {
+        return Optional.empty();
     }
 }
