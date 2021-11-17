@@ -2015,11 +2015,23 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         // has controller role (and optionally broker role as well)
         // controller.listener.names must be non-empty
         // every one must appear in listeners
+        // each port appearing in controller.quorum.voters must match the port in exactly one controller listener
         require(controllerListeners.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
         val listenerNameValues = listeners.map(_.listenerName.value).toSet
         require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
           s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
+        RaftConfig.parseVoterConnections(quorumVoters).asScala.foreach { case (nodeId, addressSpec) =>
+          addressSpec match {
+            case inetAddressSpec: RaftConfig.InetAddressSpec => {
+              val quorumVotersPort = inetAddressSpec.address.getPort
+              val controllerListenersWithSamePort = controllerListeners.filter(_.port == quorumVotersPort)
+              require(controllerListenersWithSamePort.size == 1,
+                s"Port in ${KafkaConfig.QuorumVotersProp} for controller node with ${KafkaConfig.NodeIdProp}=$nodeId ($quorumVotersPort) does not match the port for any controller listener in ${KafkaConfig.ControllerListenerNamesProp}")
+            }
+            case _ =>
+          }
+        }
       } else {
         // only broker role
         // controller.listener.names must be non-empty
