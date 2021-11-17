@@ -1075,7 +1075,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasFatalError());
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
         assertFalse(initPidResult.isSuccessful());
-        assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
+        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
         assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1090,8 +1090,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
-        assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
-
+        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
         assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1296,7 +1295,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
 
         assertTrue(transactionManager.hasAbortableError());
-        transactionManager.beginAbort();
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
         runUntil(responseFuture::isDone);
         assertProduceFutureFailed(responseFuture);
 
@@ -1304,6 +1303,8 @@ public class TransactionManagerTest {
         runUntil(transactionManager::isReady);
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
+        assertTrue(abortResult.isSuccessful());
+        abortResult.await();
 
         // ensure we can now start a new transaction
 
@@ -1351,13 +1352,15 @@ public class TransactionManagerTest {
         assertFalse(unauthorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        transactionManager.beginAbort();
+        TransactionalRequestResult result = transactionManager.beginAbort();
         runUntil(transactionManager::isReady);
         // neither produce request has been sent, so they should both be failed immediately
         assertProduceFutureFailed(authorizedTopicProduceFuture);
         assertProduceFutureFailed(unauthorizedTopicProduceFuture);
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
+        assertTrue(result.isSuccessful());
+        result.await();
 
         // ensure we can now start a new transaction
 
@@ -1417,12 +1420,14 @@ public class TransactionManagerTest {
         assertTrue(authorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        transactionManager.beginAbort();
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
         runUntil(transactionManager::isReady);
         // neither produce request has been sent, so they should both be failed immediately
         assertTrue(transactionManager.isReady());
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
+        assertTrue(abortResult.isSuccessful());
+        abortResult.await();
 
         // ensure we can now start a new transaction
 
@@ -1563,7 +1568,7 @@ public class TransactionManagerTest {
 
         runUntil(transactionManager::hasError);
 
-        assertEquals(ProducerFencedException.class, result.error().getClass());
+        assertThrows(ProducerFencedException.class, result::await);
 
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
@@ -2508,6 +2513,7 @@ public class TransactionManagerTest {
         }
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
+        assertThrows(TimeoutException.class, commitResult::await);
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -3288,12 +3294,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, true);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
-
-        try {
-            result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
-            fail("Should have raised TimeoutException");
-        } catch (TimeoutException ignored) {
-        }
+        assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS));
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> !client.hasPendingResponses());

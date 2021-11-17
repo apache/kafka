@@ -225,7 +225,7 @@ public class TransactionManager {
     private final Set<TopicPartition> newPartitionsInTransaction;
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
-    private TransactionalRequestResult pendingResult;
+    private PendingStateTransition pendingTransition;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
@@ -241,7 +241,6 @@ public class TransactionManager {
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
 
-    private volatile State priorState = null;
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
@@ -501,8 +500,8 @@ public class TransactionManager {
         log.info("Transiting to fatal error state due to {}", exception.toString());
         transitionTo(State.FATAL_ERROR, exception);
 
-        if (pendingResult != null) {
-            pendingResult.fail(exception);
+        if (pendingTransition != null) {
+            pendingTransition.result.fail(exception);
         }
     }
 
@@ -920,8 +919,8 @@ public class TransactionManager {
         KafkaException shutdownException = new KafkaException("The producer closed forcefully");
         pendingRequests.forEach(handler ->
                 handler.fatalError(shutdownException));
-        if (pendingResult != null) {
-            pendingResult.fail(shutdownException);
+        if (pendingTransition != null) {
+            pendingTransition.result.fail(shutdownException);
         }
     }
 
@@ -1091,7 +1090,6 @@ public class TransactionManager {
         else
             log.debug("Transition from state {} to {}", currentState, target);
 
-        priorState = currentState;
         currentState = target;
     }
 
@@ -1187,22 +1185,24 @@ public class TransactionManager {
 
     private TransactionalRequestResult handleCachedTransactionRequestResult(
         Supplier<TransactionalRequestResult> transactionalRequestResultSupplier,
-        State transientState
+        State nextState
     ) {
         ensureTransactional();
 
-        if (pendingResult != null && !pendingResult.isAcked()) {
-            TransactionalRequestResult result = pendingResult;
-            if (result.isCompleted() && priorState == transientState) {
-                pendingResult = null;
-                return result;
-            } else if (currentState == transientState) {
-                return result;
+        if (pendingTransition != null) {
+            if (pendingTransition.result.isAcked()) {
+                pendingTransition = null;
+            } else if (nextState != pendingTransition.state) {
+                throw new KafkaException("Unexpected transition to " + nextState +
+                    " while awaiting transition from " + pendingTransition.state);
+            } else {
+                return pendingTransition.result;
             }
         }
 
-        pendingResult = transactionalRequestResultSupplier.get();
-        return pendingResult;
+        TransactionalRequestResult result = transactionalRequestResultSupplier.get();
+        pendingTransition = new PendingStateTransition(result, nextState);
+        return result;
     }
 
     // package-private for testing
@@ -1768,4 +1768,19 @@ public class TransactionManager {
                    || error == Errors.PRODUCER_FENCED
                    || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
+
+    private static final class PendingStateTransition {
+        private final TransactionalRequestResult result;
+        private final State state;
+
+        private PendingStateTransition(
+            TransactionalRequestResult result,
+            State state
+        ) {
+            this.result = result;
+            this.state = state;
+        }
+    }
+
+
 }
