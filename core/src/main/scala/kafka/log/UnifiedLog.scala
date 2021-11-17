@@ -655,7 +655,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def close(): Unit = {
     debug("Closing log")
     lock synchronized {
-      flush(logEndOffset + 1)
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
@@ -931,7 +930,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
-              if (localLog.unflushedMessages >= config.flushInterval) flush()
+              if (localLog.unflushedMessages >= config.flushInterval) flushUpToAndExcludingLogEndOffset()
           }
           appendInfo
         }
@@ -1505,24 +1504,36 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Flush all local log segments
-   * We have to pass logEngOffset + 1 to the `def flush(offset: Long): Unit` function to flush empty
-   * active segments, which is important to make sure we don't lose logEndOffset during shutdown.
    */
-  def flush(): Unit = flush(logEndOffset)
+  def flushUpToAndExcludingLogEndOffset(): Unit = flush(logEndOffset, false)
+
+  /**
+   * Flush all local log segments including possible empty active segment.
+   *
+   * We have to pass logEngOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
+   * active segments, which is important to make sure we don't lose the empty index file during shutdown.
+   *
+   * This function should only be called during shutdown.
+   */
+  def flushUpToAndIncludingLogEndOffset(): Unit = flush(logEndOffset, true)
 
   /**
    * Flush local log segments for all offsets up to offset-1
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flush(offset: Long): Unit = {
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
-      if (offset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+  def flush(offset: Long): Unit = flush(offset, false)
+
+  private def flush(offset: Long, includingOffset: Boolean): Unit = {
+    val flushOffset = if (includingOffset) offset + 1  else offset
+    val recoveryPoint = offset
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $flushOffset") {
+      if (flushOffset > localLog.recoveryPoint) {
+        debug(s"Flushing log up to offset $flushOffset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: ${localLog.unflushedMessages}")
-        localLog.flush(offset)
+        localLog.flush(flushOffset)
         lock synchronized {
-          localLog.markFlushed(offset)
+          localLog.markFlushed(recoveryPoint)
         }
       }
     }

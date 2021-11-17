@@ -69,7 +69,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     log.updateHighWatermark(log.logEndOffset)
     log.maybeIncrementLogStartOffset(3, ClientRecordDeletion)
@@ -94,7 +94,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     for (timestamp <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp.toLong), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -117,7 +117,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     for (timestamp <- List(0L, 1L, 2L, 3L, 4L, 6L, 5L))
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes(), timestamp = timestamp), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -138,7 +138,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.LATEST_TIMESTAMP, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)
@@ -209,7 +209,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
@@ -237,7 +237,7 @@ class LogOffsetTest extends BaseRequestTest {
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
-    log.flush()
+    log.flushUpToAndExcludingLogEndOffset()
 
     val offsets = log.legacyFetchOffsetsBefore(ListOffsetsRequest.EARLIEST_TIMESTAMP, 10)
 
