@@ -84,7 +84,8 @@ public interface ReplicationPolicy {
 
     /** Internal topics are never replicated. */
     default boolean isInternalTopic(String topic) {
-        boolean isKafkaInternalTopic = topic.startsWith("__") || topic.startsWith(".") ||  topic.endsWith("-internal");
-        return isMM2InternalTopic(topic) || isKafkaInternalTopic;
+        boolean isKafkaInternalTopic = topic.startsWith("__") || topic.startsWith(".");
+        boolean isDefaultConnectTopic =  topic.endsWith("-internal") ||  topic.endsWith(".internal");
+        return isMM2InternalTopic(topic) || isKafkaInternalTopic || isDefaultConnectTopic;
     }
 }
