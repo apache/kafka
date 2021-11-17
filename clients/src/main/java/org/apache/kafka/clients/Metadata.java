@@ -218,10 +218,10 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * @return the topic ID for the given topic name or null if the ID does not exist or is not known
+     * @return a mapping from topic names to topic IDs for all topics with valid IDs in the cache
      */
-    public synchronized Uuid topicId(String topicName) {
-        return cache.topicId(topicName);
+    public synchronized Map<String, Uuid> topicIds() {
+        return cache.topicIds();
     }
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
@@ -325,6 +325,7 @@ public class Metadata implements Closeable {
 
         List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
         Map<String, Uuid> topicIds = new HashMap<>();
+        Map<String, Uuid> oldTopicIds = cache.topicIds();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             String topicName = metadata.topic();
             Uuid topicId = metadata.topicId();
@@ -333,7 +334,7 @@ public class Metadata implements Closeable {
             Uuid oldTopicId = null;
             if (!Uuid.ZERO_UUID.equals(topicId)) {
                 topicIds.put(topicName, topicId);
-                oldTopicId = cache.topicId(topicName);
+                oldTopicId = oldTopicIds.get(topicName);
             } else {
                 topicId = null;
             }
@@ -395,8 +396,8 @@ public class Metadata implements Closeable {
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
             if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
                 // If both topic IDs were valid and the topic ID changed, update the metadata
-                log.info("Topic ID for partition {} changed from {} to {}, so this topic must have been recreated. " +
-                          "Resetting the last seen epoch to {}.", tp, oldTopicId, topicId, newEpoch);
+                log.info("Resetting the last seen epoch of partition {} to {} since the associated topicId changed from {} to {}",
+                         tp, newEpoch, oldTopicId, topicId);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 return Optional.of(partitionMetadata);
             } else if (currentEpoch == null || newEpoch >= currentEpoch) {

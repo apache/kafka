@@ -1199,6 +1199,7 @@ public class Fetcher<K, V> implements Closeable {
         validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
+        Map<String, Uuid> topicIds = metadata.topicIds();
 
         for (TopicPartition partition : fetchablePartitions()) {
             FetchPosition position = this.subscriptions.position(partition);
@@ -1236,10 +1237,9 @@ public class Fetcher<K, V> implements Closeable {
                     builder = handler.newBuilder();
                     fetchable.put(node, builder);
                 }
-
-                Uuid topicId = metadata.topicId(partition.topic());
-                builder.add(partition, new FetchRequest.PartitionData(topicId == null ? Uuid.ZERO_UUID : topicId, position.offset,
-                    FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                builder.add(partition, new FetchRequest.PartitionData(
+                    topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID),
+                    position.offset, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,

@@ -880,7 +880,8 @@ public class MetadataTest {
         MetadataResponse metadataResponse =
                 RequestTestUtils.metadataUpdateWithIds(oldClusterId, oldNodes, oldTopicErrors, oldTopicPartitionCounts, _tp -> 100, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
-        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+        Map<String, Uuid> metadataTopicIds1 = metadata.topicIds();
+        retainTopics.get().forEach(topic -> assertEquals(metadataTopicIds1.get(topic), topicIds.get(topic)));
 
         // Update the metadata to add a new topic variant, "new", which will be retained with "keep". Note this
         // means that all of the "old" topics should be dropped.
@@ -915,8 +916,9 @@ public class MetadataTest {
         metadataResponse = RequestTestUtils.metadataUpdateWithIds(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 200, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
         topicIds.remove("oldValidTopic");
-        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
-        assertNull(metadata.topicId("oldValidTopic"));
+        Map<String, Uuid> metadataTopicIds2 = metadata.topicIds();
+        retainTopics.get().forEach(topic -> assertEquals(metadataTopicIds2.get(topic), topicIds.get(topic)));
+        assertNull(metadataTopicIds2.get("oldValidTopic"));
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
@@ -933,7 +935,8 @@ public class MetadataTest {
 
         metadataResponse = RequestTestUtils.metadataUpdateWithIds(newClusterId, newNodes, newTopicErrors, newTopicPartitionCounts, _tp -> 300, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
-        topicIds.forEach((topicName, topicId) -> assertNull(metadata.topicId(topicName)));
+        Map<String, Uuid> metadataTopicIds3 = metadata.topicIds();
+        topicIds.forEach((topicName, topicId) -> assertNull(metadataTopicIds3.get(topicName)));
 
         cluster = metadata.fetch();
         assertEquals(cluster.clusterResource().clusterId(), newClusterId);
@@ -973,13 +976,15 @@ public class MetadataTest {
         MetadataResponse metadataResponse =
                 RequestTestUtils.metadataUpdateWithIds(clusterId, nodes, Collections.emptyMap(), topicPartitionCounts, _tp -> 100, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
-        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+        Map<String, Uuid> metadataTopicIds1 = metadata.topicIds();
+        retainTopics.get().forEach(topic -> assertEquals(metadataTopicIds1.get(topic), topicIds.get(topic)));
 
         // Try removing the topic ID from keepValidTopic (simulating receiving a request from a controller with an older IBP)
         topicIds.remove("validTopic1");
         metadataResponse = RequestTestUtils.metadataUpdateWithIds(clusterId, nodes, Collections.emptyMap(), topicPartitionCounts, _tp -> 200, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
-        retainTopics.get().forEach(topic -> assertEquals(metadata.topicId(topic), topicIds.get(topic)));
+        Map<String, Uuid> metadataTopicIds2 = metadata.topicIds();
+        retainTopics.get().forEach(topic -> assertEquals(metadataTopicIds2.get(topic), topicIds.get(topic)));
 
         Cluster cluster = metadata.fetch();
         // We still have the topic, but it just doesn't have an ID.

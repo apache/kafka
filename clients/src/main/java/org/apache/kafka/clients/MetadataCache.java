@@ -98,8 +98,8 @@ public class MetadataCache {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
-    Uuid topicId(String topicName) {
-        return topicIds.get(topicName);
+    Map<String, Uuid> topicIds() {
+        return topicIds;
     }
 
     Optional<Node> nodeById(int id) {
