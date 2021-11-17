@@ -917,17 +917,15 @@ public class StreamThread extends Thread {
                 log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
                 final boolean rebalance = topologyMetadata.reachedVersion(lastSeenTopologyVersion);
 
-                mainConsumer.unsubscribe();
                 subscribeConsumer();
                 if (rebalance) {
                     mainConsumer.enforceRebalance();
                 }
             }
-        } while (topologyMetadata.isEmpty());
+        } while (topologyMetadata.isEmpty() && state.isAlive());
     }
 
     private long pollPhase() {
-        checkForTopologyUpdates();
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 

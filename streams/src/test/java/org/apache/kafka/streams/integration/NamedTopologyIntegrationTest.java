@@ -310,8 +310,6 @@ public class NamedTopologyIntegrationTest {
     public void shouldAddNamedTopologyToRunningApplicationWithEmptyInitialTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         streams.start();
-        IntegrationTestUtils.waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(15));
-
         streams.addNamedTopology(topology1Builder.build()).all().get();
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
