@@ -913,7 +913,7 @@ public class StreamThread extends Thread {
                 if (!topologyMetadata.needsUpdate(getName())) {
                     topologyMetadata.waitUntilTopologyChange();
                 }
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 e.printStackTrace();
             }
             taskManager.handleTopologyUpdates();

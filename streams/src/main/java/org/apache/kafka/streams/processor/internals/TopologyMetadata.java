@@ -25,7 +25,6 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 
 import java.util.ArrayList;
@@ -47,9 +46,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +69,7 @@ public class TopologyMetadata {
     private ProcessorTopology globalTopology;
     private final Map<String, StateStore> globalStateStores = new HashMap<>();
     private final Set<String> allInputTopics = new HashSet<>();
-    private final Map <String, Long> threadVersions = new ConcurrentHashMap<>();
+    private final Map<String, Long> threadVersions = new ConcurrentHashMap<>();
 
     public static class TopologyVersion {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
@@ -126,7 +123,7 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
-    public boolean needsUpdate(String threadName) {
+    public boolean needsUpdate(final String threadName) {
         return threadVersions.get(threadName) < topologyVersion();
     }
 
@@ -139,7 +136,7 @@ public class TopologyMetadata {
     }
 
 
-    public boolean reachedLatestVersion(String threadName) {
+    public boolean reachedLatestVersion(final String threadName) {
         boolean rebalance = false;
         try {
             lock();
