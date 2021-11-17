@@ -65,6 +65,15 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
   }
 }
 
+
+/**
+ * This is a LRU cache of remote index files stored in `$logdir/remote-log-index-cache`. This is helpful to avoid
+ * re-fetching the index files like offset, time indexes from the remote storage for every fetch call.
+ *
+ * @param maxSize
+ * @param remoteStorageManager
+ * @param logDir
+ */
 //todo-tier make maxSize configurable
 class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String) extends Logging {
 
@@ -99,8 +108,6 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         Files.deleteIfExists(path)
       }
     })
-
-    //todo-tier load the stored entries into the cache.
   }
 
   init()
@@ -130,12 +137,6 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
         val tmpIndexFile = new File(cacheDir, fileName + suffix + RemoteIndexCache.TmpFileSuffix)
 
-        // Below FileChannel#transferFrom call may be efficient as it goes through a fast path of transferring directly
-        // from the source channel into the filesystem cache. But if it goes through non-fast path then it expects the
-        // inputStream to always have available bytes. This is an unnecessary restriction on RemoteStorageManager to
-        // always return InputStream to have available bytes till the end.
-        // FileChannel.open(tmpIndexFile.toPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-        // .transferFrom(sourceChannel, 0, Int.MaxValue)
         Files.copy(inputStream, tmpIndexFile.toPath)
 
         Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath)

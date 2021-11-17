@@ -43,7 +43,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, Node}
+import org.apache.kafka.common.{Endpoint, KafkaException, Node}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -261,8 +261,8 @@ class KafkaServer(
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
-        val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
-        remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
+
+        remoteLogManager = createRemoteLogManager(config)
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
@@ -466,8 +466,13 @@ class KafkaServer(
     }
   }
 
-  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
+  protected def createRemoteLogManager(config: KafkaConfig): Option[RemoteLogManager] = {
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     if (remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      if(config.logDirs.size > 1) {
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+      }
+
       Some(new RemoteLogManager(remoteLogManagerConfig, config.brokerId, config.logDirs.head))
     } else {
       None

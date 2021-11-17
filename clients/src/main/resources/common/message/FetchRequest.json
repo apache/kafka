@@ -48,7 +48,9 @@
   // the `LastFetchedEpoch` field
   //
   // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
-  "validVersions": "0-13",
+  //
+  // Version 14 is the same as version 13 but it also receives a new error called OffsetMovedToTieredStorageException(KIP-405)
+  "validVersions": "0-14",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
