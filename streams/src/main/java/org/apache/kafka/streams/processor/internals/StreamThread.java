@@ -301,8 +301,6 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private final Runnable shutdownErrorHook;
 
-    private long lastSeenTopologyVersion = 0L;
-
     // These must be Atomic references as they are shared and used to signal between the assignor and the stream thread
     private final AtomicInteger assignmentErrorCode;
     private final AtomicLong nextProbingRebalanceMs;
@@ -530,6 +528,7 @@ public class StreamThread extends Thread {
 
         this.time = time;
         this.topologyMetadata = topologyMetadata;
+        this.topologyMetadata.registerThread(getName());
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
@@ -578,6 +577,7 @@ public class StreamThread extends Thread {
             failedStreamThreadSensor.record();
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
+            topologyMetadata.unregisterThread(threadMetadata.threadName());
             completeShutdown(cleanRun);
         }
     }
@@ -908,21 +908,25 @@ public class StreamThread extends Thread {
 
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
-        do {
-            topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
-            if (lastSeenTopologyVersion < topologyMetadata.topologyVersion()) {
-                lastSeenTopologyVersion = topologyMetadata.topologyVersion();
-                taskManager.handleTopologyUpdates();
-
-                log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-                final boolean rebalance = topologyMetadata.reachedVersion(lastSeenTopologyVersion);
-
-                subscribeConsumer();
-                if (rebalance) {
-                    mainConsumer.enforceRebalance();
+        while ((topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) && state.isAlive()) {
+            try {
+                if (!topologyMetadata.needsUpdate(getName())) {
+                    topologyMetadata.waitUntilTopologyChange();
                 }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        } while (topologyMetadata.isEmpty() && state.isAlive());
+            taskManager.handleTopologyUpdates();
+
+            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
+
+            final boolean needsRebalance = topologyMetadata.reachedLatestVersion(getName());
+
+            subscribeConsumer();
+            if (needsRebalance) {
+                mainConsumer.enforceRebalance();
+            }
+        }
     }
 
     private long pollPhase() {

@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -48,6 +49,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,7 +72,7 @@ public class TopologyMetadata {
     private ProcessorTopology globalTopology;
     private final Map<String, StateStore> globalStateStores = new HashMap<>();
     private final Set<String> allInputTopics = new HashSet<>();
-    private Supplier<Integer> getStreamThreadCount;
+    private final Map <String, Long> threadVersions = new ConcurrentHashMap<>();
 
     public static class TopologyVersion {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
@@ -82,7 +84,6 @@ public class TopologyMetadata {
     public static class TopologyVersionWaiters {
         final long topologyVersion; // the (minimum) version to wait for these threads to cross
         final KafkaFutureImpl<Void> future; // the future waiting on all threads to be updated
-        final AtomicLong threadsWaiting = new AtomicLong(0);
 
         public TopologyVersionWaiters(final long topologyVersion, final KafkaFutureImpl<Void> future) {
             this.topologyVersion = topologyVersion;
@@ -100,7 +101,6 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
-        getStreamThreadCount = () -> getNumStreamThreads(config);
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -112,7 +112,6 @@ public class TopologyMetadata {
         if (builders.isEmpty()) {
             log.debug("Starting up empty KafkaStreams app with no topology");
         }
-        getStreamThreadCount = () -> getNumStreamThreads(config);
     }
 
     public long topologyVersion() {
@@ -127,28 +126,42 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
-    public boolean reachedVersion(final long topologyVersion) {
-        boolean needRebalance = false;
+    public boolean needsUpdate(String threadName) {
+        return threadVersions.get(threadName) < topologyVersion();
+    }
+
+    public void registerThread(final String threadName) {
+        threadVersions.put(threadName, 0L);
+    }
+
+    public void unregisterThread(final String threadName) {
+        threadVersions.remove(threadName);
+    }
+
+
+    public boolean reachedLatestVersion(String threadName) {
+        boolean rebalance = false;
         try {
             lock();
             final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
             TopologyVersionWaiters topologyVersionWaiters;
+            threadVersions.put(threadName, topologyVersion());
             while (iterator.hasNext()) {
                 topologyVersionWaiters = iterator.next();
-                if (topologyVersionWaiters.topologyVersion <= topologyVersion) {
-                    final long threads = topologyVersionWaiters.threadsWaiting.incrementAndGet();
-                    if (threads == getStreamThreadCount.get()) {
+                final long verison = topologyVersionWaiters.topologyVersion;
+                if (verison <= threadVersions.get(threadName)) {
+                    if (threadVersions.values().stream().allMatch(t -> t >= verison)) {
                         topologyVersionWaiters.future.complete(null);
                         iterator.remove();
-                        log.error("changes have been applied on version {}", topologyVersionWaiters.topologyVersion);
-                        needRebalance = true;
+                        log.info("thread {} is now on on version {}", threadName, topologyVersionWaiters.topologyVersion);
+                        rebalance = true;
                     }
                 }
             }
         } finally {
             unlock();
         }
-        return needRebalance;
+        return rebalance;
     }
 
     public void wakeupThreads() {
@@ -160,21 +173,12 @@ public class TopologyMetadata {
         }
     }
 
-    public void maybeWaitForNonEmptyTopology(final Supplier<State> threadState) {
-        if (isEmpty() && threadState.get().isAlive()) {
-            try {
-                lock();
-                while (isEmpty() && threadState.get().isAlive() && version.activeTopologyWaiters.isEmpty()) {
-                    try {
-                        log.error("Detected that the topology is currently empty, waiting for something to process");
-                        version.topologyCV.await();
-                    } catch (final InterruptedException e) {
-                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
-                    }
-                }
-            } finally {
-                unlock();
-            }
+    public void waitUntilTopologyChange() throws InterruptedException {
+        try {
+            lock();
+            version.topologyCV.await();
+        } finally {
+            unlock();
         }
     }
 
@@ -190,7 +194,7 @@ public class TopologyMetadata {
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             buildAndVerifyTopology(newTopologyBuilder);
-            version.topologyCV.signalAll();
+            wakeupThreads();
         } finally {
             unlock();
         }
@@ -210,6 +214,7 @@ public class TopologyMetadata {
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
+            wakeupThreads();
         } finally {
             unlock();
         }
@@ -284,10 +289,6 @@ public class TopologyMetadata {
         }
 
         return configuredNumStreamThreads;
-    }
-
-    public void registerNumStreamThreadsSupplier(final Supplier<Integer> numThreads) {
-        this.getStreamThreadCount = numThreads;
     }
 
     /**

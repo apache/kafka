@@ -215,6 +215,7 @@ public class NamedTopologyIntegrationTest {
         }
 
         CLUSTER.deleteTopics(OUTPUT_STREAM_1, OUTPUT_STREAM_2, OUTPUT_STREAM_3);
+        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
     }
 
     @Test

@@ -74,7 +74,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private KafkaStreamsNamedTopologyWrapper(final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier);
-        topologyMetadata.registerNumStreamThreadsSupplier(threads::size);
         final LogContext logContext = new LogContext();
         this.log = logContext.logger(getClass());
     }
