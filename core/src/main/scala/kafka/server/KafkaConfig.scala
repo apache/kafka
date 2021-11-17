@@ -27,6 +27,7 @@ import kafka.log.LogConfig
 import kafka.log.LogConfig.MessageFormatVersion
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
+import kafka.server.KafkaConfig.ControllerListenerNamesProp
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
@@ -1884,7 +1885,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def controllerListeners: Seq[EndPoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
 
-  def saslMechanismControllerProtocol = getString(KafkaConfig.SaslMechanismControllerProtocolProp)
+  def saslMechanismControllerProtocol: String = getString(KafkaConfig.SaslMechanismControllerProtocolProp)
 
   def controlPlaneListener: Option[EndPoint] = {
     controlPlaneListenerName.map { listenerName =>
@@ -2008,16 +2009,34 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
     if (usesSelfManagedQuorum) {
-      require(controllerListeners.nonEmpty,
-        s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running a KRaft node")
-      val listenerNameValues = listeners.map(_.listenerName.value).toSet
-      require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
-        s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running a KRaft node")
+      require(controlPlaneListenerName.isEmpty,
+        s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode.")
+      if (processRoles.contains(ControllerRole)) {
+        // has controller role (and optionally broker role as well)
+        // controller.listener.names must be non-empty
+        // every one must appear in listeners
+        require(controllerListeners.nonEmpty,
+          s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
+        val listenerNameValues = listeners.map(_.listenerName.value).toSet
+        require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
+          s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
+      } else {
+        // only broker role
+        // controller.listener.names must be non-empty
+        // none of them can appear in listeners
+        require(controllerListenerNames.exists(_.nonEmpty),
+          s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
+        require(controllerListeners.isEmpty,
+          s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
+      }
     }
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
+      require(advertisedListenerNames.nonEmpty,
+        "There must be at least one advertised listener." + (
+          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in ${ControllerListenerNamesProp}?" else ""))
       require(advertisedListenerNames.contains(interBrokerListenerName),
         s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
           s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
@@ -2036,7 +2055,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!controllerListeners.exists(advertisedListeners.contains),
       s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenerNamesProp}")
 
-    // validate controller.listener.name config
+    // validate control.plane.listener.name config
     if (controlPlaneListenerName.isDefined) {
       require(advertisedListenerNames.contains(controlPlaneListenerName.get),
         s"${KafkaConfig.ControlPlaneListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
