@@ -84,14 +84,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
     if (isKRaftTest()) {
       props.foreach { config =>
-        // Add the CONTROLLER listener to "listeners" if it is not already there.
-        // But do not add it to advertised.listeners.
-        val listeners = config.getProperty(KafkaConfig.ListenersProp, "").split(",")
-        val listenerNames = listeners.map(_.replaceFirst(":.*", ""))
-        if (!listenerNames.contains("CONTROLLER")) {
-          config.setProperty(KafkaConfig.ListenersProp,
-            (listeners ++ Seq("CONTROLLER://localhost:0")).mkString(","))
-        }
         // Add a security protocol for the CONTROLLER endpoint, if one is not already set.
         val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
         if (!securityPairs.exists(_.startsWith("CONTROLLER:"))) {
