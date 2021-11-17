@@ -106,8 +106,8 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
                     log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
-                    log.warn("Eagar rebalancing protocol is deprecated in Kafka Stream since V3.1, and will not get supported" +
-                        "in future release. Please remove the 'upgrade.from' setting soon.");
+                    log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
+                        " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
