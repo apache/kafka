@@ -1277,8 +1277,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                         "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
                                         "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again");
                                 } else {
-                                    // don't reset generation member ID when ILLEGAL_GENERATION, since the member ID is still valid
-                                    resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error, error != Errors.ILLEGAL_GENERATION);
+                                    // don't reset generation member ID when ILLEGAL_GENERATION, since the member might be still valid
+                                    resetStateOnResponseError(ApiKeys.OFFSET_COMMIT, error, error != Errors.ILLEGAL_GENERATION);
                                     exception = new CommitFailedException();
                                 }
                             }

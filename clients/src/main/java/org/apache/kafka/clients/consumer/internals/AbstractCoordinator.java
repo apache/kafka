@@ -443,9 +443,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     stateSnapshot = this.state;
                 }
 
-                if ((generationSnapshot.generationId != Generation.NO_GENERATION.generationId ||
-                    !generationSnapshot.memberId.equals(Generation.NO_GENERATION.memberId)) &&
-                    stateSnapshot == MemberState.STABLE) {
+                if (!hasGenerationReset(generationSnapshot) && stateSnapshot == MemberState.STABLE) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
@@ -614,7 +612,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // only need to reset the member id if generation has not been changed,
                 // then retry immediately
                 if (generationUnchanged())
-                    resetGenerationOnResponseError(ApiKeys.JOIN_GROUP, error, true);
+                    resetStateOnResponseError(ApiKeys.JOIN_GROUP, error, true);
 
                 future.raise(error);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
@@ -729,6 +727,11 @@ public abstract class AbstractCoordinator implements Closeable {
                 .compose(new SyncGroupResponseHandler(generation));
     }
 
+    private boolean hasGenerationReset(Generation gen) {
+        // the member ID might not be reset for ILLEGAL_GENERATION error, so only check generationID and protocol name here
+        return gen.generationId == Generation.NO_GENERATION.generationId && gen.protocolName == null;
+    }
+
     private class SyncGroupResponseHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
         private SyncGroupResponseHandler(final Generation generation) {
             super(generation);
@@ -748,8 +751,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     sensors.syncSensor.record(response.requestLatencyMs());
 
                     synchronized (AbstractCoordinator.this) {
-                        if (generation.protocolName != null && state == MemberState.COMPLETING_REBALANCE) {
-                            // check protocol name only if the generation is not reset (protocol name is not null)
+                        if (!hasGenerationReset(generation) && state == MemberState.COMPLETING_REBALANCE) {
+                            // check protocol name only if the generation is not reset
                             final String protocolName = syncResponse.data().protocolName();
                             final boolean protocolNameInconsistent = protocolName != null &&
                                 !protocolName.equals(generation.protocolName);
@@ -797,8 +800,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.info("SyncGroup failed: {} Need to re-join the group. Sent generation was {}",
                             error.message(), sentGeneration);
                     if (generationUnchanged()) {
-                        // don't reset generation member ID when ILLEGAL_GENERATION, since the member ID is still valid
-                        resetGenerationOnResponseError(ApiKeys.SYNC_GROUP, error, error != Errors.ILLEGAL_GENERATION);
+                        // don't reset generation member ID when ILLEGAL_GENERATION, since the member ID might still be valid
+                        resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, error != Errors.ILLEGAL_GENERATION);
                     }
 
                     future.raise(error);
@@ -979,7 +982,8 @@ public abstract class AbstractCoordinator implements Closeable {
         if (shouldResetMemberId) {
             generation = Generation.NO_GENERATION;
         } else {
-            // keep member id to avoid to wait for the old member id leaving group until rebalance timeout
+            // keep member id since it might be still valid, to avoid to wait for the old member id leaving group
+            // until rebalance timeout in next rebalance
             generation = new Generation(Generation.NO_GENERATION.generationId, generation.memberId, null);
         }
     }
@@ -990,7 +994,7 @@ public abstract class AbstractCoordinator implements Closeable {
         needsJoinPrepare = true;
     }
 
-    synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error, boolean shouldResetMemberId) {
+    synchronized void resetStateOnResponseError(ApiKeys api, Errors error, boolean shouldResetMemberId) {
         final String reason = String.format("encountered %s from %s response", error, api);
         resetStateAndRejoin(reason, shouldResetMemberId);
     }
@@ -1162,7 +1166,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.info("Attempt to heartbeat with {} and group instance id {} failed due to {}, resetting generation",
                         sentGeneration, rebalanceConfig.groupInstanceId, error);
                     // don't reset generation member ID when ILLEGAL_GENERATION, since the member ID is still valid
-                    resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error, error != Errors.ILLEGAL_GENERATION);
+                    resetStateOnResponseError(ApiKeys.HEARTBEAT, error, error != Errors.ILLEGAL_GENERATION);
                     future.raise(error);
                 } else {
                     // if the generation has changed, then ignore this error
