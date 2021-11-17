@@ -115,16 +115,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * as well as a background I/O thread that is responsible for turning these records into requests and transmitting them
  * to the cluster. Failure to close the producer after use will leak these resources.
  * <p>
- * The {@link #send(ProducerRecord) send()} method is asynchronous. When called, it adds the record to a buffer of pending sending record
+ * The {@link #send(ProducerRecord) send()} method is asynchronous. When called, it adds the record to a buffer of pending record sends
  * and immediately returns. This allows the producer to batch together individual records for efficiency.
  * <p>
- * The <code>acks</code> config controls the criteria under which requests are considered complete. The default "all" setting
+ * The <code>acks</code> config controls the criteria under which requests are considered complete. The default setting "all"
  * will result in blocking on the full commit of the record, the slowest but most durable setting.
  * <p>
- * If the request fails, the producer can automatically retry. We have specified <code>retries</code> default as Integer.MAX_VALUE, and
+ * If the request fails, the producer can automatically retry. The <code>retries</code> setting defaults to <code>Integer.MAX_VALUE</code>, and
  * it's recommended to use <code>delivery.timeout.ms</code> to control retry behavior, instead of <code>retries</code>.
- * Note that allowing retries without setting <code>max.in.flight.requests.per.connection</code> to 1 opens up the possibility
- * of duplicates (see the documentation on <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
  * <p>
  * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
@@ -155,7 +153,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * to multiple partitions (and topics!) atomically.
  * </p>
  * <p>
- * In Kafka 3.0, the <code>enable.idempotence</code> configuration is default to true. When enabling idempotence,
+ * From Kafka 3.0, the <code>enable.idempotence</code> configuration defaults to true. When enabling idempotence,
  * <code>retries</code> config will default to <code>Integer.MAX_VALUE</code> and the <code>acks</code> config will
  * default to <code>all</code>. There are no API changes for the idempotent producer, so existing applications will
  * not need to be modified to take advantage of this feature.
