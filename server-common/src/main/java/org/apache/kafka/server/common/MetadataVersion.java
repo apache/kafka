@@ -165,7 +165,10 @@ public enum MetadataVersion {
 
     // Adds ZK to KRaft migration support (KIP-866). This includes ZkMigrationRecord, a new version of RegisterBrokerRecord,
     // and updates to a handful of RPCs.
-    IBP_3_4_IV0(8, "3.4", "IV0", true);
+    IBP_3_4_IV0(8, "3.4", "IV0", true),
+
+    // Support for tiered storage (KIP-405)
+    IBP_3_4_IV1(9, "3.4", "IV1");
 
     // NOTE: update the default version in @ClusterTest annotation to point to the latest version
     public static final String FEATURE_NAME = "metadata.version";

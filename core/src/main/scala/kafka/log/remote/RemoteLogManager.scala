@@ -35,6 +35,16 @@ import java.util.Optional
 import scala.collection.{Set, mutable}
 import scala.jdk.CollectionConverters._
 
+/**
+ * This class is responsible for
+ *  - initializing `RemoteStorageManager` and `RemoteLogMetadataManager` instances.
+ *  - receives any leader and follower replica events and partition stop events and act on them
+ *  - also provides APIs to fetch indexes, metadata about remote log segments.
+ *
+ * @param rlmConfig
+ * @param brokerId
+ * @param logDir
+ */
 class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                        brokerId: Int,
                        logDir: String) extends Logging with Closeable with KafkaMetricsGroup {
@@ -42,14 +52,14 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
   // topic ids received on leadership changes
   private val topicIds: mutable.Map[String, Uuid] = mutable.Map.empty
 
-  private val remoteLogStorageManager: ClassLoaderAwareRemoteStorageManager = createRemoteStorageManager()
+  private val remoteLogStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val remoteLogMetadataManager: RemoteLogMetadataManager = createRemoteLogMetadataManager()
 
   private val indexCache = new RemoteIndexCache(remoteStorageManager = remoteLogStorageManager, logDir = logDir)
 
   private var closed = false
 
-  private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = {
+  private[remote] def createRemoteStorageManager(): RemoteStorageManager = {
     AccessController.doPrivileged(new PrivilegedAction[ClassLoaderAwareRemoteStorageManager] {
       private val classPath = rlmConfig.remoteStorageManagerClassPath()
 

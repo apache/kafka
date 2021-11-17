@@ -244,7 +244,7 @@ case class CommittedPartitionState(
  * 5) lock is used to prevent the follower replica from being updated while ReplicaAlterDirThread is
  *    executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
  */
-class   Partition(val topicPartition: TopicPartition,
+class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
                 interBrokerProtocolVersion: MetadataVersion,
                 localBrokerId: Int,
