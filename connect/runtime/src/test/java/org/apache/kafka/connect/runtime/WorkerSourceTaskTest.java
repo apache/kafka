@@ -129,6 +129,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     // is used in the right place.
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
+    private static final long STOP_TIME_OUT = 1000;
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
@@ -257,7 +258,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         assertTrue(pauseLatch.await(5, TimeUnit.SECONDS));
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
 
@@ -311,7 +312,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(count.get() - priorCount <= 1);
 
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
 
@@ -353,10 +354,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(10);
+        assertPollMetrics(10, true);
 
         PowerMock.verifyAll();
     }
@@ -395,10 +396,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         assertTrue(awaitLatch(pollLatch));
         //Failure in poll should trigger automatic stop of the worker
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(0);
+        assertPollMetrics(0, true);
 
         PowerMock.verifyAll();
     }
@@ -443,10 +444,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(pollLatch));
         workerTask.cancel();
         workerCancelLatch.countDown();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(0);
+        assertPollMetrics(0, true);
 
         PowerMock.verifyAll();
     }
@@ -488,10 +489,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
         workerStopLatch.countDown();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(0);
+        assertPollMetrics(0, true);
 
         PowerMock.verifyAll();
     }
@@ -529,10 +530,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(0);
+        assertPollMetrics(0, true);
 
         PowerMock.verifyAll();
     }
@@ -575,10 +576,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(1);
+        assertPollMetrics(1, true);
 
         PowerMock.verifyAll();
     }
@@ -597,7 +598,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
-        expectOffsetFlush(true);
+        expectOffsetFlush(false);
 
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall().atLeastOnce();
@@ -619,12 +620,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        assertTrue(workerTask.commitOffsets());
+        // the commitOffsets will return false since flushFuture will have exception
+        assertFalse(workerTask.commitOffsets());
         workerTask.stop();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         taskFuture.get();
-        assertPollMetrics(1);
+        assertPollMetrics(1, false);
 
         PowerMock.verifyAll();
     }
@@ -854,7 +856,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(awaitLatch(startupLatch));
         workerTask.stop();
         finishStartupLatch.countDown();
-        assertTrue(workerTask.awaitStop(1000));
+        assertTrue(workerTask.awaitStop(STOP_TIME_OUT));
 
         workerTaskFuture.get();
 
@@ -1200,7 +1202,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFails() throws Exception {
+    public void testTopicCreateFails() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1225,7 +1227,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() throws Exception {
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1358,7 +1360,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
+    private void expectSendRecordSyncFailure(Throwable error) {
         expectConvertHeadersAndKeyValue(false);
         expectApplyTransformationChain(false);
 
@@ -1531,7 +1533,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         }
     }
 
-    private void assertPollMetrics(int minimumPollCountExpected) {
+    private void assertPollMetrics(int minimumPollCountExpected, boolean isCommitSucceeded) {
         MetricGroup sourceTaskGroup = workerTask.sourceTaskMetricsGroup().metricGroup();
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
         double pollRate = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-poll-rate");
@@ -1565,6 +1567,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertEquals(0, activeCount, 0.000001d);
         if (minimumPollCountExpected > 0) {
             assertEquals(RECORDS.size(), activeCountMax, 0.000001d);
+        }
+
+        double failurePercentage = metrics.currentMetricValueAsDouble(taskGroup, "offset-commit-failure-percentage");
+        double successPercentage = metrics.currentMetricValueAsDouble(taskGroup, "offset-commit-success-percentage");
+
+        if (!isCommitSucceeded) {
+            assertTrue(failurePercentage > 0);
+            assertTrue(successPercentage == 0);
+        } else {
+            assertTrue(failurePercentage == 0);
+            assertTrue(successPercentage > 0);
         }
     }
 
