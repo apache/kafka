@@ -115,11 +115,11 @@ public class TopologyMetadata {
         return version.topologyVersion.get();
     }
 
-    private void lock() {
+    public void lock() {
         version.topologyLock.lock();
     }
 
-    private void unlock() {
+    public void unlock() {
         version.topologyLock.unlock();
     }
 
@@ -174,16 +174,8 @@ public class TopologyMetadata {
         }
     }
 
-    public void waitUntilTopologyChange() throws InterruptedException {
-        try {
-            lock();
-            final long oldVersion = topologyVersion();
-            while (oldVersion == topologyVersion()) {
-                version.topologyCV.await();
-            }
-        } finally {
-            unlock();
-        }
+    public Condition waitUntilTopologyChange() {
+        return version.topologyCV;
     }
 
     /**

@@ -911,7 +911,12 @@ public class StreamThread extends Thread {
         while ((topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) && state.isAlive()) {
             try {
                 if (!topologyMetadata.needsUpdate(getName())) {
-                    topologyMetadata.waitUntilTopologyChange();
+                    try {
+                        topologyMetadata.lock();
+                        topologyMetadata.waitUntilTopologyChange().await();
+                    } finally {
+                        topologyMetadata.unlock();
+                    }
                 }
             } catch (final InterruptedException e) {
                 e.printStackTrace();
