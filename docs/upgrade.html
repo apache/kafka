@@ -26,6 +26,16 @@
         and <code>iotime-total</code>. Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>,
         and <code>io-time-ns-total</code> instead. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-773%3A+Differentiate+consistently+metric+latency+measured+in+millis+and+nanos">KIP-773</a>
         for more details.</li>
+    <li>The cooperative rebalancing protocol has been the default since 2.4, but we have continued to support the
+        eager rebalancing protocol to provide users an upgrade path. This support will be dropped in a future release,
+        so any users still on the eager protocol should prepare to finish upgrading their applications to the cooperative protocol in version 3.1.
+        This only affects users who are still on a version older than 2.4, and users who have upgraded already but have not yet
+        removed the <code>upgrade.from</code> config that they set when upgrading from a version below 2.4.
+        Users fitting into the latter case will simply need to unset this config when upgrading beyond 3.1,
+        while users in the former case will need to follow a slightly different upgrade path if they attempt to upgrade from 2.3 or below to a version above 3.1.
+        Those applications will need to go through a bridge release, by first upgrading to a version between 2.4 - 3.1 and setting the <code>upgrade.from</code> config,
+        then removing that config and upgrading to the final version above 3.1. See <a href="https://issues.apache.org/jira/browse/KAFKA-8575">KAFKA-8575</a>
+        for more details.</li>
 </ul>
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
