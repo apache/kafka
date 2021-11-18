@@ -212,10 +212,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     zkClientOpt.foreach { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
-      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default), true)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
       val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
       val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig, true)
     }
   }
 
