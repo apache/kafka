@@ -141,7 +141,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public AddNamedTopologyResult addNamedTopology(final NamedTopology newTopology) {
-        log.error("adding {}", newTopology.name());
+        log.debug("Adding topology: {}", newTopology.name());
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
@@ -166,7 +166,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove, final boolean resetOffsets) {
-        log.error("Removing {}", topologyToRemove);
+        log.debug("Removing topology: {}", topologyToRemove);
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {
@@ -181,15 +181,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 return tasks.stream();
             })
             .flatMap(t -> t.topicPartitions().stream())
-            .filter(t -> topologyMetadata.topologies(topologyToRemove).contains(t.topic()))
+            .filter(t -> topologyMetadata.sourceTopologies(topologyToRemove).contains(t.topic()))
             .collect(Collectors.toSet());
-        log.error("partitions to reset: {}", partitionsToReset);
 
 
 
         final KafkaFuture<Void> removeTopologyFuture = topologyMetadata.unregisterTopology(topologyToRemove);
 
         if (resetOffsets) {
+            log.info("partitions to reset: {}", partitionsToReset);
             if (!partitionsToReset.isEmpty()) {
                 try {
                     removeTopologyFuture.get();

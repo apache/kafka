@@ -187,6 +187,7 @@ public class NamedTopologyIntegrationTest {
         props = configProps(appId);
 
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
+
         topology1Builder = streams.newNamedTopologyBuilder(TOPOLOGY_1);
         topology1BuilderDup = streams.newNamedTopologyBuilder(TOPOLOGY_1);
         topology2Builder = streams.newNamedTopologyBuilder(TOPOLOGY_2);

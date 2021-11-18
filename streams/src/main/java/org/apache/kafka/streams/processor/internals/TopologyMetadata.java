@@ -46,6 +46,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -115,15 +116,15 @@ public class TopologyMetadata {
         return version.topologyVersion.get();
     }
 
-    public void lock() {
+    private void lock() {
         version.topologyLock.lock();
     }
 
-    public void unlock() {
+    private void unlock() {
         version.topologyLock.unlock();
     }
 
-    public Collection<String> topologies(final String name) {
+    public Collection<String> sourceTopologies(final String name) {
         return builders.get(name).sourceTopicCollection();
     }
 
@@ -174,8 +175,22 @@ public class TopologyMetadata {
         }
     }
 
-    public Condition waitUntilTopologyChange() {
-        return version.topologyCV;
+    public void maybeWaitForNonEmptyTopology(final Supplier<StreamThread.State> threadState) {
+        if (isEmpty() && threadState.get().isAlive()) {
+            try {
+                lock();
+                while (isEmpty() && threadState.get().isAlive()) {
+                    try {
+                        log.debug("Detected that the topology is currently empty, waiting for something to process");
+                        version.topologyCV.await();
+                    } catch (final InterruptedException e) {
+                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                    }
+                }
+            } finally {
+                unlock();
+            }
+        }
     }
 
     /**
@@ -186,7 +201,7 @@ public class TopologyMetadata {
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.error("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            log.info("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             buildAndVerifyTopology(newTopologyBuilder);
@@ -205,12 +220,11 @@ public class TopologyMetadata {
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.error("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
+            log.info("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
-            wakeupThreads();
         } finally {
             unlock();
         }
