@@ -18,5 +18,27 @@ package org.apache.kafka.streams.query;
 
 
 public enum FailureReason {
-    UNKNOWN_QUERY_TYPE, NOT_UP_TO_BOUND;
+    /**
+     * Failure indicating that the store doesn't know how to handle the given query.
+     */
+    UNKNOWN_QUERY_TYPE,
+
+    /**
+     * Failure indicating that the store partition is not (yet) up to the desired bound.
+     * The caller should either try again later or try a different replica.
+     */
+    NOT_UP_TO_BOUND,
+
+    /**
+     * Failure indicating that the requested store partition is not present on the local
+     * KafkaStreams instance. It may have been migrated to another instance during a rebalance.
+     * The caller is recommended to try a different replica.
+     */
+    NOT_PRESENT,
+
+    /**
+     * The requested store partition does not exist at all. For example, partition 4 was requested,
+     * but the store in question only has 4 partitions (0 through 3).
+     */
+    DOES_NOT_EXIST;
 }
