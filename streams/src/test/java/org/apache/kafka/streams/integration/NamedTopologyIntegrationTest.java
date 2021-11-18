@@ -461,6 +461,14 @@ public class NamedTopologyIntegrationTest {
         streams.removeNamedTopology("topology-1", true).all().get();
         streams.cleanUpNamedTopology("topology-1");
 
+        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach( t -> {
+            try {
+                CLUSTER.deleteTopics(t);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
         final KStream<String, Long> inputStream = topology1BuilderDup.stream(INPUT_STREAM_1);
         inputStream.groupByKey().count().toStream().to(COUNT_OUTPUT);
         inputStream.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
@@ -469,7 +477,6 @@ public class NamedTopologyIntegrationTest {
         streams.addNamedTopology(namedTopologyDup).all().get();
 
         System.err.println(streams.getFullTopologyDescription());
-
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 3), equalTo(SUM_OUTPUT_DATA));
