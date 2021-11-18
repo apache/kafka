@@ -181,7 +181,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 return tasks.stream();
             })
             .flatMap(t -> t.topicPartitions().stream())
-//            .filter(t -> topologyMetadata.sourceTopicCollection().contains(t))
+            .filter(t -> topologyMetadata.topologies(topologyToRemove).contains(t.topic()))
             .collect(Collectors.toSet());
         log.error("partitions to reset: {}", partitionsToReset);
 

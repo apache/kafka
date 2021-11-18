@@ -123,6 +123,10 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
+    public Collection<String> topologies(final String name) {
+        return builders.get(name).sourceTopicCollection();
+    }
+
     public boolean needsUpdate(final String threadName) {
         return threadVersions.get(threadName) < topologyVersion();
     }
