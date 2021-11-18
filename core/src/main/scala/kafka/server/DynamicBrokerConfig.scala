@@ -293,7 +293,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
     try {
-      info(s"Per-broker configs of $brokerId")
       val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
       dynamicBrokerConfigs.clear()
       dynamicBrokerConfigs ++= props.asScala
@@ -305,7 +304,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def updateDefaultConfig(persistentProps: Properties, doLog: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
     try {
-      info("Cluster default configs")
       val props = fromPersistentProps(persistentProps, perBrokerConfig = false)
       dynamicDefaultConfigs.clear()
       dynamicDefaultConfigs ++= props.asScala
