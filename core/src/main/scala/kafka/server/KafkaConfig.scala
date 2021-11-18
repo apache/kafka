@@ -2008,42 +2008,63 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
+    val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     if (usesSelfManagedQuorum) {
       require(controlPlaneListenerName.isEmpty,
         s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode.")
+      val sourceOfAdvertisedListeners = if (getString(KafkaConfig.AdvertisedListenersProp) != null)
+        s"${KafkaConfig.AdvertisedListenersProp}"
+      else
+        s"${KafkaConfig.ListenersProp}"
+      if (!processRoles.contains(BrokerRole)) {
+        // advertised listeners must be empty when not also running the broker role
+        require(advertisedListeners.isEmpty,
+          sourceOfAdvertisedListeners +
+            s" must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
+      } else {
+        // when running broker role advertised listeners cannot contain controller listeners
+        require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
+          sourceOfAdvertisedListeners +
+            s" must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role")
+      }
       if (processRoles.contains(ControllerRole)) {
         // has controller role (and optionally broker role as well)
         // controller.listener.names must be non-empty
         // every one must appear in listeners
-        // each port appearing in controller.quorum.voters must match the port in exactly one controller listener
+        // the port appearing in controller.quorum.voters for this node must match the port of the first controller listener
+        // (we allow other nodes' voter ports to differ to support running multiple controllers on the same host)
         require(controllerListeners.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
         val listenerNameValues = listeners.map(_.listenerName.value).toSet
         require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
           s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
-        RaftConfig.parseVoterConnections(quorumVoters).asScala.foreach { case (nodeId, addressSpec) =>
-          addressSpec match {
-            case inetAddressSpec: RaftConfig.InetAddressSpec => {
-              val quorumVotersPort = inetAddressSpec.address.getPort
-              val controllerListenersWithSamePort = controllerListeners.filter(_.port == quorumVotersPort)
-              require(controllerListenersWithSamePort.size == 1,
-                s"Port in ${KafkaConfig.QuorumVotersProp} for controller node with ${KafkaConfig.NodeIdProp}=$nodeId ($quorumVotersPort) does not match the port for any controller listener in ${KafkaConfig.ControllerListenerNamesProp}")
-            }
-            case _ =>
+        val addressSpecForThisNode = RaftConfig.parseVoterConnections(quorumVoters).get(nodeId)
+        addressSpecForThisNode match {
+          case inetAddressSpec: RaftConfig.InetAddressSpec => {
+            val quorumVotersPort = inetAddressSpec.address.getPort
+            require(controllerListeners.head.port == quorumVotersPort,
+              s"Port in ${KafkaConfig.QuorumVotersProp} for this controller node (${KafkaConfig.NodeIdProp}=$nodeId, port=$quorumVotersPort) does not match the port for the first controller listener in ${KafkaConfig.ControllerListenerNamesProp} (${controllerListeners.head.listenerName.value()}, port=${controllerListeners.head.port})")
           }
+          case _ =>
         }
       } else {
         // only broker role
         // controller.listener.names must be non-empty
         // none of them can appear in listeners
+        // warn that only the first one is used if there is more than one
         require(controllerListenerNames.exists(_.nonEmpty),
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
+        if (controllerListenerNames.size > 1) {
+          warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: $controllerListenerNames")
+        }
         require(controllerListeners.isEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
       }
+    } else {
+      // controller listener names must be empty when not in KRaft mode
+      require(!controllerListenerNames.exists(_.nonEmpty), s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava.toString}")
     }
 
-    val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
       require(advertisedListenerNames.nonEmpty,
@@ -2062,10 +2083,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
-
-    // Ensure controller listeners are not in the advertised listeners list
-    require(!controllerListeners.exists(advertisedListeners.contains),
-      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenerNamesProp}")
 
     // validate control.plane.listener.name config
     if (controlPlaneListenerName.isDefined) {
