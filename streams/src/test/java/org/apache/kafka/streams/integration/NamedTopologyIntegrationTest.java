@@ -97,6 +97,7 @@ public class NamedTopologyIntegrationTest {
     private final static String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
     private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
     private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
+    private final static String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
 
 
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
@@ -404,11 +405,11 @@ public class NamedTopologyIntegrationTest {
 
         // Prepare a new named topology with the same name but an incompatible topology (stateful subtopologies swap order)
         final NamedTopologyBuilder topology1Builder2 = streams.newNamedTopologyBuilder(TOPOLOGY_1);
-        final KStream<String, Long> inputStream2 = topology1Builder2.stream(DELAYED_INPUT_STREAM_1);
+        final KStream<String, Long> inputStream2 = topology1Builder2.stream(DELAYED_INPUT_STREAM_4);
         inputStream2.groupByKey().reduce(Long::sum).toStream().to(SUM_OUTPUT);
         inputStream2.groupByKey().count().toStream().to(COUNT_OUTPUT);
 
-        produceToInputTopics(DELAYED_INPUT_STREAM_1, STANDARD_INPUT_DATA);
+        produceToInputTopics(DELAYED_INPUT_STREAM_4, STANDARD_INPUT_DATA);
         streams.addNamedTopology(topology1Builder2.build()).all().get();
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 3), equalTo(COUNT_OUTPUT_DATA));
