@@ -62,7 +62,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
     modifyConfigs(cfgs)
-    insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }
 
@@ -78,19 +77,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       config.setProperty(KafkaConfig.ListenersProp, listeners)
       config.setProperty(KafkaConfig.AdvertisedListenersProp, listeners)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
-    }
-  }
-
-  private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
-    if (isKRaftTest()) {
-      props.foreach { config =>
-        // Add a security protocol for the CONTROLLER endpoint, if one is not already set.
-        val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
-        if (!securityPairs.exists(_.startsWith("CONTROLLER:"))) {
-          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
-            (securityPairs ++ Seq(s"CONTROLLER:${controllerListenerSecurityProtocol.toString}")).mkString(","))
-        }
-      }
     }
   }
 
