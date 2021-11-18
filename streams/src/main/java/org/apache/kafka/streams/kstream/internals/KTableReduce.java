@@ -26,7 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KTableReduce<K, V> implements KTableNewProcessorSupplier<K, V, K, V> {
+public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
     private final String storeName;
     private final Reducer<V> addReducer;

@@ -26,7 +26,7 @@
     <parent>
         <groupId>org.apache.kafka</groupId>
         <artifactId>streams-quickstart</artifactId>
-        <version>7.1.0-0-ccs</version>
+        <version>7.2.0-0-ccs</version>
         <relativePath>..</relativePath>
     </parent>
 
