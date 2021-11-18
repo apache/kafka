@@ -158,16 +158,18 @@ This is my second event</code></pre>
         </h4>
 
         <p>
-            Reading data from the console and writing it back to the console is a convenient place to start, but you'll probably want
-            to use data from other sources or export data from Kafka to other systems. For many systems, instead of writing custom
-            integration code you can use Kafka Connect to import or export data.
+            You probably have lots of data in existing systems like relational databases or traditional messaging systems,
+            along with many applications that already use these systems.
+            <a href="/documentation/#connect">Kafka Connect</a> allows you to continuously ingest
+            data from external systems into Kafka, and vice versa. It is an extensible tool that runs
+            <i>connectors</i>, which implement the custom logic for interacting with an external system.
+            It is thus very easy to integrate existing systems with Kafka. To make this process even easier,
+            there are hundreds of such connectors readily available.
         </p>
 
         <p>
-            <a href="/documentation/#connect">Kafka Connect</a> is a tool included with Kafka that imports and exports data to Kafka. It is an extensible tool that runs
-            <i>connectors</i>, which implement the custom logic for interacting with an external system. In this quickstart we'll see
-            how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a
-            Kafka topic to a file.
+            In this quickstart we'll see how to run Kafka Connect with simple connectors that import data
+            from a file to a Kafka topic and export data from a Kafka topic to a file.
         </p>
 
         <p>
