@@ -21,6 +21,7 @@ import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
+import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -327,12 +328,6 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(props, expectedErrorMessage(5555, 9093))
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093,3@anotherhost:5555")
     KafkaConfig.fromProps(props)
-  }
-
-  private def assertBadConfigContainingMessage(props: Properties, expectedIllegalArgExceptionContainsText: String): Unit = {
-    assertFalse(isValidKafkaConfig(props))
-    val caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    assertTrue(caught.getMessage.contains(expectedIllegalArgExceptionContainsText))
   }
 
   @Test
