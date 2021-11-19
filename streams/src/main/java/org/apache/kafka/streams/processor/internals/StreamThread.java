@@ -913,14 +913,12 @@ public class StreamThread extends Thread {
             if (topologyMetadata.isEmpty()) {
                 mainConsumer.unsubscribe();
             }
-            final boolean needsRebalance = topologyMetadata.reachedLatestVersion(getName());
+            topologyMetadata.reachedLatestVersion(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             subscribeConsumer();
-            if (needsRebalance) {
-                mainConsumer.enforceRebalance();
-            }
+            mainConsumer.enforceRebalance();
         }
     }
 

@@ -140,8 +140,7 @@ public class TopologyMetadata {
         threadVersions.remove(threadName);
     }
 
-    public boolean reachedLatestVersion(final String threadName) {
-        boolean rebalance = false;
+    public void reachedLatestVersion(final String threadName) {
         try {
             lock();
             final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
@@ -155,14 +154,12 @@ public class TopologyMetadata {
                         topologyVersionWaiters.future.complete(null);
                         iterator.remove();
                         log.info("Thread {} is now on topology version {}", threadName, topologyVersionWaiters.topologyVersion);
-                        rebalance = true;
                     }
                 }
             }
         } finally {
             unlock();
         }
-        return rebalance;
     }
 
     public void wakeupThreads() {
