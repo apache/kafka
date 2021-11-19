@@ -930,7 +930,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
-              if (localLog.unflushedMessages >= config.flushInterval) flushUpToAndExcludingLogEndOffset()
+              if (localLog.unflushedMessages >= config.flushInterval) flush(false)
           }
           appendInfo
         }
@@ -1504,18 +1504,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Flush all local log segments
-   */
-  def flushUpToAndExcludingLogEndOffset(): Unit = flush(logEndOffset, false)
-
-  /**
-   * Flush all local log segments including possible empty active segment.
    *
-   * We have to pass logEngOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
+   * @param inclusive should be true during a clean shutdown, and false otherwise. The reason is that
+   * we have to pass logEngOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
    * active segments, which is important to make sure we don't lose the empty index file during shutdown.
-   *
-   * This function should only be called during shutdown.
    */
-  def flushUpToAndIncludingLogEndOffset(): Unit = flush(logEndOffset, true)
+  def flush(inclusive: Boolean): Unit = flush(logEndOffset, inclusive)
 
   /**
    * Flush local log segments for all offsets up to offset-1
@@ -1527,9 +1521,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def flush(offset: Long, includingOffset: Boolean): Unit = {
     val flushOffset = if (includingOffset) offset + 1  else offset
     val recoveryPoint = offset
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $flushOffset") {
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $flushOffset and recovery point $recoveryPoint") {
       if (flushOffset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $flushOffset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+        debug(s"Flushing log up to offset $flushOffset with recovery point $recoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: ${localLog.unflushedMessages}")
         localLog.flush(flushOffset)
         lock synchronized {

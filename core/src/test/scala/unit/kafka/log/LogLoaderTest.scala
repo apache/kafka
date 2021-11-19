@@ -786,7 +786,7 @@ class LogLoaderTest {
     log = createLog(logDir, logConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     // the recovery point should not be updated after unclean shutdown until the log is flushed
     verifyRecoveredLog(log, recoveryPoint)
-    log.flushUpToAndExcludingLogEndOffset()
+    log.flush(false)
     verifyRecoveredLog(log, lastOffset)
     log.close()
   }

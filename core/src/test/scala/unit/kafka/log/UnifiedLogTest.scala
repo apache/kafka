@@ -1293,7 +1293,7 @@ class UnifiedLogTest {
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
     log.appendAsFollower(memoryRecords)
-    log.flushUpToAndExcludingLogEndOffset()
+    log.flush(false)
 
     val fetchedData = LogTestUtils.readLog(log, 0, Int.MaxValue)
 
@@ -1639,7 +1639,7 @@ class UnifiedLogTest {
     log.roll()
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
     assertEquals(1, logDir.listFiles(_.getName.endsWith(".index")).length)
-    log.flushUpToAndIncludingLogEndOffset()
+    log.flush(true)
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".index")).length)
   }
@@ -1657,7 +1657,7 @@ class UnifiedLogTest {
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
                                                                                 timestamp = mockTime.milliseconds))
     messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
-    log.flushUpToAndExcludingLogEndOffset()
+    log.flush(false)
 
     /* do successive reads to ensure all our messages are there */
     var offset = 0L

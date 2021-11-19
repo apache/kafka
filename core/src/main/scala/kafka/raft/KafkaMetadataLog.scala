@@ -212,7 +212,7 @@ final class KafkaMetadataLog private (
   }
 
   override def flush(): Unit = {
-    log.flushUpToAndExcludingLogEndOffset()
+    log.flush(true)
   }
 
   override def lastFlushedOffset(): Long = {
