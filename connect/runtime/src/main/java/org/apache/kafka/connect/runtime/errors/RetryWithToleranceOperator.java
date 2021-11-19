@@ -229,6 +229,13 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         }
     }
 
+    // For source connectors that want to skip kafka producer errors.
+    // They cannot use withinToleranceLimits() as no failure may have actually occurred prior to the producer failing
+    // to write to kafka.
+    public synchronized ToleranceType getErrorToleranceType() {
+        return errorToleranceType;
+    }
+
     // Visible for testing
     boolean checkRetry(long startTime) {
         return (time.milliseconds() - startTime) < errorRetryTimeout;

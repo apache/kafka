@@ -222,6 +222,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask(TargetState.STARTED);
     }
 
+    private void createWorkerTaskWithErrorToleration() {
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter,
+                transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
+                offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
+                RetryWithToleranceOperatorTest.ALL_OPERATOR, statusBackingStore, Runnable::run);
+    }
+
     private void createWorkerTask(TargetState initialState) {
         createWorkerTask(initialState, keyConverter, valueConverter, headerConverter);
     }
@@ -811,6 +818,33 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSourceTaskIgnoresProducerException() throws Exception {
+        createWorkerTaskWithErrorToleration();
+        expectTopicCreation(TOPIC);
+
+        // send two records
+        // record 1 will succeed
+        // record 2 will invoke the producer's failure callback, but ignore the exception via retryOperator
+        // and no ConnectException will be thrown
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+
+        expectSendRecordOnce();
+        expectSendRecordProducerCallbackFail();
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.anyObject(RecordMetadata.class));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
 
         PowerMock.verifyAll();
     }

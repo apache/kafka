@@ -39,6 +39,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -366,7 +367,11 @@ class WorkerSourceTask extends WorkerTask {
                         if (e != null) {
                             log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
                             log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
-                            producerSendException.compareAndSet(null, e);
+                            if (retryWithToleranceOperator.getErrorToleranceType().equals(ToleranceType.ALL)) {
+                                commitTaskRecord(preTransformRecord, null);
+                            } else {
+                                producerSendException.compareAndSet(null, e);
+                            }
                         } else {
                             submittedRecord.ack();
                             counter.completeRecord();
