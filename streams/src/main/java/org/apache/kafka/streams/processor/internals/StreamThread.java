@@ -577,7 +577,6 @@ public class StreamThread extends Thread {
             failedStreamThreadSensor.record();
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
-            topologyMetadata.unregisterThread(threadMetadata.threadName());
             completeShutdown(cleanRun);
         }
     }
@@ -1167,6 +1166,8 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelMetrics(getName());
 
         setState(State.DEAD);
+
+        topologyMetadata.unregisterThread(threadMetadata.threadName());
 
         log.info("Shutdown complete");
     }

@@ -124,7 +124,7 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
-    public Collection<String> sourceTopologies(final String name) {
+    public Collection<String> sourceTopicsForTopology(final String name) {
         return builders.get(name).sourceTopicCollection();
     }
 
@@ -140,7 +140,6 @@ public class TopologyMetadata {
         threadVersions.remove(threadName);
     }
 
-
     public boolean reachedLatestVersion(final String threadName) {
         boolean rebalance = false;
         try {
@@ -150,12 +149,12 @@ public class TopologyMetadata {
             threadVersions.put(threadName, topologyVersion());
             while (iterator.hasNext()) {
                 topologyVersionWaiters = iterator.next();
-                final long verison = topologyVersionWaiters.topologyVersion;
-                if (verison <= threadVersions.get(threadName)) {
-                    if (threadVersions.values().stream().allMatch(t -> t >= verison)) {
+                final long topologyVersionWaitersVersion = topologyVersionWaiters.topologyVersion;
+                if (topologyVersionWaitersVersion <= threadVersions.get(threadName)) {
+                    if (threadVersions.values().stream().allMatch(t -> t >= topologyVersionWaitersVersion)) {
                         topologyVersionWaiters.future.complete(null);
                         iterator.remove();
-                        log.info("thread {} is now on on version {}", threadName, topologyVersionWaiters.topologyVersion);
+                        log.info("Thread {} is now on topology version {}", threadName, topologyVersionWaiters.topologyVersion);
                         rebalance = true;
                     }
                 }

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
@@ -33,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
-    private final Logger log;
+    private final Logger log = LoggerFactory.getLogger(KafkaStreamsNamedTopologyWrapper.class);
 
     /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
@@ -74,8 +74,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private KafkaStreamsNamedTopologyWrapper(final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         super(new TopologyMetadata(new ConcurrentSkipListMap<>(), config), config, clientSupplier);
-        final LogContext logContext = new LogContext();
-        this.log = logContext.logger(getClass());
     }
 
     /**
@@ -175,16 +173,12 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
             .stream()
             .flatMap(t -> {
-                final HashSet<TaskMetadata> tasks = new HashSet<>();
-                tasks.addAll(t.activeTasks());
-                tasks.addAll(t.standbyTasks());
+                final Set<TaskMetadata> tasks = new HashSet<>(t.activeTasks());
                 return tasks.stream();
             })
             .flatMap(t -> t.topicPartitions().stream())
-            .filter(t -> topologyMetadata.sourceTopologies(topologyToRemove).contains(t.topic()))
+            .filter(t -> topologyMetadata.sourceTopicsForTopology(topologyToRemove).contains(t.topic()))
             .collect(Collectors.toSet());
-
-
 
         final KafkaFuture<Void> removeTopologyFuture = topologyMetadata.unregisterTopology(topologyToRemove);
 
