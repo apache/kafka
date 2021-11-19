@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.Fetch;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
@@ -1235,9 +1236,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     }
                 }
 
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
-                if (!records.isEmpty()) {
-                    // before returning the fetched records, we can send off the next round of fetches
+                final Fetch<K, V> fetch = pollForFetches(timer);
+                if (!fetch.isEmpty()) {
+                    if (fetch.records().isEmpty()) {
+                        log.debug(
+                                "Returning empty records from poll since the consumer's position has advanced "
+                                        + "for at least one topic partition; this may happen in the case of aborted or empty transactions"
+                        );
+                        return ConsumerRecords.empty();
+                    }                    // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
@@ -1247,7 +1254,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.transmitSends();
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
                 }
             } while (timer.notExpired());
 
@@ -1269,14 +1276,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
+    private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
-        if (!records.isEmpty()) {
-            return records;
+        final Fetch<K, V> fetch = fetcher.collectFetch();
+        if (!fetch.isEmpty()) {
+            return fetch;
         }
 
         // send any new fetches (won't resend pending fetches)
@@ -1301,7 +1308,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         });
         timer.update(pollTimer.currentTimeMs());
 
-        return fetcher.fetchedRecords();
+        return fetcher.collectFetch();
     }
 
     /**
