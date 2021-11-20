@@ -480,10 +480,9 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     ValueAndTimestamp.make(newAgg, newTimestamp),
                     windowStart);
                 tupleForwarder.maybeForward(
-                    new Record<>(
-                        new Windowed<>(record.key(), window),
-                        new Change<>(newAgg, sendOldValues ? oldAgg : null),
-                        newTimestamp));
+                    record.withKey(new Windowed<>(record.key(), window))
+                        .withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                        .withTimestamp(newTimestamp));
             } else {
                 if (context().recordMetadata().isPresent()) {
                     final RecordMetadata recordMetadata = context().recordMetadata().get();
