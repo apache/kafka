@@ -29,6 +29,7 @@ import java.util.{Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
+import kafka.cluster.EndPoint
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
@@ -859,6 +860,39 @@ class SocketServerTest {
       assertNotNull(request)
 
       // now try one more (should fail)
+      val conn = connect(overrideServer)
+      conn.setSoTimeout(3000)
+      assertEquals(-1, conn.getInputStream.read())
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testExceptionInAcceptor(): Unit = {
+    val overrideNum = server.config.maxConnectionsPerIp + 1
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
+    val serverMetrics = new Metrics()
+
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager) {
+
+      // same as SocketServer.createAcceptor,
+      // except the Acceptor overriding a method to inject the exception
+      override protected def createAcceptor(endPoint: EndPoint, metricPrefix: String): Acceptor = {
+        val sendBufferSize = config.socketSendBufferBytes
+        val recvBufferSize = config.socketReceiveBufferBytes
+        new Acceptor(endPoint, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time) {
+          override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+            throw new IOException("test injected IOException")
+          }
+        }
+      }
+    }
+
+    try {
+      overrideServer.startup()
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
