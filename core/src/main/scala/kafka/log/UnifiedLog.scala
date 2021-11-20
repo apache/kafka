@@ -1758,41 +1758,45 @@ object UnifiedLog extends Logging {
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
             keepPartitionMetadataFile: Boolean): UnifiedLog = {
-    // create the log directory if it doesn't exist
-    Files.createDirectories(dir.toPath)
-    val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
-    val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      dir,
-      topicPartition,
-      logDirFailureChannel,
-      config.recordVersion,
-      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    val offsets = LogLoader.load(LoadLogParams(
-      dir,
-      topicPartition,
-      config,
-      scheduler,
-      time,
-      logDirFailureChannel,
-      lastShutdownClean,
-      segments,
-      logStartOffset,
-      recoveryPoint,
-      maxProducerIdExpirationMs,
-      leaderEpochCache,
-      producerStateManager))
-    val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
-      offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
-    new UnifiedLog(offsets.logStartOffset,
-      localLog,
-      brokerTopicStats,
-      producerIdExpirationCheckIntervalMs,
-      leaderEpochCache,
-      producerStateManager,
-      topicId,
-      keepPartitionMetadataFile)
+    try {
+      // create the log directory if it doesn't exist
+      Files.createDirectories(dir.toPath)
+      val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
+      val segments = new LogSegments(topicPartition)
+      val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+        dir,
+        topicPartition,
+        logDirFailureChannel,
+        config.recordVersion,
+        s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
+      val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+      val offsets = LogLoader.load(LoadLogParams(
+        dir,
+        topicPartition,
+        config,
+        scheduler,
+        time,
+        logDirFailureChannel,
+        lastShutdownClean,
+        segments,
+        logStartOffset,
+        recoveryPoint,
+        maxProducerIdExpirationMs,
+        leaderEpochCache,
+        producerStateManager))
+      val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
+        offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
+      new UnifiedLog(offsets.logStartOffset,
+        localLog,
+        brokerTopicStats,
+        producerIdExpirationCheckIntervalMs,
+        leaderEpochCache,
+        producerStateManager,
+        topicId,
+        keepPartitionMetadataFile)
+    } catch {
+      case e: IOException => throw new KafkaStorageException(s"Topic partition dir ${dir.toPath} is offline", e)
+    }
   }
 
   def logFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.logFile(dir, offset, suffix)
