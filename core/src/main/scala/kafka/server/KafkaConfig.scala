@@ -749,7 +749,8 @@ object KafkaConfig {
     "Different security (SSL and SASL) settings can be configured for each listener by adding a normalised " +
     "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
     "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
-    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). "
+    "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). " +
+    "Note that in KRaft an additional default mapping CONTROLLER to PLAINTEXT is added."
   val controlPlaneListenerNameDoc = "Name of listener used for communication between controller and brokers. " +
     s"Broker will use the $ControlPlaneListenerNameProp to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
     "For example, if a broker's config is :\n" +
@@ -1961,9 +1962,15 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def listenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
-    getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
+    val explicitMap = getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
       .map { case (listenerName, protocolName) =>
-      ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
+        ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
+      }
+    val controllerListenerName = new ListenerName("CONTROLLER")
+    if (usesSelfManagedQuorum && !explicitMap.contains(controllerListenerName)) {
+      explicitMap ++ Map(controllerListenerName -> SecurityProtocol.PLAINTEXT)
+    } else {
+      explicitMap
     }
   }
 

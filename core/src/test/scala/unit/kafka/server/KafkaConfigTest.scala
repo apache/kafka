@@ -353,6 +353,35 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControllerListenerNameMapsToPlaintextByDefaultForKRaft(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
+    val controllerListenerName = new ListenerName("CONTROLLER")
+    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(controllerListenerName))
+    // ensure we don't map it to PLAINTEXT when it is explicitly given otherwise
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
+    assertEquals(Some(SecurityProtocol.SSL),
+      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(controllerListenerName))
+  }
+
+  @Test
+  def testControllerListenerNameDoesNotMapToPlaintextByDefaultForNonKRaft(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, "CONTROLLER://localhost:9092")
+    assertBadConfigContainingMessage(props,
+      "Error creating broker listeners from 'CONTROLLER://localhost:9092': No security protocol defined for listener CONTROLLER")
+    // Valid now
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092")
+    assertEquals(None, KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(new ListenerName("CONTROLLER")))
+  }
+
+  @Test
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
