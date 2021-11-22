@@ -164,12 +164,24 @@ abstract class QuorumTestHarness extends Logging {
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {
     Exit.setExitProcedure((code, message) => {
-      error(s"exit(${code}, ${message}) called!")
-      tearDown()
+      try {
+        throw new RuntimeException(s"exit(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
     })
     Exit.setHaltProcedure((code, message) => {
-      error(s"halt(${code}, ${message}) called!")
-      tearDown()
+      try {
+        throw new RuntimeException(s"halt(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
     })
     val name = if (testInfo.getTestMethod().isPresent()) {
       testInfo.getTestMethod().get().toString()
