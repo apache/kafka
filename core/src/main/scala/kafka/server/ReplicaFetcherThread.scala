@@ -56,12 +56,12 @@ class ReplicaFetcherThread(name: String,
                            quota: ReplicaQuota,
                            leaderEndpointBlockingSend: Option[BlockingSend] = None)
   extends AbstractFetcherThread(name = name,
-    clientId = name,
-    sourceBroker = sourceBroker,
-    failedPartitions,
-    fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
-    isInterruptible = false,
-    replicaMgr.brokerTopicStats) {
+                                clientId = name,
+                                sourceBroker = sourceBroker,
+                                failedPartitions,
+                                fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
+                                isInterruptible = false,
+                                replicaMgr.brokerTopicStats) {
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
