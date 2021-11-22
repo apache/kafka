@@ -347,11 +347,12 @@ public class TransactionManager {
                     isEpochBump);
             enqueueRequest(handler);
             return handler.result;
-        }, State.INITIALIZING);
+        }, State.INITIALIZING, "initTransactions");
     }
 
     public synchronized void beginTransaction() {
         ensureTransactional();
+        throwIfPendingState("beginTransaction");
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
     }
@@ -361,7 +362,7 @@ public class TransactionManager {
             maybeFailWithError();
             transitionTo(State.COMMITTING_TRANSACTION);
             return beginCompletingTransaction(TransactionResult.COMMIT);
-        }, State.COMMITTING_TRANSACTION);
+        }, State.COMMITTING_TRANSACTION, "commitTransaction");
     }
 
     public synchronized TransactionalRequestResult beginAbort() {
@@ -373,7 +374,7 @@ public class TransactionManager {
             // We're aborting the transaction, so there should be no need to add new partitions
             newPartitionsInTransaction.clear();
             return beginCompletingTransaction(TransactionResult.ABORT);
-        }, State.ABORTING_TRANSACTION);
+        }, State.ABORTING_TRANSACTION, "abortTransaction");
     }
 
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
@@ -404,10 +405,12 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                             final ConsumerGroupMetadata groupMetadata) {
         ensureTransactional();
+        throwIfPendingState("sendOffsetsToTransaction");
         maybeFailWithError();
-        if (currentState != State.IN_TRANSACTION)
-            throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
-                    "active transaction");
+
+        if (currentState != State.IN_TRANSACTION) {
+            throw new KafkaException("Cannot send offsets to transaction either because in state " + currentState);
+        }
 
         log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
@@ -423,32 +426,29 @@ public class TransactionManager {
         return handler.result;
     }
 
-    public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition))
-            return;
+    public synchronized void maybeAddPartition(TopicPartition topicPartition) {
+        maybeFailWithError();
+        throwIfPendingState("send");
 
-        log.debug("Begin adding new partition {} to transaction", topicPartition);
-        topicPartitionBookkeeper.addPartition(topicPartition);
-        newPartitionsInTransaction.add(topicPartition);
+        if (isTransactional()) {
+            if (!hasProducerId()) {
+                throw new KafkaException("Cannot add partition " + topicPartition +
+                    "to transaction before completing a call to initTransactions");
+            } else if (currentState != State.IN_TRANSACTION) {
+                throw new KafkaException("Cannot add partition " + topicPartition +
+                    " to transaction while in state  " + currentState);
+            } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
+                return;
+            } else {
+                log.debug("Begin adding new partition {} to transaction", topicPartition);
+                topicPartitionBookkeeper.addPartition(topicPartition);
+                newPartitionsInTransaction.add(topicPartition);
+            }
+        }
     }
 
     RuntimeException lastError() {
         return lastError;
-    }
-
-    public synchronized void failIfNotReadyForSend() {
-        if (hasError())
-            throw new KafkaException("Cannot perform send because at least one previous transactional or " +
-                    "idempotent request has failed with errors.", lastError);
-
-        if (isTransactional()) {
-            if (!hasProducerId())
-                throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
-                        "when transactions are enabled.");
-
-            if (currentState != State.IN_TRANSACTION)
-                throw new IllegalStateException("Cannot call send in state " + currentState);
-        }
     }
 
     synchronized boolean isSendToPartitionAllowed(TopicPartition tp) {
@@ -1183,9 +1183,26 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
+    private void throwPendingTransitionError(String operation) {
+        throw new KafkaException("Cannot attempt operation `" + operation + "` "
+            + "because the previous call to `" + pendingTransition.operation + "` "
+            + "timed out and must be retried");
+    }
+
+    private void throwIfPendingState(String operation) {
+        if (pendingTransition != null) {
+            if (pendingTransition.result.isAcked()) {
+                pendingTransition = null;
+            } else {
+                throwPendingTransitionError(operation);
+            }
+        }
+    }
+
     private TransactionalRequestResult handleCachedTransactionRequestResult(
         Supplier<TransactionalRequestResult> transactionalRequestResultSupplier,
-        State nextState
+        State nextState,
+        String operation
     ) {
         ensureTransactional();
 
@@ -1193,15 +1210,14 @@ public class TransactionManager {
             if (pendingTransition.result.isAcked()) {
                 pendingTransition = null;
             } else if (nextState != pendingTransition.state) {
-                throw new KafkaException("Unexpected transition to " + nextState +
-                    " while awaiting transition from " + pendingTransition.state);
+                throwPendingTransitionError(operation);
             } else {
                 return pendingTransition.result;
             }
         }
 
         TransactionalRequestResult result = transactionalRequestResultSupplier.get();
-        pendingTransition = new PendingStateTransition(result, nextState);
+        pendingTransition = new PendingStateTransition(result, nextState, operation);
         return result;
     }
 
@@ -1772,13 +1788,16 @@ public class TransactionManager {
     private static final class PendingStateTransition {
         private final TransactionalRequestResult result;
         private final State state;
+        private final String operation;
 
         private PendingStateTransition(
             TransactionalRequestResult result,
-            State state
+            State state,
+            String operation
         ) {
             this.result = result;
             this.state = state;
+            this.operation = operation;
         }
     }
 
