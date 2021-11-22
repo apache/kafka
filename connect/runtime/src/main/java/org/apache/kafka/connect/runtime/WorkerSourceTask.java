@@ -36,6 +36,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
@@ -359,7 +360,7 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
-            SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(record);
+            SubmittedRecord submittedRecord = submittedRecords.submit(record);
             try {
                 maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();

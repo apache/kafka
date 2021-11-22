@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -88,7 +89,7 @@ public class SubmittedRecordsTest {
     public void testSingleAck() {
         Map<String, Object> offset = newOffset();
 
-        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, offset);
+        SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, offset);
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // Record has been submitted but not yet acked; cannot commit offsets for it yet
         assertFalse(committableOffsets.isEmpty());
@@ -119,10 +120,10 @@ public class SubmittedRecordsTest {
         Map<String, Object> partition2Offset1 = newOffset();
         Map<String, Object> partition2Offset2 = newOffset();
 
-        SubmittedRecords.SubmittedRecord partition1Record1 = submittedRecords.submit(PARTITION1, partition1Offset1);
-        SubmittedRecords.SubmittedRecord partition1Record2 = submittedRecords.submit(PARTITION1, partition1Offset2);
-        SubmittedRecords.SubmittedRecord partition2Record1 = submittedRecords.submit(PARTITION2, partition2Offset1);
-        SubmittedRecords.SubmittedRecord partition2Record2 = submittedRecords.submit(PARTITION2, partition2Offset2);
+        SubmittedRecord partition1Record1 = submittedRecords.submit(PARTITION1, partition1Offset1);
+        SubmittedRecord partition1Record2 = submittedRecords.submit(PARTITION1, partition1Offset2);
+        SubmittedRecord partition2Record1 = submittedRecords.submit(PARTITION2, partition2Offset1);
+        SubmittedRecord partition2Record2 = submittedRecords.submit(PARTITION2, partition2Offset2);
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // No records ack'd yet; can't commit any offsets
@@ -171,7 +172,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testRemoveLastSubmittedRecord() {
-        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
@@ -195,8 +196,8 @@ public class SubmittedRecordsTest {
         Map<String, Object> partition1Offset = newOffset();
         Map<String, Object> partition2Offset = newOffset();
 
-        SubmittedRecords.SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
-        SubmittedRecords.SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
+        SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
+        SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 2, 2, 1, PARTITION1, PARTITION2);
@@ -234,7 +235,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testNullPartitionAndOffset() {
-        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
+        SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 1, 1, 1, (Map<String, Object>) null);
 
@@ -253,7 +254,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testAwaitMessagesAfterAllAcknowledged() {
-        SubmittedRecords.SubmittedRecord recordToAck = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord recordToAck = submittedRecords.submit(PARTITION1, newOffset());
         assertFalse(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
         recordToAck.ack();
         assertTrue(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
@@ -261,8 +262,8 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testAwaitMessagesAfterAllRemoved() {
-        SubmittedRecords.SubmittedRecord recordToRemove1 = submittedRecords.submit(PARTITION1, newOffset());
-        SubmittedRecords.SubmittedRecord recordToRemove2 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord recordToRemove1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord recordToRemove2 = submittedRecords.submit(PARTITION1, newOffset());
         assertFalse(
                 "Await should fail since neither of the in-flight records has been removed so far",
                 submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
@@ -296,8 +297,8 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testAwaitMessagesReturnsAfterAsynchronousAck() throws Exception {
-        SubmittedRecords.SubmittedRecord inFlightRecord1 = submittedRecords.submit(PARTITION1, newOffset());
-        SubmittedRecords.SubmittedRecord inFlightRecord2 = submittedRecords.submit(PARTITION2, newOffset());
+        SubmittedRecord inFlightRecord1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord inFlightRecord2 = submittedRecords.submit(PARTITION2, newOffset());
 
         AtomicBoolean awaitResult = new AtomicBoolean();
         CountDownLatch awaitComplete = new CountDownLatch(1);
