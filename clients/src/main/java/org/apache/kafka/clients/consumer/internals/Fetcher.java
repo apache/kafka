@@ -728,6 +728,15 @@ public class Fetcher<K, V> implements Closeable {
                     log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
                     subscriptions.position(completedFetch.partition, nextPosition);
                     positionAdvanced = true;
+                    if (partRecords.isEmpty()) {
+                        log.debug(
+                                "Advanced position for partition {} without receiving any user-visible records. " 
+                                        + "This is likely due to skipping over control records in the current fetch, " 
+                                        + "and may result in the consumer returning an empty record batch when " 
+                                        + "polled before its poll timeout has elapsed.",
+                                completedFetch.partition
+                        );
+                    }
                 }
 
                 Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);

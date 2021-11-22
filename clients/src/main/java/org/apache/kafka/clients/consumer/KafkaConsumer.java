@@ -1176,9 +1176,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offset for the subscribed list of partitions
      *
      * <p>
-     * This method returns immediately if there are records available. Otherwise, it will await the passed timeout.
-     * If the timeout expires, an empty record set will be returned. Note that this method may block beyond the
-     * timeout in order to execute custom {@link ConsumerRebalanceListener} callbacks.
+     * This method returns immediately if there are records available or if the position advances past control records.
+     * Otherwise, it will await the passed timeout. If the timeout expires, an empty record set will be returned.
+     * Note that this method may block beyond the timeout in order to execute custom
+     * {@link ConsumerRebalanceListener} callbacks.
      *
      *
      * @param timeout The maximum time to block (must not be greater than {@link Long#MAX_VALUE} milliseconds)
@@ -1238,13 +1239,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
-                    if (fetch.records().isEmpty()) {
-                        log.debug(
-                                "Returning empty records from poll since the consumer's position has advanced "
-                                        + "for at least one topic partition; this may happen in the case of aborted or empty transactions"
-                        );
-                        return ConsumerRecords.empty();
-                    }                    // before returning the fetched records, we can send off the next round of fetches
+                    // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
                     //
