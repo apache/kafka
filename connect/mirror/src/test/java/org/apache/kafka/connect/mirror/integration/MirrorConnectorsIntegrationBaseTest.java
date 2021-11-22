@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
 import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
@@ -60,6 +61,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -154,6 +156,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
         mm2Props.putAll(basicMM2Config());
         mm2Props.putAll(additionalMM2Config);
+
+        // exclude topic config:
+        mm2Props.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "delete\\.retention\\..*");
 
         mm2Config = new MirrorMakerConfig(mm2Props);
         primaryWorkerProps = mm2Config.workerConfig(new SourceAndTarget(BACKUP_CLUSTER_ALIAS, PRIMARY_CLUSTER_ALIAS));
@@ -259,7 +264,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         waitForTopicCreated(primary, "mm2-offset-syncs.backup.internal");
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
                 "topic config was not synced");
-        
+        createAndTestNewTopicWithConfigFilter();
+
         assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
             "Records were not produced to primary cluster.");
         assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1").count(),
@@ -429,6 +435,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
 
+
         mm2Config = new MirrorMakerConfig(mm2Props);
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -517,6 +524,44 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
         assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
         assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+    }
+
+    /*
+     * Run tests for Exclude Filter for copying topic configurations
+     */
+    void createAndTestNewTopicWithConfigFilter() throws Exception {
+        // create topic with configuration to test:
+        final Map<String, String> topicConfig = new HashMap<>();
+        topicConfig.put("delete.retention.ms", "1000"); // should be excluded (default value is 86400000)
+        topicConfig.put("retention.bytes", "1000"); // should be included, default value is -1
+
+        final String topic = "test-topic-with-config";
+        final String backupTopic = backupClusterTopicName(topic);
+
+        primary.kafka().createTopic(topic, NUM_PARTITIONS, 1, topicConfig);
+        waitForTopicCreated(backup, backupTopic);
+
+        String primaryConfig, backupConfig;
+
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "delete.retention.ms");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "delete.retention.ms");
+        assertNotEquals(primaryConfig, backupConfig,
+                "`delete.retention.ms` should be different, because it's in exclude filter! ");
+
+        // regression test for the config that are still supposed to be replicated
+        primaryConfig = getTopicConfig(primary.kafka(), topic, "retention.bytes");
+        backupConfig = getTopicConfig(backup.kafka(), backupTopic, "retention.bytes");
+        assertEquals(primaryConfig, backupConfig,
+                "`retention.bytes` should be the same, because it isn't in exclude filter! ");
+        assertEquals("1000", backupConfig,
+                "`retention.bytes` should be the same, because it's explicitly defined! ");
+    }
+
+    /*
+     * Returns expected topic name on target cluster.
+     */
+    String backupClusterTopicName(String topic) {
+        return PRIMARY_CLUSTER_ALIAS + "." + topic;
     }
 
     /*

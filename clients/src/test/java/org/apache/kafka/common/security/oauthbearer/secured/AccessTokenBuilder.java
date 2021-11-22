@@ -24,9 +24,7 @@ import java.io.IOException;
 import java.util.Collection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.jose4j.jwk.RsaJsonWebKey;
-import org.jose4j.jwk.RsaJwkGenerator;
-import org.jose4j.jws.AlgorithmIdentifiers;
+import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.ReservedClaimNames;
 import org.jose4j.lang.JoseException;
@@ -35,40 +33,40 @@ public class AccessTokenBuilder {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private String alg;
+
     private String audience;
 
     private String subject = "jdoe";
 
-    private String subjectClaimName = ReservedClaimNames.SUBJECT;
+    private final String subjectClaimName = ReservedClaimNames.SUBJECT;
 
     private Object scope = "engineering";
 
-    private String scopeClaimName = "scope";
+    private final String scopeClaimName = "scope";
 
-    private Long issuedAtSeconds;
+    private final Long issuedAtSeconds;
 
     private Long expirationSeconds;
 
-    private RsaJsonWebKey jwk;
+    private PublicJsonWebKey jwk;
 
-    public AccessTokenBuilder() throws JoseException {
+    public AccessTokenBuilder() {
         this(new MockTime());
     }
 
-    public AccessTokenBuilder(Time time) throws JoseException {
+    public AccessTokenBuilder(Time time) {
         this.issuedAtSeconds = time.milliseconds() / 1000;
         this.expirationSeconds = this.issuedAtSeconds + 60;
-        this.jwk = createJwk();
     }
 
-    public static RsaJsonWebKey createJwk() throws JoseException {
-        RsaJsonWebKey jwk = RsaJwkGenerator.generateJwk(2048);
-        jwk.setKeyId("key-1");
-        return jwk;
+    public String alg() {
+        return alg;
     }
 
-    public String audience() {
-        return audience;
+    public AccessTokenBuilder alg(String alg) {
+        this.alg = alg;
+        return this;
     }
 
     public AccessTokenBuilder audience(String audience) {
@@ -87,11 +85,6 @@ public class AccessTokenBuilder {
 
     public String subjectClaimName() {
         return subjectClaimName;
-    }
-
-    public AccessTokenBuilder subjectClaimName(String subjectClaimName) {
-        this.subjectClaimName = subjectClaimName;
-        return this;
     }
 
     public Object scope() {
@@ -118,18 +111,8 @@ public class AccessTokenBuilder {
         return scopeClaimName;
     }
 
-    public AccessTokenBuilder scopeClaimName(String scopeClaimName) {
-        this.scopeClaimName = scopeClaimName;
-        return this;
-    }
-
     public Long issuedAtSeconds() {
         return issuedAtSeconds;
-    }
-
-    public AccessTokenBuilder issuedAtSeconds(Long issuedAtSeconds) {
-        this.issuedAtSeconds = issuedAtSeconds;
-        return this;
     }
 
     public Long expirationSeconds() {
@@ -141,11 +124,11 @@ public class AccessTokenBuilder {
         return this;
     }
 
-    public RsaJsonWebKey jwk() {
+    public PublicJsonWebKey jwk() {
         return jwk;
     }
 
-    public AccessTokenBuilder jwk(RsaJsonWebKey jwk) {
+    public AccessTokenBuilder jwk(PublicJsonWebKey jwk) {
         this.jwk = jwk;
         return this;
     }
@@ -183,9 +166,15 @@ public class AccessTokenBuilder {
 
         JsonWebSignature jws = new JsonWebSignature();
         jws.setPayload(json);
-        jws.setKey(jwk.getPrivateKey());
-        jws.setKeyIdHeaderValue(jwk.getKeyId());
-        jws.setAlgorithmHeaderValue(AlgorithmIdentifiers.RSA_USING_SHA256);
+
+        if (jwk != null) {
+            jws.setKey(jwk.getPrivateKey());
+            jws.setKeyIdHeaderValue(jwk.getKeyId());
+        }
+
+        if (alg != null)
+            jws.setAlgorithmHeaderValue(alg);
+
         return jws.getCompactSerialization();
     }
 
