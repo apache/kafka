@@ -930,7 +930,8 @@ public class KafkaProducerTest {
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
 
             Future<?> future = executor.submit(producer::initTransactions);
-            TestUtils.waitForCondition(client::hasInFlightRequests, "blah blah");
+            TestUtils.waitForCondition(client::hasInFlightRequests,
+                "Timed out while waiting for expected `InitProducerId` request to be sent");
 
             time.sleep(maxBlockMs);
             TestUtils.assertFutureThrows(future, TimeoutException.class);
