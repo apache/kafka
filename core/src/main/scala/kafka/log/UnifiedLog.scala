@@ -1518,6 +1518,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def flush(offset: Long): Unit = flush(offset, false)
 
+  /**
+   * Flush local log segments for all offsets up to offset-1 if includingOffset=false; up to offset
+   * if includingOffset=true. The recovery point is set to offset-1.
+   *
+   * @param offset The offset to flush up to (non-inclusive); the new recovery point
+   * @param includingOffset Whether the flush includes the provided offset.
+   */
   private def flush(offset: Long, includingOffset: Boolean): Unit = {
     val flushOffset = if (includingOffset) offset + 1  else offset
     val recoveryPoint = offset

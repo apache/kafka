@@ -184,8 +184,10 @@ public interface ReplicatedLog extends AutoCloseable {
 
     /**
      * Flush the current log to disk.
+     *
+     * @param inclusive Whether the flush includes the log end offset. Should be `true` during close; otherwise false.
      */
-    void flush();
+    void flush(boolean inclusive);
 
     /**
      * Possibly perform cleaning of snapshots and logs

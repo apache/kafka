@@ -211,8 +211,8 @@ final class KafkaMetadataLog private (
     new LogOffsetMetadata(hwm.messageOffset, segmentPosition)
   }
 
-  override def flush(): Unit = {
-    log.flush(true)
+  override def flush(inclusive: Boolean): Unit = {
+    log.flush(inclusive)
   }
 
   override def lastFlushedOffset(): Long = {
