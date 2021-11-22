@@ -89,7 +89,7 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
-      "If process.roles does not contain the 'controller' role, the node id 1 must not be included in the set of voters")
+      "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")

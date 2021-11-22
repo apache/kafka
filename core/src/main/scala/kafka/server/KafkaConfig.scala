@@ -1993,18 +1993,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
-
-      // Validate process.roles with controller.quorum.voters
-      val voterIds: Set[Integer] = RaftConfig.parseVoterConnections(quorumVoters).asScala.keySet.toSet
-      if (voterIds.isEmpty) {
-        throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
-      } else if (processRoles.contains(ControllerRole)) {
-        // Ensure that controllers use their node.id as a voter in controller.quorum.voters 
-        require(voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=$voterIds")
-      } else {
-        // Ensure that the broker's node.id is not an id in controller.quorum.voters
-        require(!voterIds.contains(nodeId), s"If ${KafkaConfig.ProcessRolesProp} does not contain the 'controller' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=$voterIds")
-      }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -2021,6 +2009,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     if (usesSelfManagedQuorum) {
+      // validations for all 3 KRaft setups (co-located, controller-only, broker-only)
+      val addressSpecsByNodeId = RaftConfig.parseVoterConnections(quorumVoters)
+      if (addressSpecsByNodeId.isEmpty) {
+        throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
+      }
       require(controlPlaneListenerName.isEmpty,
         s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode.")
       val sourceOfAdvertisedListeners = if (getString(KafkaConfig.AdvertisedListenersProp) != null)
@@ -2028,56 +2021,66 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       else
         s"${KafkaConfig.ListenersProp}"
       if (!processRoles.contains(BrokerRole)) {
+        // validations for KRaft controller-only setup
         // advertised listeners must be empty when not also running the broker role
         require(advertisedListeners.isEmpty,
           sourceOfAdvertisedListeners +
             s" must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
       } else {
+        // validations for both KRaft broker setup (i.e. broker-only and co-located)
         // when running broker role advertised listeners cannot contain controller listeners
         require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
           sourceOfAdvertisedListeners +
             s" must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role")
       }
       if (processRoles.contains(ControllerRole)) {
-        // has controller role (and optionally broker role as well)
+        // validations for both KRaft controller setups (i.e. controller-only and co-located)
+        // nodeId must appear in controller.quorum.voters
         // controller.listener.names must be non-empty
         // every one must appear in listeners
         // the port appearing in controller.quorum.voters for this node must match the port of the first controller listener
         // (we allow other nodes' voter ports to differ to support running multiple controllers on the same host)
+        val addressSpecForThisNode = addressSpecsByNodeId.get(nodeId)
+        require(addressSpecForThisNode != null,
+          s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${addressSpecsByNodeId.asScala.keySet.toSet}")
         require(controllerListeners.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
         val listenerNameValues = listeners.map(_.listenerName.value).toSet
         require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
           s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
-        val addressSpecForThisNode = RaftConfig.parseVoterConnections(quorumVoters).get(nodeId)
         addressSpecForThisNode match {
           case inetAddressSpec: RaftConfig.InetAddressSpec => {
             val quorumVotersPort = inetAddressSpec.address.getPort
             require(controllerListeners.head.port == quorumVotersPort,
               s"Port in ${KafkaConfig.QuorumVotersProp} for this controller node (${KafkaConfig.NodeIdProp}=$nodeId, port=$quorumVotersPort) does not match the port for the first controller listener in ${KafkaConfig.ControllerListenerNamesProp} (${controllerListeners.head.listenerName.value()}, port=${controllerListeners.head.port})")
           }
-          case _ =>
+          case _ => // e.g. non-routable meta-address 0.0.0.0:0
         }
       } else {
-        // only broker role
+        // validations for KRaft broker-only setup
+        // nodeId must not appear in controller.quorum.voters
         // controller.listener.names must be non-empty
         // none of them can appear in listeners
         // warn that only the first one is used if there is more than one
+        require(!addressSpecsByNodeId.containsKey(nodeId),
+          s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${addressSpecsByNodeId.asScala.keySet.toSet}")
         require(controllerListenerNames.exists(_.nonEmpty),
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
+        require(controllerListeners.isEmpty,
+          s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
         if (controllerListenerNames.size > 1) {
           warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: $controllerListenerNames")
         }
-        require(controllerListeners.isEmpty,
-          s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
       }
     } else {
+      // validations for ZooKeeper (i.e. non-KRaft) setup
       // controller listener names must be empty when not in KRaft mode
       require(!controllerListenerNames.exists(_.nonEmpty), s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava.toString}")
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
+      // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       require(advertisedListenerNames.nonEmpty,
         "There must be at least one advertised listener." + (
           if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in ${ControllerListenerNamesProp}?" else ""))
