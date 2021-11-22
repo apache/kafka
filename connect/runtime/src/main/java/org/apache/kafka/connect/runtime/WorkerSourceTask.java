@@ -65,7 +65,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
@@ -260,6 +259,10 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } finally {
+            submittedRecords.awaitAllMessages(
+                    workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG),
+                    TimeUnit.MILLISECONDS
+            );
             // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
@@ -356,7 +359,7 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
-            SubmittedRecord submittedRecord = submittedRecords.submit(record);
+            SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(record);
             try {
                 maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();

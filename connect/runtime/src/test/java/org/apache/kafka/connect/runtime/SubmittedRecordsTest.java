@@ -23,9 +23,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -86,7 +88,7 @@ public class SubmittedRecordsTest {
     public void testSingleAck() {
         Map<String, Object> offset = newOffset();
 
-        SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, offset);
+        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, offset);
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // Record has been submitted but not yet acked; cannot commit offsets for it yet
         assertFalse(committableOffsets.isEmpty());
@@ -117,10 +119,10 @@ public class SubmittedRecordsTest {
         Map<String, Object> partition2Offset1 = newOffset();
         Map<String, Object> partition2Offset2 = newOffset();
 
-        SubmittedRecord partition1Record1 = submittedRecords.submit(PARTITION1, partition1Offset1);
-        SubmittedRecord partition1Record2 = submittedRecords.submit(PARTITION1, partition1Offset2);
-        SubmittedRecord partition2Record1 = submittedRecords.submit(PARTITION2, partition2Offset1);
-        SubmittedRecord partition2Record2 = submittedRecords.submit(PARTITION2, partition2Offset2);
+        SubmittedRecords.SubmittedRecord partition1Record1 = submittedRecords.submit(PARTITION1, partition1Offset1);
+        SubmittedRecords.SubmittedRecord partition1Record2 = submittedRecords.submit(PARTITION1, partition1Offset2);
+        SubmittedRecords.SubmittedRecord partition2Record1 = submittedRecords.submit(PARTITION2, partition2Offset1);
+        SubmittedRecords.SubmittedRecord partition2Record2 = submittedRecords.submit(PARTITION2, partition2Offset2);
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // No records ack'd yet; can't commit any offsets
@@ -169,7 +171,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testRemoveLastSubmittedRecord() {
-        SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
@@ -193,8 +195,8 @@ public class SubmittedRecordsTest {
         Map<String, Object> partition1Offset = newOffset();
         Map<String, Object> partition2Offset = newOffset();
 
-        SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
-        SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
+        SubmittedRecords.SubmittedRecord recordToRemove = submittedRecords.submit(PARTITION1, partition1Offset);
+        SubmittedRecords.SubmittedRecord lastSubmittedRecord = submittedRecords.submit(PARTITION2, partition2Offset);
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 2, 2, 1, PARTITION1, PARTITION2);
@@ -232,7 +234,7 @@ public class SubmittedRecordsTest {
 
     @Test
     public void testNullPartitionAndOffset() {
-        SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
+        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(null, null);
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 1, 1, 1, (Map<String, Object>) null);
 
@@ -242,6 +244,95 @@ public class SubmittedRecordsTest {
         assertMetadataNoPending(committableOffsets, 1);
 
         assertNoEmptyDeques();
+    }
+
+    @Test
+    public void testAwaitMessagesNoneSubmitted() {
+        assertTrue(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesAfterAllAcknowledged() {
+        SubmittedRecords.SubmittedRecord recordToAck = submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+        recordToAck.ack();
+        assertTrue(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesAfterAllRemoved() {
+        SubmittedRecords.SubmittedRecord recordToRemove1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecords.SubmittedRecord recordToRemove2 = submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(
+                "Await should fail since neither of the in-flight records has been removed so far",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove1);
+        assertFalse(
+                "Await should fail since only one of the two submitted records has been removed so far",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove1);
+        assertFalse(
+                "Await should fail since only one of the two submitted records has been removed so far, "
+                        + "even though that record has been removed twice",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove2);
+        assertTrue(
+                "Await should succeed since both submitted records have now been removed",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+    }
+
+    @Test
+    public void testAwaitMessagesTimesOut() {
+        submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(submittedRecords.awaitAllMessages(10, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesReturnsAfterAsynchronousAck() throws Exception {
+        SubmittedRecords.SubmittedRecord inFlightRecord1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecords.SubmittedRecord inFlightRecord2 = submittedRecords.submit(PARTITION2, newOffset());
+
+        AtomicBoolean awaitResult = new AtomicBoolean();
+        CountDownLatch awaitComplete = new CountDownLatch(1);
+        new Thread(() -> {
+            awaitResult.set(submittedRecords.awaitAllMessages(5, TimeUnit.SECONDS));
+            awaitComplete.countDown();
+        }).start();
+
+        assertTrue(
+                "Should not have finished awaiting message delivery before either in-flight record was acknowledged",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord1.ack();
+        assertTrue(
+                "Should not have finished awaiting message delivery before one in-flight record was acknowledged",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord1.ack();
+        assertTrue(
+                "Should not have finished awaiting message delivery before one in-flight record was acknowledged, "
+                        + "even though the other record has been acknowledged twice",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord2.ack();
+        assertTrue(
+                "Should have finished awaiting message delivery after both in-flight records were acknowledged",
+                awaitComplete.await(1, TimeUnit.SECONDS)
+        );
+        assertTrue(
+                "Await of in-flight messages should have succeeded",
+                awaitResult.get()
+        );
     }
 
     private void assertNoRemainingDeques() {
