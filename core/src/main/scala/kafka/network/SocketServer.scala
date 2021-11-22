@@ -733,7 +733,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
         throttledSockets += DelayedCloseSocket(socketChannel, endThrottleTimeMs)
         None
       case e: IOException =>
-        info(s"Encountered IOException, closing connection", e)
+        error(s"Encountered an error while configuring the connection, closing it.", e)
         close(endPoint.listenerName, socketChannel)
         None
     }

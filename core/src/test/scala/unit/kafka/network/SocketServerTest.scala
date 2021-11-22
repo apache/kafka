@@ -883,8 +883,10 @@ class SocketServerTest {
       override protected def createAcceptor(endPoint: EndPoint, metricPrefix: String): Acceptor = {
         val sendBufferSize = config.socketSendBufferBytes
         val recvBufferSize = config.socketReceiveBufferBytes
-        new Acceptor(endPoint, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time) {
+        val listenBacklogSize = config.socketListenBacklogSize
+        new Acceptor(endPoint, sendBufferSize, recvBufferSize, listenBacklogSize, nodeId, connectionQuotas, metricPrefix, time) {
           override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+            assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
             throw new IOException("test injected IOException")
           }
         }
@@ -896,6 +898,7 @@ class SocketServerTest {
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
+      assertEquals(0, overrideServer.connectionQuotas.get(conn.getInetAddress))
     } finally {
       shutdownServerAndMetrics(overrideServer)
     }
