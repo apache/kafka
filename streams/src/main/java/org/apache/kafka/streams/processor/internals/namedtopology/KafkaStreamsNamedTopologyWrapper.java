@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
@@ -41,6 +42,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 
@@ -183,16 +185,34 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         final KafkaFuture<Void> removeTopologyFuture = topologyMetadata.unregisterTopology(topologyToRemove);
 
         if (resetOffsets) {
+            final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             log.info("partitions to reset: {}", partitionsToReset);
             if (!partitionsToReset.isEmpty()) {
-                try {
-                    removeTopologyFuture.get();
-                } catch (final Exception e) {
-                    e.printStackTrace();
-                }
-                final DeleteConsumerGroupOffsetsResult deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
-                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
-                return new RemoveNamedTopologyResult(removeTopologyFuture, deleteOffsetsResult);
+                removeTopologyFuture.whenComplete((v, throwable) -> {
+                    if (throwable != null) {
+                        future.completeExceptionally(throwable);
+                    }
+                    DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
+                    while (deleteOffsetsResult == null) {
+                        try {
+                            deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
+                                applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
+                            deleteOffsetsResult.all().get();
+                        } catch (final InterruptedException ex) {
+                            ex.printStackTrace();
+                            break;
+                        } catch (final ExecutionException ex) {
+                            ex.printStackTrace();
+                        }
+                        try {
+                            Thread.sleep(100);
+                        } catch (final InterruptedException ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                    future.complete(null);
+                });
+                return new RemoveNamedTopologyResult(removeTopologyFuture, future);
             }
         }
         return new RemoveNamedTopologyResult(removeTopologyFuture);

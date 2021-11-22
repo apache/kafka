@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
-import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 public class RemoveNamedTopologyResult {
     private final KafkaFuture<Void> removeTopologyFuture;
-    private final DeleteConsumerGroupOffsetsResult deleteOffsetsResult;
+    private final KafkaFuture<Void> deleteOffsetsResult;
 
-    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture, final DeleteConsumerGroupOffsetsResult deleteOffsetsResult) {
+    public RemoveNamedTopologyResult(final KafkaFuture<Void> removeTopologyFuture, final KafkaFuture<Void> deleteOffsetsResult) {
         this.removeTopologyFuture = removeTopologyFuture;
         this.deleteOffsetsResult = deleteOffsetsResult;
     }
@@ -40,7 +40,7 @@ public class RemoveNamedTopologyResult {
         return removeTopologyFuture;
     }
 
-    public DeleteConsumerGroupOffsetsResult deleteOffsetsResult() {
+    public KafkaFuture<Void> deleteOffsetsResult() {
         return deleteOffsetsResult;
     }
 
@@ -54,21 +54,32 @@ public class RemoveNamedTopologyResult {
     public final KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        if (deleteOffsetsResult != null) {
-            deleteOffsetsResult.all().whenComplete((ignore, throwable) -> {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                }
-            });
-        }
-
         removeTopologyFuture.whenComplete((ignore, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                result.complete(null);
+                if (deleteOffsetsResult == null) {
+                    result.complete(null);
+                }
             }
         });
+
+        if (deleteOffsetsResult != null) {
+            deleteOffsetsResult.whenComplete((ignore, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    try {
+                        removeTopologyFuture.get();
+                    } catch (final InterruptedException | ExecutionException e) {
+                        result.completeExceptionally(e);
+                    }
+                    result.complete(null);
+                }
+            });
+        }
+
+
         return result;
     }
 }
