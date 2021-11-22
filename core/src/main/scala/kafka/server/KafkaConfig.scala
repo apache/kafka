@@ -2038,24 +2038,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         // nodeId must appear in controller.quorum.voters
         // controller.listener.names must be non-empty
         // every one must appear in listeners
-        // the port appearing in controller.quorum.voters for this node must match the port of the first controller listener
-        // (we allow other nodes' voter ports to differ to support running multiple controllers on the same host)
-        val addressSpecForThisNode = addressSpecsByNodeId.get(nodeId)
-        require(addressSpecForThisNode != null,
+        require(addressSpecsByNodeId.get(nodeId) != null,
           s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${addressSpecsByNodeId.asScala.keySet.toSet}")
         require(controllerListeners.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
         val listenerNameValues = listeners.map(_.listenerName.value).toSet
         require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
           s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
-        addressSpecForThisNode match {
-          case inetAddressSpec: RaftConfig.InetAddressSpec => {
-            val quorumVotersPort = inetAddressSpec.address.getPort
-            require(controllerListeners.head.port == quorumVotersPort,
-              s"Port in ${KafkaConfig.QuorumVotersProp} for this controller node (${KafkaConfig.NodeIdProp}=$nodeId, port=$quorumVotersPort) does not match the port for the first controller listener in ${KafkaConfig.ControllerListenerNamesProp} (${controllerListeners.head.listenerName.value()}, port=${controllerListeners.head.port})")
-          }
-          case _ => // e.g. non-routable meta-address 0.0.0.0:0
-        }
       } else {
         // validations for KRaft broker-only setup
         // nodeId must not appear in controller.quorum.voters

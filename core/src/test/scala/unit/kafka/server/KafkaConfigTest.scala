@@ -306,7 +306,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testPortInQuorumVotersMatchesFirstControllerListenerPortForThisKRaftController(): Unit = {
+  def testPortInQuorumVotersNotRequiredToMatchFirstControllerListenerPortForThisKRaftController(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "controller,broker")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093,SASL_SSL://localhost:9094")
@@ -315,17 +315,17 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL,SASL_SSL")
     KafkaConfig.fromProps(props)
 
-    // change each of the 4 ports to port 5555 -- should fail only when this node is affected
-    def expectedErrorMessage(quorumVotersPort: Int, controllerListenerPort: Int) = {
-      s"Port in controller.quorum.voters for this controller node (node.id=2, port=$quorumVotersPort) does not match the port for the first controller listener in controller.listener.names (SSL, port=$controllerListenerPort)"
-    }
+    // change each of the 4 ports to port 5555 -- should pass in all circumstances since we can't validate the
+    // controller.quorum.voters ports (which are the ports that clients use and are semantically "advertised" ports
+    // even though the controller configuration doesn't list them in advertised.listeners) against the
+    // listener ports (which are semantically different then the ports that clients use).
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:5555,SASL_SSL://localhost:9094")
-    assertBadConfigContainingMessage(props, expectedErrorMessage(9093, 5555))
+    KafkaConfig.fromProps(props)
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093,SASL_SSL://localhost:5555")
     KafkaConfig.fromProps(props)
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093,SASL_SSL://localhost:9094") // reset to original value
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:5555,3@anotherhost:9094")
-    assertBadConfigContainingMessage(props, expectedErrorMessage(5555, 9093))
+    KafkaConfig.fromProps(props)
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093,3@anotherhost:5555")
     KafkaConfig.fromProps(props)
   }
