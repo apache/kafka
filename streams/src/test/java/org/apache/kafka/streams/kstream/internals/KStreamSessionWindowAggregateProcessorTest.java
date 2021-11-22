@@ -116,6 +116,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()));
             }
         };
+        // Set initial timestamp for CachingSessionStore to prepare entry from as default
+        // InternalMockProcessorContext#timestamp returns -1.
         context.setTime(0L);
         TaskMetrics.droppedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
 
