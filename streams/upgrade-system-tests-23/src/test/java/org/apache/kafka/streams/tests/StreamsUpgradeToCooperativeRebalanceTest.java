@@ -33,8 +33,6 @@ import java.util.Set;
 
 public class StreamsUpgradeToCooperativeRebalanceTest {
 
-
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires one argument (kafka-url, properties-file) but none provided");
@@ -68,7 +66,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 @Override
                 public void apply(final String key, final String value) {
                     if (recordCounter++ % reportInterval == 0) {
-                        System.out.println(String.format("Processed %d records so far", recordCounter));
+                        System.out.printf("Processed %d records so far%n", recordCounter);
                         System.out.flush();
                     }
                 }

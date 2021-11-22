@@ -30,7 +30,6 @@ import java.util.Properties;
 
 public class StreamsUpgradeTest {
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeTest requires one argument (properties-file) but provided none");
@@ -43,7 +42,7 @@ public class StreamsUpgradeTest {
         System.out.println("props=" + streamsProperties);
 
         final KStreamBuilder builder = new KStreamBuilder();
-        final KStream dataStream = builder.stream("data");
+        final KStream<Object, Object> dataStream = builder.stream("data");
         dataStream.process(printProcessorSupplier());
         dataStream.to("echo");
 

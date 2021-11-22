@@ -28,8 +28,6 @@ import java.util.Properties;
 
 public class StreamsUpgradeToCooperativeRebalanceTest {
 
-
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
             System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires two arguments (zookeeper-url, properties-file) but only " + args.length + " provided: "
@@ -67,7 +65,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             @Override
             public void apply(final String key, final String value) {
                 if (recordCounter++ % reportInterval == 0) {
-                    System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
+                    System.out.printf("%sProcessed %d records so far%n", upgradePhase, recordCounter);
                     System.out.flush();
                 }
             }
@@ -82,7 +80,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close();
-            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
+            System.out.printf("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED%n", upgradePhase);
             System.out.flush();
         }));
     }

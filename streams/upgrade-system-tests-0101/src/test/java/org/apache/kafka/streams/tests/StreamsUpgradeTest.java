@@ -33,7 +33,6 @@ public class StreamsUpgradeTest {
     /**
      * This test cannot be executed, as long as Kafka 0.10.1.2 is not released
      */
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
             System.err.println("StreamsUpgradeTest requires two arguments (zookeeper-url, properties-file) but only " + args.length + " provided: "
@@ -49,7 +48,7 @@ public class StreamsUpgradeTest {
         System.out.println("props=" + streamsProperties);
 
         final KStreamBuilder builder = new KStreamBuilder();
-        final KStream dataStream = builder.stream("data");
+        final KStream<Object, Object> dataStream = builder.stream("data");
         dataStream.process(printProcessorSupplier());
         dataStream.to("echo");
 
