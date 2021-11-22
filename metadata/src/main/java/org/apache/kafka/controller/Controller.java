@@ -36,6 +36,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
@@ -232,6 +234,15 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<AllocateProducerIdsResponseData> allocateProducerIds(
         AllocateProducerIdsRequestData request
+    );
+
+    /**
+     * Perform some features changes
+     *
+     * @return A future which yields feature update results as a response
+     */
+    CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+        UpdateFeaturesRequestData request
     );
 
     /**

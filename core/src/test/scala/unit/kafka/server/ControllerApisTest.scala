@@ -487,6 +487,14 @@ class ControllerApisTest {
   }
 
   @Test
+  def testUnauthorizedHandleUpdateFeatures(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
+      Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
+      handleUpdateFeatures(buildRequest(new UpdateFeaturesRequest.Builder(
+        new UpdateFeaturesRequestData()).build())))
+  }
+
+  @Test
   def testCreateTopics(): Unit = {
     val controller = new MockController.Builder().build()
     val controllerApis = createControllerApis(None, controller)

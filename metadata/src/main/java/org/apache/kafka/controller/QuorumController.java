@@ -42,6 +42,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -86,6 +88,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -223,7 +226,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
@@ -542,13 +544,13 @@ public final class QuorumController implements Controller {
 
     // VisibleForTesting
     <T> CompletableFuture<T> appendReadEvent(String name, Supplier<T> handler) {
-        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        ControllerReadEvent<T> event = new ControllerReadEvent<>(name, handler);
         queue.append(event);
         return event.future();
     }
 
     <T> CompletableFuture<T> appendReadEvent(String name, long deadlineNs, Supplier<T> handler) {
-        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        ControllerReadEvent<T> event = new ControllerReadEvent<>(name, handler);
         queue.appendWithDeadline(deadlineNs, event);
         return event.future();
     }
@@ -928,7 +930,6 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
     }
 
-    @SuppressWarnings("unchecked")
     private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
@@ -1390,6 +1391,29 @@ public final class QuorumController implements Controller {
             .thenApply(result -> new AllocateProducerIdsResponseData()
                     .setProducerIdStart(result.producerIdStart())
                     .setProducerIdLen(result.producerIdLen()));
+    }
+
+    @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(UpdateFeaturesRequestData request) {
+        Map<Integer, Map<String, VersionRange>> brokerFeatures = new HashMap<>();
+        clusterControl.brokerRegistrations().forEach((key, value) -> brokerFeatures.put(key, value.supportedFeatures()));
+
+        return appendWriteEvent("updateFeatures",
+            () -> featureControl.updateFeatures(request.featureUpdates(), brokerFeatures)
+        ).thenApply(updateErrors -> {
+            UpdateFeaturesResponseData.UpdatableFeatureResultCollection results = new UpdateFeaturesResponseData.UpdatableFeatureResultCollection();
+            for (Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+                String feature = updateError.getKey();
+                ApiError error = updateError.getValue();
+                UpdateFeaturesResponseData.UpdatableFeatureResult result = new UpdateFeaturesResponseData.UpdatableFeatureResult();
+                result.setFeature(feature)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message());
+                results.add(result);
+            }
+            return new UpdateFeaturesResponseData()
+                .setResults(results);
+        });
     }
 
     @Override

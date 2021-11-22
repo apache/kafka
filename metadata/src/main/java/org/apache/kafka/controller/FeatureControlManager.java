@@ -17,26 +17,26 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.metadata.FeatureMap;
+import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineHashMap;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.TreeMap;
-
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.metadata.FeatureMap;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
-import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineHashMap;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
@@ -59,13 +59,27 @@ public class FeatureControlManager {
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
-            Map<String, VersionRange> updates, Set<String> downgradeables,
-            Map<Integer, Map<String, VersionRange>> brokerFeatures) {
+        UpdateFeaturesRequestData.FeatureUpdateKeyCollection updates,
+        Map<Integer, Map<String, VersionRange>> brokerFeatures
+    ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : updates.entrySet()) {
-            results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                downgradeables.contains(entry.getKey()), brokerFeatures, records));
+
+        for (UpdateFeaturesRequestData.FeatureUpdateKey update : updates) {
+            VersionRange existingVersionRange = finalizedVersions.get(update.feature());
+            short minVersion = existingVersionRange == null ? 1 : existingVersionRange.min();
+            if (update.feature().isEmpty())
+                // Check that the feature name is not empty.
+                results.put(update.feature(),
+                    new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."));
+            else
+                results.put(update.feature(), updateFeature(
+                    update.feature(),
+                    new VersionRange(minVersion, update.maxVersionLevel()),
+                    update.allowDowngrade(),
+                    brokerFeatures,
+                    records
+                ));
         }
 
         return ControllerResult.atomicOf(records, results);

@@ -54,7 +54,8 @@ class ControllerResult<T> {
         if (o == null || (!o.getClass().equals(getClass()))) {
             return false;
         }
-        ControllerResult other = (ControllerResult) o;
+        @SuppressWarnings("unchecked")
+        ControllerResult<T> other = (ControllerResult<T>) o;
         return records.equals(other.records) &&
             Objects.equals(response, other.response) &&
             Objects.equals(isAtomic, other.isAtomic);
