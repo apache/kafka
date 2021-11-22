@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -29,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 
@@ -51,12 +51,12 @@ public class EagerAssignor implements ConnectAssignor {
 
     @Override
     public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
-                                                     List<JoinGroupResponseMember> allMemberMetadata,
+                                                     List<AssignmentMetadata> allMemberMetadata,
                                                      WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");
         Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
-        for (JoinGroupResponseMember member : allMemberMetadata)
-            memberConfigs.put(member.memberId(), IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
+        for (AssignmentMetadata member : allMemberMetadata)
+            memberConfigs.put(member.memberId(), IncrementalCooperativeConnectProtocol.deserializeMetadata(member.metadata()));
 
         long maxOffset = findMaxMemberConfigOffset(memberConfigs, coordinator);
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);

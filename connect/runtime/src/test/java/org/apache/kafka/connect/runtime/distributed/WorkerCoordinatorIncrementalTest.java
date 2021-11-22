@@ -20,6 +20,8 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
+import org.apache.kafka.clients.consumer.Coordinator.JoinGroupMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -48,9 +50,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
-import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.WorkerTestUtils.assertAssignment;
 import static org.apache.kafka.connect.runtime.WorkerTestUtils.clusterConfigState;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
@@ -193,15 +192,15 @@ public class WorkerCoordinatorIncrementalTest {
     public void testMetadata() {
         when(configStorage.snapshot()).thenReturn(configState1);
 
-        JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
+        List<JoinGroupMetadata> serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        Iterator<JoinGroupMetadata> protocolIterator = serialized.iterator();
         assertTrue(protocolIterator.hasNext());
-        JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
+        JoinGroupMetadata defaultMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), defaultMetadata.name());
         WorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
+                .deserializeMetadata(defaultMetadata.metadata());
         assertEquals(offset, state.offset());
 
         verify(configStorage, times(1)).snapshot();
@@ -221,15 +220,15 @@ public class WorkerCoordinatorIncrementalTest {
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, compatibility.protocol(), buf);
 
-        JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
+        List<JoinGroupMetadata> serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        Iterator<JoinGroupMetadata> protocolIterator = serialized.iterator();
         assertTrue(protocolIterator.hasNext());
-        JoinGroupRequestProtocol selectedMetadata = protocolIterator.next();
+        JoinGroupMetadata selectedMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), selectedMetadata.name());
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
+                .deserializeMetadata(selectedMetadata.metadata());
         assertEquals(offset, state.offset());
         assertNotEquals(ExtendedAssignment.empty(), state.assignment());
         assertEquals(Collections.singletonList(connectorId1), state.assignment().connectors());
@@ -252,15 +251,15 @@ public class WorkerCoordinatorIncrementalTest {
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, EAGER.protocol(), buf);
 
-        JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
+        List<JoinGroupMetadata> serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        Iterator<JoinGroupMetadata> protocolIterator = serialized.iterator();
         assertTrue(protocolIterator.hasNext());
-        JoinGroupRequestProtocol selectedMetadata = protocolIterator.next();
+        JoinGroupMetadata selectedMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), selectedMetadata.name());
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
+                .deserializeMetadata(selectedMetadata.metadata());
         assertEquals(offset, state.offset());
         assertNotEquals(ExtendedAssignment.empty(), state.assignment());
 
@@ -274,7 +273,7 @@ public class WorkerCoordinatorIncrementalTest {
         coordinator.metadata();
         ++configStorageCalls;
 
-        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
         addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
 
@@ -332,7 +331,7 @@ public class WorkerCoordinatorIncrementalTest {
         coordinator.metadata();
         ++configStorageCalls;
 
-        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
         addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
@@ -430,7 +429,7 @@ public class WorkerCoordinatorIncrementalTest {
         coordinator.metadata();
         ++configStorageCalls;
 
-        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
         addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
@@ -567,11 +566,11 @@ public class WorkerCoordinatorIncrementalTest {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
 
-    private void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
+    private void addJoinGroupResponseMember(List<AssignmentMetadata> responseMembers,
                                                    String member,
                                                    long offset,
                                                    ExtendedAssignment assignment) {
-        responseMembers.add(new JoinGroupResponseMember()
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId(member)
                 .setMetadata(
                     IncrementalCooperativeConnectProtocol.serializeMetadata(

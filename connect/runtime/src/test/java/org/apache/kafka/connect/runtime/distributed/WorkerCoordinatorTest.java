@@ -16,13 +16,32 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.runners.Parameterized.Parameter;
+import static org.junit.runners.Parameterized.Parameters;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
+import org.apache.kafka.clients.consumer.Coordinator.JoinGroupMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -46,25 +65,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.powermock.api.easymock.PowerMock;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.runners.Parameterized.Parameter;
-import static org.junit.runners.Parameterized.Parameters;
 
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorTest {
@@ -222,15 +222,15 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
+        List<JoinGroupMetadata> serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        Iterator<JoinGroupMetadata> protocolIterator = serialized.iterator();
         assertTrue(protocolIterator.hasNext());
-        JoinGroupRequestData.JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
+        JoinGroupMetadata defaultMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), defaultMetadata.name());
         ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(
-                ByteBuffer.wrap(defaultMetadata.metadata()));
+                defaultMetadata.metadata());
         assertEquals(1, state.offset());
 
         PowerMock.verifyAll();
@@ -395,12 +395,12 @@ public class WorkerCoordinatorTest {
         coordinator.metadata();
 
         // Mark everyone as in sync with configState1
-        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("leader")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
         );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
@@ -437,12 +437,12 @@ public class WorkerCoordinatorTest {
         coordinator.metadata();
 
         // Mark everyone as in sync with configState1
-        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("leader")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
         );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
@@ -480,12 +480,12 @@ public class WorkerCoordinatorTest {
         coordinator.metadata();
 
         // Mark everyone as in sync with configState1
-        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        List<AssignmentMetadata> responseMembers = new ArrayList<>();
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("leader")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
         );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+        responseMembers.add(new AssignmentMetadata()
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );

@@ -16,6 +16,29 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import static java.util.Collections.emptyMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -57,30 +80,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static java.util.Collections.emptyMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
@@ -1555,20 +1554,16 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
-            return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-                    Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
-                            .setName(PROTOCOL_NAME)
-                            .setMetadata(EMPTY_DATA.array())).iterator()
-            );
+        public List<JoinGroupMetadata> metadata() {
+            return Collections.singletonList(new JoinGroupMetadata(PROTOCOL_NAME, EMPTY_DATA.array()));
         }
 
         @Override
         public Map<String, ByteBuffer> performAssignment(String leaderId,
                                                             String protocol,
-                                                            List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
+                                                            List<AssignmentMetadata> allMemberMetadata) {
             Map<String, ByteBuffer> assignment = new HashMap<>();
-            for (JoinGroupResponseData.JoinGroupResponseMember member : allMemberMetadata) {
+            for (AssignmentMetadata member : allMemberMetadata) {
                 assignment.put(member.memberId(), EMPTY_DATA);
             }
             return assignment;

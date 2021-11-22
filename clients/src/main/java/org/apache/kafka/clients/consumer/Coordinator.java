@@ -20,9 +20,11 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
-import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 
 /**
  * Coordinator interface implements group management for a single group member by interacting with
@@ -63,14 +65,14 @@ public interface Coordinator extends Closeable {
 
     /**
      * Get the current list of protocols and their associated metadata supported
-     * by the local member. The order of the protocols in the list indicates the preference
+     * by the local member. The order of the protocols in the map indicates the preference
      * of the protocol (the first entry is the most preferred). The coordinator takes this
      * preference into account when selecting the generation protocol (generally more preferred
      * protocols will be selected as long as all members support them and there is no disagreement
      * on the preference).
      * @return Non-empty map of supported protocols and metadata
      */
-    JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata();
+    List<JoinGroupMetadata> metadata();
 
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
@@ -89,12 +91,11 @@ public interface Coordinator extends Closeable {
      * @return A map from each member to their state assignment
      */
     Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                                 String protocol,
-                                                                 List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);
+                                                     String protocol,
+                                                     List<AssignmentMetadata> allMemberMetadata);
 
     /**
-     * Invoked when a group member has successfully joined a group. If this call fails with an exception,
-     * then it will be retried using the same assignment state on the next call to {@link #ensureActiveGroup()}.
+     * Invoked when a group member has successfully joined a group.
      *
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
@@ -107,10 +108,131 @@ public interface Coordinator extends Closeable {
                              ByteBuffer memberAssignment);
 
     /**
-     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions;
+     * Invoked prior to each leave group event. This is typically used to clean up assigned partitions;
      * note it is triggered by the consumer's API caller thread (i.e. background heartbeat thread would
      * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
      */
     default void onLeavePrepare() {}
 
+    /**
+     * Wrapper for {@link JoinGroupRequestProtocol} protocol class.
+     */
+    class JoinGroupMetadata {
+
+        private final JoinGroupRequestProtocol delegate;
+
+        public JoinGroupMetadata() {
+            this.delegate = new JoinGroupRequestProtocol();
+        }
+
+        public JoinGroupMetadata(String name, byte[] metadata) {
+            this();
+            this.delegate.setName(name).setMetadata(metadata);
+        }
+
+        public String name() {
+            return delegate.name();
+        }
+
+        public ByteBuffer metadata() {
+            return ByteBuffer.wrap(delegate.metadata());
+        }
+
+        public JoinGroupMetadata setName(String name) {
+            delegate.setName(name);
+            return this;
+        }
+
+        public JoinGroupMetadata setMetadata(byte[] v) {
+            delegate.setMetadata(v);
+            return this;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            JoinGroupMetadata that = (JoinGroupMetadata) o;
+            return Objects.equals(delegate, that.delegate);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(delegate);
+        }
+
+        @Override
+        public String toString() {
+            return "JoinGroupMetadata{" +
+                "delegate=" + delegate +
+                '}';
+        }
+    }
+
+    /**
+     * Wrapper for {@link JoinGroupResponseMember} protocol class.
+     */
+    class AssignmentMetadata {
+
+        private final JoinGroupResponseData.JoinGroupResponseMember delegate;
+
+        public AssignmentMetadata() {
+            this.delegate = new JoinGroupResponseMember();
+        }
+
+        public String memberId() {
+            return delegate.memberId();
+        }
+
+        public String groupInstanceId() {
+            return delegate.groupInstanceId();
+        }
+
+        public ByteBuffer metadata() {
+            return ByteBuffer.wrap(delegate.metadata());
+        }
+
+        public AssignmentMetadata setMemberId(String memberId) {
+            delegate.setMemberId(memberId);
+            return this;
+        }
+
+        public AssignmentMetadata setGroupInstanceId(String groupInstanceId) {
+            delegate.setGroupInstanceId(groupInstanceId);
+            return this;
+        }
+
+        public AssignmentMetadata setMetadata(byte[] metadata) {
+            delegate.setMetadata(metadata);
+            return this;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            AssignmentMetadata that = (AssignmentMetadata) o;
+            return Objects.equals(delegate, that.delegate);
+        }
+
+        @Override
+        public int hashCode() {
+            return delegate.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "AssignmentMetadata{" +
+                "delegate=" + delegate +
+                '}';
+        }
+    }
 }

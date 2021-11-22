@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
@@ -44,6 +45,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -163,6 +165,64 @@ public abstract class AbstractCoordinator implements Coordinator {
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
     }
+
+    /**
+     * Unique identifier for the class of supported protocols (e.g. "consumer" or "connect").
+     * @return Non-null protocol type name
+     */
+    public abstract String protocolType();
+
+    /**
+     * Get the current list of protocols and their associated metadata supported
+     * by the local member. The order of the protocols in the list indicates the preference
+     * of the protocol (the first entry is the most preferred). The coordinator takes this
+     * preference into account when selecting the generation protocol (generally more preferred
+     * protocols will be selected as long as all members support them and there is no disagreement
+     * on the preference).
+     * @return Non-empty map of supported protocols and metadata
+     */
+    public abstract List<JoinGroupMetadata> metadata();
+
+    /**
+     * Invoked prior to each group join or rejoin. This is typically used to perform any
+     * cleanup from the previous generation (such as committing offsets for the consumer)
+     * @param generation The previous generation or -1 if there was none
+     * @param memberId The identifier of this member in the previous group or "" if there was none
+     */
+    public abstract void onJoinPrepare(int generation, String memberId);
+
+    /**
+     * Perform assignment for the group. This is used by the leader to push state to all the members
+     * of the group (e.g. to push partition assignments in the case of the new consumer)
+     * @param leaderId The id of the leader (which is this member)
+     * @param protocol The protocol selected by the coordinator
+     * @param allMemberMetadata Metadata from all members of the group
+     * @return A map from each member to their state assignment
+     */
+    public abstract Map<String, ByteBuffer> performAssignment(String leaderId,
+                                                                 String protocol,
+                                                                 List<AssignmentMetadata> allMemberMetadata);
+
+    /**
+     * Invoked when a group member has successfully joined a group. If this call fails with an exception,
+     * then it will be retried using the same assignment state on the next call to {@link #ensureActiveGroup()}.
+     *
+     * @param generation The generation that was joined
+     * @param memberId The identifier for the local member in the group
+     * @param protocol The protocol selected by the coordinator
+     * @param memberAssignment The assignment propagated from the group leader
+     */
+    public abstract void onJoinComplete(int generation,
+                                           String memberId,
+                                           String protocol,
+                                           ByteBuffer memberAssignment);
+
+    /**
+     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions;
+     * note it is triggered by the consumer's API caller thread (i.e. background heartbeat thread would
+     * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
+     */
+    public void onLeavePrepare() {}
 
     /**
      * Visible for testing.
@@ -480,7 +540,14 @@ public abstract class AbstractCoordinator implements Coordinator {
                         .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
-                        .setProtocols(metadata())
+                        .setProtocols(new JoinGroupRequestProtocolCollection(
+                            metadata()
+                            .stream()
+                            .map(joinGroupMetadata -> new JoinGroupRequestData.JoinGroupRequestProtocol()
+                                .setName(joinGroupMetadata.name())
+                                .setMetadata(Utils.toArray(joinGroupMetadata.metadata())))
+                                .collect(Collectors.toSet()).iterator())
+                        )
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
         );
 
@@ -631,8 +698,16 @@ public abstract class AbstractCoordinator implements Coordinator {
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
         try {
             // perform the leader synchronization and send back the assignment for the group
-            Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.data().leader(), joinResponse.data().protocolName(),
-                    joinResponse.data().members());
+            Map<String, ByteBuffer> groupAssignment = performAssignment(
+                joinResponse.data().leader(),
+                joinResponse.data().protocolName(),
+                joinResponse.data().members().stream()
+                    .map(joinGroupResponseMember -> new AssignmentMetadata()
+                        .setMemberId(joinGroupResponseMember.memberId())
+                        .setGroupInstanceId(joinGroupResponseMember.groupInstanceId())
+                        .setMetadata(joinGroupResponseMember.metadata()))
+                    .collect(Collectors.toList())
+            );
 
             List<SyncGroupRequestData.SyncGroupRequestAssignment> groupAssignmentList = new ArrayList<>();
             for (Map.Entry<String, ByteBuffer> assignment : groupAssignment.entrySet()) {

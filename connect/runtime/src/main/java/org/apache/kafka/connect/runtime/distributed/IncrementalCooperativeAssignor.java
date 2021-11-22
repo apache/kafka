@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import java.util.Map.Entry;
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
@@ -41,7 +42,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
@@ -85,15 +85,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
     @Override
     public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
-                                                     List<JoinGroupResponseMember> allMemberMetadata,
+                                                     List<AssignmentMetadata> allMemberMetadata,
                                                      WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");
 
         Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
-        for (JoinGroupResponseMember member : allMemberMetadata) {
+        for (AssignmentMetadata member : allMemberMetadata) {
             memberConfigs.put(
                     member.memberId(),
-                    IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
+                    IncrementalCooperativeConnectProtocol.deserializeMetadata(member.metadata()));
         }
         log.debug("Member configs: {}", memberConfigs);
 

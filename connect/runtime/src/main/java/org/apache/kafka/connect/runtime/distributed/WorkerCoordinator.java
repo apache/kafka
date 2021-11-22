@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -40,8 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
-import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 
 /**
@@ -164,17 +163,26 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    public JoinGroupRequestProtocolCollection metadata() {
+    public List<JoinGroupMetadata> metadata() {
         configSnapshot = configStorage.snapshot();
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), localAssignmentSnapshot);
         switch (protocolCompatibility) {
             case EAGER:
-                return ConnectProtocol.metadataRequest(workerState);
+                return ConnectProtocol.metadataRequest(workerState)
+                    .stream()
+                    .map(r -> new JoinGroupMetadata(r.name(), r.metadata()))
+                    .collect(Collectors.toList());
             case COMPATIBLE:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false)
+                    .stream()
+                    .map(r -> new JoinGroupMetadata(r.name(), r.metadata()))
+                    .collect(Collectors.toList());
             case SESSIONED:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true)
+                    .stream()
+                    .map(r -> new JoinGroupMetadata(r.name(), r.metadata()))
+                    .collect(Collectors.toList());
             default:
                 throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
         }
@@ -211,7 +219,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
+    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<AssignmentMetadata> allMemberMetadata) {
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);

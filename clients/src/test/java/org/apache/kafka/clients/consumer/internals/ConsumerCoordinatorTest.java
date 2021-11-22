@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -281,11 +282,11 @@ public abstract class ConsumerCoordinatorTest {
         // the consumer only subscribed to "topic1"
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
 
-        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
+        List<AssignmentMetadata> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
             ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue());
             ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
-            metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
+            metadata.add(new AssignmentMetadata()
                 .setMemberId(subscriptionEntry.getKey())
                 .setMetadata(buf.array()));
         }
@@ -343,7 +344,7 @@ public abstract class ConsumerCoordinatorTest {
         return buffer;
     }
 
-    private List<JoinGroupResponseData.JoinGroupResponseMember> validateCooperativeAssignmentTestSetup() {
+    private List<AssignmentMetadata> validateCooperativeAssignmentTestSetup() {
         // consumer1 and consumer2 subscribed to "topic1" with 2 partitions: t1p, t2p
         Map<String, List<String>> memberSubscriptions = new HashMap<>();
         List<String> subscribedTopics = singletonList(topic1);
@@ -358,7 +359,7 @@ public abstract class ConsumerCoordinatorTest {
         ConsumerPartitionAssignor.Subscription subscriptionConsumer2 = new ConsumerPartitionAssignor.Subscription(
             subscribedTopics, subscriptionUserData(1), emptyList());
 
-        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
+        List<AssignmentMetadata> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : memberSubscriptions.entrySet()) {
             ByteBuffer buf = null;
             if (subscriptionEntry.getKey().equals(consumerId)) {
@@ -367,7 +368,7 @@ public abstract class ConsumerCoordinatorTest {
                 buf = ConsumerProtocol.serializeSubscription(subscriptionConsumer2);
             }
 
-            metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
+            metadata.add(new AssignmentMetadata()
                 .setMemberId(subscriptionEntry.getKey())
                 .setMetadata(buf.array()));
         }
@@ -378,7 +379,7 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testPerformAssignmentShouldValidateCooperativeAssignment() {
         SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
-        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
+        List<AssignmentMetadata> metadata = validateCooperativeAssignmentTestSetup();
 
         // simulate the custom cooperative assignor didn't revoke the partition first before assign to other consumer
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
@@ -402,7 +403,7 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testPerformAssignmentShouldSkipValidateCooperativeAssignmentForBuiltInCooperativeStickyAssignor() {
         SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
-        List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
+        List<AssignmentMetadata> metadata = validateCooperativeAssignmentTestSetup();
 
         List<ConsumerPartitionAssignor> assignorsWithCooperativeStickyAssignor = new ArrayList<>(assignors);
         // create a mockPartitionAssignor with the same name as cooperative sticky assignor

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.clients.consumer.Coordinator.AssignmentMetadata;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -38,6 +38,6 @@ public interface ConnectAssignor {
      * @return the assignment of connectors and tasks to workers
      */
     Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
-                                              List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
+                                              List<AssignmentMetadata> allMemberMetadata,
                                               WorkerCoordinator coordinator);
 }
