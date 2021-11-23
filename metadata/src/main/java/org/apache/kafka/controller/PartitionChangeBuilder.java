@@ -22,6 +22,8 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,6 +40,8 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
  * PartitionChangeBuilder handles changing partition registrations.
  */
 public class PartitionChangeBuilder {
+    private static final Logger log = LoggerFactory.getLogger(PartitionChangeBuilder.class);
+
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {
         if (record.isr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
@@ -141,12 +145,15 @@ public class PartitionChangeBuilder {
     private void tryElection(PartitionChangeRecord record) {
         BestLeader bestLeader = new BestLeader();
         if (bestLeader.node != partition.leader) {
+            log.debug("Setting new leader for topicId {}, partition {} to {}", topicId, partitionId, bestLeader.node);
             record.setLeader(bestLeader.node);
             if (bestLeader.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(bestLeader.node));
             }
+        } else {
+            log.debug("Failed to find a new leader with current state: {}", this);
         }
     }
 
@@ -239,5 +246,21 @@ public class PartitionChangeBuilder {
             return Optional.of(new ApiMessageAndVersion(record,
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()));
         }
+    }
+
+    @Override
+    public String toString() {
+        return "PartitionChangeBuilder(" +
+            "partition=" + partition +
+            ", topicId=" + topicId +
+            ", partitionId=" + partitionId +
+            ", isAcceptableLeader=" + isAcceptableLeader +
+            ", uncleanElectionOk=" + uncleanElectionOk +
+            ", targetIsr=" + targetIsr +
+            ", targetReplicas=" + targetReplicas +
+            ", targetRemoving=" + targetRemoving +
+            ", targetAdding=" + targetAdding +
+            ", alwaysElectPreferredIfPossible=" + alwaysElectPreferredIfPossible +
+            ')';
     }
 }

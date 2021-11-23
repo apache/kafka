@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
+import java.util.Objects;
+
 class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
     private final KeyValueMapper<? super KIn, ? super VIn, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper;
@@ -41,6 +43,7 @@ class KStreamFlatMap<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn
         public void process(final Record<KIn, VIn> record) {
             final Iterable<? extends KeyValue<? extends KOut, ? extends VOut>> newKeyValues =
                 mapper.apply(record.key(), record.value());
+            Objects.requireNonNull(newKeyValues, "The provided KeyValueMapper returned null which is not allowed.");
             for (final KeyValue<? extends KOut, ? extends VOut> newPair : newKeyValues) {
                 context().forward(record.withKey(newPair.key).withValue(newPair.value));
             }

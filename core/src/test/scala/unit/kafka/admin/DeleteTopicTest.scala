@@ -22,9 +22,9 @@ import java.util.{Collections, Optional, Properties}
 
 import scala.collection.Seq
 import kafka.log.UnifiedLog
-import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
+import kafka.zk.TopicPartitionZNode
 import kafka.utils.TestUtils
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import scala.jdk.CollectionConverters._
 
-class DeleteTopicTest extends ZooKeeperTestHarness {
+class DeleteTopicTest extends QuorumTestHarness {
 
   var servers: Seq[KafkaServer] = Seq()
 
@@ -147,7 +147,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def waitUntilTopicGone(adminClient: Admin, topicName: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       try {
-        adminClient.describeTopics(util.Collections.singletonList(topicName)).all().get()
+        adminClient.describeTopics(util.Collections.singletonList(topicName)).allTopicNames().get()
         false
       } catch {
         case e: ExecutionException =>

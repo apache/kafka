@@ -99,7 +99,7 @@ class GroupMetadataManager(brokerId: Int,
     GroupMetadataManager.MetricsGroup,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  val offsetCommitsSensor: Sensor = metrics.sensor("OffsetCommits")
+  val offsetCommitsSensor: Sensor = metrics.sensor(GroupMetadataManager.OffsetCommitsSensor)
 
   offsetCommitsSensor.add(new Meter(
     metrics.metricName("offset-commit-rate",
@@ -109,7 +109,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of committed offsets")))
 
-  val offsetExpiredSensor: Sensor = metrics.sensor("OffsetExpired")
+  val offsetExpiredSensor: Sensor = metrics.sensor(GroupMetadataManager.OffsetExpiredSensor)
 
   offsetExpiredSensor.add(new Meter(
     metrics.metricName("offset-expiration-rate",
@@ -318,7 +318,6 @@ class GroupMetadataManager(brokerId: Int,
 
       case None =>
         responseCallback(Errors.NOT_COORDINATOR)
-        None
     }
   }
 
@@ -977,6 +976,9 @@ class GroupMetadataManager(brokerId: Int,
     shuttingDown.set(true)
     if (scheduler.isStarted)
       scheduler.shutdown()
+    metrics.removeSensor(GroupMetadataManager.LoadTimeSensor)
+    metrics.removeSensor(GroupMetadataManager.OffsetCommitsSensor)
+    metrics.removeSensor(GroupMetadataManager.OffsetExpiredSensor)
 
     // TODO: clear the caches
   }
@@ -1038,6 +1040,8 @@ object GroupMetadataManager {
   // Metrics names
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
+  val OffsetCommitsSensor: String = "OffsetCommits"
+  val OffsetExpiredSensor: String = "OffsetExpired"
 
   /**
    * Generates the key for offset commit message for given (group, topic, partition)

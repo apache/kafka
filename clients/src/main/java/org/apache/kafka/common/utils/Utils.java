@@ -948,10 +948,12 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      *
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     *
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null) {
+        if (path != null && !OperatingSystem.IS_WINDOWS) {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }

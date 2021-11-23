@@ -724,6 +724,16 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Abort cleaning of the provided partition and log a message about it.
+   */
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.abortCleaning(topicPartition)
+      info(s"The cleaning for partition $topicPartition is aborted")
+    }
+  }
+
+  /**
    * Resume cleaning of the provided partition and log a message about it.
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
@@ -772,6 +782,25 @@ class LogManager(logDirs: Seq[File],
   def topicConfigUpdated(topic: String): Unit = {
     partitionsInitializing.keys.filter(_.topic() == topic).foreach {
       topicPartition => partitionsInitializing.replace(topicPartition, false, true)
+    }
+  }
+
+  /**
+   * Update the configuration of the provided topic.
+   */
+  def updateTopicConfig(topic: String,
+                        newTopicConfig: Properties): Unit = {
+    topicConfigUpdated(topic)
+    val logs = logsByTopic(topic)
+    if (logs.nonEmpty) {
+      // Combine the default properties with the overrides in zk to create the new LogConfig
+      val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
+      logs.foreach { log =>
+        val oldLogConfig = log.updateConfig(newLogConfig)
+        if (oldLogConfig.compact && !newLogConfig.compact) {
+          abortCleaning(log.topicPartition)
+        }
+      }
     }
   }
 

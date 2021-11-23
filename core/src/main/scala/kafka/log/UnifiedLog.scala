@@ -59,7 +59,7 @@ object LogAppendInfo {
   /**
    * In ProduceResponse V8+, we add two new fields record_errors and error_message (see KIP-467).
    * For any record failures with InvalidTimestamp or InvalidRecordException, we construct a LogAppendInfo object like the one
-   * in unknownLogAppendInfoWithLogStartOffset, but with additiona fields recordErrors and errorMessage
+   * in unknownLogAppendInfoWithLogStartOffset, but with additional fields recordErrors and errorMessage
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
@@ -353,13 +353,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   def logDirFailureChannel: LogDirFailureChannel = localLog.logDirFailureChannel
 
-  def updateConfig(newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): LogConfig = {
     val oldConfig = localLog.config
     localLog.updateConfig(newConfig)
     val oldRecordVersion = oldConfig.recordVersion
     val newRecordVersion = newConfig.recordVersion
     if (newRecordVersion != oldRecordVersion)
       initializeLeaderEpochCache()
+    oldConfig
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -958,16 +959,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def maybeIncrementFirstUnstableOffset(): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
 
-    val updatedFirstStableOffset = producerStateManager.firstUnstableOffset match {
+    val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
         Some(convertToOffsetMetadataOrThrow(offset))
       case other => other
     }
 
-    if (updatedFirstStableOffset != this.firstUnstableOffsetMetadata) {
-      debug(s"First unstable offset updated to $updatedFirstStableOffset")
-      this.firstUnstableOffsetMetadata = updatedFirstStableOffset
+    if (updatedFirstUnstableOffset != this.firstUnstableOffsetMetadata) {
+      debug(s"First unstable offset updated to $updatedFirstUnstableOffset")
+      this.firstUnstableOffsetMetadata = updatedFirstUnstableOffset
     }
   }
 

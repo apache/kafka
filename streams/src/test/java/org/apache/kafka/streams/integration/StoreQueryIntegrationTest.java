@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -34,7 +35,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
-import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStreamsBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -66,6 +67,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -148,16 +150,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                        "Unexpected exception thrown while getting the value from store.",
-                        exception.getMessage(),
-                        is(
-                                anyOf(
-                                        containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                                        containsString("The state store, source-table, may have migrated to another instance")
-                                )
-                        )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -241,16 +234,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -415,23 +399,25 @@ public class StoreQueryIntegrationTest {
         final Semaphore semaphore = new Semaphore(0);
         final int numStreamThreads = 2;
 
-        final NamedTopologyStreamsBuilder builder1A = new NamedTopologyStreamsBuilder("topology-A");
-        getStreamsBuilderWithTopology(builder1A, semaphore);
-
-        final NamedTopologyStreamsBuilder builder2A = new NamedTopologyStreamsBuilder("topology-A");
-        getStreamsBuilderWithTopology(builder2A, semaphore);
-
         final Properties streamsConfiguration1 = streamsConfiguration();
         streamsConfiguration1.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
 
         final Properties streamsConfiguration2 = streamsConfiguration();
         streamsConfiguration2.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numStreamThreads);
 
-        final KafkaStreamsNamedTopologyWrapper kafkaStreams1 = createNamedTopologyKafkaStreams(builder1A, streamsConfiguration1);
-        final KafkaStreamsNamedTopologyWrapper kafkaStreams2 = createNamedTopologyKafkaStreams(builder2A, streamsConfiguration2);
+        final KafkaStreamsNamedTopologyWrapper kafkaStreams1 = createNamedTopologyKafkaStreams(streamsConfiguration1);
+        final KafkaStreamsNamedTopologyWrapper kafkaStreams2 = createNamedTopologyKafkaStreams(streamsConfiguration2);
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+        final NamedTopologyBuilder builder1A = kafkaStreams1.newNamedTopologyBuilder("topology-A", streamsConfiguration1);
+        getStreamsBuilderWithTopology(builder1A, semaphore);
+
+        final NamedTopologyBuilder builder2A = kafkaStreams2.newNamedTopologyBuilder("topology-A", streamsConfiguration2);
+        getStreamsBuilderWithTopology(builder2A, semaphore);
+
+        kafkaStreams1.start(builder1A.build());
+        kafkaStreams2.start(builder2A.build());
+        waitForApplicationState(kafkaStreamsList, State.RUNNING, Duration.ofSeconds(60));
 
         assertTrue(kafkaStreams1.metadataForLocalThreads().size() > 1);
         assertTrue(kafkaStreams2.metadataForLocalThreads().size() > 1);
@@ -495,6 +481,7 @@ public class StoreQueryIntegrationTest {
         //Add thread
         final Optional<String> streamThread = kafkaStreams1.addStreamThread();
         assertThat(streamThread.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
         produceValueRange(key, 0, batch1NumMessages);
         produceValueRange(key2, 0, batch1NumMessages);
@@ -503,6 +490,7 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the batches were processed in a timely manner
         assertThat(semaphore.tryAcquire(3 * batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -513,16 +501,7 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -530,9 +509,9 @@ public class StoreQueryIntegrationTest {
 
         final Optional<String> removedThreadName = kafkaStreams1.removeStreamThread();
         assertThat(removedThreadName.isPresent(), is(true));
+        until(() -> kafkaStreams1.state().isRunningOrRebalancing());
 
-        until(() -> kafkaStreams1.state().equals(KafkaStreams.State.RUNNING));
-
+        until(() -> KafkaStreams.State.RUNNING.equals(kafkaStreams1.state()));
         until(() -> {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -543,20 +522,25 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                assertThat(
-                    "Unexpected exception thrown while getting the value from store.",
-                    exception.getMessage(),
-                    is(
-                        anyOf(
-                            containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                            containsString("The state store, source-table, may have migrated to another instance")
-                        )
-                    )
-                );
+                verifyRetrievableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
+    }
+
+    private void verifyRetrievableException(final Exception exception) {
+        assertThat(
+            "Unexpected exception thrown while getting the value from store.",
+            exception.getMessage(),
+            is(
+                anyOf(
+                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                    containsString("The state store, source-table, may have migrated to another instance"),
+                    containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING")
+                )
+            )
+        );
     }
 
     private static void until(final TestCondition condition) {
@@ -587,8 +571,8 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
-    private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final NamedTopologyStreamsBuilder builder, final Properties config) {
-        final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(builder.buildNamedTopology(config), config);
+    private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final Properties config) {
+        final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(config);
         streamsToCleanup.add(streams);
         return streams;
     }

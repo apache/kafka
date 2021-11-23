@@ -70,6 +70,7 @@ import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -362,11 +363,12 @@ public class TopologyTestDriver implements Closeable {
                     throw new IllegalStateException();
                 }
             },
-            logContext
+            logContext,
+            mockWallClockTime
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache);
+        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
@@ -468,7 +470,8 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("deprecation")
     private void setupTask(final StreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
-                           final ThreadCache cache) {
+                           final ThreadCache cache,
+                           final TaskConfig taskConfig) {
         if (!partitionsByInputTopic.isEmpty()) {
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
@@ -508,7 +511,7 @@ public class TopologyTestDriver implements Closeable {
                 new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
                 consumer,
-                streamsConfig,
+                taskConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
@@ -1334,8 +1337,9 @@ public class TopologyTestDriver implements Closeable {
 
         public TestDriverProducer(final StreamsConfig config,
                                   final KafkaClientSupplier clientSupplier,
-                                  final LogContext logContext) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
+                                  final LogContext logContext,
+                                  final Time time) {
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext, time);
         }
 
         @Override

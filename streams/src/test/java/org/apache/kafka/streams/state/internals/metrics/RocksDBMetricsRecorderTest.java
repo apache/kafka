@@ -29,6 +29,8 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.rocksdb.Cache;
+import org.rocksdb.HistogramData;
+import org.rocksdb.HistogramType;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
@@ -39,7 +41,6 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.resetToNice;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
@@ -53,7 +54,6 @@ import static org.powermock.api.easymock.PowerMock.verify;
 @PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
-    private final static String THREAD_ID = "thread-id";
     private final static TaskId TASK_ID1 = new TaskId(0, 0);
     private final static TaskId TASK_ID2 = new TaskId(0, 1);
     private final static String STORE_NAME = "store-name";
@@ -74,12 +74,18 @@ public class RocksDBMetricsRecorderTest {
     private final Sensor bytesReadFromDatabaseSensor = createMock(Sensor.class);
     private final Sensor memtableBytesFlushedSensor = createMock(Sensor.class);
     private final Sensor memtableHitRatioSensor = createMock(Sensor.class);
+    private final Sensor memtableAvgFlushTimeSensor = createMock(Sensor.class);
+    private final Sensor memtableMinFlushTimeSensor = createMock(Sensor.class);
+    private final Sensor memtableMaxFlushTimeSensor = createMock(Sensor.class);
     private final Sensor writeStallDurationSensor = createMock(Sensor.class);
     private final Sensor blockCacheDataHitRatioSensor = createMock(Sensor.class);
     private final Sensor blockCacheIndexHitRatioSensor = createMock(Sensor.class);
     private final Sensor blockCacheFilterHitRatioSensor = createMock(Sensor.class);
     private final Sensor bytesReadDuringCompactionSensor = createMock(Sensor.class);
     private final Sensor bytesWrittenDuringCompactionSensor = createMock(Sensor.class);
+    private final Sensor compactionTimeAvgSensor = createMock(Sensor.class);
+    private final Sensor compactionTimeMinSensor = createMock(Sensor.class);
+    private final Sensor compactionTimeMaxSensor = createMock(Sensor.class);
     private final Sensor numberOfOpenFilesSensor = createMock(Sensor.class);
     private final Sensor numberOfFileErrorsSensor = createMock(Sensor.class);
 
@@ -400,6 +406,17 @@ public class RocksDBMetricsRecorderTest {
         memtableHitRatioSensor.record((double) 4 / (4 + 6), 0L);
         replay(memtableHitRatioSensor);
 
+        final HistogramData memtableFlushTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 2L, 10L, 3.0);
+        final HistogramData memtableFlushTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 4L, 8L, 10.0);
+        expect(statisticsToAdd1.getHistogramData(HistogramType.FLUSH_TIME)).andReturn(memtableFlushTimeData1);
+        expect(statisticsToAdd2.getHistogramData(HistogramType.FLUSH_TIME)).andReturn(memtableFlushTimeData2);
+        memtableAvgFlushTimeSensor.record((double) (10 + 8) / (2 + 4), 0L);
+        replay(memtableAvgFlushTimeSensor);
+        memtableMinFlushTimeSensor.record(3.0, 0L);
+        replay(memtableMinFlushTimeSensor);
+        memtableMaxFlushTimeSensor.record(20.0, 0L);
+        replay(memtableMaxFlushTimeSensor);
+
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(4L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(5L);
         writeStallDurationSensor.record(4 + 5, 0L);
@@ -436,6 +453,17 @@ public class RocksDBMetricsRecorderTest {
         bytesReadDuringCompactionSensor.record(5 + 6, 0L);
         replay(bytesReadDuringCompactionSensor);
 
+        final HistogramData compactionTimeData1 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 16.0, 2L, 8L, 6.0);
+        final HistogramData compactionTimeData2 = new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 24.0, 2L, 8L, 4.0);
+        expect(statisticsToAdd1.getHistogramData(HistogramType.COMPACTION_TIME)).andReturn(compactionTimeData1);
+        expect(statisticsToAdd2.getHistogramData(HistogramType.COMPACTION_TIME)).andReturn(compactionTimeData2);
+        compactionTimeAvgSensor.record((double) (8 + 8) / (2 + 2), 0L);
+        replay(compactionTimeAvgSensor);
+        compactionTimeMinSensor.record(4.0, 0L);
+        replay(compactionTimeMinSensor);
+        compactionTimeMaxSensor.record(24.0, 0L);
+        replay(compactionTimeMaxSensor);
+
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(5L);
         expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(3L);
         expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(7L);
@@ -460,12 +488,18 @@ public class RocksDBMetricsRecorderTest {
             bytesReadFromDatabaseSensor,
             memtableBytesFlushedSensor,
             memtableHitRatioSensor,
+            memtableAvgFlushTimeSensor,
+            memtableMinFlushTimeSensor,
+            memtableMaxFlushTimeSensor,
             writeStallDurationSensor,
             blockCacheDataHitRatioSensor,
             blockCacheIndexHitRatioSensor,
             blockCacheFilterHitRatioSensor,
             bytesWrittenDuringCompactionSensor,
             bytesReadDuringCompactionSensor,
+            compactionTimeAvgSensor,
+            compactionTimeMinSensor,
+            compactionTimeMaxSensor,
             numberOfOpenFilesSensor,
             numberOfFileErrorsSensor
         );
@@ -479,12 +513,18 @@ public class RocksDBMetricsRecorderTest {
             bytesReadFromDatabaseSensor,
             memtableBytesFlushedSensor,
             memtableHitRatioSensor,
+            memtableAvgFlushTimeSensor,
+            memtableMinFlushTimeSensor,
+            memtableMaxFlushTimeSensor,
             writeStallDurationSensor,
             blockCacheDataHitRatioSensor,
             blockCacheIndexHitRatioSensor,
             blockCacheFilterHitRatioSensor,
             bytesWrittenDuringCompactionSensor,
             bytesReadDuringCompactionSensor,
+            compactionTimeAvgSensor,
+            compactionTimeMinSensor,
+            compactionTimeMaxSensor,
             numberOfOpenFilesSensor,
             numberOfFileErrorsSensor
         );
@@ -496,12 +536,18 @@ public class RocksDBMetricsRecorderTest {
             bytesReadFromDatabaseSensor,
             memtableBytesFlushedSensor,
             memtableHitRatioSensor,
+            memtableAvgFlushTimeSensor,
+            memtableMinFlushTimeSensor,
+            memtableMaxFlushTimeSensor,
             writeStallDurationSensor,
             blockCacheDataHitRatioSensor,
             blockCacheIndexHitRatioSensor,
             blockCacheFilterHitRatioSensor,
             bytesWrittenDuringCompactionSensor,
             bytesReadDuringCompactionSensor,
+            compactionTimeAvgSensor,
+            compactionTimeMinSensor,
+            compactionTimeMaxSensor,
             numberOfOpenFilesSensor,
             numberOfFileErrorsSensor
         );
@@ -509,9 +555,10 @@ public class RocksDBMetricsRecorderTest {
 
     @Test
     public void shouldCorrectlyHandleHitRatioRecordingsWithZeroHitsAndMisses() {
-        resetToNice(statisticsToAdd1);
+        reset(statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
-        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
+        expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
+        expect(statisticsToAdd1.getAndResetTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableHitRatioSensor.record(0, 0L);
         blockCacheDataHitRatioSensor.record(0, 0L);
@@ -530,6 +577,24 @@ public class RocksDBMetricsRecorderTest {
         verify(blockCacheFilterHitRatioSensor);
     }
 
+    @Test
+    public void shouldCorrectlyHandleAvgRecordingsWithZeroSumAndCount() {
+        reset(statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
+        expect(statisticsToAdd1.getAndResetTickerCount(anyObject())).andStubReturn(0L);
+        replay(statisticsToAdd1);
+        memtableAvgFlushTimeSensor.record(0, 0L);
+        compactionTimeAvgSensor.record(0, 0L);
+        replay(memtableAvgFlushTimeSensor);
+        replay(compactionTimeAvgSensor);
+
+        recorder.record(0L);
+
+        verify(memtableAvgFlushTimeSensor);
+        verify(compactionTimeAvgSensor);
+    }
+
     private void setUpMetricsMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
@@ -542,6 +607,12 @@ public class RocksDBMetricsRecorderTest {
             .andReturn(memtableBytesFlushedSensor);
         expect(RocksDBMetrics.memtableHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(memtableHitRatioSensor);
+        expect(RocksDBMetrics.memtableAvgFlushTimeSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(memtableAvgFlushTimeSensor);
+        expect(RocksDBMetrics.memtableMinFlushTimeSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(memtableMinFlushTimeSensor);
+        expect(RocksDBMetrics.memtableMaxFlushTimeSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(memtableMaxFlushTimeSensor);
         expect(RocksDBMetrics.writeStallDurationSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(writeStallDurationSensor);
         expect(RocksDBMetrics.blockCacheDataHitRatioSensor(eq(streamsMetrics), eq(metricsContext)))
@@ -554,6 +625,12 @@ public class RocksDBMetricsRecorderTest {
             .andReturn(bytesWrittenDuringCompactionSensor);
         expect(RocksDBMetrics.bytesReadDuringCompactionSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(bytesReadDuringCompactionSensor);
+        expect(RocksDBMetrics.compactionTimeAvgSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(compactionTimeAvgSensor);
+        expect(RocksDBMetrics.compactionTimeMinSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(compactionTimeMinSensor);
+        expect(RocksDBMetrics.compactionTimeMaxSensor(eq(streamsMetrics), eq(metricsContext)))
+            .andReturn(compactionTimeMaxSensor);
         expect(RocksDBMetrics.numberOfOpenFilesSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(eq(streamsMetrics), eq(metricsContext)))
@@ -595,6 +672,12 @@ public class RocksDBMetricsRecorderTest {
             .andStubReturn(memtableBytesFlushedSensor);
         expect(RocksDBMetrics.memtableHitRatioSensor(streamsMetrics, metricsContext))
             .andStubReturn(memtableHitRatioSensor);
+        expect(RocksDBMetrics.memtableAvgFlushTimeSensor(streamsMetrics, metricsContext))
+            .andStubReturn(memtableAvgFlushTimeSensor);
+        expect(RocksDBMetrics.memtableMinFlushTimeSensor(streamsMetrics, metricsContext))
+            .andStubReturn(memtableMinFlushTimeSensor);
+        expect(RocksDBMetrics.memtableMaxFlushTimeSensor(streamsMetrics, metricsContext))
+            .andStubReturn(memtableMaxFlushTimeSensor);
         expect(RocksDBMetrics.writeStallDurationSensor(streamsMetrics, metricsContext))
             .andStubReturn(writeStallDurationSensor);
         expect(RocksDBMetrics.blockCacheDataHitRatioSensor(streamsMetrics, metricsContext))
@@ -607,6 +690,12 @@ public class RocksDBMetricsRecorderTest {
             .andStubReturn(bytesWrittenDuringCompactionSensor);
         expect(RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricsContext))
             .andStubReturn(bytesReadDuringCompactionSensor);
+        expect(RocksDBMetrics.compactionTimeAvgSensor(streamsMetrics, metricsContext))
+            .andStubReturn(compactionTimeAvgSensor);
+        expect(RocksDBMetrics.compactionTimeMinSensor(streamsMetrics, metricsContext))
+            .andStubReturn(compactionTimeMinSensor);
+        expect(RocksDBMetrics.compactionTimeMaxSensor(streamsMetrics, metricsContext))
+            .andStubReturn(compactionTimeMaxSensor);
         expect(RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricsContext))
             .andStubReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))

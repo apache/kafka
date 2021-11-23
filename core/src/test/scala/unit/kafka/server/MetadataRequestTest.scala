@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -36,8 +36,8 @@ import scala.jdk.CollectionConverters._
 class MetadataRequestTest extends AbstractMetadataRequestTest {
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
   }
 
   @Test

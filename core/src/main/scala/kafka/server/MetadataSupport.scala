@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
-import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.requests.AbstractResponse
 

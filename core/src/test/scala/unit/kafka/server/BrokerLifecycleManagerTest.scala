@@ -104,15 +104,15 @@ class BrokerLifecycleManagerTest {
   def testCreateStartAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val manager = new BrokerLifecycleManager(context.config, context.time, None)
-    assertEquals(BrokerState.NOT_RUNNING, manager.state())
+    assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     TestUtils.retry(60000) {
-      assertEquals(BrokerState.STARTING, manager.state())
+      assertEquals(BrokerState.STARTING, manager.state)
     }
     manager.close()
-    assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+    assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
   }
 
   @Test
@@ -128,7 +128,7 @@ class BrokerLifecycleManagerTest {
       Collections.emptyMap())
     TestUtils.retry(10000) {
       context.poll()
-      assertEquals(1000L, manager.brokerEpoch())
+      assertEquals(1000L, manager.brokerEpoch)
     }
     manager.close()
 
@@ -169,9 +169,9 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(60000) {
       context.poll()
       manager.eventQueue.wakeup()
-      assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+      assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
       assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally())
-      assertEquals(-1L, manager.brokerEpoch())
+      assertEquals(-1L, manager.brokerEpoch)
     }
     manager.close()
   }
@@ -192,7 +192,7 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      assertEquals(BrokerState.RECOVERY, manager.state())
+      assertEquals(BrokerState.RECOVERY, manager.state)
     }
     context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
       new BrokerHeartbeatResponseData().setIsFenced(false)), controllerNode)
@@ -200,13 +200,13 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      assertEquals(BrokerState.RUNNING, manager.state())
+      assertEquals(BrokerState.RUNNING, manager.state)
     }
     manager.beginControlledShutdown()
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      assertEquals(BrokerState.PENDING_CONTROLLED_SHUTDOWN, manager.state())
+      assertEquals(BrokerState.PENDING_CONTROLLED_SHUTDOWN, manager.state)
       assertTrue(context.mockClient.hasInFlightRequests)
     }
 
@@ -226,7 +226,7 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+      assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
     }
     manager.controlledShutdownFuture.get()
     manager.close()

@@ -41,15 +41,18 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
-import kafka.server.ZkMetadataCache;
+import kafka.server.builders.LogManagerBuilder;
+import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
+import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -80,10 +83,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
-import scala.collection.Iterator;
-import scala.collection.JavaConverters;
-import scala.collection.Map;
 
 import java.io.File;
 import java.io.IOException;
@@ -96,7 +95,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import scala.Option;
+import scala.collection.Iterator;
+import scala.collection.Map;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -129,28 +130,30 @@ public class ReplicaFetcherThreadBenchmark {
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
 
-        List<File> logDirs = Collections.singletonList(logDir);
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
-        logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new MockConfigRepository(),
-                logConfig,
-                new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
-                1,
-                1000L,
-                10000L,
-                10000L,
-                1000L,
-                60000,
-                ApiVersion.latestVersion(),
-                scheduler,
-                brokerTopicStats,
-                logDirFailureChannel,
-                Time.SYSTEM,
-                true);
+        List<File> logDirs = Collections.singletonList(logDir);
+        logManager = new LogManagerBuilder().
+            setLogDirs(logDirs).
+            setInitialOfflineDirs(Collections.emptyList()).
+            setConfigRepository(new MockConfigRepository()).
+            setInitialDefaultConfig(logConfig).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setRecoveryThreadsPerDataDir(1).
+            setFlushCheckMs(1000L).
+            setFlushRecoveryOffsetCheckpointMs(10000L).
+            setFlushStartOffsetCheckpointMs(10000L).
+            setRetentionCheckMs(1000L).
+            setMaxPidExpirationMs(60000).
+            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setScheduler(scheduler).
+            setBrokerTopicStats(brokerTopicStats).
+            setLogDirFailureChannel(logDirFailureChannel).
+            setTime(Time.SYSTEM).
+            setKeepPartitionMetadataFile(true).
+            build();
 
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
         HashMap<String, Uuid> topicIds = new HashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = new ArrayList<>();
@@ -177,7 +180,7 @@ public class ReplicaFetcherThreadBenchmark {
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);
-            initialFetchStates.put(tp, new InitialFetchState(new BrokerEndPoint(3, "host", 3000), 0, 0));
+            initialFetchStates.put(tp, new InitialFetchState(topicId, new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {
                 @Override
                 public int sizeInBytes() {
@@ -189,7 +192,7 @@ public class ReplicaFetcherThreadBenchmark {
                     return null;
                 }
             };
-            initialFetched.put(tp, new FetchResponseData.PartitionData()
+            initialFetched.put(new TopicIdPartition(topicId.get(), tp), new FetchResponseData.PartitionData()
                     .setPartitionIndex(tp.partition())
                     .setLastStableOffset(0)
                     .setLogStartOffset(0)
@@ -213,15 +216,26 @@ public class ReplicaFetcherThreadBenchmark {
         ZkMetadataCache metadataCache = new ZkMetadataCache(0);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
-        replicaManager = new ReplicaManager(config, metrics, new MockTime(), Option.apply(Mockito.mock(KafkaZkClient.class)), scheduler, logManager, new AtomicBoolean(false),
-                Mockito.mock(QuotaFactory.QuotaManagers.class), brokerTopicStats, metadataCache, new LogDirFailureChannel(logDirs.size()), TestUtils.createAlterIsrManager(), Option.empty());
+        replicaManager = new ReplicaManagerBuilder().
+            setConfig(config).
+            setMetrics(metrics).
+            setTime(new MockTime()).
+            setZkClient(Mockito.mock(KafkaZkClient.class)).
+            setScheduler(scheduler).
+            setLogManager(logManager).
+            setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
+            setBrokerTopicStats(brokerTopicStats).
+            setMetadataCache(metadataCache).
+            setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
+            setAlterIsrManager(TestUtils.createAlterIsrManager()).
+            build();
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched, topicIds), ApiKeys.FETCH.latestVersion());
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)

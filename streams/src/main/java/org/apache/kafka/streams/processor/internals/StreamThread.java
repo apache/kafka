@@ -310,6 +310,7 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -512,6 +513,21 @@ public class StreamThread extends Thread {
         ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
 
+        ThreadMetrics.addThreadStartTimeMetric(
+            threadId,
+            streamsMetrics,
+            time.milliseconds()
+        );
+        ThreadMetrics.addThreadBlockedTimeMetric(
+            threadId,
+            new StreamThreadTotalBlockedTime(
+                mainConsumer,
+                restoreConsumer,
+                taskManager::totalProducerBlockedTime
+            ),
+            streamsMetrics
+        );
+
         this.time = time;
         this.topologyMetadata = topologyMetadata;
         this.logPrefix = logContext.logPrefix();
@@ -532,6 +548,7 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+        this.eosEnabled = eosEnabled(config);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -579,6 +596,14 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                checkForTopologyUpdates();
+                // If we received the shutdown signal while waiting for a topology to be added, we can
+                // stop polling regardless of the rebalance status since we know there are no tasks left
+                if (!isRunning() && topologyMetadata.isEmpty()) {
+                    log.info("Shutting down thread with empty topology.");
+                    break;
+                }
+
                 maybeSendShutdown();
                 final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
@@ -594,7 +619,13 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                          "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.handleCorruption(e.corruptedTasks());
+                    // check if any active task got corrupted. We will trigger a rebalance in that case.
+                    // once the task corruptions have been handled
+                    final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
+                    if (enforceRebalance && eosEnabled) {
+                        log.info("Active task(s) got corrupted. Triggering a rebalance.");
+                        mainConsumer.enforceRebalance();
+                    }
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }
@@ -611,8 +642,12 @@ public class StreamThread extends Thread {
                           StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(e);
+                this.streamsUncaughtExceptionHandler.accept(new StreamsException(e));
                 return false;
+            } catch (final StreamsException e) {
+                throw e;
+            } catch (final Exception e) {
+                throw new StreamsException(e);
             }
         }
         return true;
@@ -887,8 +922,6 @@ public class StreamThread extends Thread {
     }
 
     private long pollPhase() {
-        checkForTopologyUpdates();
-
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -1127,6 +1160,7 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
+        streamsMetrics.removeAllThreadLevelMetrics(getName());
 
         setState(State.DEAD);
 

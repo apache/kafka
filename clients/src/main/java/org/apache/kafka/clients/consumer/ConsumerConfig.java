@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -39,6 +40,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.RangeAssignor.RANGE_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.RoundRobinAssignor.ROUNDROBIN_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.StickyAssignor.STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -47,6 +52,16 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 public class ConsumerConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
+
+    // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
+    // This is to help optimize ConsumerCoordinator#performAssignment method
+    public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS =
+        Collections.unmodifiableList(Arrays.asList(
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
+            COOPERATIVE_STICKY_ASSIGNOR_NAME
+        ));
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS

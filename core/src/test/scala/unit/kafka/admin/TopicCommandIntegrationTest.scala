@@ -80,7 +80,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
   }
 
   @BeforeEach
-  def setup(info: TestInfo): Unit = {
+  override def setUp(info: TestInfo): Unit = {
+    super.setUp(info)
+
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -110,7 +112,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -125,7 +127,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -140,7 +142,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -190,7 +192,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
-      .all()
+      .allTopicNames()
       .get()
       .get(testTopicName)
       .partitions()
@@ -287,7 +289,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
+    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
   }
 
@@ -300,7 +302,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).values().get(testTopicName).get()
+    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
     assertTrue(topicDescription.partitions().size() == 3)
     assertEquals(List(4,2), topicDescription.partitions().get(2).replicas().asScala.map(_.id()))
   }
@@ -491,7 +493,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     try {
       // check which partition is on broker 0 which we'll kill
       val testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
-        .all().get().asScala(testTopicName)
+        .allTopicNames().get().asScala(testTopicName)
       val partitionOnBroker0 = testTopicDescription.partitions().asScala.find(_.leader().id() == 0).get.partition()
 
       killBroker(0)
@@ -586,7 +588,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     val brokerIds = servers.map(_.config.brokerId)
     TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
 
-    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
+    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).allTopicNames().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
 
     val replicasOfFirstPartition = firstPartition.replicas().asScala.map(_.id())
@@ -797,7 +799,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       Collections.emptyList(), Collections.emptyList())
     val describeResult = AdminClientTestUtils.describeTopicsResult(testTopicName, new TopicDescription(
       testTopicName, false, Collections.singletonList(topicPartitionInfo)))
-    when(adminClient.describeTopics(any())).thenReturn(describeResult)
+    when(adminClient.describeTopics(any(classOf[java.util.Collection[String]]))).thenReturn(describeResult)
 
     val result = AdminClientTestUtils.createPartitionsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
     when(adminClient.createPartitions(any(), any())).thenReturn(result)

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.time.Duration;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
@@ -137,7 +138,27 @@ public class WindowStoreBuilderTest {
         assertFalse(((AbstractStoreBuilder<String, String, WindowStore<String, String>>) builder).enableCaching);
     }
 
-    @SuppressWarnings("all")
+    @Test
+    public void shouldDisableLogCompactionWithRetainDuplicates() {
+        supplier = Stores.persistentWindowStore(
+            "name",
+            Duration.ofMillis(10L),
+            Duration.ofMillis(10L),
+            true);
+        final StoreBuilder<WindowStore<String, String>> builder = new WindowStoreBuilder<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        ).withCachingEnabled();
+
+        assertThat(
+            builder.logConfig().get(TopicConfig.CLEANUP_POLICY_CONFIG),
+            equalTo(TopicConfig.CLEANUP_POLICY_DELETE)
+        );
+    }
+
+    @SuppressWarnings("null")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));

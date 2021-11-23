@@ -266,7 +266,19 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         for (long now = timeFrom.toEpochMilli(); now <= timeTo.toEpochMilli(); now++) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (final Entry<K, V> entry : kvMap.subMap(keyFrom, true, keyTo, true).entrySet()) {
+                final NavigableMap<K, V> kvSubMap;
+                if (keyFrom == null && keyFrom == null) {
+                    kvSubMap = kvMap;
+                } else if (keyFrom == null) {
+                    kvSubMap = kvMap.headMap(keyTo, true);
+                } else if (keyTo == null) {
+                    kvSubMap = kvMap.tailMap(keyFrom, true);
+                } else {
+                    // keyFrom != null and KeyTo != null
+                    kvSubMap = kvMap.subMap(keyFrom, true, keyTo, true);
+                }
+
+                for (final Entry<K, V> entry : kvSubMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }
@@ -297,8 +309,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
-                                                          final K to,
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
                                                           final Instant timeFrom,
                                                           final Instant timeTo) throws IllegalArgumentException {
         final long timeFromTs = ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom"));
@@ -310,7 +322,19 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         for (long now = timeToTs; now >= timeFromTs; now--) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).descendingMap().entrySet()) {
+                final NavigableMap<K, V> kvSubMap;
+                if (keyFrom == null && keyFrom == null) {
+                    kvSubMap = kvMap;
+                } else if (keyFrom == null) {
+                    kvSubMap = kvMap.headMap(keyTo, true);
+                } else if (keyTo == null) {
+                    kvSubMap = kvMap.tailMap(keyFrom, true);
+                } else {
+                    // keyFrom != null and KeyTo != null
+                    kvSubMap = kvMap.subMap(keyFrom, true, keyTo, true);
+                }
+
+                for (final Entry<K, V> entry : kvSubMap.descendingMap().entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }

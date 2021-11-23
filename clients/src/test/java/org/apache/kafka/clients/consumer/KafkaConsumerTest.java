@@ -34,9 +34,11 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -714,9 +716,10 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                Map<TopicPartition, FetchRequest.PartitionData> fetchData = request.fetchData(topicNames);
-                return fetchData.keySet().equals(singleton(tp0)) &&
-                        fetchData.get(tp0).fetchOffset == 50L;
+                Map<TopicIdPartition, FetchRequest.PartitionData> fetchData = request.fetchData(topicNames);
+                TopicIdPartition tidp0 = new TopicIdPartition(topicIds.get(tp0.topic()), tp0);
+                return fetchData.keySet().equals(singleton(tidp0)) &&
+                        fetchData.get(tidp0).fetchOffset == 50L;
 
             }, fetchResponse(tp0, 50L, 5));
 
@@ -1761,7 +1764,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchData(topicNames).containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+            && ((FetchRequest) body).fetchData(topicNames).containsKey(new TopicIdPartition(topicId, tp0)), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1923,6 +1926,96 @@ public class KafkaConsumerTest {
     public void testCommittedAuthenticationFailure() {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
+    }
+
+    @Test
+    public void testMeasureCommitSyncDurationOnFailure() {
+        final KafkaConsumer<String, String> consumer
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+
+        try {
+            consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommitSyncDuration() {
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(
+            offsetCommitResponse(Collections.singletonMap(tp0, Errors.NONE)),
+            coordinator
+        );
+
+        consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDurationOnFailure() {
+        final KafkaConsumer<String, String> consumer
+            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+
+        try {
+            consumer.committed(Collections.singleton(tp0));
+        } catch (final RuntimeException e) {
+        }
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
+    }
+
+    @Test
+    public void testMeasureCommittedDuration() {
+        long offset1 = 10000;
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        SubscriptionState subscription = new SubscriptionState(new LogContext(),
+            OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+
+        // lookup coordinator
+        client.prepareResponseFrom(
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // fetch offset for one topic
+        client.prepareResponseFrom(
+            offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE), coordinator);
+
+        consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
+
+        final Metric metric = consumer.metrics()
+            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+        assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
     @Test
@@ -2247,8 +2340,7 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
-        Time time = new MockTime();
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(final Time time) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -2260,6 +2352,14 @@ public class KafkaConsumerTest {
 
         client.createPendingAuthenticationError(node, 0);
         return newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
+        return consumerWithPendingAuthenticationError(new MockTime());
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingError(final Time time) {
+        return consumerWithPendingAuthenticationError(time);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
@@ -2443,7 +2543,7 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -2460,14 +2560,14 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition,
+            tpResponses.put(new TopicIdPartition(topicIds.get(partition.topic()), partition),
                 new FetchResponseData.PartitionData()
                     .setPartitionIndex(partition.partition())
                     .setHighWatermark(highWatermark)
                     .setLogStartOffset(logStartOffset)
                     .setRecords(records));
         }
-        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses, topicIds);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
@@ -2835,6 +2935,17 @@ public class KafkaConsumerTest {
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
+    }
+
+    @Test
+    public void testAssignorNameConflict() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            Arrays.asList(RangeAssignor.class.getName(), ConsumerPartitionAssignorTest.TestConsumerPartitionAssignor.class.getName()));
+
+        assertThrows(KafkaException.class,
+            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

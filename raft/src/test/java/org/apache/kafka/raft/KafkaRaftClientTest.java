@@ -101,9 +101,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -126,9 +124,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, localId)
             .build();
 
@@ -151,11 +147,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withElectedLeader(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withElectedLeader(epoch, localId)
+            .build();
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
@@ -181,11 +175,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withVotedCandidate(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withVotedCandidate(epoch, localId)
+            .build();
 
         // Resign from candidate, will restart in candidate state
         assertTrue(context.client.quorum().isCandidate());
@@ -235,11 +227,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withElectedLeader(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withElectedLeader(epoch, localId)
+            .build();
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
@@ -262,9 +252,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -728,9 +716,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
-            })
+            .updateRandom(r -> r.mockNextInt(jitterMs))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -1238,9 +1224,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
-            })
+            .updateRandom(r -> r.mockNextInt(exponentialFactor))
             .build();
 
         context.assertUnknownLeader(0);
@@ -2184,9 +2168,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2395,9 +2377,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2799,4 +2779,5 @@ public class KafkaRaftClientTest {
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
+
 }

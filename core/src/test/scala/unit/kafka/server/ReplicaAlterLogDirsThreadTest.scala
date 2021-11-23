@@ -17,21 +17,21 @@
 package kafka.server
 
 import java.util.{Collections, Optional}
-
 import kafka.api.Request
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{UnifiedLog, LogManager}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.UpdateMetadataRequestData
-import org.apache.kafka.common.protocol.{Errors, ApiKeys}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
-import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
+import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
 import org.junit.jupiter.api.Assertions._
@@ -49,6 +49,7 @@ class ReplicaAlterLogDirsThreadTest {
   private val topicId = Uuid.randomUuid()
   private val topicIds = collection.immutable.Map("topic1" -> topicId)
   private val topicNames = collection.immutable.Map(topicId -> "topic1")
+  private val tid1p0 = new TopicIdPartition(topicId, t1p0)
   private val failedPartitions = new FailedPartitions
 
   private val partitionStates = List(new UpdateMetadataRequestData.UpdateMetadataPartitionState()
@@ -65,7 +66,7 @@ class ReplicaAlterLogDirsThreadTest {
   metadataCache.updateMetadata(0, updateMetadataRequest)
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
-    InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
+    InitialFetchState(topicId = Some(topicId), leader = new BrokerEndPoint(0, "localhost", 9092),
       initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
   }
 
@@ -132,7 +133,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(0L)
     when(futureLog.latestEpoch).thenReturn(None)
 
-    val fencedRequestData = new FetchRequest.PartitionData(0L, 0L,
+    val fencedRequestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch - 1))
     val fencedResponseData = FetchPartitionData(
       error = Errors.FENCED_LEADER_EPOCH,
@@ -144,7 +145,7 @@ class ReplicaAlterLogDirsThreadTest {
       abortedTransactions = None,
       preferredReadReplica = None,
       isReassignmentFetch = false)
-    mockFetchFromCurrentLog(t1p0, fencedRequestData, config, replicaManager, fencedResponseData)
+    mockFetchFromCurrentLog(tid1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val thread = new ReplicaAlterLogDirsThread(
@@ -172,7 +173,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.currentLeaderEpoch))
     assertEquals(1, thread.partitionCount)
 
-    val requestData = new FetchRequest.PartitionData(0L, 0L,
+    val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
     val responseData = FetchPartitionData(
       error = Errors.NONE,
@@ -184,7 +185,7 @@ class ReplicaAlterLogDirsThreadTest {
       abortedTransactions = None,
       preferredReadReplica = None,
       isReassignmentFetch = false)
-    mockFetchFromCurrentLog(t1p0, requestData, config, replicaManager, responseData)
+    mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     thread.doWork()
 
@@ -230,7 +231,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(0L)
     when(futureLog.latestEpoch).thenReturn(None)
 
-    val requestData = new FetchRequest.PartitionData(0L, 0L,
+    val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
     val responseData = FetchPartitionData(
       error = Errors.NONE,
@@ -242,7 +243,7 @@ class ReplicaAlterLogDirsThreadTest {
       abortedTransactions = None,
       preferredReadReplica = None,
       isReassignmentFetch = false)
-    mockFetchFromCurrentLog(t1p0, requestData, config, replicaManager, responseData)
+    mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val thread = new ReplicaAlterLogDirsThread(
@@ -264,27 +265,26 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(0, thread.partitionCount)
   }
 
-  private def mockFetchFromCurrentLog(topicPartition: TopicPartition,
+  private def mockFetchFromCurrentLog(topicIdPartition: TopicIdPartition,
                                       requestData: FetchRequest.PartitionData,
                                       config: KafkaConfig,
                                       replicaManager: ReplicaManager,
                                       responseData: FetchPartitionData): Unit = {
-    val callbackCaptor: ArgumentCaptor[Seq[(TopicPartition, FetchPartitionData)] => Unit] =
-      ArgumentCaptor.forClass(classOf[Seq[(TopicPartition, FetchPartitionData)] => Unit])
+    val callbackCaptor: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] =
+      ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
     when(replicaManager.fetchMessages(
       timeout = ArgumentMatchers.eq(0L),
       replicaId = ArgumentMatchers.eq(Request.FutureLocalReplicaId),
       fetchMinBytes = ArgumentMatchers.eq(0),
       fetchMaxBytes = ArgumentMatchers.eq(config.replicaFetchResponseMaxBytes),
       hardMaxBytesLimit = ArgumentMatchers.eq(false),
-      fetchInfos = ArgumentMatchers.eq(Seq(topicPartition -> requestData)),
-      topicIds = ArgumentMatchers.eq(topicIds.asJava),
+      fetchInfos = ArgumentMatchers.eq(Seq(topicIdPartition -> requestData)),
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
       isolationLevel = ArgumentMatchers.eq(IsolationLevel.READ_UNCOMMITTED),
       clientMetadata = ArgumentMatchers.eq(None)
     )).thenAnswer(_ => {
-      callbackCaptor.getValue.apply(Seq((topicPartition, responseData)))
+      callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
     })
   }
 
@@ -446,7 +446,7 @@ class ReplicaAlterLogDirsThreadTest {
     val partitionT1p0: Partition = createMock(classOf[Partition])
     val partitionT1p1: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
-    val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val partitionT1p0Id = 0
     val partitionT1p1Id = 1
@@ -536,7 +536,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
-    val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val partitionId = 0
     val leaderEpoch = 5
@@ -622,7 +622,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
-    val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val initialFetchOffset = 100
 
@@ -676,7 +676,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
-    val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val partitionId = 0
     val futureReplicaLeaderEpoch = 1
@@ -720,11 +720,10 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject())
-    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])).anyTimes()
+    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)])).anyTimes()
 
     replay(replicaManager, logManager, quotaManager, partition, log, futureLog)
 
@@ -766,7 +765,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
     val partition: Partition = createMock(classOf[Partition])
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
-    val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
+    val responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val partitionId = 0
     val leaderEpoch = 5
@@ -853,8 +852,8 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> initialFetchState(0L, leaderEpoch)))
 
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-      t1p0 -> PartitionFetchState(150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
-      t1p1 -> PartitionFetchState(160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None)))
+      t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
+      t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get.fetchRequest
@@ -864,7 +863,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
-    assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for first partition")
+    assertEquals(t1p0, fetchInfos.head._1.topicPartition, "Expected fetch request for first partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
   }
 
@@ -906,8 +905,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // one partition is ready and one is truncating
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(150, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(160, None, leaderEpoch, state = Truncating, lastFetchedEpoch = None)))
+        t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, state = Truncating, lastFetchedEpoch = None)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
@@ -915,13 +914,13 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError.nonEmpty)
     val fetchInfos = fetchRequest.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
-    assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for non-truncating partition")
+    assertEquals(t1p0, fetchInfos.head._1.topicPartition, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -929,13 +928,13 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError2.nonEmpty)
     val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos2.length)
-    assertEquals(t1p0, fetchInfos2.head._1, "Expected fetch request for non-delayed partition")
+    assertEquals(t1p0, fetchInfos2.head._1.topicPartition, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
     assertFalse(partitionsWithError3.nonEmpty)
   }
@@ -955,7 +954,7 @@ class ReplicaAlterLogDirsThreadTest {
   }
 
   def stubWithFetchMessages(logT1p0: UnifiedLog, logT1p1: UnifiedLog, futureLog: UnifiedLog, partition: Partition, replicaManager: ReplicaManager,
-                            responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]): IExpectationSetters[Unit] = {
+                            responseCallback: Capture[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]): IExpectationSetters[Unit] = {
     stub(logT1p0, logT1p1, futureLog, partition, replicaManager)
     expect(replicaManager.fetchMessages(
       EasyMock.anyLong(),
@@ -965,10 +964,9 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject())
-    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])).anyTimes()
+    ).andAnswer(() => responseCallback.getValue.apply(Seq.empty[(TopicIdPartition, FetchPartitionData)])).anyTimes()
   }
 }

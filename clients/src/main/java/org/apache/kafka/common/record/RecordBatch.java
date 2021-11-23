@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.CloseableIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.OptionalLong;
 
 /**
  * A record batch is a container for records. In old versions of the record format (versions 0 and 1),
@@ -210,6 +211,12 @@ public interface RecordBatch extends Iterable<Record> {
      * @return true if it is, false otherwise
      */
     boolean isTransactional();
+
+    /**
+     * Get the delete horizon, returns OptionalLong.EMPTY if the first timestamp is not the delete horizon
+     * @return timestamp of the delete horizon
+     */
+    OptionalLong deleteHorizonMs();
 
     /**
      * Get the partition leader epoch of this record batch.
