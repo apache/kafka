@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.List;
+import java.util.stream.Collectors;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -64,6 +67,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
@@ -337,7 +341,18 @@ public class GlobalKTableIntegrationTest {
         startStreams();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
 
-        kafkaStreams.close();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            kafkaStreams.close();
+
+            List<String> logs =
+                appender.getMessages().stream()
+                    .map(line -> line.split("] ")[1])
+                    .collect(Collectors.toList());
+            assertFalse(
+                logs.contains("Error happened while maintaining global state store. The streams application or client will now close to ERROR.")
+            );
+
+        }
     }
 
     private void createTopics() throws Exception {

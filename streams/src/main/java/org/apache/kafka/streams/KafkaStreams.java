@@ -670,9 +670,6 @@ public class KafkaStreams implements AutoCloseable {
 
                     if (newState == GlobalStreamThread.State.RUNNING) {
                         maybeSetRunning();
-                    } else if (newState == GlobalStreamThread.State.DEAD && oldState != GlobalStreamThread.State.PENDING_SHUTDOWN) {
-                        log.error("Global thread has died. The streams application or client will now close to ERROR.");
-                        closeToError();
                     }
                 }
             }
