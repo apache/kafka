@@ -20,9 +20,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -54,7 +56,7 @@ class CachingWindowStore
 
     private String cacheName;
     private boolean sendOldValues;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
@@ -82,7 +84,7 @@ class CachingWindowStore
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name(),  context.taskId().topologyName());
 
@@ -100,7 +102,7 @@ class CachingWindowStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext context) {
+                                    final InternalProcessorContext<?, ?> context) {
         final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
@@ -120,10 +122,11 @@ class CachingWindowStore
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
-                        binaryWindowKey,
-                        rawNewValue,
-                        sendOldValues ? rawOldValue : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            binaryWindowKey,
+                            new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }

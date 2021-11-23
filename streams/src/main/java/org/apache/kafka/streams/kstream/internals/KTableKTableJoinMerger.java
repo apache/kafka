@@ -119,7 +119,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         public void process(final Record<K, Change<V>> record) {
             if (queryableName != null) {
                 store.put(record.key(), ValueAndTimestamp.make(record.value().newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), record.value().newValue, sendOldValues ? record.value().oldValue : null);
+                tupleForwarder.maybeForward(record);
             } else {
                 if (sendOldValues) {
                     context().forward(record);
