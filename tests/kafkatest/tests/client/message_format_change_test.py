@@ -15,12 +15,12 @@ from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.services.kafka import config_property, KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_9, LATEST_0_10, LATEST_0_11, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_9, LATEST_0_10, LATEST_0_11, V_2_8_0, DEV_BRANCH, KafkaVersion
 
 
 class MessageFormatChangeTest(ProduceConsumeValidateTest):
@@ -82,6 +82,8 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}},
                                                                     controller_num_nodes_override=1)
+        for node in self.kafka.nodes:
+            node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0) # required for writing old message formats
 
         self.kafka.start()
         self.logger.info("First format change to 0.9.0")

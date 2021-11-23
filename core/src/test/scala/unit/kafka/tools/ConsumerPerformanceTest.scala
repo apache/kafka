@@ -17,10 +17,10 @@
 
 package kafka.tools
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.text.SimpleDateFormat
-
 import kafka.utils.Exit
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
@@ -109,6 +109,43 @@ class ConsumerPerformanceTest {
     )
     try assertThrows(classOf[IllegalArgumentException], () => new ConsumerPerformance.ConsumerPerfConfig(args))
     finally Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    val consumerConfigFile = File.createTempFile("test_consumer_config",".conf")
+    consumerConfigFile.deleteOnExit()
+    new PrintWriter(consumerConfigFile.getPath) { write("client.id=consumer-1"); close() }
+
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10",
+      "--consumer.config", consumerConfigFile.getPath
+    )
+
+    //When
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("consumer-1", config.props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10"
+    )
+
+    //When
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("perf-consumer-client", config.props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
   }
 
   private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {

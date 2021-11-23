@@ -56,14 +56,14 @@ public class TimelineIntegerTest {
     public void testSnapshot() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineInteger integer = new TimelineInteger(registry);
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         integer.set(1);
-        registry.createSnapshot(3);
+        registry.getOrCreateSnapshot(3);
         integer.set(2);
         integer.increment();
         integer.increment();
         integer.decrement();
-        registry.createSnapshot(4);
+        registry.getOrCreateSnapshot(4);
         assertEquals(0, integer.get(2));
         assertEquals(1, integer.get(3));
         assertEquals(3, integer.get(4));
@@ -77,9 +77,9 @@ public class TimelineIntegerTest {
     public void testReset() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineInteger value = new TimelineInteger(registry);
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         value.set(1);
-        registry.createSnapshot(3);
+        registry.getOrCreateSnapshot(3);
         value.set(2);
 
         registry.reset();

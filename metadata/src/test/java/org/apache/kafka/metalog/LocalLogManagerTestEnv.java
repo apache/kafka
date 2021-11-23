@@ -145,6 +145,10 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return shared.appendedBytes();
     }
 
+    public LeaderAndEpoch leaderAndEpoch() {
+        return shared.leaderAndEpoch();
+    }
+
     @Override
     public void close() throws InterruptedException {
         try {

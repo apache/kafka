@@ -112,12 +112,68 @@ public class SegmentIteratorTest {
     }
 
     @Test
+    public void shouldIterateOverAllSegmentsWhenNullKeyFromKeyTo() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            null,
+            null,
+            true);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldIterateBackwardOverAllSegments() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentTwo, segmentOne).iterator(), //store should pass the segments in the right order
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("z".getBytes()),
+            false);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldIterateBackwardOverAllSegmentsWhenNullKeyFromKeyTo() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentTwo, segmentOne).iterator(), //store should pass the segments in the right order
+            hasNextCondition,
+            null,
+            null,
             false);
 
         assertTrue(iterator.hasNext());
@@ -174,6 +230,47 @@ public class SegmentIteratorTest {
     }
 
     @Test
+    public void shouldOnlyIterateOverSegmentsInBackwardRangeWhenNullKeyFrom() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            null,
+            Bytes.wrap("b".getBytes()),
+            false);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldOnlyIterateOverSegmentsInBackwardRangeWhenNullKeyTo() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            Bytes.wrap("c".getBytes()),
+            null,
+            false);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldOnlyIterateOverSegmentsInRange() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
@@ -189,6 +286,54 @@ public class SegmentIteratorTest {
         assertTrue(iterator.hasNext());
         assertEquals("b", new String(iterator.peekNextKey().get()));
         assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldOnlyIterateOverSegmentsInRangeWhenNullKeyFrom() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            null,
+            Bytes.wrap("c".getBytes()),
+            true);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldOnlyIterateOverSegmentsInRangeWhenNullKeyTo() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            Bytes.wrap("b".getBytes()),
+            null,
+            true);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
 
         assertFalse(iterator.hasNext());
     }

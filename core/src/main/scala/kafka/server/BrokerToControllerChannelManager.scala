@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ApiMessageAndVersion
 
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._

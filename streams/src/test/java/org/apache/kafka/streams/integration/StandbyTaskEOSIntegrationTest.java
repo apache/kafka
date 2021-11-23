@@ -186,7 +186,7 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(props), new MockTime(), true);
+            new StreamsConfig(props), new MockTime(), true, false);
 
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));

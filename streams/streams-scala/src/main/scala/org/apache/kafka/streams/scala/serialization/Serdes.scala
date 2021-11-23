@@ -57,8 +57,10 @@ object Serdes extends LowPrioritySerdes {
       }
     )
 
-  def fromFn[T >: Null](serializer: (String, T) => Array[Byte],
-                        deserializer: (String, Array[Byte]) => Option[T]): Serde[T] =
+  def fromFn[T >: Null](
+    serializer: (String, T) => Array[Byte],
+    deserializer: (String, Array[Byte]) => Option[T]
+  ): Serde[T] =
     JSerdes.serdeFrom(
       new Serializer[T] {
         override def serialize(topic: String, data: T): Array[Byte] = serializer(topic, data)
@@ -75,13 +77,13 @@ object Serdes extends LowPrioritySerdes {
 
 trait LowPrioritySerdes {
 
-  implicit val nullSerde: Serde[Null] = {
+  implicit val nullSerde: Serde[Null] =
     Serdes.fromFn[Null](
       { _: Null =>
         null
-      }, { _: Array[Byte] =>
+      },
+      { _: Array[Byte] =>
         None
       }
     )
-  }
 }

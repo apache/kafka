@@ -32,7 +32,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOff
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-
 import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util
@@ -40,6 +39,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Date, Optional, Properties}
+
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -89,11 +89,16 @@ object ReplicaVerificationTool extends Logging {
                          .describedAs("ms")
                          .ofType(classOf[java.lang.Integer])
                          .defaultsTo(1000)
-    val topicWhiteListOpt = parser.accepts("topic-white-list", "White list of topics to verify replica consistency. Defaults to all topics.")
+    val topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; ignored if --topics-include specified. List of topics to verify replica consistency. Defaults to '.*' (all topics)")
                          .withRequiredArg
                          .describedAs("Java regex (String)")
                          .ofType(classOf[String])
                          .defaultsTo(".*")
+    val topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency. Defaults to '.*' (all topics)")
+                        .withRequiredArg
+                        .describedAs("Java regex (String)")
+                        .ofType(classOf[String])
+                        .defaultsTo(".*")
     val initialOffsetTimeOpt = parser.accepts("time", "Timestamp for getting the initial offsets.")
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
@@ -118,8 +123,12 @@ object ReplicaVerificationTool extends Logging {
     }
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
-    val regex = options.valueOf(topicWhiteListOpt)
-    val topicWhiteListFiler = new IncludeList(regex)
+    val regex = if (options.has(topicsIncludeOpt))
+      options.valueOf(topicsIncludeOpt)
+    else
+      options.valueOf(topicWhiteListOpt)
+
+    val topicsIncludeFilter = new IncludeList(regex)
 
     try Pattern.compile(regex)
     catch {
@@ -145,11 +154,11 @@ object ReplicaVerificationTool extends Logging {
     val topicIds = topicsMetadata.map( metadata => metadata.name() -> metadata.topicId()).toMap
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
-      topicWhiteListFiler.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
+      topicsIncludeFilter.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
     }
 
     if (filteredTopicMetadata.isEmpty) {
-      error(s"No topics found. $topicWhiteListOpt if specified, is either filtering out all topics or there is no topic.")
+      error(s"No topics found. $topicsIncludeOpt if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
@@ -212,7 +221,7 @@ object ReplicaVerificationTool extends Logging {
 
   private def listTopicsMetadata(adminClient: Admin): Seq[TopicDescription] = {
     val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get
-    adminClient.describeTopics(topics).all.get.values.asScala.toBuffer
+    adminClient.describeTopics(topics).allTopicNames.get.values.asScala.toBuffer
   }
 
   private def brokerDetails(adminClient: Admin): Map[Int, Node] = {
@@ -398,11 +407,11 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(topicIds.getOrElse(topicPartition.topic, Uuid.ZERO_UUID), replicaBuffer.getOffset(topicPartition),
         0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
-      forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap, topicIds.asJava)
+      forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)
 
     debug("Issuing fetch request ")
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
@@ -63,6 +64,11 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
      */
     public RemoteLogSegmentState state() {
         return state;
+    }
+
+    @Override
+    public TopicIdPartition topicIdPartition() {
+        return remoteLogSegmentId.topicIdPartition();
     }
 
     @Override

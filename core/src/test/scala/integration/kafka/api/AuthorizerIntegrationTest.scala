@@ -18,6 +18,7 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
+
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
@@ -54,16 +55,17 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-
 import java.util.Collections.singletonList
+
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
@@ -76,7 +78,7 @@ object AuthorizerIntegrationTest {
   val BrokerListenerName = "BROKER"
   val ClientListenerName = "CLIENT"
 
-  class PrincipalBuilder extends KafkaPrincipalBuilder {
+  class PrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
         case BrokerListenerName => BrokerPrincipal
@@ -313,8 +315,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   )
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
     addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
@@ -348,21 +350,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
-    requests.FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
+      0, 0, 100, Optional.of(27)))
+    requests.FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createFetchRequestWithUnknownTopic(id: Uuid, version: Short) = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
-    requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap, Collections.singletonMap(topic, id)).build()
+    partitionMap.put(tp,
+      new requests.FetchRequest.PartitionData(id, 0, 0, 100, Optional.of(27)))
+    requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
-    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
+      0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
@@ -710,7 +715,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized = describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized,  topicExists = topicExists, topicNames = topicNames)
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = topicExists, topicNames = topicNames)
         removeAllClientAcls()
       }
 
@@ -1446,40 +1451,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val offset = 15L
     val leaderEpoch: Optional[Integer] = Optional.of(1)
     val metadata = "metadata"
-    val topicOneOffsets = topic1List.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val topicOneAndTwoOffsets = topic1And2List.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
-    val allTopicOffsets = allTopicsList.asScala.map {
-      tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
-    }.toMap.asJava
 
-    // create 5 consumers to commit offsets so we can fetch them later
-
-    def commitOffsets(tpList: util.List[TopicPartition],
-                      offsets: util.Map[TopicPartition, OffsetAndMetadata]): Unit = {
+    def commitOffsets(tpList: util.List[TopicPartition]): Unit = {
       val consumer = createConsumer()
       consumer.assign(tpList)
+      val offsets = tpList.asScala.map{
+        tp => (tp, new OffsetAndMetadata(offset, leaderEpoch, metadata))
+      }.toMap.asJava
       consumer.commitSync(offsets)
       consumer.close()
     }
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(0))
-    commitOffsets(topic1List, topicOneOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(1))
-    commitOffsets(topic1And2List, topicOneAndTwoOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(2))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(3))
-    commitOffsets(allTopicsList, allTopicOffsets)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groups(4))
-    commitOffsets(allTopicsList, allTopicOffsets)
+    // create 5 consumers to commit offsets so we can fetch them later
+    val partitionMap = groupToPartitionMap.asScala.map(e => (e._1, Option(e._2).getOrElse(allTopicsList)))
+    groups.foreach { groupId =>
+      consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+      commitOffsets(partitionMap(groupId))
+    }
 
     removeAllClientAcls()
 
@@ -1572,24 +1560,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // from the offsetFetch response
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResources(2))
     offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
-    offsetFetchResponse.data().groups().forEach(g =>
-      g.groupId() match {
-        case "group1" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(0)), offsetFetchResponse
-            .partitionDataMap(groups(0)), topic1List)
-        case "group2" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(1)), offsetFetchResponse
-            .partitionDataMap(groups(1)), topic1And2List)
-        case "group3" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(2)), offsetFetchResponse
-            .partitionDataMap(groups(2)), allTopicsList)
-        case "group4" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(3)), offsetFetchResponse
-            .partitionDataMap(groups(3)), allTopicsList)
-        case "group5" =>
-          verifyResponse(offsetFetchResponse.groupLevelError(groups(4)), offsetFetchResponse
-            .partitionDataMap(groups(4)), allTopicsList)
-      })
+    offsetFetchResponse.data.groups.asScala.map(_.groupId).foreach( groupId =>
+      verifyResponse(offsetFetchResponse.groupLevelError(groupId), offsetFetchResponse.partitionDataMap(groupId), partitionMap(groupId))
+    )
   }
 
   @Test

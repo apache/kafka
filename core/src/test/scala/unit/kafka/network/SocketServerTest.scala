@@ -1134,6 +1134,7 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SASL_SSL")
     val overrideServer = new SocketServer(
       KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
     ) {
@@ -1582,7 +1583,7 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
     }
   }
-  
+
   @Test
   def testUnmuteChannelWithBufferedReceives(): Unit = {
     val time = new MockTime()
@@ -1853,6 +1854,23 @@ class SocketServerTest {
     })
   }
 
+  @Test
+  def testListenBacklogSize(): Unit = {
+    val backlogSize = 128
+    props.put("socket.listen.backlog.size", backlogSize.toString)
+
+    // TCP listen backlog size is the max count of pending connections (i.e. connections such that
+    // 3-way handshake is done at kernel level and waiting to be accepted by the server application.
+    // From client perspective, such connections should be visible as already "connected")
+    // Hence, we can check if listen backlog size is properly configured by trying to connect the server
+    // without starting acceptor thread.
+    withTestableServer(KafkaConfig.fromProps(props), { testableServer =>
+      1 to backlogSize foreach { _ =>
+        assertTrue(connect(testableServer).isConnected)
+      }
+    }, false)
+  }
+
   private def sslServerProps: Properties = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
@@ -1862,9 +1880,10 @@ class SocketServerTest {
   }
 
   private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
-                                 testWithServer: TestableSocketServer => Unit): Unit = {
+                                 testWithServer: TestableSocketServer => Unit,
+                                 startProcessingRequests: Boolean = true): Unit = {
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup()
+    testableServer.startup(startProcessingRequests = startProcessingRequests)
     try {
       testWithServer(testableServer)
     } finally {

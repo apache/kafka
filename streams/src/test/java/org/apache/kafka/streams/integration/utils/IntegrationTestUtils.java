@@ -49,6 +49,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
+import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -991,9 +992,15 @@ public class IntegrationTestUtils {
 
     private static StateListener getStateListener(final KafkaStreams streams) {
         try {
-            final Field field = streams.getClass().getDeclaredField("stateListener");
-            field.setAccessible(true);
-            return (StateListener) field.get(streams);
+            if (streams instanceof KafkaStreamsNamedTopologyWrapper) {
+                final Field field = streams.getClass().getSuperclass().getDeclaredField("stateListener");
+                field.setAccessible(true);
+                return (StateListener) field.get(streams);
+            } else {
+                final Field field = streams.getClass().getDeclaredField("stateListener");
+                field.setAccessible(true);
+                return (StateListener) field.get(streams);
+            }
         } catch (final IllegalAccessException | NoSuchFieldException e) {
             throw new RuntimeException("Failed to get StateListener through reflection", e);
         }

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.test.KeyValueIteratorStub;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -53,6 +54,13 @@ public class SessionKeySchemaTest {
 
     private final SessionKeySchema sessionKeySchema = new SessionKeySchema();
     private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
+
+    @After
+    public void after() {
+        if (iterator != null) {
+            iterator.close();
+        }
+    }
 
     @Before
     public void before() {

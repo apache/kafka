@@ -49,9 +49,9 @@ class AclApis(authHelper: AuthHelper,
   private val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
 
-  def close(): Unit = {
-    alterAclsPurgatory.shutdown()
-  }
+  def isClosed: Boolean = alterAclsPurgatory.isShutdown
+
+  def close(): Unit = alterAclsPurgatory.shutdown()
 
   def handleDescribeAcls(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)

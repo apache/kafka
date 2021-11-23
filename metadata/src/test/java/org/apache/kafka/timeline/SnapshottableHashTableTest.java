@@ -105,7 +105,7 @@ public class SnapshottableHashTableTest {
             new SnapshottableHashTable<>(registry, 1);
         assertTrue(null == table.snapshottableAddOrReplace(E_1B));
         assertEquals(1, table.snapshottableSize(Long.MAX_VALUE));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         assertTrue(E_1B == table.snapshottableAddOrReplace(E_1A));
         assertTrue(E_1B == table.snapshottableGet(E_1A, 0));
         assertTrue(E_1A == table.snapshottableGet(E_1A, Long.MAX_VALUE));
@@ -113,7 +113,7 @@ public class SnapshottableHashTableTest {
         assertEquals(null, table.snapshottableAddOrReplace(E_3A));
         assertEquals(3, table.snapshottableSize(Long.MAX_VALUE));
         assertEquals(1, table.snapshottableSize(0));
-        registry.createSnapshot(1);
+        registry.getOrCreateSnapshot(1);
         assertEquals(E_1A, table.snapshottableRemove(E_1B));
         assertEquals(E_2A, table.snapshottableRemove(E_2A));
         assertEquals(E_3A, table.snapshottableRemove(E_3A));
@@ -137,7 +137,7 @@ public class SnapshottableHashTableTest {
         assertFalse(table.snapshottableAddUnlessPresent(E_1A));
         assertTrue(table.snapshottableAddUnlessPresent(E_2A));
         assertTrue(table.snapshottableAddUnlessPresent(E_3A));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
         assertEquals(E_1B, table.snapshottableRemove(E_1B));
         assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
@@ -154,7 +154,7 @@ public class SnapshottableHashTableTest {
         SnapshottableHashTable<TestElement> table =
             new SnapshottableHashTable<>(registry, 1);
         assertEquals(null, table.snapshottableAddOrReplace(E_1A));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         Iterator<TestElement> iter = table.snapshottableIterator(0);
         assertTrue(table.snapshottableAddUnlessPresent(E_2A));
         assertTrue(table.snapshottableAddUnlessPresent(E_3A));
@@ -171,7 +171,7 @@ public class SnapshottableHashTableTest {
         assertEquals(null, table.snapshottableAddOrReplace(E_3A));
         assertEquals(E_1A, table.snapshottableRemove(E_1A));
         assertEquals(null, table.snapshottableAddOrReplace(E_1B));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         Iterator<TestElement> iter = table.snapshottableIterator(0);
         List<TestElement> iterElements = new ArrayList<>();
         iterElements.add(iter.next());
@@ -192,10 +192,10 @@ public class SnapshottableHashTableTest {
         assertEquals(null, table.snapshottableAddOrReplace(E_1A));
         assertEquals(null, table.snapshottableAddOrReplace(E_2A));
         assertEquals(null, table.snapshottableAddOrReplace(E_3A));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
         assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
-        registry.createSnapshot(1);
+        registry.getOrCreateSnapshot(1);
         assertEquals(3, table.snapshottableSize(Long.MAX_VALUE));
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_1B, E_2A, E_3B);
         table.snapshottableRemove(E_1B);
@@ -216,10 +216,10 @@ public class SnapshottableHashTableTest {
         assertEquals(null, table.snapshottableAddOrReplace(E_1A));
         assertEquals(null, table.snapshottableAddOrReplace(E_2A));
         assertEquals(null, table.snapshottableAddOrReplace(E_3A));
-        registry.createSnapshot(0);
+        registry.getOrCreateSnapshot(0);
         assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
         assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
-        registry.createSnapshot(1);
+        registry.getOrCreateSnapshot(1);
 
         registry.reset();
 

@@ -19,22 +19,21 @@ package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
 import java.util.Properties
-
 import kafka.api.ApiVersion
-import kafka.log.Log
+import kafka.log.{UnifiedLog, LogLoader}
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.tools.DumpLogSegments
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ListBuffer => Buffer}
@@ -48,7 +47,7 @@ import scala.collection.Seq
   *
   * A test which validates the end to end workflow is also included.
   */
-class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness with Logging {
+class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness with Logging {
 
   // Set this to KAFKA_0_11_0_IV1 to demonstrate the tests failing in the pre-KIP-101 case
   val apiVersion = ApiVersion.latestVersion
@@ -60,8 +59,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
   }
 
   @AfterEach
@@ -153,7 +152,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     broker100.shutdown()
 
     //Delete the clean shutdown file to simulate crash
-    new File(broker100.config.logDirs.head, Log.CleanShutdownFile).delete()
+    new File(broker100.config.logDirs.head, LogLoader.CleanShutdownFile).delete()
 
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, broker100, 0)
@@ -191,7 +190,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer = createBufferingProducer
 
     //Write 100 messages
-    (0 until 100).foreach { i =>
+    (0 until 100).foreach { _ =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
       producer.flush()
     }
@@ -200,7 +199,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
+    new File(brokers(0).config.logDirs(0), LogLoader.CleanShutdownFile).delete()
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)
@@ -226,7 +225,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     printSegments()
 
     //Start broker 101. When it comes up it should read a whole batch of messages from the leader.
-    //As the chronology is lost we would end up with non-monatonic offsets (pre kip-101)
+    //As the chronology is lost we would end up with non-monotonic offsets (pre kip-101)
     brokers(1).startup()
 
     //Wait for replication to resync
@@ -419,12 +418,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   }
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
-    val log: Log = getLog(broker, partition)
+    val log: UnifiedLog = getLog(broker, partition)
     log.flush()
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): Log = {
+  private def getLog(broker: KafkaServer, partition: Int): UnifiedLog = {
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
@@ -466,8 +465,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
-    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.version)
-    config.setProperty(KafkaConfig.LogMessageFormatVersionProp, apiVersion.version)
+    TestUtils.setIbpAndMessageFormatVersions(config, apiVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }

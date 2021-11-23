@@ -115,7 +115,7 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
 
         # Make sure the ConfigCommand CLI is able to talk to a TLS-enabled ZooKeeper quorum
         # This is necessary for the bootstrap use case despite direct ZooKeeper connectivity being deprecated
-        self.zk.describe(self.topic)
+        self.zk.describeUsers()
 
         # Make sure the AclCommand CLI is able to talk to a TLS-enabled ZooKeeper quorum
         # This is necessary for the bootstrap use case despite direct ZooKeeper connectivity being deprecated

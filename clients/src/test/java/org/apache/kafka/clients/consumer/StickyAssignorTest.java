@@ -40,6 +40,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static java.util.Collections.emptyList;
+
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override
@@ -51,6 +53,48 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
         return new Subscription(topics,
             serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(DEFAULT_GENERATION))));
+    }
+
+    @Override
+    public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
+        return new Subscription(topics,
+                                serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
+    }
+
+    @Test
+    public void testAllConsumersHaveOwnedPartitionInvalidatedWhenClaimedByMultipleConsumersInSameGenerationWithEqualPartitionsPerConsumer() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+
+        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
+        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
+        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer3));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testAllConsumersHaveOwnedPartitionInvalidatedWhenClaimedByMultipleConsumersInSameGenerationWithUnequalPartitionsPerConsumer() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 4);
+
+        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
+        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
+        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic, 1), tp(topic, 3)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer3));
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
     }
 
     @ParameterizedTest(name = "testAssignmentWithMultipleGenerations1 with isAllSubscriptionsEqual: {0}")
@@ -226,11 +270,6 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(c2partitions0.containsAll(c2partitions));
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-    }
-
-    private Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
-        return new Subscription(topics,
-            serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
     }
 
     private static Subscription buildSubscriptionWithOldSchema(List<String> topics, List<TopicPartition> partitions) {

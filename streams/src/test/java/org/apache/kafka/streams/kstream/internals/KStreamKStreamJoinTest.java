@@ -100,8 +100,7 @@ public class KStreamKStreamJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
-                    + "offset=[0]")
+                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
             );
         }
     }

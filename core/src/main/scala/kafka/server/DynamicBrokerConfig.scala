@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.network.SocketServer
@@ -36,6 +35,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 
+import scala.annotation.nowarn
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -204,16 +204,19 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val reconfigurables = mutable.Buffer[Reconfigurable]()
   private val brokerReconfigurables = mutable.Buffer[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var currentConfig = kafkaConfig
+  private var currentConfig: KafkaConfig = null
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
-  private[server] def initialize(zkClient: KafkaZkClient): Unit = {
+  private[server] def initialize(zkClientOpt: Option[KafkaZkClient]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
-    val adminZkClient = new AdminZkClient(zkClient)
-    updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
-    val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-    updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+
+    zkClientOpt.foreach { zkClient =>
+      val adminZkClient = new AdminZkClient(zkClient)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
+      val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
+      val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
+      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+    }
   }
 
   /**
@@ -516,6 +519,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false)
     if (newConfig ne currentConfig) {
@@ -621,6 +625,7 @@ trait BrokerReconfigurable {
 object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
   // is supported on all brokers in the cluster.
+  @nowarn("cat=deprecation")
   val ExcludedConfigs = Set(KafkaConfig.LogMessageFormatVersionProp)
 
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
@@ -652,9 +657,9 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    val currentLogConfig = logManager.currentDefaultConfig
-    val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
-    val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
+    val originalLogConfig = logManager.currentDefaultConfig
+    val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
+    val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
     newConfig.valuesFromThisConfig.forEach { (k, v) =>
       if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
@@ -670,7 +675,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 
     updateLogsConfig(newBrokerDefaults.asScala)
 
-    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
+    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !originalUncleanLeaderElectionEnable) {
       server match {
         case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableDefaultUncleanLeaderElection()
         case _ =>
@@ -718,7 +723,7 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
     if (newConfig.numNetworkThreads != oldConfig.numNetworkThreads)
       server.socketServer.resizeThreadPool(oldConfig.numNetworkThreads, newConfig.numNetworkThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
-      server.replicaManager.replicaFetcherManager.resizeThreadPool(newConfig.numReplicaFetchers)
+      server.replicaManager.resizeFetcherThreadPool(newConfig.numReplicaFetchers)
     if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)
       server.logManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
     if (newConfig.backgroundThreads != oldConfig.backgroundThreads)
@@ -954,6 +959,3 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     listeners.map(e => (e.listenerName, e)).toMap
 
 }
-
-
-

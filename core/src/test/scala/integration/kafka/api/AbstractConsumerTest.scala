@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -74,8 +74,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // create the test topic with all the brokers as replicas
     createTopic(topic, 2, brokerCount)
@@ -161,6 +161,25 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
       msg = s"Timed out before consuming expected $numRecords records. " +
         s"The number consumed was ${records.size}.")
     records
+  }
+
+
+  /**
+   * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
+   * records to each partition
+   */
+  protected def createTopicAndSendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                                          topicName: String,
+                                          numPartitions: Int,
+                                          recordsPerPartition: Int): Set[TopicPartition] = {
+    createTopic(topicName, numPartitions, brokerCount)
+    var parts = Set[TopicPartition]()
+    for (partition <- 0 until numPartitions) {
+      val tp = new TopicPartition(topicName, partition)
+      sendRecords(producer, recordsPerPartition, tp)
+      parts = parts + tp
+    }
+    parts
   }
 
   protected def sendAndAwaitAsyncCommit[K, V](consumer: Consumer[K, V],

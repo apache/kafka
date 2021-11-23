@@ -104,7 +104,7 @@ public class EmitOnChangeIntegrationTest {
             .toStream()
             .map((key, value) -> {
                 if (shouldThrow.compareAndSet(true, false)) {
-                    throw new IllegalStateException("Kaboom");
+                    throw new RuntimeException("Kaboom");
                 } else {
                     return new KeyValue<>(key, value);
                 }

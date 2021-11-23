@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.server;
 
+import kafka.api.ApiVersion;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -27,6 +28,7 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
@@ -54,7 +56,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -106,7 +107,7 @@ public class CheckpointBench {
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 LogConfig.apply(), new MockConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, ApiVersion.latestVersion());
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
@@ -117,20 +118,18 @@ public class CheckpointBench {
                         this.time, "");
 
         this.alterIsrManager = TestUtils.createAlterIsrManager();
-        this.replicaManager = new ReplicaManager(
-                this.brokerProperties,
-                this.metrics,
-                this.time,
-                Option.empty(),
-                this.scheduler,
-                this.logManager,
-                new AtomicBoolean(false),
-                this.quotaManagers,
-                brokerTopicStats,
-                metadataCache,
-                this.failureChannel,
-                alterIsrManager,
-                Option.empty());
+        this.replicaManager = new ReplicaManagerBuilder().
+            setConfig(brokerProperties).
+            setMetrics(metrics).
+            setTime(time).
+            setScheduler(scheduler).
+            setLogManager(logManager).
+            setQuotaManagers(quotaManagers).
+            setBrokerTopicStats(brokerTopicStats).
+            setMetadataCache(metadataCache).
+            setLogDirFailureChannel(failureChannel).
+            setAlterIsrManager(alterIsrManager).
+            build();
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

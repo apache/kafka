@@ -23,7 +23,7 @@ import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
@@ -41,14 +41,14 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
-class ControllerIntegrationTest extends ZooKeeperTestHarness {
+class ControllerIntegrationTest extends QuorumTestHarness {
   var servers = Seq.empty[KafkaServer]
   val firstControllerEpoch = KafkaController.InitialControllerEpoch + 1
   val firstControllerEpochZkVersion = KafkaController.InitialControllerEpochZkVersion + 1
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     servers = Seq.empty[KafkaServer]
   }
 
@@ -218,6 +218,35 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     //Start other broker and check metadata
     verifyMetadata(otherBroker)
+  }
+
+  @Test
+  def testMetadataPropagationOnBrokerShutdownWithNoReplicas(): Unit = {
+    servers = makeServers(3)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val replicaBroker = servers.filter(e => e.config.brokerId != controllerId).head
+
+    val controllerBroker = servers.filter(e => e.config.brokerId == controllerId).head
+    val otherBroker = servers.filter(e => e.config.brokerId != controllerId &&
+      e.config.brokerId != replicaBroker.config.brokerId).head
+
+    val topic = "topic1"
+    val assignment = Map(0 -> Seq(replicaBroker.config.brokerId))
+
+    // Create topic
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
+    // Shutdown the broker with replica
+    replicaBroker.shutdown()
+    replicaBroker.awaitShutdown()
+
+    // Shutdown the other broker
+    otherBroker.shutdown()
+    otherBroker.awaitShutdown()
+
+    // The controller should be the only alive broker
+    TestUtils.waitUntilBrokerMetadataIsPropagated(Seq(controllerBroker))
   }
 
   @Test
@@ -1115,6 +1144,66 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(topicIdAfterUpgrade.get, topicId)
     assertEquals("t", controller2.controllerContext.topicNames(topicId))
 
+    TestUtils.waitUntilTrue(() => servers(0).logManager.getLog(tp).isDefined, "log was not created")
+
+    val topicIdInLog = servers(0).logManager.getLog(tp).get.topicId
+    assertEquals(Some(topicId), topicIdInLog)
+
+    adminZkClient.deleteTopic(tp.topic)
+    TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),
+      "topic should have been removed from controller context after deletion")
+  }
+
+  @Test
+  def testTopicIdCreatedOnUpgradeMultiBrokerScenario(): Unit = {
+    // Simulate an upgrade scenario where the controller is still on a pre-topic ID IBP, but the other two brokers are upgraded.
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    servers = servers ++ makeServers(3, startingIdNumber = 1)
+    val originalControllerId = TestUtils.waitUntilControllerElected(zkClient)
+    assertEquals(0, originalControllerId)
+    val controller = getController().kafkaController
+    assertEquals(KAFKA_2_7_IV0, servers(originalControllerId).config.interBrokerProtocolVersion)
+    val remainingBrokers = servers.filter(_.config.brokerId != originalControllerId)
+    val tp = new TopicPartition("t", 0)
+    // Only the remaining brokers will have the replicas for the partition
+    val assignment = Map(tp.partition -> remainingBrokers.map(_.config.brokerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, remainingBrokers(0).config.brokerId, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(None, topicIdAfterCreate)
+    val emptyTopicId = controller.controllerContext.topicIds.get("t")
+    assertEquals(None, emptyTopicId)
+
+    // All partition logs should not have topic IDs
+    remainingBrokers.foreach { server =>
+      TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined, "log was not created for server" + server.config.brokerId)
+      val topicIdInLog = server.logManager.getLog(tp).get.topicId
+      assertEquals(None, topicIdInLog)
+    }
+
+    // Shut down the controller to transfer the controller to a new IBP broker.
+    servers(originalControllerId).shutdown()
+    servers(originalControllerId).awaitShutdown()
+    // If we were upgrading, this server would be the latest IBP, but it doesn't matter in this test scenario
+    servers(originalControllerId).startup()
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
+    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertNotEquals(emptyTopicId, topicIdAfterUpgrade)
+    val controller2 = getController().kafkaController
+    assertNotEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
+    val topicId = controller2.controllerContext.topicIds.get("t").get
+    assertEquals(topicIdAfterUpgrade.get, topicId)
+    assertEquals("t", controller2.controllerContext.topicNames(topicId))
+
+    // All partition logs should have topic IDs
+    remainingBrokers.foreach { server =>
+      TestUtils.waitUntilTrue(() => server.logManager.getLog(tp).isDefined, "log was not created for server" + server.config.brokerId)
+      val topicIdInLog = server.logManager.getLog(tp).get.topicId
+      assertEquals(Some(topicId), topicIdInLog,
+        s"Server ${server.config.brokerId} had topic ID $topicIdInLog instead of ${Some(topicId)} as expected.")
+    }
+
     adminZkClient.deleteTopic(tp.topic)
     TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),
       "topic should have been removed from controller context after deletion")
@@ -1287,8 +1376,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           listenerSecurityProtocolMap : Option[String] = None,
                           controlPlaneListenerName : Option[String] = None,
                           interBrokerProtocolVersion: Option[ApiVersion] = None,
-                          logDirCount: Int = 1) = {
-    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount)
+                          logDirCount: Int = 1,
+                          startingIdNumber: Int = 0) = {
+    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)

@@ -52,7 +52,6 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -69,6 +68,7 @@ import org.slf4j.Logger;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1597,7 +1597,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                         "because the URL of the leader's REST interface is empty!"), null);
                                 return;
                             }
-                            String reconfigUrl = RestServer.urlJoin(leaderUrl, "/connectors/" + connName + "/tasks");
+                            String reconfigUrl = UriBuilder.fromUri(leaderUrl)
+                                    .path("connectors")
+                                    .path(connName)
+                                    .path("tasks")
+                                    .build()
+                                    .toString();
                             log.trace("Forwarding task configurations for connector {} to leader", connName);
                             RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config, sessionKey, requestSignatureAlgorithm);
                             cb.onCompletion(null, null);

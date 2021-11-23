@@ -56,7 +56,7 @@ public class FeatureControlManagerTest {
     @Test
     public void testUpdateFeatures() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        snapshotRegistry.createSnapshot(-1);
+        snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 2), snapshotRegistry);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
@@ -87,11 +87,11 @@ public class FeatureControlManagerTest {
         FeatureLevelRecord record = new FeatureLevelRecord().
             setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        snapshotRegistry.createSnapshot(-1);
+        snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 2), snapshotRegistry);
         manager.replay(record);
-        snapshotRegistry.createSnapshot(123);
+        snapshotRegistry.getOrCreateSnapshot(123);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(rangeMap("foo", 1, 2)), 123),
             manager.finalizedFeatures(123));
     }
@@ -124,7 +124,7 @@ public class FeatureControlManagerTest {
             rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
         assertEquals(Collections.singletonMap("foo", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
-        snapshotRegistry.createSnapshot(3);
+        snapshotRegistry.getOrCreateSnapshot(3);
 
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,

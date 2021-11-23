@@ -75,13 +75,14 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             serdes.rawValue("three")));
 
         context.restore(STORE_NAME, restorableEntries);
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
-            .fetchAll(0L, 2 * WINDOW_SIZE);
+        try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
+            .fetchAll(0L, 2 * WINDOW_SIZE)) {
 
-        assertEquals(windowedPair(1, "one", 0L), iterator.next());
-        assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
-        assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
-        assertFalse(iterator.hasNext());
+            assertEquals(windowedPair(1, "one", 0L), iterator.next());
+            assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());
+            assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test

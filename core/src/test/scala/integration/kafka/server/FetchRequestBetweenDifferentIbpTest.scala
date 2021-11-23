@@ -19,7 +19,6 @@ package integration.kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
-
 import kafka.api.{ApiVersion, DefaultApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV1, KAFKA_3_1_IV0}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -74,7 +73,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     producer.send(record2)
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
+    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
     assertEquals(2, count)
   }
 
@@ -110,7 +109,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
 
-    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
+    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
     assertEquals(2, count)
 
     // Make controller version2
@@ -129,7 +128,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Assign this new topic in addition to the old topics.
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic2, 0)))
 
-    val count2 = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
+    val count2 = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
     assertEquals(2, count2)
   }
 
@@ -144,10 +143,9 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     })
   }
 
-  private def createConfig(nodeId: Int,interBrokerVersion: ApiVersion): KafkaConfig = {
+  private def createConfig(nodeId: Int, interBrokerVersion: ApiVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerVersion.version)
     KafkaConfig.fromProps(props)
   }
 

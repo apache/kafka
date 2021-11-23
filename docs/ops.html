@@ -518,11 +518,6 @@
   <pre class="line-numbers"><code class="language-bash">  > bin/kafka-configs.sh  --bootstrap-server localhost:9092 --describe --entity-type users --entity-type clients
   Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200</code></pre>
-  <p>
-  It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. These properties are applied only if quota overrides or defaults are not configured in Zookeeper. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
-  <pre class="line-numbers"><code class="language-text">    quota.producer.default=10485760
-    quota.consumer.default=10485760</code></pre>
-  Note that these properties are being deprecated and may be removed in a future release. Defaults configured using kafka-configs.sh take precedence over these properties.
 
   <h3 class="anchor-heading"><a id="datacenters" class="anchor-link"></a><a href="#datacenters">6.2 Datacenters</a></h3>
 
@@ -1891,6 +1886,16 @@ $ bin/kafka-acls.sh \
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>io-wait-time-ns-total</td>
+        <td>The total time the I/O thread spent waiting in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>io-waittime-total</td>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent waiting in nanoseconds. Replacement is <code>io-wait-time-ns-total</code>.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>io-wait-ratio</td>
         <td>The fraction of time the I/O thread spent waiting.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
@@ -1898,6 +1903,16 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>io-time-ns-avg</td>
         <td>The average length of time for I/O per select call in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>io-time-ns-total</td>
+        <td>The total time the I/O thread spent doing I/O in nanoseconds.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>iotime-total</td>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent doing I/O in nanoseconds. Replacement is <code>io-time-ns-total</code>.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -2070,6 +2085,16 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>bufferpool-wait-time</td>
         <td>The fraction of time an appender waits for space allocation.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-time-total</td>
+        <td><b>*Deprecated*</b> The total time an appender waits for space allocation in nanoseconds. Replacement is <code>bufferpool-wait-time-ns-total</code></td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-time-ns-total</td>
+        <td>The total time an appender waits for space allocation in nanoseconds.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
 
@@ -2862,6 +2887,21 @@ for built-in state stores, currently we have:
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
+      <td>memtable-flush-time-avg</td>
+      <td>The average duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-flush-time-min</td>
+      <td>The minimum duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-flush-time-max</td>
+      <td>The maximum duration of memtable flushes to disc in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
       <td>block-cache-data-hit-ratio</td>
       <td>The ratio of block cache hits for data blocks relative to all lookups for data blocks to the block cache.</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
@@ -2894,6 +2934,21 @@ for built-in state stores, currently we have:
     <tr>
       <td>bytes-written-compaction-rate</td>
       <td>The average number of bytes written per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-avg</td>
+      <td>The average duration of disc compactions in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-min</td>
+      <td>The minimum duration of disc compactions in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-time-max</td>
+      <td>The maximum duration of disc compactions in ms.</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>

@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -29,7 +28,6 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.test.MockProcessor;
@@ -46,11 +44,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
-import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 
@@ -64,51 +58,7 @@ public class KStreamKStreamLeftJoinTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
-    public void testLeftJoinWithInvalidSpuriousResultFixFlag() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<Integer, String> stream1;
-        final KStream<Integer, String> stream2;
-        final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        stream1 = builder.stream(topic1, consumed);
-        stream2 = builder.stream(topic2, consumed);
-
-        joined = stream1.leftJoin(
-            stream2,
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        joined.process(supplier);
-
-        props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 5);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
-            assertThat(appender.getMessages(), hasItem("Invalid value (5) on internal configuration " +
-                "'" + ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX + "'. Please specify a true/false value."));
-        }
-    }
-
-    @Test
-    public void testLeftJoinWithSpuriousResultFixDisabledViaFeatureFlag() {
-        runLeftJoinWithoutSpuriousResultFix(
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofHours(24L)),
-            false
-        );
-    }
-
-    @Test
     public void testLeftJoinWithSpuriousResultFixDisabledOldApi() {
-        runLeftJoinWithoutSpuriousResultFix(
-            JoinWindows.of(ofMillis(100L)),
-            true
-        );
-    }
-
-    private void runLeftJoinWithoutSpuriousResultFix(final JoinWindows joinWindows,
-                                                     final boolean fixEnabled) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -121,20 +71,18 @@ public class KStreamKStreamLeftJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.leftJoin(
-            stream2,
-            MockValueJoiner.TOSTRING_JOINER,
-            joinWindows,
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(100L)),
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
 
-        props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, fixEnabled);
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
@@ -149,8 +97,8 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", 0L),
-                new KeyValueTimestamp<>(1, "A1+null", 0L)
+                    new KeyValueTimestamp<>(0, "A0+null", 0L),
+                    new KeyValueTimestamp<>(1, "A1+null", 0L)
             );
 
             // push two items to the other stream; this should produce two items
@@ -162,29 +110,14 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKeys[i], "a" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+a0", 0L),
-                new KeyValueTimestamp<>(1, "A1+a1", 0L)
+                    new KeyValueTimestamp<>(0, "A0+a0", 0L),
+                    new KeyValueTimestamp<>(1, "A1+a1", 0L)
             );
         }
     }
 
     @Test
-    public void testLeftJoinDuplicatesWithSpuriousResultFixDisabledFeatureFlag() {
-        testLeftJoinDuplicatesSpuriousResultFix(
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(10L)),
-            false
-        );
-    }
-    @Test
     public void testLeftJoinDuplicatesWithSpuriousResultFixDisabledOldApi() {
-        testLeftJoinDuplicatesSpuriousResultFix(
-            JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
-            true
-        );
-    }
-
-    private void testLeftJoinDuplicatesSpuriousResultFix(final JoinWindows joinWindows,
-                                                         final boolean fixEnabled) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -195,20 +128,18 @@ public class KStreamKStreamLeftJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.leftJoin(
-            stream2,
-            MockValueJoiner.TOSTRING_JOINER,
-            joinWindows,
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
 
-        props.put(ENABLE_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, fixEnabled);
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
@@ -219,10 +150,10 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic2.pipeInput(0, "a0", 0L);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+null", 0L),
-                new KeyValueTimestamp<>(0, "A0-0+null", 0L),
-                new KeyValueTimestamp<>(0, "A0+a0", 0L),
-                new KeyValueTimestamp<>(0, "A0-0+a0", 0L)
+                    new KeyValueTimestamp<>(0, "A0+null", 0L),
+                    new KeyValueTimestamp<>(0, "A0-0+null", 0L),
+                    new KeyValueTimestamp<>(0, "A0+a0", 0L),
+                    new KeyValueTimestamp<>(0, "A0-0+a0", 0L)
             );
         }
     }
@@ -946,6 +877,7 @@ public class KStreamKStreamLeftJoinTest {
 
         // push a dummy record to produce all left-join non-joined items
         time += 301L;
+        driver.advanceWallClockTime(Duration.ofMillis(1000L));
         inputTopic1.pipeInput(0, "dummy", time);
         processor.checkAndClearProcessResult(
             new KeyValueTimestamp<>(0, "C0+null", 1101L),

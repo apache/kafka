@@ -299,44 +299,55 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldIterateAllStoredItems() {
         final int items = addItemsToCache();
-        final KeyValueIterator<Bytes, byte[]> all = store.all();
         final List<Bytes> results = new ArrayList<>();
-        while (all.hasNext()) {
-            results.add(all.next().key);
+
+        try (final KeyValueIterator<Bytes, byte[]> all = store.all()) {
+            while (all.hasNext()) {
+                results.add(all.next().key);
+            }
         }
+
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
             Bytes.wrap("0".getBytes()),
             Bytes.wrap("1".getBytes()),
             Bytes.wrap("2".getBytes())
         ), results);
+
     }
 
     @Test
     public void shouldReverseIterateAllStoredItems() {
         final int items = addItemsToCache();
-        final KeyValueIterator<Bytes, byte[]> all = store.reverseAll();
         final List<Bytes> results = new ArrayList<>();
-        while (all.hasNext()) {
-            results.add(all.next().key);
+
+        try (final KeyValueIterator<Bytes, byte[]> all = store.reverseAll()) {
+            while (all.hasNext()) {
+                results.add(all.next().key);
+            }
         }
+
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
             Bytes.wrap("2".getBytes()),
             Bytes.wrap("1".getBytes()),
             Bytes.wrap("0".getBytes())
         ), results);
+
     }
 
     @Test
     public void shouldIterateOverRange() {
         final int items = addItemsToCache();
-        final KeyValueIterator<Bytes, byte[]> range =
-            store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
-        while (range.hasNext()) {
-            results.add(range.next().key);
+
+        try (final KeyValueIterator<Bytes, byte[]> range =
+                 store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
+            while (range.hasNext()) {
+                results.add(range.next().key);
+            }
         }
+
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
             Bytes.wrap("0".getBytes()),
@@ -348,12 +359,15 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldReverseIterateOverRange() {
         final int items = addItemsToCache();
-        final KeyValueIterator<Bytes, byte[]> range =
-            store.reverseRange(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
-        while (range.hasNext()) {
-            results.add(range.next().key);
+
+        try (final KeyValueIterator<Bytes, byte[]> range =
+                 store.reverseRange(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
+            while (range.hasNext()) {
+                results.add(range.next().key);
+            }
         }
+
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
             Bytes.wrap("2".getBytes()),
@@ -374,20 +388,23 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         store.putAll(entries);
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("p1", new StringSerializer());
         final List<String> keys = new ArrayList<>();
         final List<String> values = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            keys.add(next.key.toString());
-            values.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("p1", new StringSerializer())) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                keys.add(next.key.toString());
+                values.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(2));
         assertThat(keys, is(Arrays.asList("p1", "p11")));
         assertThat(values, is(Arrays.asList("2", "2")));
+
     }
 
     @Test
@@ -400,17 +417,19 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         store.putAll(entries);
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("abcd", new StringSerializer());
         final List<String> keys = new ArrayList<>();
         final List<String> values = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            keys.add(next.key.toString());
-            values.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("abcd", new StringSerializer())) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                keys.add(next.key.toString());
+                values.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(2));
         assertThat(keys, is(Arrays.asList("abcd", "abcdd")));
         assertThat(values, is(Arrays.asList("2", "1")));

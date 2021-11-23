@@ -86,6 +86,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         waitForTopicCreated(backup, "test-topic-1");
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
                 "topic config was not synced");
+        createAndTestNewTopicWithConfigFilter();
 
         assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
                 "Records were not produced to primary cluster.");
@@ -259,5 +260,13 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
         assertEquals(0, records.count(), "consumer record size is not zero");
         backupConsumer.close();
+    }
+
+    /*
+     * Returns expected topic name on target cluster.
+     */
+    @Override
+    String backupClusterTopicName(String topic) {
+        return topic;
     }
 }

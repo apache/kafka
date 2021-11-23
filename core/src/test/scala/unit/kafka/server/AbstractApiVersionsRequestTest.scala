@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util.Properties
+
 import kafka.test.ClusterInstance
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
@@ -24,10 +26,11 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Tag
 
-import java.util.Properties
 import scala.jdk.CollectionConverters._
 
+@Tag("integration")
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {

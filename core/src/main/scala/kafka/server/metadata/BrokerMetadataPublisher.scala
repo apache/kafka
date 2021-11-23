@@ -19,19 +19,19 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigType
-import kafka.server.{ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 
 import scala.collection.mutable
 
 
-object BrokerMetadataPublisher {
+object BrokerMetadataPublisher extends Logging {
   /**
    * Given a topic name, find out if it changed. Note: if a topic named X was deleted and
    * then re-created, this method will return just the re-creation. The deletion will show
@@ -46,37 +46,45 @@ object BrokerMetadataPublisher {
   def getTopicDelta(topicName: String,
                     newImage: MetadataImage,
                     delta: MetadataDelta): Option[TopicDelta] = {
-    Option(newImage.topics().getTopic(topicName)).map {
-      topicImage => delta.topicsDelta().changedTopic(topicImage.id())
+    Option(newImage.topics().getTopic(topicName)).flatMap {
+      topicImage => Option(delta.topicsDelta()).flatMap {
+        topicDelta => Option(topicDelta.changedTopic(topicImage.id()))
+      }
     }
   }
 
   /**
    * Find logs which should not be on the current broker, according to the metadata image.
    *
-   * @param brokerId  The ID of the current broker.
-   * @param newImage  The metadata image.
-   * @param logs      A collection of Log objects.
+   * @param brokerId        The ID of the current broker.
+   * @param newTopicsImage  The new topics image after broker has been reloaded
+   * @param logs            A collection of Log objects.
    *
    * @return          The topic partitions which are no longer needed on this broker.
    */
-  def findGhostReplicas(brokerId: Int,
-                        newImage: MetadataImage,
-                        logs: Iterable[Log]): Iterable[TopicPartition] = {
+  def findStrayPartitions(brokerId: Int,
+                          newTopicsImage: TopicsImage,
+                          logs: Iterable[UnifiedLog]): Iterable[TopicPartition] = {
     logs.flatMap { log =>
-      log.topicId match {
-        case None => throw new RuntimeException(s"Topic ${log.name} does not have a topic ID, " +
+      val topicId = log.topicId.getOrElse {
+        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
           "which is not allowed when running in KRaft mode.")
-        case Some(topicId) =>
-          val partitionId = log.topicPartition.partition()
-          Option(newImage.topics().getPartition(topicId, partitionId)) match {
-            case None => None
-            case Some(partition) => if (partition.replicas.contains(brokerId)) {
-              Some(log.topicPartition)
-            } else {
-              None
-            }
+      }
+
+      val partitionId = log.topicPartition.partition()
+      Option(newTopicsImage.getPartition(topicId, partitionId)) match {
+        case Some(partition) =>
+          if (!partition.replicas.contains(brokerId)) {
+            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
+              s"does not contain the local brokerId $brokerId.")
+            Some(log.topicPartition)
+          } else {
+            None
           }
+
+        case None =>
+          info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
+          Some(log.topicPartition)
       }
     }
   }
@@ -105,72 +113,52 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
-  override def publish(newHighestMetadataOffset: Long,
-                       delta: MetadataDelta,
-                       newImage: MetadataImage): Unit = {
+  override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
+    val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
+
     try {
+      trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset ${newHighestMetadataOffset}.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset ${newHighestMetadataOffset}.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
       }
 
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, newHighestMetadataOffset)
+        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
       }
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
         // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(newImage, topicsDelta)
+        replicaManager.applyDelta(topicsDelta, newImage)
 
-        // Handle the case where the old consumer offsets topic was deleted.
-        if (topicsDelta.topicWasDeleted(Topic.GROUP_METADATA_TOPIC_NAME)) {
-          topicsDelta.image().getTopic(Topic.GROUP_METADATA_TOPIC_NAME).partitions().entrySet().forEach {
-            entry =>
-              if (entry.getValue().leader == brokerId) {
-                groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-              }
-          }
-        }
-        // Handle the case where we have new local leaders or followers for the consumer
-        // offsets topic.
-        getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => groupCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
-          }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-          }
-        }
+        // Update the group coordinator of local changes
+        updateCoordinator(
+          newImage,
+          delta,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          groupCoordinator.onElection,
+          groupCoordinator.onResignation
+        )
 
-        // Handle the case where the old transaction state topic was deleted.
-        if (topicsDelta.topicWasDeleted(Topic.TRANSACTION_STATE_TOPIC_NAME)) {
-          topicsDelta.image().getTopic(Topic.TRANSACTION_STATE_TOPIC_NAME).partitions().entrySet().forEach {
-            entry =>
-              if (entry.getValue().leader == brokerId) {
-                txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-              }
-          }
-        }
-        // If the transaction state topic changed in a way that's relevant to this broker,
-        // notify the transaction coordinator.
-        getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          topicDelta.newLocalLeaders(brokerId).forEach {
-            entry => txnCoordinator.onElection(entry.getKey(), entry.getValue().leaderEpoch)
-          }
-          topicDelta.newLocalFollowers(brokerId).forEach {
-            entry => txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-          }
-        }
+        // Update the transaction coordinator of local changes
+        updateCoordinator(
+          newImage,
+          delta,
+          Topic.TRANSACTION_STATE_TOPIC_NAME,
+          txnCoordinator.onElection,
+          txnCoordinator.onResignation
+        )
 
         // Notify the group coordinator about deleted topics.
         val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
@@ -195,7 +183,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           }
           tag.foreach { t =>
             val newProperties = newImage.configs().configProperties(configResource)
-            dynamicConfigHandlers(t).processConfigChanges(configResource.name(), newProperties)
+            val maybeDefaultName = configResource.name() match {
+              case "" => ConfigEntityName.Default
+              case k => k
+            }
+            dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
           }
         }
       }
@@ -209,10 +201,55 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         finishInitializingReplicaManager(newImage)
       }
     } catch {
-      case t: Throwable => error(s"Error publishing broker metadata at ${newHighestMetadataOffset}", t)
+      case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
     } finally {
       _firstPublish = false
+    }
+  }
+
+  /**
+   * Update the coordinator of local replica changes: election and resignation.
+   *
+   * @param image latest metadata image
+   * @param delta metadata delta from the previous image and the latest image
+   * @param topicName name of the topic associated with the coordinator
+   * @param election function to call on election; the first parameter is the partition id;
+   *                 the second parameter is the leader epoch
+   * @param resignation function to call on resignation; the first parameter is the partition id;
+   *                    the second parameter is the leader epoch
+   */
+  private def updateCoordinator(
+    image: MetadataImage,
+    delta: MetadataDelta,
+    topicName: String,
+    election: (Int, Int) => Unit,
+    resignation: (Int, Option[Int]) => Unit
+  ): Unit = {
+    // Handle the case where the topic was deleted
+    Option(delta.topicsDelta()).foreach { topicsDelta =>
+      if (topicsDelta.topicWasDeleted(topicName)) {
+        topicsDelta.image.getTopic(topicName).partitions.entrySet.forEach { entry =>
+          if (entry.getValue.leader == brokerId) {
+            resignation(entry.getKey, Some(entry.getValue.leaderEpoch))
+          }
+        }
+      }
+    }
+
+    // Handle the case where the replica was reassigned, made a leader or made a follower
+    getTopicDelta(topicName, image, delta).foreach { topicDelta =>
+      val changes = topicDelta.localChanges(brokerId)
+
+      changes.deletes.forEach { topicPartition =>
+        resignation(topicPartition.partition, None)
+      }
+      changes.leaders.forEach { (topicPartition, partitionInfo) =>
+        election(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+      }
+      changes.followers.forEach { (topicPartition, partitionInfo) =>
+        resignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
+      }
     }
   }
 
@@ -237,9 +274,9 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     // Delete log directories which we're not supposed to have, according to the
     // latest metadata. This is only necessary to do when we're first starting up. If
     // we have to load a snapshot later, these topics will appear in deletedTopicIds.
-    val ghostReplicas = findGhostReplicas(brokerId, newImage, logManager.allLogs)
-    if (ghostReplicas.nonEmpty) {
-      replicaManager.deleteGhostReplicas(ghostReplicas)
+    val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.allLogs)
+    if (strayPartitions.nonEmpty) {
+      replicaManager.deleteStrayReplicas(strayPartitions)
     }
 
     // Make sure that the high water mark checkpoint thread is running for the replica

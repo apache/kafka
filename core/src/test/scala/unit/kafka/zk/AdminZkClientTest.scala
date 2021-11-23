@@ -23,11 +23,11 @@ import kafka.controller.ReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
 
-class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTest {
 
   var servers: Seq[KafkaServer] = Seq()
 
@@ -136,6 +136,18 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
     // shouldn't be able to create a topic that collides
     assertThrows(classOf[InvalidTopicException], () => adminZkClient.createTopic(collidingTopic, 3, 1))
+  }
+
+  @Test
+  def testMarkedDeletionTopicCreation(): Unit = {
+    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val topicPartition = new TopicPartition("test", 0)
+    val topic = topicPartition.topic
+    EasyMock.expect(zkMock.isTopicMarkedForDeletion(topic)).andReturn(true);
+    EasyMock.replay(zkMock)
+    val adminZkClient = new AdminZkClient(zkMock)
+
+    assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
   }
 
   @Test

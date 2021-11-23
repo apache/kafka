@@ -346,7 +346,7 @@ public class MockController implements Controller {
     }
 
     @Override
-    public long curClaimEpoch() {
+    public int curClaimEpoch() {
         return active ? 1 : -1;
     }
 

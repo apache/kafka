@@ -50,25 +50,36 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
+/**
+ * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
+ *
+ * <p>
+ * Under the current scheme for classloading isolation in Connect, the delegating classloader loads
+ * plugin classes that it finds in its child plugin classloaders. For classes that are not plugins,
+ * this delegating classloader delegates its loading to its parent. This makes this classloader a
+ * child-first classloader.
+ * <p>
+ * This class is thread-safe and parallel capable.
+ */
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
     private static final String UNDEFINED_VERSION = "undefined";
 
-    private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
-    private final Map<String, String> aliases;
+    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
+    private final ConcurrentMap<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
@@ -85,11 +96,19 @@ public class DelegatingClassLoader extends URLClassLoader {
         Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
             .collect(Collectors.toSet());
 
+    // Although this classloader does not load classes directly but rather delegates loading to a
+    // PluginClassLoader or its parent through its base class, because of the use of inheritance in
+    // in the latter case, this classloader needs to also be declared as parallel capable to use
+    // fine-grain locking when loading classes.
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
-        this.pluginLoaders = new HashMap<>();
-        this.aliases = new HashMap<>();
+        this.pluginLoaders = new ConcurrentHashMap<>();
+        this.aliases = new ConcurrentHashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
@@ -177,7 +196,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return classLoader;
     }
 
-    private static PluginClassLoader newPluginClassLoader(
+    protected PluginClassLoader newPluginClassLoader(
             final URL pluginLocation,
             final URL[] urls,
             final ClassLoader parent

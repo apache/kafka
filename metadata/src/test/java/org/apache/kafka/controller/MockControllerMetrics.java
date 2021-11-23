@@ -19,14 +19,18 @@ package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active;
+    private volatile int fencedBrokers;
+    private volatile int activeBrokers;
     private volatile int topics;
     private volatile int partitions;
     private volatile int offlinePartitions;
     private volatile int preferredReplicaImbalances;
-
+    private volatile boolean closed = false;
 
     public MockControllerMetrics() {
         this.active = false;
+        this.fencedBrokers = 0;
+        this.activeBrokers = 0;
         this.topics = 0;
         this.partitions = 0;
         this.offlinePartitions = 0;
@@ -51,6 +55,26 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
+    }
+
+    @Override
+    public void setFencedBrokerCount(int brokerCount) {
+        this.fencedBrokers = brokerCount;
+    }
+
+    @Override
+    public int fencedBrokerCount() {
+        return this.fencedBrokers;
+    }
+
+    @Override
+    public void setActiveBrokerCount(int brokerCount) {
+        this.activeBrokers = brokerCount;
+    }
+
+    @Override
+    public int activeBrokerCount() {
+        return activeBrokers;
     }
 
     @Override
@@ -91,5 +115,14 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+    }
+
+    public boolean isClosed() {
+        return this.closed;
     }
 }

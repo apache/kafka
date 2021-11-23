@@ -378,8 +378,6 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -394,6 +392,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -443,8 +442,6 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -459,6 +456,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka

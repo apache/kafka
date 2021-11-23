@@ -101,7 +101,7 @@ class MetadataRecordSerdeTest {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.clear();
-        buffer.put((byte) 0x00);
+        buffer.put((byte) 0x01);
         buffer.put((byte) 0x80);
         buffer.put((byte) 0x80);
         buffer.put((byte) 0x80);
@@ -123,7 +123,7 @@ class MetadataRecordSerdeTest {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.clear();
-        buffer.put((byte) 0x00);
+        buffer.put((byte) 0x01);
         buffer.put((byte) 0x08);
         buffer.put((byte) 0x80);
         buffer.put((byte) 0x80);
@@ -145,7 +145,7 @@ class MetadataRecordSerdeTest {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(64);
         buffer.clear();
-        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x01); // frame version
         buffer.put((byte) 0x08); // apiKey
         buffer.put((byte) 0xff); // api version
         buffer.put((byte) 0xff); // api version
@@ -166,7 +166,7 @@ class MetadataRecordSerdeTest {
     public void testParsingUnsupportedApiKey() {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(64);
-        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x01); // frame version
         buffer.put((byte) 0xff); // apiKey
         buffer.put((byte) 0x7f); // apiKey
         buffer.put((byte) 0x00); // api version
@@ -185,7 +185,7 @@ class MetadataRecordSerdeTest {
     public void testParsingMalformedMessage() {
         MetadataRecordSerde serde = new MetadataRecordSerde();
         ByteBuffer buffer = ByteBuffer.allocate(4);
-        buffer.put((byte) 0x00); // frame version
+        buffer.put((byte) 0x01); // frame version
         buffer.put((byte) 0x00); // apiKey
         buffer.put((byte) 0x00); // apiVersion
         buffer.put((byte) 0x80); // malformed data
