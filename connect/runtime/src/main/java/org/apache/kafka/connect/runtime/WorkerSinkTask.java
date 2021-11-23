@@ -652,10 +652,10 @@ class WorkerSinkTask extends WorkerTask {
                 workerErrantRecordReporter.cancelFutures(topicPartitions);
                 log.trace("Cancelled all reported errors for {}", topicPartitions);
             }
-            topicPartitions.forEach(currentOffsets::remove);
+            currentOffsets.keySet().removeAll(topicPartitions);
         }
         updatePartitionCount();
-        topicPartitions.forEach(lastCommittedOffsets::remove);
+        lastCommittedOffsets.keySet().removeAll(topicPartitions);
     }
 
     private void updatePartitionCount() {
@@ -894,10 +894,8 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         void clearOffsets(Collection<TopicPartition> topicPartitions) {
-            topicPartitions.forEach(tp -> {
-                consumedOffsets.remove(tp);
-                committedOffsets.remove(tp);
-            });
+            consumedOffsets.keySet().removeAll(topicPartitions);
+            committedOffsets.keySet().removeAll(topicPartitions);
             computeSinkRecordLag();
         }
 
