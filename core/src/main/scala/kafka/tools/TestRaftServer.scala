@@ -38,7 +38,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.snapshot.SnapshotReader
+import org.apache.kafka.snapshot.{FileSnapshotReader}
 
 import scala.jdk.CollectionConverters._
 
@@ -152,7 +152,7 @@ class TestRaftServer(
     case class HandleClaim(epoch: Int) extends RaftEvent
     case object HandleResign extends RaftEvent
     case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
-    case class HandleSnapshot(reader: SnapshotReader[Array[Byte]]) extends RaftEvent
+    case class HandleSnapshot(reader: FileSnapshotReader[Array[Byte]]) extends RaftEvent
     case object Shutdown extends RaftEvent
 
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
@@ -178,7 +178,7 @@ class TestRaftServer(
       eventQueue.offer(HandleCommit(reader))
     }
 
-    override def handleSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
+    override def handleSnapshot(reader: FileSnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
     }
 

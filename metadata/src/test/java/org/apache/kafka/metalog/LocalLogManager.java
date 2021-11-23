@@ -39,6 +39,8 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.FileSnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -379,7 +381,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             offset = reader.lastOffset().getAsLong();
         }
 
-        void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+        void handleSnapshot(FileSnapshotReader<ApiMessageAndVersion> reader) {
             listener.handleSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
@@ -701,7 +703,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
+    public Optional<FileSnapshotWriter<ApiMessageAndVersion>> createSnapshot(
         long committedOffset,
         int committedEpoch,
         long lastContainedLogTimestamp

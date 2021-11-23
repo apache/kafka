@@ -17,7 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -43,7 +42,7 @@ import org.apache.kafka.raft.internals.RecordsIterator;
  * offsets and epoch from the log are included in this snapshot. Both of these values are
  * inclusive.
  */
-public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
+public final class SnapshotReader<T> implements FileSnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
 

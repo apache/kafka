@@ -45,7 +45,7 @@ import java.util.function.Supplier;
  *
  * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
  */
-final public class SnapshotWriter<T> implements AutoCloseable {
+final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
@@ -74,6 +74,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
             compressionType,
             serde
         );
+        initializeSnapshotWithHeader();
     }
 
     /**
@@ -122,7 +123,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
      * @param serde the record serialization and deserialization implementation
      * @return {@link Optional}{@link SnapshotWriter}
      */
-    public static <T> Optional<SnapshotWriter<T>> createWithHeader(
+    public static <T> Optional<FileSnapshotWriter<T>> createWithHeader(
         Supplier<Optional<RawSnapshotWriter>> supplier,
         int maxBatchSize,
         MemoryPool memoryPool,
@@ -131,7 +132,7 @@ final public class SnapshotWriter<T> implements AutoCloseable {
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
-        Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
+        return supplier.get().map(snapshot -> {
             return new SnapshotWriter<T>(
                     snapshot,
                     maxBatchSize,
@@ -141,8 +142,6 @@ final public class SnapshotWriter<T> implements AutoCloseable {
                     CompressionType.NONE,
                     serde);
         });
-        writer.ifPresent(SnapshotWriter::initializeSnapshotWithHeader);
-        return writer;
     }
 
     /**
