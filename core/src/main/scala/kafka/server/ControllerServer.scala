@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.api.KAFKA_3_1_IV1
-
 import java.util
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
@@ -31,6 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -38,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
 import org.apache.kafka.metadata.{MetadataVersion, MetadataVersions, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -60,7 +59,8 @@ class ControllerServer(
   val time: Time,
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val raftApiVersions: ApiVersions
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -77,9 +77,8 @@ class ControllerServer(
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
-  // TODO define this map elsewhere
-  val supportedFeatures: Map[String, VersionRange] = Map(
-    MetadataVersion.FEATURE_NAME -> VersionRange.of(MetadataVersions.V1.version(), MetadataVersions.latest().version()))
+  val quorumFeatures = new QuorumFeatures(   // TODO define this map elsewhere
+    raftApiVersions, Map(MetadataVersion.FEATURE_NAME -> VersionRange.of(MetadataVersions.V1.version(), MetadataVersions.latest().version())).asJava)
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -163,14 +162,8 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val initialMetadataVersion = config.interBrokerProtocolVersion match {
-        case KAFKA_3_1_IV1 =>
-          MetadataVersions.of(metaProperties.initialMetadataVersion)
-        case ibp if ibp < KAFKA_3_1_IV1 =>
-          MetadataVersions.UNSUPPORTED
-        case ibp if ibp > KAFKA_3_1_IV1 =>
-          throw new ConfigException("Cannot run KRaft mode with IBP greater than 3.1-IV1")
-        case _ => throw new IllegalStateException
+      if (config.interBrokerProtocolVersionString != Defaults.InterBrokerProtocolVersion) {
+        throw new ConfigException(s"Detected non-default IBP value ${config.interBrokerProtocolVersionString}. Cannot run KRaft mode with IBP set!")
       }
 
       controller = new QuorumController.Builder(config.nodeId).
@@ -178,7 +171,7 @@ class ControllerServer(
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
         setRaftClient(raftManager.client).
-        setSupportedFeatures(supportedFeatures.asJava).
+        setQuorumFeatures(quorumFeatures).
         setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
@@ -187,7 +180,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setInitialMetadataVersion(initialMetadataVersion).
+        setInitialMetadataVersion(metaProperties.initialMetadataVersion).
         build()
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
@@ -196,7 +189,6 @@ class ControllerServer(
         authorizer,
         quotaManagers,
         time,
-        supportedFeatures,
         controller,
         raftManager,
         config,

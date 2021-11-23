@@ -4262,8 +4262,7 @@ public class KafkaAdminClient extends AdminClient {
                 return new UpdateFeaturesRequest.Builder(
                     new UpdateFeaturesRequestData()
                         .setTimeoutMs(timeoutMs)
-                        .setFeatureUpdates(featureUpdatesRequestData)
-                            .set);
+                        .setFeatureUpdates(featureUpdatesRequestData));
             }
 
             @Override

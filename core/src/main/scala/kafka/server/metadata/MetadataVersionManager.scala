@@ -85,7 +85,7 @@ sealed trait MetadataVersionDelta {
   val version: Short
 
   def asMetadataVersions(): MetadataVersions = {
-    MetadataVersions.of(version)
+    MetadataVersions.fromValue(version)
   }
 }
 

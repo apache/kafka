@@ -108,7 +108,8 @@ class KafkaRaftManager[T](
   time: Time,
   metrics: Metrics,
   threadNamePrefixOpt: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  apiVersions: ApiVersions
 ) extends RaftManager[T] with Logging {
 
   private val raftConfig = new RaftConfig(config)
@@ -274,7 +275,7 @@ class KafkaRaftManager[T](
       config.connectionSetupTimeoutMaxMs,
       time,
       discoverBrokerVersions,
-      new ApiVersions,
+      apiVersions,
       logContext
     )
   }

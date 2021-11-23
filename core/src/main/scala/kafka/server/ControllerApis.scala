@@ -22,7 +22,6 @@ import java.util.Collections
 import java.util.Map.Entry
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
 import java.util.concurrent.{CompletableFuture, ExecutionException}
-
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -48,7 +47,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
+import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
@@ -62,7 +61,6 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val authorizer: Option[Authorizer],
                      val quotas: QuotaManagers,
                      val time: Time,
-                     val supportedFeatures: Map[String, VersionRange],
                      val controller: Controller,
                      val raftManager: RaftManager[ApiMessageAndVersion],
                      val config: KafkaConfig,
@@ -781,14 +779,12 @@ class ControllerApis(val requestChannel: RequestChannel,
     val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
     controller.updateFeatures(updateFeaturesRequest.data)
-      .whenComplete((results, exception) => {
+      .whenComplete((response, exception) => {
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-            results.setThrottleTimeMs(requestThrottleMs)
-            new UpdateFeaturesResponse(results)
-          })
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new UpdateFeaturesResponse(response.setThrottleTimeMs(requestThrottleMs)))
         }
       })
   }

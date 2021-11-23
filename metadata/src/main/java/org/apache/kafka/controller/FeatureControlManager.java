@@ -49,9 +49,10 @@ public class FeatureControlManager {
     /**
      * An immutable map containing the features supported by this controller's software.
      */
-    private final Map<String, VersionRange> supportedFeatures;
+    private final QuorumFeatures quorumFeatures;
 
     private final MetadataVersionProvider metadataVersionProvider;
+
     /**
      * Maps feature names to finalized version ranges.
      */
@@ -59,10 +60,10 @@ public class FeatureControlManager {
 
     private final Map<String, FeatureLevelListener> listeners;
 
-    FeatureControlManager(Map<String, VersionRange> supportedFeatures,
+    FeatureControlManager(QuorumFeatures quorumFeatures,
                           SnapshotRegistry snapshotRegistry,
                           MetadataVersionProvider metadataVersionProvider) {
-        this.supportedFeatures = supportedFeatures;
+        this.quorumFeatures = quorumFeatures;
         this.metadataVersionProvider = metadataVersionProvider;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.listeners = new HashMap<>();
@@ -91,10 +92,8 @@ public class FeatureControlManager {
                         "Cannot initialize metadata.version since it has already been initialized.")
             ));
         }
-        final VersionRange supportedRange = supportedFeatures.get(MetadataVersions.FEATURE_NAME);
-        final VersionRange initRange = VersionRange.of(supportedRange.min(), initVersion);
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        ApiError result = updateMetadataVersion(initRange, records::add);
+        ApiError result = updateMetadataVersion(initVersion, initVersion, records::add);
         return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersions.FEATURE_NAME, result));
     }
 
@@ -103,8 +102,9 @@ public class FeatureControlManager {
     }
 
     boolean canSupportVersion(String featureName, VersionRange versionRange) {
-        VersionRange localRange = supportedFeatures.get(featureName);
-        return localRange != null && localRange.contains(versionRange);
+        return quorumFeatures.localSupportedFeature(featureName)
+            .filter(localRange -> localRange.contains(versionRange))
+            .isPresent();
     }
 
     private ApiError updateFeature(String featureName,
@@ -169,7 +169,8 @@ public class FeatureControlManager {
         }
 
         if (featureName.equals(MetadataVersions.FEATURE_NAME)) {
-            return updateMetadataVersion(newRange, records::add);
+            // Perform additional checks if we're updating metadata.version
+            return updateMetadataVersion(newRange.max(), metadataVersionProvider.activeVersion().version(), records::add);
         } else {
             records.add(new ApiMessageAndVersion(
                 new FeatureLevelRecord().setName(featureName).
@@ -182,29 +183,38 @@ public class FeatureControlManager {
     /**
      * Perform some additional validation for metadata.version updates.
      */
-    private ApiError updateMetadataVersion(VersionRange newRange, Consumer<ApiMessageAndVersion> recordConsumer) {
-        if (newRange.max() < newRange.min()) {
+    private ApiError updateMetadataVersion(short newVersion,
+                                           short recordVersion,
+                                           Consumer<ApiMessageAndVersion> recordConsumer) {
+        Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersions.FEATURE_NAME);
+        if (!quorumSupported.isPresent()) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The upper value for the new range cannot be less than the lower value.");
+                "The quorum can not support metadata.version!");
         }
 
-        if (newRange.max() <= 0) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The upper value for the new range cannot be less than 1.");
+        if (newVersion <= 0) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION, "metadata.version cannot be less than 1");
         }
+
+        if (quorumSupported.get().max() < newVersion) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The controller quorum cannot support the given metadata.version " + newVersion);
+        }
+
+        final VersionRange newRange = VersionRange.of(quorumSupported.get().min(), newVersion);
 
         if (!canSupportVersion(MetadataVersions.FEATURE_NAME, newRange)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The controller does not support the given feature range.");
+                "The active controller does not support the given metadata.version " + newRange.max());
         }
 
         VersionRange currentRange = finalizedVersions.get(MetadataVersions.FEATURE_NAME);
-        if (currentRange != null && currentRange.max() > newRange.max()) {
+        if (currentRange != null && currentRange.max() > newVersion) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION, "Downgrading metadata.version is not yet supported.");
         }
 
         try {
-            MetadataVersions.of(newRange.max());
+            MetadataVersions.fromValue(newRange.max());
         } catch (IllegalArgumentException e) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newRange.max());
         }
@@ -212,9 +222,8 @@ public class FeatureControlManager {
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord().setName(MetadataVersions.FEATURE_NAME).
                 setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
-            metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
+                recordVersion));
         return ApiError.NONE;
-
     }
 
     FeatureMapAndEpoch finalizedFeatures(long lastCommittedOffset) {

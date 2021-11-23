@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -54,6 +56,10 @@ public class FeatureControlManagerTest {
         return result;
     }
 
+    public static QuorumFeatures features(Object... args) {
+        return new QuorumFeatures(new ApiVersions(), rangeMap(args));
+    }
+
     private static Map<String, Short> updateMap(Object... args) {
         Map<String, Short> result = new HashMap<>();
         for (int i = 0; i < args.length; i += 3) {
@@ -70,7 +76,7 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
+            features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
@@ -101,7 +107,7 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
+            features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(rangeMap("foo", 1, 2)), 123),
@@ -112,7 +118,7 @@ public class FeatureControlManagerTest {
     public void testUpdateFeaturesErrorCases() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -170,7 +176,7 @@ public class FeatureControlManagerTest {
     public void testFeatureControlIterator() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 1, 5, "bar", 1, 1),
                 Collections.emptySet(), Collections.emptyMap());

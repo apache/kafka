@@ -25,6 +25,7 @@ import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -80,7 +81,7 @@ class TestRaftServer(
     val metaProperties = MetaProperties(
       clusterId = Uuid.ZERO_UUID.toString,
       nodeId = config.nodeId,
-      initialMetadataVersion = MetadataVersions.latest().version()
+      initialMetadataVersion = MetadataVersions.latest()
     )
 
     raftManager = new KafkaRaftManager[Array[Byte]](
@@ -92,7 +93,8 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      new ApiVersions
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

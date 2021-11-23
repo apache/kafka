@@ -18,10 +18,10 @@ package kafka.raft
 
 import java.util.concurrent.CompletableFuture
 import java.util.Properties
-
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.tools.TestRaftServer.ByteArraySerde
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -78,7 +78,8 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      new ApiVersions
     )
   }
 

@@ -20,16 +20,10 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 
 public enum MetadataVersions implements MetadataVersion {
-    UNSUPPORTED((short) -2, null, "Unsupported version, IBP < 3.1-IV1", false) {
+    UNINITIALIZED((short) 0, null, "Uninitialized version", false) {
         @Override
         public short recordVersion(MetadataRecordType type) {
             return type.lowestSupportedVersion();
-        }
-    },
-    UNINITIALIZED((short) -1, null, "Uninitialized version", false) {
-        @Override
-        public short recordVersion(MetadataRecordType type) {
-            return -1;
         }
     },
     V1((short) 1, null, "Initial version", false) {
@@ -61,7 +55,7 @@ public enum MetadataVersions implements MetadataVersion {
         this.isBackwardsCompatible = isBackwardsCompatible;
     }
 
-    public static MetadataVersions of(short value) {
+    public static MetadataVersions fromValue(short value) {
         for (MetadataVersions version : MetadataVersions.values()) {
             if (version.version == value) {
                 return version;
@@ -69,6 +63,11 @@ public enum MetadataVersions implements MetadataVersion {
         }
         throw new IllegalArgumentException("Unsupported metadata.version " + value + "!");
     }
+
+    public static MetadataVersions stable() {
+        return V1;
+    }
+
 
     public static MetadataVersions latest() {
         return V2;
