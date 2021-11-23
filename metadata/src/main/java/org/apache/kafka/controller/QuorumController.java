@@ -256,7 +256,7 @@ public final class QuorumController implements Controller {
 
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, quorumFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
@@ -268,6 +268,8 @@ public final class QuorumController implements Controller {
             }
         }
     }
+
+    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
     private static final String ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX =
         "The active controller appears to be node ";

@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -37,7 +41,7 @@ public class TaskHandle {
 
     private final String taskId;
     private final ConnectorHandle connectorHandle;
-    private final AtomicInteger partitionsAssigned = new AtomicInteger(0);
+    private final ConcurrentMap<TopicPartition, PartitionHistory> partitions = new ConcurrentHashMap<>();
     private final StartAndStopCounter startAndStopCounter = new StartAndStopCounter();
     private final Consumer<SinkRecord> consumer;
 
@@ -128,19 +132,74 @@ public class TaskHandle {
     }
 
     /**
-     * Set the number of partitions assigned to this task.
+     * Adds a set of partitions to the (sink) task's assignment
      *
-     * @param numPartitions number of partitions
+     * @param partitions the newly-assigned partitions
      */
-    public void partitionsAssigned(int numPartitions) {
-        partitionsAssigned.set(numPartitions);
+    public void partitionsAssigned(Collection<TopicPartition> partitions) {
+        partitions.forEach(partition -> this.partitions.computeIfAbsent(partition, PartitionHistory::new).assigned());
     }
 
     /**
-     * @return the number of topic partitions assigned to this task.
+     * Removes a set of partitions to the (sink) task's assignment
+     *
+     * @param partitions the newly-revoked partitions
      */
-    public int partitionsAssigned() {
-        return partitionsAssigned.get();
+    public void partitionsRevoked(Collection<TopicPartition> partitions) {
+        partitions.forEach(partition -> this.partitions.computeIfAbsent(partition, PartitionHistory::new).revoked());
+    }
+
+    /**
+     * Records offset commits for a (sink) task's partitions
+     *
+     * @param partitions the committed partitions
+     */
+    public void partitionsCommitted(Collection<TopicPartition> partitions) {
+        partitions.forEach(partition -> this.partitions.computeIfAbsent(partition, PartitionHistory::new).committed());
+    }
+
+    /**
+     * @return the complete set of partitions currently assigned to this (sink) task
+     */
+    public Collection<TopicPartition> assignment() {
+        return partitions.values().stream()
+                .filter(PartitionHistory::isAssigned)
+                .map(PartitionHistory::topicPartition)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * @return the number of topic partitions assigned to this (sink) task.
+     */
+    public int numPartitionsAssigned() {
+        return assignment().size();
+    }
+
+    /**
+     * Returns the number of times the partition has been assigned to this (sink) task.
+     * @param partition the partition
+     * @return the number of times it has been assigned; may be 0 if never assigned
+     */
+    public int timesAssigned(TopicPartition partition) {
+        return partitions.computeIfAbsent(partition, PartitionHistory::new).timesAssigned();
+    }
+
+    /**
+     * Returns the number of times the partition has been revoked from this (sink) task.
+     * @param partition the partition
+     * @return the number of times it has been revoked; may be 0 if never revoked
+     */
+    public int timesRevoked(TopicPartition partition) {
+        return partitions.computeIfAbsent(partition, PartitionHistory::new).timesRevoked();
+    }
+
+    /**
+     * Returns the number of times the framework has committed offsets for this partition
+     * @param partition the partition
+     * @return the number of times it has been committed; may be 0 if never committed
+     */
+    public int timesCommitted(TopicPartition partition) {
+        return partitions.computeIfAbsent(partition, PartitionHistory::new).timesCommitted();
     }
 
     /**
@@ -265,5 +324,51 @@ public class TaskHandle {
         return "Handle{" +
                 "taskId='" + taskId + '\'' +
                 '}';
+    }
+
+    private static class PartitionHistory {
+        private final TopicPartition topicPartition;
+        private boolean assigned = false;
+        private int timesAssigned = 0;
+        private int timesRevoked = 0;
+        private int timesCommitted = 0;
+
+        public PartitionHistory(TopicPartition topicPartition) {
+            this.topicPartition = topicPartition;
+        }
+
+        public void assigned() {
+            timesAssigned++;
+            assigned = true;
+        }
+
+        public void revoked() {
+            timesRevoked++;
+            assigned = false;
+        }
+
+        public void committed() {
+            timesCommitted++;
+        }
+
+        public TopicPartition topicPartition() {
+            return topicPartition;
+        }
+
+        public boolean isAssigned() {
+            return assigned;
+        }
+
+        public int timesAssigned() {
+            return timesAssigned;
+        }
+
+        public int timesRevoked() {
+            return timesRevoked;
+        }
+
+        public int timesCommitted() {
+            return timesCommitted;
+        }
     }
 }

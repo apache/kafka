@@ -845,22 +845,6 @@ public class CachingPersistentSessionStoreTest {
         }
 
         @Override
-        public void apply(final byte[] key,
-                          final byte[] newValue,
-                          final byte[] oldValue,
-                          final long timestamp) {
-            forwarded.add(
-                new KeyValueTimestamp<>(
-                    keyDeserializer.deserialize(null, key),
-                    new Change<>(
-                        valueDesializer.deserialize(null, newValue),
-                        valueDesializer.deserialize(null, oldValue)),
-                    timestamp
-                )
-            );
-        }
-
-        @Override
         public void apply(final Record<byte[], Change<byte[]>> record) {
             forwarded.add(
                 new KeyValueTimestamp<>(

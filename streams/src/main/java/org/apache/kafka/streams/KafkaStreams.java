@@ -152,7 +152,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Logger log;
     private final String clientId;
     private final Metrics metrics;
-    private final StreamsConfig config;
+    protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
@@ -795,12 +795,12 @@ public class KafkaStreams implements AutoCloseable {
      * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology  the topology specifying the computational logic
-     * @param config    configs for Kafka Streams
+     * @param applicationConfigs    configs for Kafka Streams
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
-                        final StreamsConfig config) {
-        this(topology, config, new DefaultKafkaClientSupplier());
+                        final StreamsConfig applicationConfigs) {
+        this(topology, applicationConfigs, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -810,15 +810,15 @@ public class KafkaStreams implements AutoCloseable {
      * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology       the topology specifying the computational logic
-     * @param config         configs for Kafka Streams
+     * @param applicationConfigs         configs for Kafka Streams
      * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
      *                       for the new {@code KafkaStreams} instance
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
-                        final StreamsConfig config,
+                        final StreamsConfig applicationConfigs,
                         final KafkaClientSupplier clientSupplier) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier);
     }
 
     /**
@@ -828,34 +828,34 @@ public class KafkaStreams implements AutoCloseable {
      * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology       the topology specifying the computational logic
-     * @param config         configs for Kafka Streams
+     * @param applicationConfigs         configs for Kafka Streams
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
-                        final StreamsConfig config,
+                        final StreamsConfig applicationConfigs,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, new DefaultKafkaClientSupplier(), time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, new DefaultKafkaClientSupplier(), time);
     }
 
     private KafkaStreams(final Topology topology,
-                         final StreamsConfig config,
+                         final StreamsConfig applicationConfigs,
                          final KafkaClientSupplier clientSupplier,
                          final Time time) throws StreamsException {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, config), config, clientSupplier, time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
     }
 
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
-                           final StreamsConfig config,
+                           final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(topologyMetadata, config, clientSupplier, Time.SYSTEM);
+        this(topologyMetadata, applicationConfigs, clientSupplier, Time.SYSTEM);
     }
 
     private KafkaStreams(final TopologyMetadata topologyMetadata,
-                         final StreamsConfig config,
+                         final StreamsConfig applicationConfigs,
                          final KafkaClientSupplier clientSupplier,
                          final Time time) throws StreamsException {
-        this.config = config;
+        this.applicationConfigs = applicationConfigs;
         this.time = time;
 
         this.topologyMetadata = topologyMetadata;
@@ -864,15 +864,15 @@ public class KafkaStreams implements AutoCloseable {
         final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 
         try {
-            stateDirectory = new StateDirectory(config, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
+            stateDirectory = new StateDirectory(applicationConfigs, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
 
         // The application ID is a required config and hence should always have value
-        final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final String userClientId = applicationConfigs.getString(StreamsConfig.CLIENT_ID_CONFIG);
+        final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
             clientId = applicationId + "-" + processId;
         } else {
@@ -883,22 +883,22 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(config.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
-        metrics = getMetrics(config, time, clientId);
+        metrics = getMetrics(applicationConfigs, time, clientId);
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
-            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+            applicationConfigs.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             time
         );
 
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
-        ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
         threads = Collections.synchronizedList(new LinkedList<>());
@@ -906,14 +906,14 @@ public class KafkaStreams implements AutoCloseable {
 
         streamsMetadataState = new StreamsMetadataState(
             this.topologyMetadata,
-            parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+            parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
         oldHandler = false;
         streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
-        totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        final int numStreamThreads = topologyMetadata.getNumStreamThreads(config);
+        totalCacheSize = applicationConfigs.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
+        final int numStreamThreads = topologyMetadata.getNumStreamThreads(applicationConfigs);
         final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
 
         GlobalStreamThread.State globalThreadState = null;
@@ -921,8 +921,8 @@ public class KafkaStreams implements AutoCloseable {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(
                 topologyMetadata.globalTaskTopology(),
-                config,
-                clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
+                applicationConfigs,
+                clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
                 streamsMetrics,
@@ -949,13 +949,13 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         stateDirCleaner = setupStateDirCleaner();
-        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
     }
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             topologyMetadata,
-            config,
+            applicationConfigs,
             clientSupplier,
             adminClient,
             processId,
@@ -964,6 +964,7 @@ public class KafkaStreams implements AutoCloseable {
             time,
             streamsMetadataState,
             cacheSizePerThread,
+
             stateDirectory,
             delegatingStateRestoreListener,
             threadIdx,
@@ -1117,7 +1118,7 @@ public class KafkaStreams implements AutoCloseable {
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
                             final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
                                 adminClient.removeMembersFromConsumerGroup(
-                                    config.getString(StreamsConfig.APPLICATION_ID_CONFIG), 
+                                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
                                     new RemoveMembersFromConsumerGroupOptions(membersToRemove)
                                 );
                             try {
@@ -1125,16 +1126,16 @@ public class KafkaStreams implements AutoCloseable {
                                 removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
                             } catch (final java.util.concurrent.TimeoutException e) {
                                 log.error("Could not remove static member {} from consumer group {} due to a timeout: {}",
-                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                          groupInstanceID.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
                                 throw new TimeoutException(e.getMessage(), e);
                             } catch (final InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             } catch (final ExecutionException e) {
                                 log.error("Could not remove static member {} from consumer group {} due to: {}",
-                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                          groupInstanceID.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
                                 throw new StreamsException(
                                         "Could not remove static member " + groupInstanceID.get()
-                                            + " from consumer group " + config.getString(StreamsConfig.APPLICATION_ID_CONFIG)
+                                            + " from consumer group " + applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
                                             + " for the following reason: ",
                                         e.getCause()
                                 );
@@ -1286,7 +1287,7 @@ public class KafkaStreams implements AutoCloseable {
 
             processStreamThread(StreamThread::start);
 
-            final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
+            final Long cleanupDelay = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
             stateDirCleaner.scheduleAtFixedRate(() -> {
                 // we do not use lock here since we only read on the value and act on it
                 if (state == State.RUNNING) {

@@ -33,7 +33,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
+import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{MetadataVersions, PartitionRegistration}
 import org.junit.jupiter.api.Assertions._
@@ -80,6 +80,7 @@ class ReplicaManagerConcurrencyTest {
 
     val topicModel = new TopicModel(Uuid.randomUuid(), "foo", Map(0 -> initialPartitionRegistration))
     val topicPartition = new TopicPartition(topicModel.name, 0)
+    val topicIdPartition = new TopicIdPartition(topicModel.topicId, topicPartition)
     val controller = new ControllerModel(topicModel, channel, replicaManager)
 
     submit(new Clock(time))
@@ -110,8 +111,7 @@ class ReplicaManagerConcurrencyTest {
     val fetcher = new FetcherModel(
       clientId = s"replica-$remoteId",
       replicaId = remoteId,
-      topicModel.topicId,
-      topicPartition,
+      topicIdPartition,
       replicaManager
     )
 
@@ -182,8 +182,7 @@ class ReplicaManagerConcurrencyTest {
   private class FetcherModel(
     clientId: String,
     replicaId: Int,
-    topicId: Uuid,
-    topicPartition: TopicPartition,
+    topicIdPartition: TopicIdPartition,
     replicaManager: ReplicaManager
   ) extends ShutdownableThread(name = clientId, isInterruptible = false) {
     private val random = new Random()
@@ -200,6 +199,7 @@ class ReplicaManagerConcurrencyTest {
 
     override def doWork(): Unit = {
       val partitionData = new FetchRequest.PartitionData(
+        topicIdPartition.topicId,
         fetchOffset,
         -1,
         65536,
@@ -208,11 +208,11 @@ class ReplicaManagerConcurrencyTest {
       )
 
       val future = new CompletableFuture[FetchPartitionData]()
-      def fetchCallback(results: collection.Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+      def fetchCallback(results: collection.Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
         try {
           assertEquals(1, results.size)
-          val (topicPartition, result) = results.head
-          assertEquals(this.topicPartition, topicPartition)
+          val (topicIdPartition, result) = results.head
+          assertEquals(this.topicIdPartition, topicIdPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {
@@ -226,8 +226,7 @@ class ReplicaManagerConcurrencyTest {
         fetchMinBytes = 1,
         fetchMaxBytes = 1024 * 1024,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(topicPartition -> partitionData),
-        topicIds = Collections.singletonMap(topicPartition.topic, topicId),
+        fetchInfos = Seq(topicIdPartition -> partitionData),
         quota = QuotaFactory.UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
