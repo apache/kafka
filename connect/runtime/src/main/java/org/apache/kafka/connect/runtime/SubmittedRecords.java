@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
@@ -46,7 +45,7 @@ class SubmittedRecords {
 
     // Visible for testing
     final Map<Map<String, Object>, Deque<SubmittedRecord>> records = new HashMap<>();
-    private final AtomicInteger numUnackedMessages = new AtomicInteger(0);
+    private int numUnackedMessages = 0;
     private CountDownLatch messageDrainLatch;
 
     public SubmittedRecords() {
@@ -74,7 +73,7 @@ class SubmittedRecords {
         records.computeIfAbsent(result.partition(), p -> new LinkedList<>())
                 .add(result);
         synchronized (this) {
-            numUnackedMessages.incrementAndGet();
+            numUnackedMessages++;
         }
         return result;
     }
@@ -154,7 +153,7 @@ class SubmittedRecords {
         // on an instance variable when invoking CountDownLatch::await outside a synchronized block
         CountDownLatch messageDrainLatch;
         synchronized (this) {
-            messageDrainLatch = new CountDownLatch(numUnackedMessages.get());
+            messageDrainLatch = new CountDownLatch(numUnackedMessages);
             this.messageDrainLatch = messageDrainLatch;
         }
         try {
@@ -182,7 +181,7 @@ class SubmittedRecords {
     // to awaitAllMessages (which might cause us to decrement first, then create a new message drain latch, then count down
     // that latch here, effectively double-acking the message)
     private synchronized void messageAcked() {
-        numUnackedMessages.decrementAndGet();
+        numUnackedMessages--;
         if (messageDrainLatch != null) {
             messageDrainLatch.countDown();
         }
