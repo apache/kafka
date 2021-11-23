@@ -236,7 +236,7 @@ public class KStreamKTableJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
+                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
                     + "offset=[0]"));
         }
     }
@@ -250,7 +250,7 @@ public class KStreamKTableJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null join key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
+                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
                     + "offset=[0]")
             );
         }

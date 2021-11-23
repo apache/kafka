@@ -25,7 +25,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -36,8 +36,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   var adminClient: Admin = null
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     createTopic(topicName, 1, 1.toShort)
     produceMessages()
     adminClient = Admin.create(Map[String, Object](

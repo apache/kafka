@@ -604,4 +604,37 @@ class ConsoleConsumerTest {
     try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
     finally Exit.resetExitProcedure()
   }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning",
+      "--consumer-property", "client.id=consumer-1")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
+
+    //Then
+    assertEquals("consumer-1", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
+
+  @Test
+  def testDefaultClientId(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
+
+    //Then
+    assertEquals("console-consumer", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG))
+  }
 }

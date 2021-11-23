@@ -13,7 +13,7 @@
 package kafka.api
 
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.Log
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
@@ -45,7 +45,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     ).asJava
     consumer.commitSync(offsetMap)
     val logManager = servers.head.getLogManager
-    def getGroupMetadataLogOpt: Option[Log] =
+    def getGroupMetadataLogOpt: Option[UnifiedLog] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 
     TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logSegments.exists(_.log.batches.asScala.nonEmpty)),

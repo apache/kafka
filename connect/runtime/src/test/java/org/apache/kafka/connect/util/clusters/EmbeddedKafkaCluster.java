@@ -305,7 +305,7 @@ public class EmbeddedKafkaCluster {
         log.info("Describing topics {}", topicNames);
         try (Admin admin = createAdminClient()) {
             DescribeTopicsResult result = admin.describeTopics(topicNames);
-            Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+            Map<String, KafkaFuture<TopicDescription>> byName = result.topicNameValues();
             for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : byName.entrySet()) {
                 String topicName = entry.getKey();
                 try {
@@ -378,6 +378,19 @@ public class EmbeddedKafkaCluster {
 
         try (final Admin adminClient = createAdminClient(adminClientConfig)) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Delete a Kafka topic.
+     *
+     * @param topic the topic to delete; may not be null
+     */
+    public void deleteTopic(String topic) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.deleteTopics(Collections.singleton(topic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }

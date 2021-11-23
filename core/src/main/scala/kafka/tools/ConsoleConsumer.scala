@@ -61,7 +61,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def run(conf: ConsumerConfig): Unit = {
-    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs.toLong else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val consumerWrapper =
@@ -148,6 +148,8 @@ object ConsoleConsumer extends Logging {
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+    if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
       props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props

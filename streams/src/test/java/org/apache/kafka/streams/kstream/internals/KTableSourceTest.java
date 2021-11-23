@@ -162,6 +162,36 @@ public class KTableSourceTest {
     }
 
     @Test
+    public void kTableShouldLogOnOutOfOrder() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+        builder.table(topic, stringConsumed, Materialized.as("store"));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    topic,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
+            inputTopic.pipeInput("key", "value", 10L);
+            inputTopic.pipeInput("key", "value", 5L);
+
+            assertThat(
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
+                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[1] offset=[0].")
+            );
+        }
+    }
+
+    @Test
     public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";

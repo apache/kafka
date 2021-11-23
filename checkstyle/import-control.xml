@@ -139,6 +139,9 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
+        <subpackage name="secured">
+          <allow pkg="org.jose4j" />
+        </subpackage>
       </subpackage>
     </subpackage>
 
@@ -225,6 +228,7 @@
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.policy"/>
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
@@ -236,9 +240,11 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.util" />
   </subpackage>
 
   <subpackage name="metadata">
@@ -247,6 +253,7 @@
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.raft" />
@@ -303,6 +310,11 @@
       <allow pkg="org.apache.kafka.server.common" />
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.test" />
+
+      <subpackage name="remote">
+        <allow pkg="scala.collection" />
+      </subpackage>
+
     </subpackage>
   </subpackage>
 
@@ -329,6 +341,7 @@
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
     <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
   </subpackage>

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.api.Test;
 
@@ -92,5 +94,23 @@ public class RequestHeaderTest {
 
         RequestHeader parsed = RequestHeader.parse(buffer);
         assertEquals(header, parsed);
+    }
+
+    @Test
+    public void parseHeaderWithNullClientId() {
+        RequestHeaderData headerData = new RequestHeaderData().
+            setClientId(null).
+            setCorrelationId(123).
+            setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
+            setRequestApiVersion((short) 10);
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(headerData.size(serializationCache, (short) 2));
+        headerData.write(new ByteBufferAccessor(buffer), serializationCache, (short) 2);
+        buffer.flip();
+        RequestHeader parsed = RequestHeader.parse(buffer);
+        assertEquals("", parsed.clientId());
+        assertEquals(123, parsed.correlationId());
+        assertEquals(ApiKeys.FIND_COORDINATOR, parsed.apiKey());
+        assertEquals((short) 10, parsed.apiVersion());
     }
 }

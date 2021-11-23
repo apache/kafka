@@ -32,23 +32,26 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignmentCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -69,12 +72,14 @@ import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -85,6 +90,8 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIG
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -97,11 +104,14 @@ public class QuorumControllerTest {
      */
     @Test
     public void testCreateAndClose() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, __ -> { })) {
-            }
+        MockControllerMetrics metrics = new MockControllerMetrics();
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv =
+                new QuorumControllerTestEnv(logEnv, builder -> builder.setMetrics(metrics))
+        ) {
         }
+        assertTrue(metrics.isClosed(), "metrics were not closed");
     }
 
     /**
@@ -109,11 +119,11 @@ public class QuorumControllerTest {
      */
     @Test
     public void testConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
-                testConfigurationOperations(controlEnv.activeController());
-            }
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
+        ) {
+            testConfigurationOperations(controlEnv.activeController());
         }
     }
 
@@ -140,11 +150,11 @@ public class QuorumControllerTest {
      */
     @Test
     public void testDelayedConfigurationOperations() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv =
-                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
-                testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
-            }
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
+        ) {
+            testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
 
@@ -162,6 +172,89 @@ public class QuorumControllerTest {
                 BROKER0, Collections.emptyList())).get());
         logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
+    }
+
+    @Test
+    public void testFenceMultipleBrokers() throws Throwable {
+        List<Integer> allBrokers = Arrays.asList(1, 2, 3, 4, 5);
+        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
+        List<Integer> brokersToFence = Arrays.asList(2, 3, 4, 5);
+        short replicationFactor = 5;
+        long sessionTimeoutMillis = 1000;
+
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutMillis));
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = new HashMap<>();
+
+            for (Integer brokerId : allBrokers) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setIncarnationId(Uuid.randomUuid()).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
+            }
+
+            // Brokers are only registered and should still be fenced
+            allBrokers.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+
+            // Unfence all brokers and create a topic foo
+            sendBrokerheartbeat(active, allBrokers, brokerEpochs);
+            CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Collections.singleton(
+                    new CreatableTopic().setName("foo").setNumPartitions(1).
+                        setReplicationFactor(replicationFactor)).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(createTopicsRequestData).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
+
+            // Fence some of the brokers
+            TestUtils.waitForCondition(() -> {
+                    sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    for (Integer brokerId : brokersToFence) {
+                        if (active.replicationControl().isBrokerUnfenced(brokerId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }, sessionTimeoutMillis * 3,
+                "Fencing of brokers did not process within expected time"
+            );
+
+            // Send another heartbeat to the brokers we want to keep alive
+            sendBrokerheartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+
+            // At this point only the brokers we want fenced should be fenced.
+            brokersToKeepUnfenced.forEach(brokerId -> {
+                assertTrue(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been unfenced");
+            });
+            brokersToFence.forEach(brokerId -> {
+                assertFalse(active.replicationControl().isBrokerUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+
+            // Verify the isr and leaders for the topic partition
+            int[] expectedIsr = {1};
+            int[] isrFoo = active.replicationControl().getPartition(topicIdFoo, 0).isr;
+
+            assertTrue(Arrays.equals(isrFoo, expectedIsr),
+                "The ISR for topic foo was " + Arrays.toString(isrFoo) +
+                    ". It is expected to be " + Arrays.toString(expectedIsr));
+
+            int fooLeader = active.replicationControl().getPartition(topicIdFoo, 0).leader;
+            assertEquals(expectedIsr[0], fooLeader);
+        }
     }
 
     @Test
@@ -607,4 +700,169 @@ public class QuorumControllerTest {
             }
         }
     }
+
+    @Test
+    public void testMissingInMemorySnapshot() throws Exception {
+        int numBrokers = 3;
+        int numPartitions = 3;
+        String topicName = "topic-name";
+
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+            QuorumControllerTestEnv controlEnv =
+                new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
+        ) {
+            QuorumController controller = controlEnv.activeController();
+
+            Map<Integer, Long> brokerEpochs = registerBrokers(controller, numBrokers);
+
+            // Create a lot of partitions
+            List<CreatableReplicaAssignment> partitions = IntStream
+                .range(0, numPartitions)
+                .mapToObj(partitionIndex -> new CreatableReplicaAssignment()
+                    .setPartitionIndex(partitionIndex)
+                    .setBrokerIds(Arrays.asList(0, 1, 2))
+                )
+                .collect(Collectors.toList());
+
+            Uuid topicId = controller.createTopics(
+                new CreateTopicsRequestData()
+                    .setTopics(
+                        new CreatableTopicCollection(
+                            Collections.singleton(
+                                new CreatableTopic()
+                                    .setName(topicName)
+                                    .setNumPartitions(-1)
+                                    .setReplicationFactor((short) -1)
+                                    .setAssignments(new CreatableReplicaAssignmentCollection(partitions.iterator()))
+                            ).iterator()
+                        )
+                    )
+            ).get().topics().find(topicName).topicId();
+
+            // Create a lot of alter isr
+            List<AlterIsrRequestData.PartitionData> alterIsrs = IntStream
+                .range(0, numPartitions)
+                .mapToObj(partitionIndex -> {
+                    PartitionRegistration partitionRegistration = controller.replicationControl().getPartition(
+                        topicId,
+                        partitionIndex
+                    );
+
+                    return new AlterIsrRequestData.PartitionData()
+                        .setPartitionIndex(partitionIndex)
+                        .setLeaderEpoch(partitionRegistration.leaderEpoch)
+                        .setCurrentIsrVersion(partitionRegistration.partitionEpoch)
+                        .setNewIsr(Arrays.asList(0, 1));
+                })
+                .collect(Collectors.toList());
+
+            AlterIsrRequestData.TopicData topicData = new AlterIsrRequestData.TopicData()
+                .setName(topicName);
+            topicData.partitions().addAll(alterIsrs);
+
+            int leaderId = 0;
+            AlterIsrRequestData alterIsrRequest = new AlterIsrRequestData()
+                .setBrokerId(leaderId)
+                .setBrokerEpoch(brokerEpochs.get(leaderId));
+            alterIsrRequest.topics().add(topicData);
+
+            logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
+
+            int oldClaimEpoch = controller.curClaimEpoch();
+            assertThrows(
+                ExecutionException.class,
+                () -> controller.alterIsr(alterIsrRequest).get()
+            );
+
+            // Wait for the controller to become active again
+            assertSame(controller, controlEnv.activeController());
+            assertTrue(
+                oldClaimEpoch < controller.curClaimEpoch(),
+                String.format("oldClaimEpoch = %s, newClaimEpoch = %s", oldClaimEpoch, controller.curClaimEpoch())
+            );
+
+            // Since the alterIsr partially failed we expect to see
+            // some partitions to still have 2 in the ISR.
+            int partitionsWithReplica2 = Utils.toList(
+                controller
+                    .replicationControl()
+                    .brokersToIsrs()
+                    .partitionsWithBrokerInIsr(2)
+            ).size();
+            int partitionsWithReplica0 = Utils.toList(
+                controller
+                    .replicationControl()
+                    .brokersToIsrs()
+                    .partitionsWithBrokerInIsr(0)
+            ).size();
+
+            assertEquals(numPartitions, partitionsWithReplica0);
+            assertNotEquals(0, partitionsWithReplica2);
+            assertTrue(
+                partitionsWithReplica0 > partitionsWithReplica2,
+                String.format(
+                    "partitionsWithReplica0 = %s, partitionsWithReplica2 = %s",
+                    partitionsWithReplica0,
+                    partitionsWithReplica2
+                )
+            );
+        }
+    }
+
+    private Map<Integer, Long> registerBrokers(QuorumController controller, int numBrokers) throws Exception {
+        Map<Integer, Long> brokerEpochs = new HashMap<>();
+        for (int brokerId = 0; brokerId < numBrokers; brokerId++) {
+            BrokerRegistrationReply reply = controller.registerBroker(
+                new BrokerRegistrationRequestData()
+                    .setBrokerId(brokerId)
+                    .setRack(null)
+                    .setClusterId("06B-K3N1TBCNYFgruEVP0Q")
+                    .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
+                    .setListeners(
+                        new ListenerCollection(
+                            Arrays.asList(
+                                new Listener()
+                                .setName("PLAINTEXT")
+                                .setHost("localhost")
+                                .setPort(9092 + brokerId)
+                                ).iterator()
+                            )
+                        )
+                    ).get();
+            brokerEpochs.put(brokerId, reply.epoch());
+
+            // Send heartbeat to unfence
+            controller.processBrokerHeartbeat(
+                new BrokerHeartbeatRequestData()
+                    .setWantFence(false)
+                    .setBrokerEpoch(brokerEpochs.get(brokerId))
+                    .setBrokerId(brokerId)
+                    .setCurrentMetadataOffset(100000L)
+            ).get();
+        }
+
+        return brokerEpochs;
+    }
+
+    private void sendBrokerheartbeat(
+        QuorumController controller,
+        List<Integer> brokers,
+        Map<Integer, Long> brokerEpochs
+    ) throws Exception {
+        if (brokers.isEmpty()) {
+            return;
+        }
+        for (Integer brokerId : brokers) {
+            BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(
+                new BrokerHeartbeatRequestData()
+                    .setWantFence(false)
+                    .setBrokerEpoch(brokerEpochs.get(brokerId))
+                    .setBrokerId(brokerId)
+                    .setCurrentMetadataOffset(100000)
+            ).get();
+            assertEquals(new BrokerHeartbeatReply(true, false, false, false), reply);
+        }
+    }
+
 }

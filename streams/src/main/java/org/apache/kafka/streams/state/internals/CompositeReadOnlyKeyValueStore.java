@@ -67,8 +67,6 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        Objects.requireNonNull(from);
-        Objects.requireNonNull(to);
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
@@ -87,8 +85,6 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
-        Objects.requireNonNull(from);
-        Objects.requireNonNull(to);
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {

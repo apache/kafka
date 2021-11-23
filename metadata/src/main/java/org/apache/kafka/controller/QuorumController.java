@@ -75,6 +75,8 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.policy.AlterConfigPolicy;
+import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -136,6 +138,8 @@ public final class QuorumController implements Controller {
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
         private long sessionTimeoutNs = NANOSECONDS.convert(18, TimeUnit.SECONDS);
         private ControllerMetrics controllerMetrics = null;
+        private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
+        private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -201,6 +205,16 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
+            this.createTopicPolicy = createTopicPolicy;
+            return this;
+        }
+
+        public Builder setAlterConfigPolicy(Optional<AlterConfigPolicy> alterConfigPolicy) {
+            this.alterConfigPolicy = alterConfigPolicy;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -218,17 +232,20 @@ public final class QuorumController implements Controller {
             }
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
                     raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
-                    sessionTimeoutNs, controllerMetrics);
+                    sessionTimeoutNs, controllerMetrics, createTopicPolicy,
+                    alterConfigPolicy);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
             }
         }
     }
+
+    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
     private static final String ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX =
         "The active controller appears to be node ";
@@ -640,7 +657,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
-            appendControlEvent("handleCommits[baseOffset=" + reader.baseOffset() + "]", () -> {
+            appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
                     long processedRecordsSize = 0;
@@ -698,13 +715,13 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            appendControlEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
+            appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;
                     if (isActiveController) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snasphot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%s)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )
@@ -759,7 +776,7 @@ public final class QuorumController implements Controller {
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             if (newLeader.isLeader(nodeId)) {
                 final int newEpoch = newLeader.epoch();
-                appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
+                appendRaftEvent("handleLeaderChange[" + newEpoch + "]", () -> {
                     int curEpoch = curClaimEpoch;
                     if (curEpoch != -1) {
                         throw new RuntimeException("Tried to claim controller epoch " +
@@ -782,7 +799,7 @@ public final class QuorumController implements Controller {
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                 });
             } else if (curClaimEpoch != -1) {
-                appendControlEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
+                appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
                     log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
@@ -795,13 +812,32 @@ public final class QuorumController implements Controller {
         public void beginShutdown() {
             queue.beginShutdown("MetaLogManager.Listener");
         }
+
+        private void appendRaftEvent(String name, Runnable runnable) {
+            appendControlEvent(name, () -> {
+                if (this != metaLogListener) {
+                    log.debug("Ignoring {} raft event from an old registration", name);
+                } else {
+                    runnable.run();
+                }
+            });
+        }
     }
 
     private void renounce() {
         curClaimEpoch = -1;
         controllerMetrics.setActive(false);
         purgatory.failAll(newNotControllerException());
-        snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+
+        if (snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
+            snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+        } else {
+            resetState();
+            raftClient.unregister(metaLogListener);
+            metaLogListener = new QuorumMetaLogListener();
+            raftClient.register(metaLogListener);
+        }
+
         writeOffset = -1;
         clusterControl.deactivate();
         cancelMaybeFenceReplicas();
@@ -839,7 +875,9 @@ public final class QuorumController implements Controller {
             return;
         }
         scheduleDeferredWriteEvent(MAYBE_FENCE_REPLICAS, nextCheckTimeNs, () -> {
-            ControllerResult<Void> result = replicationControl.maybeFenceStaleBrokers();
+            ControllerResult<Void> result = replicationControl.maybeFenceOneStaleBroker();
+            // This following call ensures that if there are multiple brokers that
+            // are currently stale, then fencing for them is scheduled immediately
             rescheduleMaybeFenceStaleBrokers();
             return result;
         });
@@ -932,6 +970,7 @@ public final class QuorumController implements Controller {
         newBytesSinceLastSnapshot = 0;
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
+        lastCommittedTimestamp = -1;
     }
 
     private final LogContext logContext;
@@ -1018,9 +1057,11 @@ public final class QuorumController implements Controller {
 
     /**
      * The interface that receives callbacks from the Raft log.  These callbacks are
-     * invoked from the Raft thread(s), not from the controller thread.
+     * invoked from the Raft thread(s), not from the controller thread. Control events
+     * from this callbacks need to compare against this value to verify that the event
+     * was not from a previous registration.
      */
-    private final QuorumMetaLogListener metaLogListener;
+    private QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -1049,7 +1090,6 @@ public final class QuorumController implements Controller {
      */
     private long writeOffset;
 
-
     /**
      * Maximum number of bytes processed through handling commits before generating a snapshot.
      */
@@ -1072,7 +1112,9 @@ public final class QuorumController implements Controller {
                              ReplicaPlacer replicaPlacer,
                              long snapshotMaxNewRecordBytes,
                              long sessionTimeoutNs,
-                             ControllerMetrics controllerMetrics) {
+                             ControllerMetrics controllerMetrics,
+                             Optional<CreateTopicPolicy> createTopicPolicy,
+                             Optional<AlterConfigPolicy> alterConfigPolicy) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1082,16 +1124,16 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs);
+            snapshotRegistry, configDefs, alterConfigPolicy);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer);
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
-            configurationControl, clusterControl, controllerMetrics);
+            configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
         this.raftClient = raftClient;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
@@ -1347,13 +1389,14 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public long curClaimEpoch() {
+    public int curClaimEpoch() {
         return curClaimEpoch;
     }
 
     @Override
     public void close() throws InterruptedException {
         queue.close();
+        controllerMetrics.close();
     }
 
     // VisibleForTesting

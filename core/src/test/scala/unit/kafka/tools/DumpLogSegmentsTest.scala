@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, LogTestUtils}
+import kafka.log.{AppendOrigin, UnifiedLog, LogConfig, LogManager, LogTestUtils}
 import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
@@ -53,13 +53,13 @@ class DumpLogSegmentsTest {
   val time = new MockTime(0, 0)
 
   val batches = new ArrayBuffer[BatchInfo]
-  var log: Log = _
+  var log: UnifiedLog = _
 
   @BeforeEach
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
-    log = Log(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+    log = UnifiedLog(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
@@ -130,13 +130,13 @@ class DumpLogSegmentsTest {
     def verifyRecordsInOutput(checkKeysAndValues: Boolean, args: Array[String]): Unit = {
       def isBatch(index: Int): Boolean = {
         var i = 0
-        batches.zipWithIndex.foreach { case (batch, batchIndex) =>
+        batches.zipWithIndex.foreach { case (batch, _) =>
           if (i == index)
             return true
 
           i += 1
 
-          batch.records.indices.foreach { recordIndex =>
+          batch.records.indices.foreach { _ =>
             if (i == index)
               return false
             i += 1
@@ -207,8 +207,7 @@ class DumpLogSegmentsTest {
   def testDumpTimeIndexErrors(): Unit = {
     addSimpleRecords()
     val errors = new TimeIndexDumpErrors
-    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors,
-      Int.MaxValue)
+    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)

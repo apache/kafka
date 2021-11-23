@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
@@ -32,13 +32,13 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V>
  */
 class SessionTupleForwarder<K, V> {
-    private final ProcessorContext context;
+    private final ProcessorContext<Windowed<K>, Change<V>> context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
     @SuppressWarnings("unchecked")
     SessionTupleForwarder(final StateStore store,
-                          final ProcessorContext context,
+                          final ProcessorContext<Windowed<K>, Change<V>> context,
                           final CacheFlushListener<Windowed<K>, V> flushListener,
                           final boolean sendOldValues) {
         this.context = context;
@@ -46,11 +46,11 @@ class SessionTupleForwarder<K, V> {
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    public void maybeForward(final Windowed<K> key,
-                             final V newValue,
-                             final V oldValue) {
+    public void maybeForward(final Record<Windowed<K>, Change<V>> record) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(key.window().end()));
+            context.forward(
+                record.withValue(new Change<>(record.value().newValue, sendOldValues ? record.value().oldValue : null))
+                    .withTimestamp(record.key() != null ? record.key().window().end() : record.timestamp()));
         }
     }
 }

@@ -426,19 +426,23 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             this.forward = forward;
             this.toInclusive = toInclusive;
             if (forward) {
-                iterWithTimestamp.seek(from.get());
-                iterNoTimestamp.seek(from.get());
-                rawLastKey = to.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + to);
+                if (from == null) {
+                    iterWithTimestamp.seekToFirst();
+                    iterNoTimestamp.seekToFirst();
+                } else {
+                    iterWithTimestamp.seek(from.get());
+                    iterNoTimestamp.seek(from.get());
                 }
+                rawLastKey = to == null ? null : to.get();
             } else {
-                iterWithTimestamp.seekForPrev(to.get());
-                iterNoTimestamp.seekForPrev(to.get());
-                rawLastKey = from.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + from);
+                if (to == null) {
+                    iterWithTimestamp.seekToLast();
+                    iterNoTimestamp.seekToLast();
+                } else {
+                    iterWithTimestamp.seekForPrev(to.get());
+                    iterNoTimestamp.seekForPrev(to.get());
                 }
+                rawLastKey = from == null ? null : from.get();
             }
         }
 
@@ -448,9 +452,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
             if (next == null) {
                 return allDone();
+            } else if (rawLastKey == null) {
+                //null means range endpoint is open
+                return next;
             } else {
                 if (forward) {
-
                     if (comparator.compare(next.key.get(), rawLastKey) < 0) {
                         return next;
                     } else if (comparator.compare(next.key.get(), rawLastKey) == 0) {

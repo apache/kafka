@@ -846,9 +846,10 @@ public class QueryableStateIntegrationTest {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
 
-        final KeyValueIterator<String, Long> range = myMapStore.range("hello", "kafka");
-        while (range.hasNext()) {
-            System.out.println(range.next());
+        try (final KeyValueIterator<String, Long> range = myMapStore.range("hello", "kafka")) {
+            while (range.hasNext()) {
+                System.out.println(range.next());
+            }
         }
     }
 
@@ -899,9 +900,10 @@ public class QueryableStateIntegrationTest {
             IntegrationTestUtils.getStore("queryMapValues", kafkaStreams, keyValueStore());
 
         int index = 0;
-        final KeyValueIterator<String, Long> range = myMapStore.prefixScan("go", Serdes.String().serializer());
-        while (range.hasNext()) {
-            assertEquals(expectedPrefixScanResult.get(index++), range.next());
+        try (final KeyValueIterator<String, Long> range = myMapStore.prefixScan("go", Serdes.String().serializer())) {
+            while (range.hasNext()) {
+                assertEquals(expectedPrefixScanResult.get(index++), range.next());
+            }
         }
     }
 
@@ -1234,12 +1236,14 @@ public class QueryableStateIntegrationTest {
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
                                               final String key) {
-        final WindowStoreIterator<Long> fetch =
-            store.fetch(key, ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis()));
-        if (fetch.hasNext()) {
-            final KeyValue<Long, Long> next = fetch.next();
-            return Collections.singleton(KeyValue.pair(key, next.value));
+        try (final WindowStoreIterator<Long> fetch =
+                 store.fetch(key, ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis()))) {
+            if (fetch.hasNext()) {
+                final KeyValue<Long, Long> next = fetch.next();
+                return Collections.singleton(KeyValue.pair(key, next.value));
+            }
         }
+
         return Collections.emptySet();
     }
 

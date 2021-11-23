@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
@@ -99,8 +100,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code
  * Properties props = new Properties();
  * props.put("bootstrap.servers", "localhost:9092");
- * props.put("acks", "all");
- * props.put("retries", 0);
  * props.put("linger.ms", 1);
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
@@ -116,15 +115,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * as well as a background I/O thread that is responsible for turning these records into requests and transmitting them
  * to the cluster. Failure to close the producer after use will leak these resources.
  * <p>
- * The {@link #send(ProducerRecord) send()} method is asynchronous. When called it adds the record to a buffer of pending record sends
+ * The {@link #send(ProducerRecord) send()} method is asynchronous. When called, it adds the record to a buffer of pending record sends
  * and immediately returns. This allows the producer to batch together individual records for efficiency.
  * <p>
- * The <code>acks</code> config controls the criteria under which requests are considered complete. The "all" setting
- * we have specified will result in blocking on the full commit of the record, the slowest but most durable setting.
+ * The <code>acks</code> config controls the criteria under which requests are considered complete. The default setting "all"
+ * will result in blocking on the full commit of the record, the slowest but most durable setting.
  * <p>
- * If the request fails, the producer can automatically retry, though since we have specified <code>retries</code>
- * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on
- * <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
+ * If the request fails, the producer can automatically retry. The <code>retries</code> setting defaults to <code>Integer.MAX_VALUE</code>, and
+ * it's recommended to use <code>delivery.timeout.ms</code> to control retry behavior, instead of <code>retries</code>.
  * <p>
  * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
@@ -136,7 +134,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * arrive to fill up the same batch. This is analogous to Nagle's algorithm in TCP. For example, in the code snippet above,
  * likely all 100 records would be sent in a single request since we set our linger time to 1 millisecond. However this setting
  * would add 1 millisecond of latency to our request waiting for more records to arrive if we didn't fill up the buffer. Note that
- * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code> so under heavy load
+ * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code>. So, under heavy load,
  * batching will occur regardless of the linger configuration; however setting this to something larger than 0 can lead to fewer, more
  * efficient requests when not under maximal load at the cost of a small amount of latency.
  * <p>
@@ -155,7 +153,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * to multiple partitions (and topics!) atomically.
  * </p>
  * <p>
- * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
+ * From Kafka 3.0, the <code>enable.idempotence</code> configuration defaults to true. When enabling idempotence,
  * <code>retries</code> config will default to <code>Integer.MAX_VALUE</code> and the <code>acks</code> config will
  * default to <code>all</code>. There are no API changes for the idempotent producer, so existing applications will
  * not need to be modified to take advantage of this feature.
@@ -241,6 +239,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
+    private final KafkaProducerMetrics producerMetrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long totalMemorySize;
@@ -356,6 +355,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            this.producerMetrics = new KafkaProducerMetrics(metrics);
             this.partitioner = config.getConfiguredInstance(
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
@@ -590,9 +590,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordInit(time.nanoseconds() - now);
     }
 
     /**
@@ -613,7 +615,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long now = time.nanoseconds();
         transactionManager.beginTransaction();
+        producerMetrics.recordBeginTxn(time.nanoseconds() - now);
     }
 
     /**
@@ -697,9 +701,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
-        sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+
+        if (!offsets.isEmpty()) {
+            long start = time.nanoseconds();
+            TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            producerMetrics.recordSendOffsets(time.nanoseconds() - start);
+        }
     }
 
     /**
@@ -730,9 +739,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
     /**
@@ -761,9 +772,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         log.info("Aborting incomplete transaction");
+        long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
     /**
@@ -1124,12 +1137,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public void flush() {
         log.trace("Flushing accumulated records in producer.");
+
+        long start = time.nanoseconds();
         this.accumulator.beginFlush();
         this.sender.wakeup();
         try {
             this.accumulator.awaitFlushCompletion();
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
+        } finally {
+            producerMetrics.recordFlush(time.nanoseconds() - start);
         }
     }
 
@@ -1245,6 +1262,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         Utils.closeQuietly(interceptors, "producer interceptors", firstException);
+        Utils.closeQuietly(producerMetrics, "producer metrics wrapper", firstException);
         Utils.closeQuietly(metrics, "producer metrics", firstException);
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
