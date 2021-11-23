@@ -870,9 +870,7 @@ class SocketServerTest {
 
   @Test
   def testExceptionInAcceptor(): Unit = {
-    val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
 
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
