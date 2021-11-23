@@ -49,7 +49,7 @@ public class ProducerIdsImageTest {
             setProducerIdsEnd(456), (short) 0));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(3).
-            setBrokerId(100).
+            setBrokerEpoch(100).
             setProducerIdsEnd(789), (short) 0));
 
         DELTA1 = new ProducerIdsDelta(IMAGE1);
