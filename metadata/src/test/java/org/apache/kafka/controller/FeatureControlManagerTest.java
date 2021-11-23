@@ -57,7 +57,7 @@ public class FeatureControlManagerTest {
     }
 
     public static QuorumFeatures features(Object... args) {
-        return new QuorumFeatures(new ApiVersions(), rangeMap(args));
+        return new QuorumFeatures(0, new ApiVersions(), rangeMap(args), Collections.emptyList());
     }
 
     private static Map<String, Short> updateMap(Object... args) {

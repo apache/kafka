@@ -126,6 +126,10 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * the fact that the controller may have several operations in progress at any given
  * point.  The future associated with each operation will not be completed until the
  * results of the operation have been made durable to the metadata log.
+ *
+ * The QuorumController uses the "metadata.version" feature flag as a mechanism to control
+ * the usage of new log record schemas. Starting with 3.2, this version must be set before
+ * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
     /**
@@ -811,22 +815,21 @@ public final class QuorumController implements Controller {
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
 
-
+                    // Check if we need to bootstrap a metadata.version into the log
                     if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
-                        // No metadata.version in current metadata log
-                        if (initialMetadataVersion != MetadataVersions.UNINITIALIZED) {
-                            // TODO can we do without this write event here? Probably
-                            appendWriteEvent("initializeMetadataVersion", () -> {
-                                log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
-                                return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
-                            });
-                        } else {
+                        if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
                             appendWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
                             });
+                        } else {
+                            appendWriteEvent("initializeMetadataVersion", () -> {
+                                log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
+                                return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
+                            });
                         }
                     }
+
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
                     // required because the active controller assumes that there is always an in-memory snapshot at the
                     // last committed offset.
@@ -860,8 +863,9 @@ public final class QuorumController implements Controller {
 
     /**
      * A callback for changes to feature levels including metadata.version. This is called synchronously from
-     * {@link FeatureControlManager#replay(FeatureLevelRecord)} after the FeatureLevelRecord has been committed and
-     * after the in-memory state of FeatureControlManager has been updated.
+     * {@link FeatureControlManager#replay(FeatureLevelRecord)} which is part of a ControllerWriteEvent. It is safe
+     * to modify controller state here. By the time this listener is called, a FeatureLevelRecord has been committed and
+     * the in-memory state of FeatureControlManager has been updated.
      */
     class QuorumFeatureListener implements FeatureLevelListener {
         @Override
@@ -873,25 +877,20 @@ public final class QuorumController implements Controller {
             if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!isFeatureSupported) {
                     if (isActiveController) {
-                        log.error("Standby controller cannot support metadata.version {}", finalizedMaxVersion);
                         // TODO if we get here, somehow the active controller wrote an unsupported version to the log
                         //      how could this happen? What should we do?
+                        log.error("Active controller cannot support metadata.version {}", finalizedMaxVersion);
                     } else {
                         log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedMaxVersion);
                         beginShutdown();
                     }
                 } else {
-                    //appendControlEvent("handleMetadataVersion", () -> {
                     log.info("Setting our metadata.version to {}", finalizedMaxVersion);
                     activeMetadataVersion = finalizedMaxVersion;
-                        //snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                        //beginWritingSnapshot();
-                        // TODO other synchronous controller stuff here
-                    //});
+                    // TODO other synchronous controller stuff here.
                 }
-            } else {
-                // TODO handle other feature updates here
             }
+            // In the future, handle other feature flags that are relevant to the controller here.
         }
     }
 

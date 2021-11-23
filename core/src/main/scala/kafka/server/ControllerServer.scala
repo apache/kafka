@@ -38,7 +38,6 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
-import org.apache.kafka.metadata.{MetadataVersion, MetadataVersions, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
@@ -77,8 +76,6 @@ class ControllerServer(
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
-  val quorumFeatures = new QuorumFeatures(   // TODO define this map elsewhere
-    raftApiVersions, Map(MetadataVersion.FEATURE_NAME -> VersionRange.of(MetadataVersions.V1.version(), MetadataVersions.latest().version())).asJava)
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -166,6 +163,10 @@ class ControllerServer(
         throw new ConfigException(s"Detected non-default IBP value ${config.interBrokerProtocolVersionString}. Cannot run KRaft mode with IBP set!")
       }
 
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
+      val quorumFeatures = new QuorumFeatures(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatures(), controllerNodes)
       controller = new QuorumController.Builder(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
@@ -183,8 +184,6 @@ class ControllerServer(
         setInitialMetadataVersion(metaProperties.initialMetadataVersion).
         build()
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -193,7 +192,7 @@ class ControllerServer(
         raftManager,
         config,
         metaProperties,
-        controllerNodes.toSeq,
+        controllerNodes.asScala.toSeq,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,

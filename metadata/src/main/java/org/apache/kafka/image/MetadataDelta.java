@@ -207,6 +207,13 @@ public final class MetadataDelta {
     public void replay(FeatureLevelRecord record) {
         if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features(), metadataVersionProvider);
         featuresDelta.replay(record);
+        featuresDelta.metadataVersionChange().ifPresent(__ -> {
+            // If any feature flags change, need to trigger components to possibly handle the new flags
+            clusterDelta = new ClusterDelta(image.cluster());
+            configsDelta = new ConfigurationsDelta(image.configs());
+            topicsDelta = new TopicsDelta(image.topics());
+            clientQuotasDelta = new ClientQuotasDelta(image.clientQuotas());
+        });
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {

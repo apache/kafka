@@ -58,6 +58,9 @@ public class FeatureControlManager {
      */
     private final TimelineHashMap<String, VersionRange> finalizedVersions;
 
+    /**
+     * Collection of listeners for when features change
+     */
     private final Map<String, FeatureLevelListener> listeners;
 
     FeatureControlManager(QuorumFeatures quorumFeatures,
