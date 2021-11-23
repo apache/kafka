@@ -344,7 +344,7 @@ public class GlobalKTableIntegrationTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             kafkaStreams.close();
 
-            List<String> logs =
+            final List<String> logs =
                 appender.getMessages().stream()
                     .map(line -> line.split("] ")[1])
                     .collect(Collectors.toList());
