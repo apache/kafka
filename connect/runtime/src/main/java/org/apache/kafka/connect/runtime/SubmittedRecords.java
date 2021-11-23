@@ -45,13 +45,11 @@ class SubmittedRecords {
     private static final Logger log = LoggerFactory.getLogger(SubmittedRecords.class);
 
     // Visible for testing
-    final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
-    private AtomicInteger numUnackedMessages;
+    final Map<Map<String, Object>, Deque<SubmittedRecord>> records = new HashMap<>();
+    private final AtomicInteger numUnackedMessages = new AtomicInteger(0);
     private CountDownLatch messageDrainLatch;
 
     public SubmittedRecords() {
-        this.records = new HashMap<>();
-        this.numUnackedMessages = new AtomicInteger(0);
     }
 
     /**
@@ -180,6 +178,9 @@ class SubmittedRecords {
         return queuedRecords.peek() != null && queuedRecords.peek().acked();
     }
 
+    // Synchronize in order to ensure that the number of unacknowledged messages isn't modified in the middle of a call
+    // to awaitAllMessages (which might cause us to decrement first, then create a new message drain latch, then count down
+    // that latch here, effectively double-acking the message)
     private synchronized void messageAcked() {
         numUnackedMessages.decrementAndGet();
         if (messageDrainLatch != null) {
