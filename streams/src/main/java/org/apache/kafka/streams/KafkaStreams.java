@@ -666,7 +666,6 @@ public class KafkaStreams implements AutoCloseable {
                     // global stream thread has different invariants
                     final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
                     globalThreadState = newState;
-                    final GlobalStreamThread.State oldState = (GlobalStreamThread.State) abstractOldState;
 
                     if (newState == GlobalStreamThread.State.RUNNING) {
                         maybeSetRunning();
