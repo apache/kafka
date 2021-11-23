@@ -146,6 +146,7 @@ class SubmittedRecords {
 
     /**
      * Wait for all currently in-flight messages to be acknowledged, up to the requested timeout.
+     * This method is expected to be called from the same thread that calls {@link #committableOffsets()}.
      * @param timeout the maximum time to wait
      * @param timeUnit the time unit of the timeout argument
      * @return whether all in-flight messages were acknowledged before the timeout elapsed
