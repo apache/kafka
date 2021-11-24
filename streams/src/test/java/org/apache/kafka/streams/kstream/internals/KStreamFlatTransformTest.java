@@ -21,7 +21,6 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransform.KStreamFlatTransformProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.easymock.EasyMock;
@@ -40,7 +39,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
     private Number inputValue;
 
     private Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformer;
-    private ProcessorContext<Integer, Integer> context;
+    private InternalProcessorContext<Integer, Integer> context;
 
     private KStreamFlatTransformProcessor<Number, Number, Integer, Integer> processor;
 
@@ -49,13 +48,13 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
         inputKey = 1;
         inputValue = 10;
         transformer = mock(Transformer.class);
-        context = strictMock(ProcessorContext.class);
+        context = strictMock(InternalProcessorContext.class);
         processor = new KStreamFlatTransformProcessor<>(transformer);
     }
 
     @Test
     public void shouldInitialiseFlatTransformProcessor() {
-        transformer.init((InternalProcessorContext<Integer, Integer>) context);
+        transformer.init(context);
         replayAll();
 
         processor.init(context);
