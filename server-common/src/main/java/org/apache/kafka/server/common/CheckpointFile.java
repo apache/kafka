@@ -132,7 +132,8 @@ public class CheckpointFile<T> {
 
             int readVersion = toInt(line);
             if (readVersion != version) {
-                throw new IOException();
+                throw new IOException("Unrecognised version:" + readVersion + ", expected version: " + version
+                                              + " in checkpoint file at: " + location);
             }
 
             line = reader.readLine();

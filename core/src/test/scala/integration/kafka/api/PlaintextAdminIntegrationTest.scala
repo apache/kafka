@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.io.File
+import java.net.InetAddress
 import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.Arrays.asList
@@ -31,6 +32,7 @@ import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -42,7 +44,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
@@ -69,8 +71,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private val changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
@@ -98,6 +100,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       nodeStrs = nodes.map ( node => s"${node.host}:${node.port}" ).toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
+  }
+
+  @Test
+  def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
+    val config = createConfig
+    config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
+    val returnBadAddressFirst = new HostResolver {
+      override def resolve(host: String): Array[InetAddress] = {
+        Array[InetAddress](InetAddress.getByName("10.200.20.100"), InetAddress.getByName(host))
+      }
+    }
+    client = AdminClientTestUtils.create(config, returnBadAddressFirst)
+    // simply check that a call, e.g. describeCluster, returns normally
+    client.describeCluster().nodes().get()
   }
 
   @Test

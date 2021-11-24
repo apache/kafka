@@ -195,7 +195,6 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-
     assertEquals(tp1, filthiestLog.topicPartition)
     assertEquals(tp1, filthiestLog.log.topicPartition)
   }

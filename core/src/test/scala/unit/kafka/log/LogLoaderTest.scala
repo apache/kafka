@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
 
 class LogLoaderTest {
   var config: KafkaConfig = null
-  val brokerTopicStats = new BrokerTopicStats
+  val brokerTopicStats = new BrokerTopicStats()
   val maxProducerIdExpirationMs: Int = 60 * 60 * 1000
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
@@ -75,13 +75,25 @@ class LogLoaderTest {
 
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown
     // flag and to inject a runtime error
-    def interceptedLogManager(logConfig: LogConfig, logDirs: Seq[File], simulateError: SimulateError): LogManager = {
-      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], new MockConfigRepository(),
-        initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
-        flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
-        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-        keepPartitionMetadataFile = config.usesTopicId, interBrokerProtocolVersion = config.interBrokerProtocolVersion) {
+    def interceptedLogManager(logConfig: LogConfig, logDirs: Seq[File], simulateError: SimulateError): LogManager =
+      new LogManager(
+        logDirs = logDirs.map(_.getAbsoluteFile),
+        initialOfflineDirs = Array.empty[File],
+        configRepository = new MockConfigRepository(),
+        initialDefaultConfig = logConfig,
+        cleanerConfig = CleanerConfig(enableCleaner = false),
+        recoveryThreadsPerDataDir = 4,
+        flushCheckMs = 1000L,
+        flushRecoveryOffsetCheckpointMs = 10000L,
+        flushStartOffsetCheckpointMs = 10000L,
+        retentionCheckMs = 1000L,
+        maxPidExpirationMs = 60 * 60 * 1000,
+        interBrokerProtocolVersion = config.interBrokerProtocolVersion,
+        scheduler = time.scheduler,
+        brokerTopicStats = new BrokerTopicStats(),
+        logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+        time = time,
+        keepPartitionMetadataFile = config.usesTopicId) {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                              logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
@@ -111,7 +123,6 @@ class LogLoaderTest {
             producerStateManager, None, true)
         }
       }
-    }
 
     val cleanShutdownFile = new File(logDir, LogLoader.CleanShutdownFile)
     locally {

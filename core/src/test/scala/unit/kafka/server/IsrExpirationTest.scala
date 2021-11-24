@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{UnifiedLog, LogManager}
@@ -65,9 +64,16 @@ class IsrExpirationTest {
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = configs.head,
+      time = time,
+      scheduler = null,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
+      alterIsrManager = alterIsrManager)
   }
 
   @AfterEach

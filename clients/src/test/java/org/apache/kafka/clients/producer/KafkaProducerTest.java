@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.Sender;
@@ -1093,7 +1094,10 @@ public class KafkaProducerTest {
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
             double beginFirst = getAndAssertDurationAtLeast(producer, "txn-begin-time-ns-total", tick.toNanos());
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
+            producer.sendOffsetsToTransaction(Collections.singletonMap(
+                    new TopicPartition("topic", 0),
+                    new OffsetAndMetadata(5L)),
+                    new ConsumerGroupMetadata("group"));
             double sendOffFirst = getAndAssertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", tick.toNanos());
             producer.commitTransaction();
             double commitFirst = getAndAssertDurationAtLeast(producer, "txn-commit-time-ns-total", tick.toNanos());
@@ -1104,7 +1108,10 @@ public class KafkaProducerTest {
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
             assertDurationAtLeast(producer, "txn-begin-time-ns-total", beginFirst + tick.toNanos());
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("group"));
+            producer.sendOffsetsToTransaction(Collections.singletonMap(
+                    new TopicPartition("topic", 0),
+                    new OffsetAndMetadata(10L)),
+                    new ConsumerGroupMetadata("group"));
             assertDurationAtLeast(producer, "txn-send-offsets-time-ns-total", sendOffFirst + tick.toNanos());
             producer.commitTransaction();
             assertDurationAtLeast(producer, "txn-commit-time-ns-total", commitFirst + tick.toNanos());

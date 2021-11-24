@@ -213,12 +213,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                     final long timeFrom,
                                                     final long timeTo,
                                                     final boolean forward) {
-        Objects.requireNonNull(from, "from key cannot be null");
-        Objects.requireNonNull(to, "to key cannot be null");
-
         removeExpiredSegments();
 
-        if (from.compareTo(to) > 0) {
+        if (from != null && to != null && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -397,7 +394,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         final Bytes to = (retainDuplicates && keyTo != null) ? wrapForDups(keyTo, Integer.MAX_VALUE) : keyTo;
 
         final WrappedWindowedKeyValueIterator iterator =
-            new WrappedWindowedKeyValueIterator(from,
+            new WrappedWindowedKeyValueIterator(
+                from,
                 to,
                 segmentIterator,
                 openIterators::remove,
@@ -462,11 +460,28 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             }
 
             final Bytes key = getKey(next.key);
-            if (key.compareTo(getKey(keyFrom)) >= 0 && key.compareTo(getKey(keyTo)) <= 0) {
+            if (isKeyWithinRange(key)) {
                 return true;
             } else {
                 next = null;
                 return hasNext();
+            }
+        }
+
+        private boolean isKeyWithinRange(final Bytes key) {
+            // split all cases for readability and avoid BooleanExpressionComplexity checkstyle warning
+            if (keyFrom == null && keyTo == null) {
+                // fetch all
+                return true;
+            } else if (keyFrom == null) {
+                // start from the beginning
+                return key.compareTo(getKey(keyTo)) <= 0;
+            } else if (keyTo == null) {
+                // end to the last
+                return key.compareTo(getKey(keyFrom)) >= 0;
+            } else {
+                // key is within the range
+                return key.compareTo(getKey(keyFrom)) >= 0 && key.compareTo(getKey(keyTo)) <= 0;
             }
         }
 
@@ -499,9 +514,16 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> currentSegment = segmentIterator.next();
             currentTime = currentSegment.getKey();
 
-            final ConcurrentNavigableMap<Bytes, byte[]> subMap = allKeys ?
-                currentSegment.getValue() :
-                currentSegment.getValue().subMap(keyFrom, true, keyTo, true);
+            final ConcurrentNavigableMap<Bytes, byte[]> subMap;
+            if (allKeys) { // keyFrom == null && keyTo == null
+                subMap = currentSegment.getValue();
+            } else if (keyFrom == null) {
+                subMap = currentSegment.getValue().headMap(keyTo, true);
+            } else if (keyTo == null) {
+                subMap = currentSegment.getValue().tailMap(keyFrom, true);
+            } else {
+                subMap = currentSegment.getValue().subMap(keyFrom, true, keyTo, true);
+            }
 
             if (forward) {
                 return subMap.entrySet().iterator();

@@ -19,43 +19,40 @@ package kafka.server
 
 import java.net.InetAddress
 import java.util
+import java.util.Collections.singletonList
 import java.util.Properties
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{CompletableFuture, ExecutionException}
+
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.test.MockController
-import kafka.utils.MockTime
+import kafka.utils.{MockTime, NotNothing}
 import org.apache.kafka.clients.admin.AlterConfigOp
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.Uuid.ZERO_UUID
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
+import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult
-import org.apache.kafka.common.message._
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterConfigsResourceCollection, AlterableConfig, AlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => OldAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => OldAlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => OldAlterableConfig}
-import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
+import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.Controller
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -65,7 +62,9 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 class ControllerApisTest {
   private val nodeId = 1
@@ -136,12 +135,11 @@ class ControllerApisTest {
 
   def createDenyAllAuthorizer(): Authorizer = {
     val authorizer = mock(classOf[Authorizer])
-    mock(classOf[Authorizer])
     when(authorizer.authorize(
       any(classOf[AuthorizableRequestContext]),
       any(classOf[java.util.List[Action]])
     )).thenReturn(
-      java.util.Collections.singletonList(AuthorizationResult.DENIED)
+      singletonList(AuthorizationResult.DENIED)
     )
     authorizer
   }
@@ -730,6 +728,79 @@ class ControllerApisTest {
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(null)),
       controllerApis.createPartitions(request, false, _ => Set("foo", "bar")).get().asScala.toSet)
+  }
+
+  @Test
+  def testElectLeadersAuthorization(): Unit = {
+    val authorizer = mock(classOf[Authorizer])
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(Some(authorizer), controller)
+
+    val request = new ElectLeadersRequest.Builder(
+      ElectionType.PREFERRED,
+      null,
+      30000
+    ).build()
+
+    val resource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val actions = singletonList(new Action(AclOperation.ALTER, resource, 1, true, true))
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      ArgumentMatchers.eq(actions)
+    )).thenReturn(singletonList(AuthorizationResult.DENIED))
+
+    val response = handleRequest[ElectLeadersResponse](request, controllerApis)
+    assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testElectLeadersHandledByController(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    val request = new ElectLeadersRequest.Builder(
+      ElectionType.PREFERRED,
+      null,
+      30000
+    ).build()
+
+    val responseData = new ElectLeadersResponseData()
+        .setErrorCode(Errors.NOT_CONTROLLER.code)
+
+    when(controller.electLeaders(
+      request.data
+    )).thenReturn(CompletableFuture.completedFuture(responseData))
+
+    val response = handleRequest[ElectLeadersResponse](request, controllerApis)
+    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode))
+  }
+
+  private def handleRequest[T <: AbstractResponse](
+    request: AbstractRequest,
+    controllerApis: ControllerApis
+  )(
+    implicit classTag: ClassTag[T],
+    @nowarn("cat=unused") nn: NotNothing[T]
+  ): T = {
+    val req = buildRequest(request)
+
+    controllerApis.handle(req, RequestLocal.NoCaching)
+
+    val capturedResponse: ArgumentCaptor[AbstractResponse] =
+      ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(req),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    capturedResponse.getValue match {
+      case response: T => response
+      case response =>
+        throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, " +
+          s"but found ${response.getClass}")
+    }
   }
 
   @AfterEach

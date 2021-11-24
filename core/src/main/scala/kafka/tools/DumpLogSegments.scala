@@ -59,11 +59,11 @@ object DumpLogSegments {
       suffix match {
         case UnifiedLog.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.maxMessageSize, opts.messageParser, opts.skipRecordMetadata)
+            opts.messageParser, opts.skipRecordMetadata)
         case UnifiedLog.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
-          dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors, opts.maxMessageSize)
+          dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors)
         case UnifiedLog.ProducerSnapshotFileSuffix =>
           dumpProducerIdSnapshot(file)
         case UnifiedLog.TxnIndexFileSuffix =>
@@ -102,7 +102,8 @@ object DumpLogSegments {
     try {
       ProducerStateManager.readSnapshot(file).foreach { entry =>
         print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
-          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} ")
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
+          s"lastTimestamp: ${entry.lastTimestamp} ")
         entry.batchMetadata.headOption.foreach { metadata =>
           print(s"firstSequence: ${metadata.firstSeq} lastSequence: ${metadata.lastSeq} " +
             s"lastOffset: ${metadata.lastOffset} offsetDelta: ${metadata.offsetDelta} timestamp: ${metadata.timestamp}")
@@ -162,8 +163,7 @@ object DumpLogSegments {
   private[tools] def dumpTimeIndex(file: File,
                                    indexSanityOnly: Boolean,
                                    verifyOnly: Boolean,
-                                   timeIndexDumpErrors: TimeIndexDumpErrors,
-                                   maxMessageSize: Int): Unit = {
+                                   timeIndexDumpErrors: TimeIndexDumpErrors): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
@@ -245,7 +245,6 @@ object DumpLogSegments {
                       printContents: Boolean,
                       nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
-                      maxMessageSize: Int,
                       parser: MessageParser[_, _],
                       skipRecordMetadata: Boolean): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong

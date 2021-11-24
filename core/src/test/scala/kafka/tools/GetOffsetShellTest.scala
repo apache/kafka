@@ -25,7 +25,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   private val topicCount = 4
@@ -38,7 +38,8 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     }.map(KafkaConfig.fromProps)
 
   @BeforeEach
-  def createTestAndInternalTopics(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     Range(1, topicCount + 1).foreach(i => createTopic(topicName(i), i))
 
     val props = new Properties()
