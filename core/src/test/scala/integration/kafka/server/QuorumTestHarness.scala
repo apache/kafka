@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -162,6 +162,26 @@ abstract class QuorumTestHarness extends Logging {
   // That way you control the initialization order.
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {
+    Exit.setExitProcedure((code, message) => {
+      try {
+        throw new RuntimeException(s"exit(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
+    })
+    Exit.setHaltProcedure((code, message) => {
+      try {
+        throw new RuntimeException(s"halt(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
+    })
     val name = if (testInfo.getTestMethod().isPresent()) {
       testInfo.getTestMethod().get().toString()
     } else {
@@ -296,6 +316,8 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
