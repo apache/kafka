@@ -64,7 +64,7 @@ object MetadataCacheTest {
         val partialImage = new MetadataImage(
           new RaftOffsetAndEpoch(100, 10),
           image.features(), ClusterImage.EMPTY,
-          image.topics(), image.configs(), image.clientQuotas())
+          image.topics(), image.configs(), image.clientQuotas(), image.producerIds())
         val delta = new MetadataDelta(partialImage)
 
         def toRecord(broker: UpdateMetadataBroker): RegisterBrokerRecord = {
