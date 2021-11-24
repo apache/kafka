@@ -36,6 +36,16 @@ public interface SinkTaskContext {
     Map<String, String> configs();
 
     /**
+     * Get the Connector Name. The Connector Name is a unique identifier.
+     */
+    String connectorName();
+
+    /**
+     * Get the Task ID.  The Task ID is unique within the Connector.
+     */
+    int taskId();
+
+    /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
      * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
      * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task

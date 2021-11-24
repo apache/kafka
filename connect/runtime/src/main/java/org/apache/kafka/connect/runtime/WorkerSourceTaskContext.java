@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Map;
 
@@ -39,6 +40,16 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
     @Override
     public Map<String, String> configs() {
         return configState.taskConfig(task.id());
+    }
+
+    @Override
+    public String connectorName() {
+        return this.task.id.connector();
+    }
+
+    @Override
+    public int taskId() {
+        return this.task.id.task();
     }
 
     @Override

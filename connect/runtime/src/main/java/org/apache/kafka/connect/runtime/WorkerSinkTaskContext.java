@@ -22,6 +22,7 @@ import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,16 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     @Override
     public Map<String, String> configs() {
         return configState.taskConfig(sinkTask.id());
+    }
+
+    @Override
+    public String connectorName() {
+        return this.sinkTask.id.connector();
+    }
+
+    @Override
+    public int taskId() {
+        return this.sinkTask.id.task();
     }
 
     @Override
