@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -135,6 +136,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
      * you should inform all of them by calling {@code #addNamedTopology(NamedTopology)} on each client in order for
      * it to begin processing the new topology.
+     * This method is not purely Async.
      *
      * @throws IllegalArgumentException if this topology name is already in use
      * @throws IllegalStateException    if streams has not been started or has already shut down
@@ -157,6 +159,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
      * running, you should inform all of them by calling {@code #removeNamedTopology(String)} on each client to ensure
      * it stops processing the old topology.
+     * This method is not purely Async.
      *
      * @param topologyToRemove          name of the topology to be removed
      * @param resetOffsets              whether to reset the committed offsets for any source topics
@@ -202,7 +205,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             ex.printStackTrace();
                             break;
                         } catch (final ExecutionException ex) {
-                            ex.printStackTrace();
+                            if (ex.getCause() != null &&
+                                ex.getCause() instanceof GroupSubscribedToTopicException &&
+                                ex.getCause()
+                                    .getMessage()
+                                    .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
+                                ex.printStackTrace();
+                            } else {
+                                future.completeExceptionally(ex);
+                            }
                         }
                         try {
                             Thread.sleep(100);
@@ -222,6 +233,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
      * running, you should inform all of them by calling {@code #removeNamedTopology(String)} on each client to ensure
      * it stops processing the old topology.
+     * This method is not purely Async.
      *
      * @param topologyToRemove          name of the topology to be removed
      *

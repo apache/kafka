@@ -140,7 +140,7 @@ public class TopologyMetadata {
         threadVersions.remove(threadName);
     }
 
-    public void reachedLatestVersion(final String threadName) {
+    public void maybeNotifyTopologyVersionWaiters(final String threadName) {
         try {
             lock();
             final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();

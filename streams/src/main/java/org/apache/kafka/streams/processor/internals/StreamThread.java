@@ -913,7 +913,7 @@ public class StreamThread extends Thread {
             if (topologyMetadata.isEmpty()) {
                 mainConsumer.unsubscribe();
             }
-            topologyMetadata.reachedLatestVersion(getName());
+            topologyMetadata.maybeNotifyTopologyVersionWaiters(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
