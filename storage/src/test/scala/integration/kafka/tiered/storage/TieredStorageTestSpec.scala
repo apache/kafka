@@ -124,7 +124,9 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
     //
     // Enables remote log storage for this topic.
     //
-    spec.properties.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true.toString)
+    if (!spec.properties.containsKey(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG)) {
+      spec.properties.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true.toString)
+    }
     //
     // Ensure offset and time indexes are generated for every record.
     //
@@ -154,6 +156,17 @@ final class CreateTopicAction(val spec: TopicSpec) extends TieredStorageTestActi
   }
 
   override def describe(output: PrintStream): Unit = output.println(s"create-topic: $spec")
+}
+
+final class UpdateTopicConfigAction(val topic: String, val configsToBeAdded: Map[String, String],
+                                    val configsToBeDeleted: Seq[String]) extends TieredStorageTestAction {
+  override protected def doExecute(context: TieredStorageTestContext): Unit = {
+    context.updateTopicConfig(topic, configsToBeAdded, configsToBeDeleted)
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"update topic config: $topic, configs-to-be-added: $configsToBeAdded, configs-to-be-deleted: $configsToBeDeleted")
+  }
 }
 
 /**
@@ -492,7 +505,8 @@ final class TieredStorageTestBuilder {
                   partitionsCount: Int,
                   replicationFactor: Int,
                   maxBatchCountPerSegment: Int,
-                  replicaAssignment: Map[Int, Seq[Int]] = Map()): this.type = {
+                  replicaAssignment: Map[Int, Seq[Int]] = Map(),
+                  enableRemoteLogStorage: Boolean = true): this.type = {
 
     assert(maxBatchCountPerSegment >= 1, s"Segments size for topic ${topic} needs to be >= 1")
     assert(partitionsCount >= 1, s"Partition count for topic ${topic} needs to be >= 1")
@@ -502,7 +516,19 @@ final class TieredStorageTestBuilder {
     maybeCreateConsumeActions()
 
     val assignment = if (replicaAssignment.isEmpty) None else Some(replicaAssignment)
-    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, maxBatchCountPerSegment, assignment))
+    val properties = new Properties()
+    properties.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, enableRemoteLogStorage.toString)
+    actions += new CreateTopicAction(TopicSpec(topic, partitionsCount, replicationFactor, maxBatchCountPerSegment, assignment, properties))
+    this
+  }
+
+  def updateTopicConfig(topic: String,
+                        configsToBeAdded: Map[String, String],
+                        configsToBeDeleted: Seq[String]): this.type = {
+    assert(configsToBeAdded.nonEmpty || configsToBeDeleted.nonEmpty, s"Topic ${topic} configs shouldn't be empty")
+    maybeCreateProduceAction()
+    maybeCreateConsumeActions()
+    actions += new UpdateTopicConfigAction(topic, configsToBeAdded, configsToBeDeleted)
     this
   }
 

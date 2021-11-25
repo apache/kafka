@@ -243,37 +243,32 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition],
                          partitionsBecomeFollower: Set[Partition],
                          topicIds: util.Map[String, Uuid]): Unit = {
-    debug(s"Received leadership changes for leaders: $partitionsBecomeLeader and followers: $partitionsBecomeFollower")
-    topicIds.forEach((topic, uuid) => this.topicIds.put(topic, uuid))
-
-    // Partitions logs are available when this callback is invoked.
+    trace(s"Received leadership changes for partitionsBecomeLeader: $partitionsBecomeLeader " +
+      s"and partitionsBecomeLeader: $partitionsBecomeLeader")
     // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
-    def filterPartitions(partitions: Set[Partition]): Set[Partition] = {
-      partitions.filterNot(partition => Topic.isInternal(partition.topic) ||
+
+    def nonSupported(partition: Partition): Boolean = {
+      Topic.isInternal(partition.topic) ||
         partition.topic.equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME) ||
         partition.log.exists(log => !log.remoteLogEnabled())
-      )
     }
 
-    val followerTopicPartitions = filterPartitions(partitionsBecomeFollower).map(partition =>
-      new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
-
-    val filteredLeaderPartitions = filterPartitions(partitionsBecomeLeader)
-    val leaderTopicPartitions = filteredLeaderPartitions.map(partition =>
-      new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
-
-    debug(s"Effective topic partitions after filtering compact and internal topics, leaders: $leaderTopicPartitions " +
-      s"and followers: $followerTopicPartitions")
-
-    if (leaderTopicPartitions.nonEmpty || followerTopicPartitions.nonEmpty) {
-     remoteLogMetadataManager.onPartitionLeadershipChanges(leaderTopicPartitions.asJava, followerTopicPartitions.asJava)
-    }
-
-    followerTopicPartitions.foreach { tp => doHandleLeaderOrFollowerPartitions(tp, task => task.convertToFollower())}
-
-    filteredLeaderPartitions.foreach { partition =>
-      doHandleLeaderOrFollowerPartitions(new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition),
-        task => task.convertToLeader(partition.getLeaderEpoch))
+    val leaderPartitions = partitionsBecomeLeader.filterNot(nonSupported)
+      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition) -> p).toMap
+    val followerPartitions = partitionsBecomeFollower.filterNot(nonSupported)
+      .map(p => new TopicIdPartition(topicIds.get(p.topic), p.topicPartition))
+    if (leaderPartitions.nonEmpty || followerPartitions.nonEmpty) {
+      debug(s"Effective topic partitions after filtering compact and internal topics, " +
+        s"leaders: ${leaderPartitions.keySet} and followers: $followerPartitions")
+      topicIds.forEach((topic, uuid) => this.topicIds.put(topic, uuid))
+      remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions.keySet.asJava, followerPartitions.asJava)
+      followerPartitions.foreach {
+        topicIdPartition => doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToFollower())
+      }
+      leaderPartitions.foreach {
+        case (topicIdPartition, partition) =>
+          doHandleLeaderOrFollowerPartitions(topicIdPartition, _.convertToLeader(partition.getLeaderEpoch))
+      }
     }
   }
 
@@ -934,7 +929,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     else this synchronized {
       Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager")
       Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager")
-      leaderOrFollowerTasks.values().forEach((taskWithFuture: RLMTaskWithFuture) => taskWithFuture.cancel())
+      leaderOrFollowerTasks.values().forEach(_.cancel())
+      leaderOrFollowerTasks.clear()
       rlmScheduledThreadPool.shutdown()
       closed = true
     }

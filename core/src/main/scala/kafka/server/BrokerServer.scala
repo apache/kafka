@@ -299,7 +299,7 @@ class BrokerServer(
       config.dynamicConfig.addReconfigurables(this)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
+        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
       if (!config.processRoles.contains(ControllerRole)) {

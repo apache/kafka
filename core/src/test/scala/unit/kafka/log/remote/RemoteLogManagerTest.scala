@@ -123,13 +123,9 @@ class RemoteLogManagerTest {
     cache.assign(1, 30)
     cache.assign(2, 100)
 
-    val logConfig: LogConfig = createNiceMock(classOf[LogConfig])
-    expect(logConfig.compact).andReturn(false).anyTimes()
-    expect(logConfig.remoteStorageEnable).andReturn(true).anyTimes()
-
     val log: Log = createNiceMock(classOf[Log])
     expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
-    expect(log.config).andReturn(logConfig).anyTimes()
+    expect(log.remoteLogEnabled()).andReturn(true).anyTimes()
 
     val nextSegmentLeaderEpochs = new util.HashMap[Integer, lang.Long]
     nextSegmentLeaderEpochs.put(0, 0)
@@ -158,7 +154,7 @@ class RemoteLogManagerTest {
     expect(partition.topicPartition).andReturn(topicIdPartition.topicPartition()).anyTimes()
     expect(partition.log).andReturn(Option(log)).anyTimes()
     expect(partition.getLeaderEpoch).andReturn(0).anyTimes()
-    replay(logConfig, log, partition, rlmmManager)
+    replay(log, partition, rlmmManager)
 
     val remoteLogManager = new RemoteLogManager(_ => Option(log),
       (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
@@ -182,6 +178,8 @@ class RemoteLogManagerTest {
     segmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
       0, 200, -1L, brokerId, -1L, 1024, segmentLeaderEpochs)
     assertEquals(None, remoteLogManager.findNextSegmentMetadata(segmentMetadata))
+
+    verify(log, partition, rlmmManager)
   }
 
   @Test
@@ -241,14 +239,10 @@ class RemoteLogManagerTest {
   def testCollectAbortedTransactionsIteratesNextRemoteSegment(): Unit = {
     cache.assign(0, 0)
 
-    val logConfig: LogConfig = createNiceMock(classOf[LogConfig])
-    expect(logConfig.compact).andReturn(false).anyTimes()
-    expect(logConfig.remoteStorageEnable).andReturn(true).anyTimes()
-
     val log: Log = createNiceMock(classOf[Log])
     expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
-    expect(log.config).andReturn(logConfig).anyTimes()
     expect(log.logSegments).andReturn(Iterable.empty).anyTimes()
+    expect(log.remoteLogEnabled()).andReturn(true).anyTimes()
 
     val baseOffset = 45
     val timeIdx = new TimeIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 12)
@@ -306,7 +300,7 @@ class RemoteLogManagerTest {
     expect(partition.log).andReturn(Option(log)).anyTimes()
     expect(partition.getLeaderEpoch).andReturn(0).anyTimes()
 
-    replay(logConfig, log, rlmmManager, rsmManager, records, partition)
+    replay(log, rlmmManager, rsmManager, records, partition)
     val remoteLogManager =
       new RemoteLogManager(_ => Option(log), (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
         override private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = rlmmManager
@@ -322,15 +316,13 @@ class RemoteLogManagerTest {
 
     assertTrue(expectedFetchDataInfo.abortedTransactions.isDefined)
     assertEquals(abortedTxns.map(_.asAbortedTransaction), expectedFetchDataInfo.abortedTransactions.get)
+
+    verify(log, rlmmManager, rsmManager, records, partition)
   }
 
   @Test
   def testCollectAbortedTransactionsIteratesNextLocalSegment(): Unit = {
     cache.assign(0, 0)
-
-    val logConfig: LogConfig = createNiceMock(classOf[LogConfig])
-    expect(logConfig.compact).andReturn(false).anyTimes()
-    expect(logConfig.remoteStorageEnable).andReturn(true).anyTimes()
 
     val baseOffset = 45
     val timeIdx = new TimeIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 12)
@@ -353,8 +345,8 @@ class RemoteLogManagerTest {
 
     val log: Log = createNiceMock(classOf[Log])
     expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
-    expect(log.config).andReturn(logConfig).anyTimes()
     expect(log.logSegments).andReturn(List(logSegment)).anyTimes()
+    expect(log.remoteLogEnabled()).andReturn(true).anyTimes()
 
     val rlmmManager: RemoteLogMetadataManager = createNiceMock(classOf[RemoteLogMetadataManager])
     expect(rlmmManager.remoteLogSegmentMetadata(EasyMock.eq(topicIdPartition), anyInt(), anyLong()))
@@ -379,7 +371,7 @@ class RemoteLogManagerTest {
     expect(partition.log).andReturn(Option(log)).anyTimes()
     expect(partition.getLeaderEpoch).andReturn(0).anyTimes()
 
-    replay(logConfig, logSegment, log, rlmmManager, rsmManager, records, partition)
+    replay(logSegment, log, rlmmManager, rsmManager, records, partition)
     val remoteLogManager =
       new RemoteLogManager(_ => Option(log), (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
         override private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = rlmmManager
@@ -395,6 +387,8 @@ class RemoteLogManagerTest {
 
     assertTrue(expectedFetchDataInfo.abortedTransactions.isDefined)
     assertEquals(abortedTxns.map(_.asAbortedTransaction), expectedFetchDataInfo.abortedTransactions.get)
+
+    verify(logSegment, log, rlmmManager, rsmManager, records, partition)
   }
 
   @Test
