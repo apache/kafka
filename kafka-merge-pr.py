@@ -183,6 +183,10 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
             committer_name, committer_email)
         merge_message_flags += ["-m", message]
 
+    # The string "Closes #%s" string is required for GitHub to correctly close the PR
+    close_line = "Closes #%s from %s" % (pr_num, pr_repo_desc)
+    merge_message_flags += ["-m", close_line]
+
     run_cmd(['git', 'commit', '--author="%s"' % primary_author] + merge_message_flags)
 
     continue_maybe("Merge complete (local ref %s). Push to %s?" % (
