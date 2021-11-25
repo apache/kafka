@@ -44,10 +44,12 @@ public class Position {
     }
 
     public Position update(final String topic, final int partition, final long offset) {
-        position.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
-        final ConcurrentMap<Integer, AtomicLong> topicMap = position.get(topic);
-        topicMap.computeIfAbsent(partition, k -> new AtomicLong(0));
-        topicMap.get(partition).getAndAccumulate(offset, Math::max);
+        if (topic != null) {
+            position.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
+            final ConcurrentMap<Integer, AtomicLong> topicMap = position.get(topic);
+            topicMap.computeIfAbsent(partition, k -> new AtomicLong(0));
+            topicMap.get(partition).getAndAccumulate(offset, Math::max);
+        }
         return this;
     }
 

@@ -18,6 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -26,8 +29,22 @@ public class RocksDBSessionStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
     implements SessionStore<Bytes, byte[]> {
 
+    private Position position;
+    private StateStoreContext stateStoreContext;
+
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
         super(bytesStore);
+        this.position = Position.emptyPosition();
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        super.init(context, root);
+        this.stateStoreContext = context;
+    }
+
+    Position getPosition() {
+        return position;
     }
 
     @Override
@@ -121,5 +138,10 @@ public class RocksDBSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
+
+        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
+            position = position.update(meta.topic(), meta.partition(), meta.offset());
+        }
     }
 }
