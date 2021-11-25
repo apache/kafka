@@ -324,11 +324,10 @@ class Log(@volatile private var _dir: File,
 
   @volatile private var highestOffsetWithRemoteIndex: Long = -1L
 
-  private def remoteLogEnabled(): Boolean = {
+  private[kafka] def remoteLogEnabled(): Boolean = {
     // remote logging is enabled only for non-compact and non-internal topics
     rlmEnabled && !(config.compact || Topic.isInternal(topicPartition.topic())) && config.remoteStorageEnable
   }
-
 
   locally {
     val startMs = time.milliseconds
@@ -346,8 +345,8 @@ class Log(@volatile private var _dir: File,
     leaderEpochCache.foreach(_.truncateFromEnd(nextOffsetMetadata.messageOffset))
 
     updateLocalLogStartOffset(math.max(logStartOffset, segments.firstEntry.getValue.baseOffset))
-
-    if (!remoteLogEnabled()) logStartOffset = localLogStartOffset
+    if (!remoteLogEnabled())
+      logStartOffset = localLogStartOffset
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
@@ -2296,7 +2295,6 @@ class Log(@volatile private var _dir: File,
             removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
             activeSegment.truncateTo(targetOffset)
 
-            // TODO: @kamalcph check the logic again
             this.localLogStartOffset = math.min(targetOffset, this.localLogStartOffset)
             updateLogStartOffset(math.min(this.localLogStartOffset, this.logStartOffset))
 
@@ -2304,6 +2302,7 @@ class Log(@volatile private var _dir: File,
 
             completeTruncation(
               startOffset = math.min(targetOffset, logStartOffset),
+              localLogStartOffset = math.min(targetOffset, localLogStartOffset),
               endOffset = targetOffset
             )
           }
@@ -2335,6 +2334,7 @@ class Log(@volatile private var _dir: File,
 
         completeTruncation(
           startOffset = newOffset,
+          localLogStartOffset = newOffset,
           endOffset = newOffset
         )
       }
@@ -2343,14 +2343,11 @@ class Log(@volatile private var _dir: File,
 
   private def completeTruncation(
     startOffset: Long,
+    localLogStartOffset: Long,
     endOffset: Long
   ): Unit = {
-    // TODO: @kamalcph check the logic again.
-    if (remoteLogEnabled()) {
-      updateLocalLogStartOffset(startOffset)
-    } else {
-      updateLogStartOffset(startOffset)
-    }
+    updateLogStartOffset(startOffset)
+    updateLocalLogStartOffset(localLogStartOffset)
     // logStartOffset = startOffset
     nextOffsetMetadata = LogOffsetMetadata(endOffset, activeSegment.baseOffset, activeSegment.size)
     recoveryPoint = math.min(recoveryPoint, endOffset)
