@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
+
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
@@ -50,8 +51,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, TopicIdPartition, Uuid}
-import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, TopicsDelta, TopicsImage}
+import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.image.{ClientQuotasImage, ClusterImageTest, ConfigurationsImage, FeaturesImage, MetadataImage, ProducerIdsImage, TopicsDelta, TopicsImage}
 import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
@@ -3489,7 +3490,8 @@ class ReplicaManagerTest {
       ClusterImageTest.IMAGE1,
       topicsImage,
       ConfigurationsImage.EMPTY,
-      ClientQuotasImage.EMPTY
+      ClientQuotasImage.EMPTY,
+      ProducerIdsImage.EMPTY
     )
   }
 
@@ -3501,8 +3503,9 @@ class ReplicaManagerTest {
     assertEquals(expectedTopicId, fetchState.get.topicId)
   }
 
-  @Test
-  def testPartitionFetchStateUpdatesWithTopicIdAdded(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionFetchStateUpdatesWithTopicIdChanges(startsWithTopicId: Boolean): Unit = {
     val aliveBrokersIds = Seq(0, 1)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
       brokerId = 0, aliveBrokersIds)
@@ -3510,18 +3513,23 @@ class ReplicaManagerTest {
       val tp = new TopicPartition(topic, 0)
       val leaderAndIsr = new LeaderAndIsr(1, 0, aliveBrokersIds.toList, 0)
 
-      val leaderAndIsrRequest1 = leaderAndIsrRequest(Uuid.ZERO_UUID, tp, aliveBrokersIds, leaderAndIsr)
+      // This test either starts with a topic ID in the PartitionFetchState and removes it on the next request (startsWithTopicId)
+      // or does not start with a topic ID in the PartitionFetchState and adds one on the next request (!startsWithTopicId)
+      val startingId = if (startsWithTopicId) topicId else Uuid.ZERO_UUID
+      val startingIdOpt = if (startsWithTopicId) Some(topicId) else None
+      val leaderAndIsrRequest1 = leaderAndIsrRequest(startingId, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse1 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse1.error)
 
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, None)
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, startingIdOpt)
 
-      val leaderAndIsrRequest2 = leaderAndIsrRequest(topicId, tp, aliveBrokersIds, leaderAndIsr)
+      val endingId = if (!startsWithTopicId) topicId else Uuid.ZERO_UUID
+      val endingIdOpt = if (!startsWithTopicId) Some(topicId) else None
+      val leaderAndIsrRequest2 = leaderAndIsrRequest(endingId, tp, aliveBrokersIds, leaderAndIsr)
       val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
 
-      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, Some(topicId))
-
+      assertFetcherHasTopicId(replicaManager.replicaFetcherManager, tp, endingIdOpt)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -3549,7 +3557,7 @@ class ReplicaManagerTest {
       assertEquals(1, replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).size)
 
       // Append a couple of messages.
-      for (i <- 1 to 40) {
+      for (i <- 1 to 500) {
         val records = TestUtils.singletonRecords(s"message $i".getBytes)
         appendRecords(replicaManager, tp, records).onFire { response =>
           assertEquals(Errors.NONE, response.error)

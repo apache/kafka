@@ -184,15 +184,18 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 if (!mergedWindow.equals(newSessionWindow)) {
                     for (final KeyValue<Windowed<KIn>, VAgg> session : merged) {
                         store.remove(session.key);
-                        tupleForwarder.maybeForward(session.key, null,
-                            sendOldValues ? session.value : null);
+                        tupleForwarder.maybeForward(
+                            record.withKey(session.key)
+                                .withValue(new Change<>(null, session.value)));
                     }
                 }
 
                 agg = aggregator.apply(record.key(), record.value(), agg);
                 final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
                 store.put(sessionKey, agg);
-                tupleForwarder.maybeForward(sessionKey, agg, null);
+                tupleForwarder.maybeForward(
+                    record.withKey(sessionKey)
+                        .withValue(new Change<>(agg, null)));
             }
         }
     }

@@ -83,7 +83,7 @@ class SocketServer(val config: KafkaConfig,
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
-  private val nodeId = config.brokerId
+  protected val nodeId = config.brokerId
 
   private val logContext = new LogContext(s"[SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId] ")
 
@@ -282,10 +282,11 @@ class SocketServer(val config: KafkaConfig,
     }
   }
 
-  private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
+  protected def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
-    new Acceptor(endPoint, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time)
+    val listenBacklogSize = config.socketListenBacklogSize
+    new Acceptor(endPoint, sendBufferSize, recvBufferSize, listenBacklogSize, nodeId, connectionQuotas, metricPrefix, time)
   }
 
   private def addDataPlaneProcessors(acceptor: Acceptor, endpoint: EndPoint, newProcessorsPerListener: Int): Unit = {
@@ -549,6 +550,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
 private[kafka] class Acceptor(val endPoint: EndPoint,
                               val sendBufferSize: Int,
                               val recvBufferSize: Int,
+                              val listenBacklogSize: Int,
                               nodeId: Int,
                               connectionQuotas: ConnectionQuotas,
                               metricPrefix: String,
@@ -557,7 +559,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   this.logIdent = logPrefix
   private val nioSelector = NSelector.open()
-  val serverChannel = openServerSocket(endPoint.host, endPoint.port)
+  val serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
   private val processors = new ArrayBuffer[Processor]()
   private val processorsStarted = new AtomicBoolean
   private val blockedPercentMeter = newMeter(s"${metricPrefix}AcceptorBlockedPercent",
@@ -648,7 +650,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   /**
    * Create a server socket to listen for connections on.
    */
-  private def openServerSocket(host: String, port: Int): ServerSocketChannel = {
+  private def openServerSocket(host: String, port: Int, listenBacklogSize: Int): ServerSocketChannel = {
     val socketAddress =
       if (Utils.isBlank(host))
         new InetSocketAddress(port)
@@ -660,7 +662,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       serverChannel.socket().setReceiveBufferSize(recvBufferSize)
 
     try {
-      serverChannel.socket.bind(socketAddress)
+      serverChannel.socket.bind(socketAddress, listenBacklogSize)
       info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     } catch {
       case e: SocketException =>
@@ -717,11 +719,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     val socketChannel = serverSocketChannel.accept()
     try {
       connectionQuotas.inc(endPoint.listenerName, socketChannel.socket.getInetAddress, blockedPercentMeter)
-      socketChannel.configureBlocking(false)
-      socketChannel.socket().setTcpNoDelay(true)
-      socketChannel.socket().setKeepAlive(true)
-      if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-        socketChannel.socket().setSendBufferSize(sendBufferSize)
+      configureAcceptedSocketChannel(socketChannel)
       Some(socketChannel)
     } catch {
       case e: TooManyConnectionsException =>
@@ -734,7 +732,19 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
         val endThrottleTimeMs = e.startThrottleTimeMs + e.throttleTimeMs
         throttledSockets += DelayedCloseSocket(socketChannel, endThrottleTimeMs)
         None
+      case e: IOException =>
+        error(s"Encountered an error while configuring the connection, closing it.", e)
+        close(endPoint.listenerName, socketChannel)
+        None
     }
+  }
+
+  protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+    socketChannel.configureBlocking(false)
+    socketChannel.socket().setTcpNoDelay(true)
+    socketChannel.socket().setKeepAlive(true)
+    if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+      socketChannel.socket().setSendBufferSize(sendBufferSize)
   }
 
   /**

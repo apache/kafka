@@ -636,6 +636,7 @@ class KafkaConfigTest {
 
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.SocketListenBacklogSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
           assertPropertyInvalid(baseProperties, name, "127.0.0.1:not_a_number")
         case KafkaConfig.ConnectionsMaxIdleMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1320,5 +1321,14 @@ class KafkaConfigTest {
     val originals = config.originals()
     assertEquals("3", originals.get(KafkaConfig.BrokerIdProp))
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
+  }
+
+  @Test
+  def testSaslJwksEndpointRetryDefaults(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    val config = KafkaConfig.fromProps(props)
+    assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp))
+    assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp))
   }
 }
