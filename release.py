@@ -18,6 +18,7 @@
 #
 
 """
+
 Utility for creating release candidates and promoting release candidates to a final relase.
 
 Usage: release.py [subcommand]
