@@ -213,6 +213,9 @@ case object SegmentDeletion extends LogStartOffsetIncrementReason {
 case object SnapshotGenerated extends LogStartOffsetIncrementReason {
   override def toString: String = "snapshot generated"
 }
+case object RemoteLogStorageDisabled extends LogStartOffsetIncrementReason {
+  override def toString: String = "remote log storage disabled"
+}
 
 /**
  * An append-only log for storing messages.
@@ -1418,6 +1421,10 @@ class Log(@volatile private var _dir: File,
 
   private def maybeIncrementLocalLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
     maybeIncrementLogStartOffset(newLogStartOffset, reason, onlyLocalLogStartOffsetUpdate = true)
+  }
+
+  def maybeIncrementLogStartOffsetAsRemoteLogStorageDisabled(): Boolean = {
+    maybeIncrementLogStartOffset(localLogStartOffset, RemoteLogStorageDisabled)
   }
 
   /**
