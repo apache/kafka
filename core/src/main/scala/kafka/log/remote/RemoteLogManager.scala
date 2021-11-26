@@ -22,7 +22,7 @@ import java.nio.file.Files
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional}
+import java.util.Optional
 import java.lang
 import kafka.cluster.Partition
 import kafka.log.{AbortedTxn, Log, OffsetPosition}
@@ -276,34 +276,43 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
    * is set as true.
    *
-   * @param topicPartition  topic partition to be stopped.
-   * @param delete          flag to indicate whether the given topic partitions to be deleted or not.
+   * @param partitions  topic partitions that needs to be stopped.
+   * @param delete      flag to indicate whether the given topic partitions to be deleted or not.
    */
-  def stopPartitions(topicPartition: TopicPartition, delete: Boolean): Unit = {
-    // unassign topic partitions from RLM leader/follower
-    val topicIdPartition = topicIds.remove(topicPartition.topic())
-       match {
-        case Some(uuid) => Some(new TopicIdPartition(uuid, topicPartition))
-        case None => None
-      }
+  def stopPartitions(partitions: Set[TopicPartition], delete: Boolean): Unit = {
+    // FIXME(@satishd) Need to check whether it is really needed to delete from remote.
+    //  This may be a delete request only for this replica. We should delete from remote storage only if
+    //  the topic partition is getting deleted.
+    debug(s"Stopping ${partitions.size} partitions, delete: $delete")
+    val partitionsByTopic = partitions.groupBy(_.topic())
+    partitionsByTopic.foreach { entry =>
+      // FIXME: When to remove the topicId from topicIds map? (leaving them can lead to memory leak)
+      val topic = entry._1
+      val partitions = entry._2
 
-    if (topicIdPartition.isDefined) {
-      val rlmTaskWithFuture = leaderOrFollowerTasks.remove(topicIdPartition.get)
-      if (rlmTaskWithFuture != null) {
-        rlmTaskWithFuture.cancel()
-      }
-    }
-
-    if (delete) {
-      try {
-        //todo-tier need to check whether it is really needed to delete from remote. This may be a delete request only
-        //for this replica. We should delete from remote storage only if the topic partition is getting deleted.
-        topicIdPartition.foreach(idPartition => {
-          remoteLogMetadataManager.listRemoteLogSegments(idPartition).forEachRemaining(elt => deleteRemoteLogSegment(elt, _ => true))
-          remoteLogMetadataManager.onStopPartitions(Collections.singleton(idPartition))
+      val topicId = topicIds.get(topic)
+      if (topicId.isDefined) {
+        val tpIds = partitions.map(new TopicIdPartition(topicId.get, _))
+        tpIds.foreach(tpId => {
+          val task = leaderOrFollowerTasks.remove(tpId)
+          if (task != null) {
+            info(s"Cancelling the RLM task for tp: ${tpId.topicPartition()}")
+            task.cancel()
+          }
+          if (delete) {
+            try {
+              debug(s"Deleting the remote log segments for partition: $tpId")
+              remoteLogMetadataManager.listRemoteLogSegments(tpId).forEachRemaining(elt => deleteRemoteLogSegment(elt, _ => true))
+            } catch {
+              case ex: Exception => error(s"Error occurred while deleting the partition: ${tpId.topicPartition()}", ex)
+            }
+          }
         })
-      } catch {
-        case ex: Exception => error(s"Error occurred while deleting topic partition: $topicPartition", ex)
+        try {
+          remoteLogMetadataManager.onStopPartitions(tpIds.asJava)
+        } catch {
+          case ex: Exception => error(s"Error occurred while stopping partitions for topic: $topic", ex)
+        }
       }
     }
   }

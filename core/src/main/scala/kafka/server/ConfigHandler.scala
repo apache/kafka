@@ -68,27 +68,38 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager, kafkaConfig
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      val isRemoteLogEnabledBeforeUpdate = logs.head.remoteLogEnabled()
+      val wasRemoteLogEnabledBeforeUpdate = logs.head.remoteLogEnabled()
       logs.foreach(_.updateConfig(logConfig))
-      maybeEnableRemoteLogStorage(topic, logs, isRemoteLogEnabledBeforeUpdate)
+      maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
     }
   }
 
-  private[server] def maybeEnableRemoteLogStorage(topic: String, logs: Seq[Log], isRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
-    // Topic configs gets updated incrementally. If the remote log storage was already enabled for this topic prior to
-    // this update, then this call is a no-op.
-    if (!isRemoteLogEnabledBeforeUpdate && logs.head.remoteLogEnabled()) {
+  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+                                                        logs: Seq[Log],
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+    val isRemoteLogEnabled = logs.head.remoteLogEnabled()
+    // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
+    if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
       val topicId = logs.head.topicId
       if (topicId.isEmpty) {
         warn(s"Could not enable remote log storage for topic $topic because we did not know the corresponding topicId.")
         return
       }
-
       val topicIds = Map(topic -> topicId.get).asJava
       val (leaderPartitions, followerPartitions) =
         logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
       replicaManager.remoteLogManager.foreach(rlm =>
         rlm.onLeadershipChange(leaderPartitions.toSet, followerPartitions.toSet, topicIds))
+    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
+      logs.map(log => {
+        log.maybeIncrementLogStartOffsetAsRemoteLogStorageDisabled()
+        log.topicPartition
+      })
+        .groupBy(tp => replicaManager.onlinePartition(tp).exists(_.isLeader))
+        .foreach {
+          case (isLeader, partitions) =>
+            replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions.toSet, isLeader))
+        }
     }
   }
 
