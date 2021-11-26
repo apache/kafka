@@ -47,7 +47,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,7 +102,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleSnapshot(FileSnapshotReader<ApiMessageAndVersion> reader) {
+        public void handleSnapshot(RecordsSnapshotReader<ApiMessageAndVersion> reader) {
             try {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();

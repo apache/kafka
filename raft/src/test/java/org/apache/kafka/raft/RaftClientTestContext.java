@@ -57,7 +57,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -1070,7 +1070,7 @@ public final class RaftClientTestContext {
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
         private final OptionalInt localId;
-        private Optional<FileSnapshotReader<String>> snapshot = Optional.empty();
+        private Optional<RecordsSnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;
 
         MockListener(OptionalInt localId) {
@@ -1129,8 +1129,8 @@ public final class RaftClientTestContext {
                 .orElse(null);
         }
 
-        Optional<FileSnapshotReader<String>> drainHandledSnapshot() {
-            Optional<FileSnapshotReader<String>> temp = snapshot;
+        Optional<RecordsSnapshotReader<String>> drainHandledSnapshot() {
+            Optional<RecordsSnapshotReader<String>> temp = snapshot;
             snapshot = Optional.empty();
             return temp;
         }
@@ -1189,7 +1189,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleSnapshot(FileSnapshotReader<String> reader) {
+        public void handleSnapshot(RecordsSnapshotReader<String> reader) {
             snapshot.ifPresent(snapshot -> assertDoesNotThrow(snapshot::close));
             commits.clear();
             savedBatches.clear();

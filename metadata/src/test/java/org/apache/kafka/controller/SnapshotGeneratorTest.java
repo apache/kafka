@@ -30,7 +30,7 @@ import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -72,7 +72,7 @@ public class SnapshotGeneratorTest {
 
     @Test
     public void testGenerateBatches() throws Exception {
-        FileSnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
+        RecordsSnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
         ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(100, 2, 400, 0.0);
         List<Section> sections = Arrays.asList(new Section("replication",
@@ -91,7 +91,7 @@ public class SnapshotGeneratorTest {
         assertTrue(writer.isFrozen());
     }
 
-    private FileSnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
+    private RecordsSnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
         long committedOffset,
         long lastContainedLogTime
     ) {

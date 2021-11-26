@@ -77,7 +77,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestUtils;
@@ -357,7 +357,7 @@ public class QuorumControllerTest {
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
                 long snapshotLogOffset = active.beginWritingSnapshot().get();
                 reader = logEnv.waitForSnapshot(snapshotLogOffset);
-                FileSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
+                RecordsSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(reader);
                 assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
                 checkSnapshotContent(expectedSnapshotContent(fooId, brokerEpochs), snapshot);
             }
@@ -368,7 +368,7 @@ public class QuorumControllerTest {
                      new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
                 QuorumController active = controlEnv.activeController();
                 long snapshotLogOffset = active.beginWritingSnapshot().get();
-                FileSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
+                RecordsSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(
                     logEnv.waitForSnapshot(snapshotLogOffset)
                 );
                 assertEquals(snapshotLogOffset, snapshot.lastContainedLogOffset());
@@ -428,7 +428,7 @@ public class QuorumControllerTest {
                 active.allocateProducerIds(
                     new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
 
-                FileSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(logEnv.waitForLatestSnapshot());
+                RecordsSnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(logEnv.waitForLatestSnapshot());
                 checkSnapshotSubcontent(
                     expectedSnapshotContent(fooId, brokerEpochs),
                     snapshot
@@ -493,7 +493,7 @@ public class QuorumControllerTest {
         }
     }
 
-    private FileSnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
+    private RecordsSnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
         return SnapshotReader.of(
             reader,
             new MetadataRecordSerde(),

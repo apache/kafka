@@ -14,17 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
-import java.util.Iterator;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.util.Iterator;
 
 /**
- * Interface of the snapshot reader
+ * A type for reading an immutable snapshot.
+ *
+ * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
+ * is assumed that the content of the snapshot represents all of the objects T for the topic
+ * partition from offset 0 up to but not including the end offset in the snapshot id.
+ *
+ * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}
+ * objects returned by this iterator are independent of the offset of the records in the
+ * log used to generate this batch.
+ *
+ * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
+ * offsets and epoch from the log are included in this snapshot. Both of these values are
+ * inclusive.
  */
-public interface FileSnapshotReader<T> extends AutoCloseable, Iterator<Batch<T>> {
+public interface RecordsSnapshotReader<T> extends AutoCloseable, Iterator<Batch<T>> {
     /**
      * Returns the end offset and epoch for the snapshot.
      */

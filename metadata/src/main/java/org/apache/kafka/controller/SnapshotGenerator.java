@@ -25,7 +25,7 @@ import java.util.OptionalLong;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.slf4j.Logger;
 
 
@@ -49,7 +49,7 @@ final class SnapshotGenerator {
     }
 
     private final Logger log;
-    private final FileSnapshotWriter<ApiMessageAndVersion> writer;
+    private final RecordsSnapshotWriter<ApiMessageAndVersion> writer;
     private final int maxBatchesPerGenerateCall;
     private final ExponentialBackoff exponentialBackoff;
     private final List<Section> sections;
@@ -60,7 +60,7 @@ final class SnapshotGenerator {
     private long numRecords;
 
     SnapshotGenerator(LogContext logContext,
-                      FileSnapshotWriter<ApiMessageAndVersion> writer,
+                      RecordsSnapshotWriter<ApiMessageAndVersion> writer,
                       int maxBatchesPerGenerateCall,
                       ExponentialBackoff exponentialBackoff,
                       List<Section> sections) {
@@ -83,7 +83,7 @@ final class SnapshotGenerator {
         return writer.lastContainedLogOffset();
     }
 
-    FileSnapshotWriter writer() {
+    RecordsSnapshotWriter writer() {
         return writer;
     }
 

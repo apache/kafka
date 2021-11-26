@@ -38,7 +38,7 @@ import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 
 import java.net.InetSocketAddress;
@@ -1111,7 +1111,7 @@ public class RaftEventSimulationTest {
                 assertTrue(snapshotId.offset <= highWatermark.getAsLong());
                 startOffset.set(snapshotId.offset);
 
-                try (FileSnapshotReader<Integer> snapshot =
+                try (RecordsSnapshotReader<Integer> snapshot =
                         SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());

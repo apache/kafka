@@ -22,7 +22,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -68,7 +68,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     }
 
     @Override
-    public synchronized void handleSnapshot(FileSnapshotReader<ApiMessageAndVersion> reader) {
+    public synchronized void handleSnapshot(RecordsSnapshotReader<ApiMessageAndVersion> reader) {
         long lastCommittedOffset = reader.lastContainedLogOffset();
         try {
             while (reader.hasNext()) {

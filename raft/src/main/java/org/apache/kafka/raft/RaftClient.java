@@ -18,8 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.snapshot.FileSnapshotReader;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +49,7 @@ public interface RaftClient<T> extends AutoCloseable {
 
         /**
          * Callback which is invoked when the Listener needs to load a snapshot.
-         * It is the responsibility of this implementation to invoke {@link FileSnapshotReader#close()}
+         * It is the responsibility of this implementation to invoke {@link RecordsSnapshotReader#close()}
          * after consuming the reader.
          *
          * When handling this call, the implementation must assume that all previous calls
@@ -57,7 +57,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * @param reader snapshot reader instance which must be iterated and closed
          */
-        void handleSnapshot(FileSnapshotReader<T> reader);
+        void handleSnapshot(RecordsSnapshotReader<T> reader);
 
         /**
          * Called on any change to leadership. This includes both when a leader is elected and
@@ -65,7 +65,7 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * If this node is the leader, then the notification of leadership will be delayed until
          * the implementation of this interface has caught up to the high-watermark through calls to
-         * {@link #handleSnapshot(FileSnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         * {@link #handleSnapshot(RecordsSnapshotReader)} and {@link #handleCommit(BatchReader)}.
          *
          * If this node is not the leader, then this method will be called as soon as possible. In
          * this case the leader may or may not be known for the current epoch.
@@ -208,7 +208,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * Create a writable snapshot file for a committed offset and epoch.
      *
      * The RaftClient assumes that the snapshot returned will contain the records up to and
-     * including the committed offset and epoch. See {@link FileSnapshotWriter} for details on
+     * including the committed offset and epoch. See {@link RecordsSnapshotWriter} for details on
      * how to use this object. If a snapshot already exists then returns an
      * {@link Optional#empty()}.
      *
@@ -219,5 +219,5 @@ public interface RaftClient<T> extends AutoCloseable {
      * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
      *         or less than the log start offset.
      */
-    Optional<FileSnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
+    Optional<RecordsSnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
 }

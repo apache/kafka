@@ -64,13 +64,13 @@ final public class SnapshotWriterReaderTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
         // Create an empty snapshot and freeze it immediately
-        try (FileSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
+        try (RecordsSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
             assertEquals(id, snapshot.snapshotId());
             snapshot.freeze();
         }
 
         // Verify that an empty snapshot has only the Header and Footer
-        try (FileSnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+        try (RecordsSnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
@@ -97,13 +97,13 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (FileSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
+        try (RecordsSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, magicTimestamp).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> assertDoesNotThrow(() -> snapshot.append(batch)));
             snapshot.freeze();
         }
 
-        try (FileSnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
+        try (RecordsSnapshotReader<String> reader = readSnapshot(context, id, Integer.MAX_VALUE)) {
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
             assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
@@ -129,7 +129,7 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (FileSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
+        try (RecordsSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
@@ -157,7 +157,7 @@ final public class SnapshotWriterReaderTest {
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
 
-        try (FileSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
+        try (RecordsSnapshotWriter<String> snapshot = context.client.createSnapshot(id.offset - 1, id.epoch, 0).get()) {
             assertEquals(id, snapshot.snapshotId());
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
@@ -183,7 +183,7 @@ final public class SnapshotWriterReaderTest {
         return result;
     }
 
-    private FileSnapshotReader<String> readSnapshot(
+    private RecordsSnapshotReader<String> readSnapshot(
         RaftClientTestContext context,
         OffsetAndEpoch snapshotId,
         int maxBatchSize
@@ -250,7 +250,7 @@ final public class SnapshotWriterReaderTest {
         );
     }
 
-    public static void assertSnapshot(List<List<String>> batches, FileSnapshotReader<String> reader) {
+    public static void assertSnapshot(List<List<String>> batches, RecordsSnapshotReader<String> reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 

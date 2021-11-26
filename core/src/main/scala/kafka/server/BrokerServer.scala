@@ -48,7 +48,7 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.FileSnapshotWriter
+import org.apache.kafka.snapshot.RecordsSnapshotWriter
 
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters._
@@ -59,7 +59,7 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     extends SnapshotWriterBuilder {
   override def build(committedOffset: Long,
                      committedEpoch: Int,
-                     lastContainedLogTime: Long): FileSnapshotWriter[ApiMessageAndVersion] = {
+                     lastContainedLogTime: Long): RecordsSnapshotWriter[ApiMessageAndVersion] = {
     raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
         asScala.getOrElse(
       throw new RuntimeException("A snapshot already exists with " +

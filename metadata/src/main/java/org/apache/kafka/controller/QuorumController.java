@@ -77,8 +77,8 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
-import org.apache.kafka.snapshot.FileSnapshotReader;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
@@ -367,7 +367,7 @@ public final class QuorumController implements Controller {
                     )
                 );
             }
-            Optional<FileSnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
+            Optional<RecordsSnapshotWriter<ApiMessageAndVersion>> writer = raftClient.createSnapshot(
                 committedOffset,
                 committedEpoch,
                 committedTimestamp
@@ -715,7 +715,7 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleSnapshot(FileSnapshotReader<ApiMessageAndVersion> reader) {
+        public void handleSnapshot(RecordsSnapshotReader<ApiMessageAndVersion> reader) {
             appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     boolean isActiveController = curClaimEpoch != -1;

@@ -32,20 +32,7 @@ import java.util.Optional;
 import java.util.List;
 import java.util.function.Supplier;
 
-/**
- * A type for writing a snapshot for a given end offset and epoch.
- *
- * A snapshot writer can be used to append objects until freeze is called. When freeze is
- * called the snapshot is validated and marked as immutable. After freeze is called any
- * append will fail with an exception.
- *
- * It is assumed that the content of the snapshot represents all of the records for the
- * topic partition from offset 0 up to but not including the end offset in the snapshot
- * id.
- *
- * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
- */
-final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
+final public class SnapshotWriter<T> implements RecordsSnapshotWriter<T> {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
@@ -74,7 +61,6 @@ final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
             compressionType,
             serde
         );
-        initializeSnapshotWithHeader();
     }
 
     /**
@@ -82,7 +68,7 @@ final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
      *
      * @throws IllegalStateException if the snapshot is not empty
      */
-    private void initializeSnapshotWithHeader() {
+    public void initializeSnapshotWithHeader() {
         if (snapshot.sizeInBytes() != 0) {
             String message = String.format(
                 "Initializing writer with a non-empty snapshot: id = '%s'.",
@@ -123,7 +109,7 @@ final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
      * @param serde the record serialization and deserialization implementation
      * @return {@link Optional}{@link SnapshotWriter}
      */
-    public static <T> Optional<FileSnapshotWriter<T>> createWithHeader(
+    public static <T> Optional<RecordsSnapshotWriter<T>> createWithHeader(
         Supplier<Optional<RawSnapshotWriter>> supplier,
         int maxBatchSize,
         MemoryPool memoryPool,
@@ -132,7 +118,7 @@ final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
-        return supplier.get().map(snapshot -> {
+        Optional<RecordsSnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
             return new SnapshotWriter<T>(
                     snapshot,
                     maxBatchSize,
@@ -142,6 +128,8 @@ final public class SnapshotWriter<T> implements FileSnapshotWriter<T> {
                     CompressionType.NONE,
                     serde);
         });
+        writer.ifPresent(RecordsSnapshotWriter::initializeSnapshotWithHeader);
+        return writer;
     }
 
     /**

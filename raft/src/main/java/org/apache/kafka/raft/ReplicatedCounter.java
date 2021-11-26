@@ -19,8 +19,8 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.snapshot.FileSnapshotReader;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.Optional;
@@ -114,7 +114,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastCommittedEpoch,
                     lastOffsetSnapshotted
                 );
-                Optional<FileSnapshotWriter<Integer>> snapshot = client.createSnapshot(
+                Optional<RecordsSnapshotWriter<Integer>> snapshot = client.createSnapshot(
                     lastCommittedOffset,
                     lastCommittedEpoch,
                     lastCommittedTimestamp);
@@ -136,7 +136,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleSnapshot(FileSnapshotReader<Integer> reader) {
+    public synchronized void handleSnapshot(RecordsSnapshotReader<Integer> reader) {
         try {
             log.debug("Loading snapshot {}", reader.snapshotId());
             while (reader.hasNext()) {

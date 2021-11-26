@@ -74,8 +74,8 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.FileSnapshotWriter;
-import org.apache.kafka.snapshot.FileSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -308,7 +308,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
-                    FileSnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
+                    RecordsSnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
                             "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
                             listenerContext.listenerName(),
@@ -331,7 +331,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private Optional<FileSnapshotReader<T>> latestSnapshot() {
+    private Optional<RecordsSnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
             SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
         );
@@ -2344,7 +2344,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Optional<FileSnapshotWriter<T>> createSnapshot(
+    public Optional<RecordsSnapshotWriter<T>> createSnapshot(
         long committedOffset,
         int committedEpoch,
         long lastContainedLogTime
@@ -2494,7 +2494,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * This API is used when the Listener needs to be notified of a new snapshot. This happens
          * when the context's next offset is less than the log start offset.
          */
-        private void fireHandleSnapshot(FileSnapshotReader<T> reader) {
+        private void fireHandleSnapshot(RecordsSnapshotReader<T> reader) {
             synchronized (this) {
                 nextOffset = reader.snapshotId().offset;
                 lastSent = null;

@@ -15,11 +15,26 @@
  * limitations under the License.
  */
 package org.apache.kafka.snapshot;
+
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 
 import java.util.List;
-public interface FileSnapshotWriter<T> extends AutoCloseable {
+
+/**
+ * A type for writing a snapshot for a given end offset and epoch.
+ *
+ * A snapshot writer can be used to append objects until freeze is called. When freeze is
+ * called the snapshot is validated and marked as immutable. After freeze is called any
+ * append will fail with an exception.
+ *
+ * It is assumed that the content of the snapshot represents all of the records for the
+ * topic partition from offset 0 up to but not including the end offset in the snapshot
+ * id.
+ *
+ * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
+ */
+public interface RecordsSnapshotWriter<T> extends AutoCloseable {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
@@ -37,14 +52,12 @@ public interface FileSnapshotWriter<T> extends AutoCloseable {
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
-     * <p>
      * Modification to the snapshot are not allowed once it is frozen.
      */
     boolean isFrozen();
 
     /**
      * Appends a list of values to the snapshot.
-     * <p>
      * The list of record passed are guaranteed to get written together.
      *
      * @param records the list of records to append to the snapshot
@@ -54,7 +67,6 @@ public interface FileSnapshotWriter<T> extends AutoCloseable {
 
     /**
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
-     * <p>
      * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
      */
     void freeze();
@@ -65,4 +77,10 @@ public interface FileSnapshotWriter<T> extends AutoCloseable {
      * If close is called without first calling freeze the snapshot is aborted.
      */
     void close();
+
+    /**
+     * Initialize the snapshot with header
+     */
+    void initializeSnapshotWithHeader();
+
 }
