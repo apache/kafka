@@ -23,7 +23,6 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
@@ -73,14 +72,12 @@ public class SnapshotGeneratorTest {
     @Test
     public void testGenerateBatches() throws Exception {
         SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
-        ExponentialBackoff exponentialBackoff =
-            new ExponentialBackoff(100, 2, 400, 0.0);
         List<Section> sections = Arrays.asList(new Section("replication",
                 Arrays.asList(BATCHES.get(0), BATCHES.get(1), BATCHES.get(2)).iterator()),
             new Section("configuration",
                 Arrays.asList(BATCHES.get(3), BATCHES.get(4)).iterator()));
         SnapshotGenerator generator = new SnapshotGenerator(new LogContext(),
-            writer, 2, exponentialBackoff, sections);
+            writer, 2, sections);
         assertFalse(writer.isFrozen());
         assertEquals(123L, generator.lastContainedLogOffset());
         assertEquals(writer, generator.writer());

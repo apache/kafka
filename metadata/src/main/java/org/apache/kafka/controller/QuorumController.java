@@ -59,7 +59,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -322,7 +321,7 @@ public final class QuorumController implements Controller {
     }
 
     private Throwable handleEventException(String name,
-                                           Optional<Long> startProcessingTimeNs,
+                                           OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
         if (!startProcessingTimeNs.isPresent()) {
             log.info("unable to start processing {} because of {}.", name,
@@ -334,7 +333,7 @@ public final class QuorumController implements Controller {
             }
         }
         long endProcessingTime = time.nanoseconds();
-        long deltaNs = endProcessingTime - startProcessingTimeNs.get();
+        long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
         if (exception instanceof ApiException) {
             log.info("{}: failed with {} in {} us", name,
@@ -357,7 +356,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final Runnable handler;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
 
         ControlEvent(String name, Runnable handler) {
             this.name = name;
@@ -368,10 +367,10 @@ public final class QuorumController implements Controller {
         public void run() throws Exception {
             long now = time.nanoseconds();
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             log.debug("Executing {}.", this);
             handler.run();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
+            handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
         }
 
         @Override
@@ -395,7 +394,6 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
         void createSnapshotGenerator(long committedOffset, int committedEpoch, long committedTimestamp) {
@@ -420,7 +418,6 @@ public final class QuorumController implements Controller {
                     logContext,
                     writer.get(),
                     MAX_BATCHES_PER_GENERATE_CALL,
-                    exponentialBackoff,
                     Arrays.asList(
                         new Section("features", featureControl.iterator(committedOffset)),
                         new Section("cluster", clusterControl.iterator(committedOffset)),
@@ -504,7 +501,7 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
@@ -520,9 +517,9 @@ public final class QuorumController implements Controller {
         public void run() throws Exception {
             long now = time.nanoseconds();
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             T value = handler.get();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
+            handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
             future.complete(value);
         }
 
@@ -592,7 +589,7 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
         ControllerWriteEvent(String name, ControllerWriteOperation<T> op) {
@@ -614,14 +611,14 @@ public final class QuorumController implements Controller {
             if (controllerEpoch == -1) {
                 throw newNotControllerException();
             }
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(writeOffset);
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                Optional<Long> maybeOffset = purgatory.highestPendingOffset();
+                OptionalLong maybeOffset = purgatory.highestPendingOffset();
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can return immediately.
@@ -633,7 +630,7 @@ public final class QuorumController implements Controller {
                 }
                 // If there are operations in the purgatory, we want to wait for the latest
                 // one to complete before returning our result to the user.
-                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.get(), result);
+                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.getAsLong(), result);
                 log.debug("Read-only operation {} will be completed when the log " +
                     "reaches offset {}", this, resultAndOffset.offset());
             } else {
@@ -668,7 +665,7 @@ public final class QuorumController implements Controller {
         @Override
         public void complete(Throwable exception) {
             if (exception == null) {
-                handleEventEnd(this.toString(), startProcessingTimeNs.get());
+                handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
                 future.complete(resultAndOffset.response());
             } else {
                 future.completeExceptionally(
