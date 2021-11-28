@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{SnapshotReader}
+import org.apache.kafka.snapshot.SnapshotReader
 
 
 object BrokerMetadataListener {
