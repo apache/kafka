@@ -52,12 +52,14 @@ public interface SnapshotWriter<T> extends AutoCloseable {
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
+     *
      * Modification to the snapshot are not allowed once it is frozen.
      */
     boolean isFrozen();
 
     /**
      * Appends a list of values to the snapshot.
+     *
      * The list of record passed are guaranteed to get written together.
      *
      * @param records the list of records to append to the snapshot
@@ -67,6 +69,7 @@ public interface SnapshotWriter<T> extends AutoCloseable {
 
     /**
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
+     *
      * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
      */
     void freeze();
