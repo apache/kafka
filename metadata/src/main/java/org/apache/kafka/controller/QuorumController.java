@@ -79,7 +79,6 @@ import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
