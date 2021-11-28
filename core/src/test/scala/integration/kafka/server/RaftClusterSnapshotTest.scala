@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
@@ -30,7 +29,6 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
-
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
