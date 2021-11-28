@@ -538,34 +538,11 @@ class AclAuthorizer extends Authorizer with Logging {
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
         (operation == acl.operation || acl.operation == AclOperation.ALL) &&
-        hostAuthorize(host,acl.host)
+        (acl.host == host || acl.host == AclEntry.WildcardHost)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
-  }
-
-  private def hostAuthorize(sourceIp: String, hostPrincipal: String): Boolean = {
-    if (hostPrincipal.contains("/")) {
-      val authorize = isIPCidrRange(sourceIp, hostPrincipal)
-      if (!authorize) {
-        authorizerLogger.debug(s"Acl ip network segment verification failed,sourceIP= $sourceIp ,hostPrincipal= $hostPrincipal")
-      }
-      authorize || hostPrincipal == AclEntry.WildcardHost
-    } else {
-      sourceIp == hostPrincipal || hostPrincipal == AclEntry.WildcardHost
-    }
-  }
-
-  private def isIPCidrRange(ip: String, cidr: String): Boolean = {
-    val ips = ip.split("\\.")
-    val ipAddr = (ips(0).toInt << 24) | (ips(1).toInt << 16) | (ips(2).toInt << 8) | ips(3).toInt
-    val cidrType = cidr.replaceAll(".*/", "").toInt
-    val mask = 0xFFFFFFFF << (32 - cidrType)
-    val cidrIp = cidr.replaceAll("/.*", "")
-    val cidrIps = cidrIp.split("\\.")
-    val cidrIpAddr = (cidrIps(0).toInt << 24) | (cidrIps(1).toInt << 16) | (cidrIps(2).toInt << 8) | cidrIps(3).toInt
-    (ipAddr & mask) == (cidrIpAddr & mask)
   }
 
   private def loadCache(): Unit = {
