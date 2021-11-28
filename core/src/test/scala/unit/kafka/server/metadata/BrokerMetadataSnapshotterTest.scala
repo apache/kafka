@@ -30,7 +30,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.queue.EventQueue
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{MockRawSnapshotWriter, SnapshotWriter, RecordsSnapshotWriter}
+import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -48,9 +48,9 @@ class BrokerMetadataSnapshotterTest {
 
     override def build(committedOffset: Long,
                        committedEpoch: Int,
-                       lastContainedLogTime: Long): RecordsSnapshotWriter[ApiMessageAndVersion] = {
+                       lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
       val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
-      SnapshotWriter.createWithHeader(
+      RecordsSnapshotWriter.createWithHeader(
         () => {
           Optional.of(
             new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch))

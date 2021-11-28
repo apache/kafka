@@ -30,10 +30,10 @@ import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -72,7 +72,7 @@ public class SnapshotGeneratorTest {
 
     @Test
     public void testGenerateBatches() throws Exception {
-        RecordsSnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
+        SnapshotWriter<ApiMessageAndVersion> writer = createSnapshotWriter(123, 0);
         ExponentialBackoff exponentialBackoff =
             new ExponentialBackoff(100, 2, 400, 0.0);
         List<Section> sections = Arrays.asList(new Section("replication",
@@ -91,11 +91,11 @@ public class SnapshotGeneratorTest {
         assertTrue(writer.isFrozen());
     }
 
-    private RecordsSnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
+    private SnapshotWriter<ApiMessageAndVersion> createSnapshotWriter(
         long committedOffset,
         long lastContainedLogTime
     ) {
-        return SnapshotWriter.createWithHeader(
+        return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, 1)),
             1024,
             MemoryPool.NONE,

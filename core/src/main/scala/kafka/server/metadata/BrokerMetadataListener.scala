@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{RecordsSnapshotReader}
+import org.apache.kafka.snapshot.{SnapshotReader}
 
 
 object BrokerMetadataListener {
@@ -136,10 +136,10 @@ class BrokerMetadataListener(
   /**
    * Handle metadata snapshots
    */
-  override def handleSnapshot(reader: RecordsSnapshotReader[ApiMessageAndVersion]): Unit =
+  override def handleSnapshot(reader: SnapshotReader[ApiMessageAndVersion]): Unit =
     eventQueue.append(new HandleSnapshotEvent(reader))
 
-  class HandleSnapshotEvent(reader: RecordsSnapshotReader[ApiMessageAndVersion])
+  class HandleSnapshotEvent(reader: SnapshotReader[ApiMessageAndVersion])
     extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       try {

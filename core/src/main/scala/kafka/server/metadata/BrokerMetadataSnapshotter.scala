@@ -23,13 +23,13 @@ import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{RecordsSnapshotWriter}
+import org.apache.kafka.snapshot.{SnapshotWriter}
 
 
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
-            lastContainedLogTime: Long): RecordsSnapshotWriter[ApiMessageAndVersion]
+            lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion]
 }
 
 class BrokerMetadataSnapshotter(
@@ -71,7 +71,7 @@ class BrokerMetadataSnapshotter(
   }
 
   class CreateSnapshotEvent(image: MetadataImage,
-                            writer: RecordsSnapshotWriter[ApiMessageAndVersion])
+                            writer: SnapshotWriter[ApiMessageAndVersion])
         extends EventQueue.Event {
     override def run(): Unit = {
       try {

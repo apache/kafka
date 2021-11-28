@@ -37,10 +37,10 @@ import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -381,7 +381,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             offset = reader.lastOffset().getAsLong();
         }
 
-        void handleSnapshot(RecordsSnapshotReader<ApiMessageAndVersion> reader) {
+        void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             listener.handleSnapshot(reader);
             offset = reader.lastContainedLogOffset();
         }
@@ -472,7 +472,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             if (snapshot.isPresent()) {
                                 log.trace("Node {}: handling snapshot with id {}.", nodeId, snapshot.get().snapshotId());
                                 listenerData.handleSnapshot(
-                                    SnapshotReader.of(
+                                    RecordsSnapshotReader.of(
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
@@ -703,13 +703,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public Optional<RecordsSnapshotWriter<ApiMessageAndVersion>> createSnapshot(
+    public Optional<SnapshotWriter<ApiMessageAndVersion>> createSnapshot(
         long committedOffset,
         int committedEpoch,
         long lastContainedLogTimestamp
     ) {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(committedOffset + 1, committedEpoch);
-        return SnapshotWriter.createWithHeader(
+        return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(snapshotId),
             1024,
             MemoryPool.NONE,
