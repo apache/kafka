@@ -23,7 +23,7 @@ import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{SnapshotWriter}
+import org.apache.kafka.snapshot.SnapshotWriter
 
 
 trait SnapshotWriterBuilder {
