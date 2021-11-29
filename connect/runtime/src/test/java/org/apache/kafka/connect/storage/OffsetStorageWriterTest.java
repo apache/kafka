@@ -35,7 +35,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.junit.Assert.assertFalse;
@@ -76,12 +78,13 @@ public class OffsetStorageWriterTest {
     public void testWriteFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+        verify(callback).onCompletion(isNull(), isNull());
     }
 
     // It should be possible to set offset values to null
@@ -89,12 +92,13 @@ public class OffsetStorageWriterTest {
     public void testWriteNullValueFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, callback, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null, false, null);
 
         writer.offset(OFFSET_KEY, null);
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+        verify(callback).onCompletion(isNull(), isNull());
     }
 
     // It should be possible to use null keys. These aren't actually stored as null since the key is wrapped to include
@@ -103,12 +107,13 @@ public class OffsetStorageWriterTest {
     public void testWriteNullKeyFlush() throws Exception {
         @SuppressWarnings("unchecked")
         Callback<Void> callback = mock(Callback.class);
-        expectStore(null, null, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+        expectStore(null, null, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
 
         writer.offset(null, OFFSET_VALUE);
 
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+        verify(callback).onCompletion(isNull(), isNull());
     }
 
     @Test
@@ -128,18 +133,19 @@ public class OffsetStorageWriterTest {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = mock(Callback.class);
         // First time the write fails
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, true, null);
-
-        // Third time it has no data to flush so we won't get past beginFlush()
-
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, true, null);
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+        verify(callback).onCompletion(eq(EXCEPTION), isNull());
 
         // Second time it succeeds
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, callback, false, null);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
         assertTrue(writer.beginFlush());
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
+        verify(callback).onCompletion(isNull(), isNull());
+
+        // Third time it has no data to flush so we won't get past beginFlush()
         assertFalse(writer.beginFlush());
     }
 
@@ -149,7 +155,7 @@ public class OffsetStorageWriterTest {
         final Callback<Void> callback = mock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, null, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
@@ -171,7 +177,7 @@ public class OffsetStorageWriterTest {
         CountDownLatch allowStoreCompleteCountdown = new CountDownLatch(1);
         // In this test, the write should be cancelled so the callback will not be invoked and is not
         // passed to the expectStore call
-        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, null, false, allowStoreCompleteCountdown);
+        expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
@@ -189,8 +195,6 @@ public class OffsetStorageWriterTest {
      * @param keySerialized serialized version of the key
      * @param value the value for the offset
      * @param valueSerialized serialized version of the value
-     * @param callback the callback to invoke when completed, or null if the callback isn't
-     *                 expected to be invoked
      * @param fail if true, treat
      * @param waitForCompletion if non-null, a CountDownLatch that should be awaited on before
      *                          invoking the callback. A (generous) timeout is still imposed to
@@ -199,7 +203,6 @@ public class OffsetStorageWriterTest {
     @SuppressWarnings("unchecked")
     private void expectStore(Map<String, Object> key, byte[] keySerialized,
                              Map<String, Object> value, byte[] valueSerialized,
-                             final Callback<Void> callback,
                              final boolean fail,
                              final CountDownLatch waitForCompletion) {
         List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
@@ -224,14 +227,6 @@ public class OffsetStorageWriterTest {
                 return null;
             });
         });
-
-        if (callback != null) {
-            if (fail) {
-                callback.onCompletion(EXCEPTION, null);
-            } else {
-                callback.onCompletion(null, null);
-            }
-        }
     }
 
 }
