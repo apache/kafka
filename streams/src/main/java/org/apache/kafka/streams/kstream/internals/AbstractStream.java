@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -109,6 +110,12 @@ public abstract class AbstractStream<K, V> {
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
         Objects.requireNonNull(valueMapper, "valueMapper can't be null");
         return (readOnlyKey, value) -> valueMapper.apply(value);
+    }
+
+    static <K, V, VR> ProcessorSupplier<K, V, K, VR> toValueProcessor(
+        final ProcessorSupplier<K, V, K, VR> processorSupplier
+    ) {
+        return new ValueProcessorSupplier<>(processorSupplier);
     }
 
     static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(

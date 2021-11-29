@@ -161,7 +161,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamFilter<>(predicate, false), name);
+            new ProcessorParameters<>(
+                new ValueProcessorSupplier<>(new KStreamFilter<>(predicate, false)),
+                name);
         final ProcessorGraphNode<? super K, ? super V> filterProcessorNode =
             new ProcessorGraphNode<>(name, processorParameters);
 
@@ -190,7 +192,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamFilter<>(predicate, true), name);
+            new ProcessorParameters<>(
+                new ValueProcessorSupplier<>(new KStreamFilter<>(predicate, true)),
+                name);
         final ProcessorGraphNode<? super K, ? super V> filterNotProcessorNode =
             new ProcessorGraphNode<>(name, processorParameters);
 
@@ -298,7 +302,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPVALUES_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamMapValues<>(valueMapperWithKey), name);
+            new ProcessorParameters<>(
+                new ValueProcessorSupplier<>(new KStreamMapValues<>(valueMapperWithKey)),
+                name);
         final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode =
             new ProcessorGraphNode<>(name, processorParameters);
         mapValuesProcessorNode.setValueChangingOperation(true);
@@ -364,7 +370,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAPVALUES_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamFlatMapValues<>(valueMapper), name);
+            new ProcessorParameters<>(
+                new KStreamFlatMapValues<>(valueMapper),
+                name);
         final ProcessorGraphNode<? super K, ? super V> flatMapValuesNode =
             new ProcessorGraphNode<>(name, processorParameters);
         flatMapValuesNode.setValueChangingOperation(true);
@@ -429,7 +437,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PEEK_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamPeek<>(action), name);
+            new ProcessorParameters<>(
+                new ValueProcessorSupplier<>(new KStreamPeek<>(action)),
+                name);
         final ProcessorGraphNode<? super K, ? super V> peekNode =
             new ProcessorGraphNode<>(name, processorParameters);
 
@@ -1501,7 +1511,37 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+    public <VR> KStream<K, VR> processValues(
+        ProcessorSupplier<? super K, ? super V, ? extends K, ? extends VR> processorSupplier, Named named,
+        String... stateStoreNames) {
+        Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
+        ApiUtils.checkSupplier(processorSupplier);
+        for (final String stateStoreName : stateStoreNames) {
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+        }
+
+        final String name = new NamedInternal(named).name();
+        final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
+            name,
+            new ProcessorParameters<>(new ValueProcessorSupplier<>((ProcessorSupplier<K, V, K, VR>) processorSupplier), name),
+            stateStoreNames);
+
+        builder.addGraphNode(graphNode, processNode);
+
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            null,
+            subTopologySourceNodes,
+            repartitionRequired,
+            processNode,
+            builder);
+    }
+
+    @Override
+    public <KR, VR> KStream<KR, VR> process(final ProcessorSupplier<? super K, ? super V, ? extends KR, ? extends VR> processorSupplier,
                         final Named named,
                         final String... stateStoreNames) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
@@ -1519,5 +1559,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             stateStoreNames);
 
         builder.addGraphNode(graphNode, processNode);
+
+        return new KStreamImpl<>(
+            name,
+            null,
+            null,
+            subTopologySourceNodes,
+            true,
+            processNode,
+            builder);
     }
 }

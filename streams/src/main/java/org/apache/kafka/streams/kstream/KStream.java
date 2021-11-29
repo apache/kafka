@@ -4933,7 +4933,11 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+    <KR, VR> KStream<KR, VR> process(final ProcessorSupplier<? super K, ? super V, ? extends KR, ? extends VR> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
+
+    <VR> KStream<K, VR> processValues(final ProcessorSupplier<? super K, ? super V, ? extends K, ? extends VR> processorSupplier,
+        final Named named,
+        final String... stateStoreNames);
 }
