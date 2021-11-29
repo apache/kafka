@@ -20,6 +20,7 @@ package kafka.log
 import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_3_0_IV1}
 import kafka.log.LogConfig.configDef
 import kafka.message.BrokerCompressionCodec
+import kafka.record.LogDirSelectType
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
@@ -68,6 +69,7 @@ object Defaults {
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
   val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
   val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
+  val LogDirectorySelectStrategy = kafka.server.Defaults.LogDirectorySelectStrategy
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
@@ -107,6 +109,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
+  val logDirectorySelectStrategy = LogDirSelectType.forName(getString(LogConfig.LogDirectorySelectStrategyProp))
 
   class RemoteLogConfig {
     val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
@@ -217,6 +220,7 @@ object LogConfig {
   val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
   val MessageDownConversionEnableProp = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
+  val LogDirectorySelectStrategyProp = TopicConfig.LOG_DIRECTORY_SELECT_STRATEGY_CONFIG
 
   // Leave these out of TopicConfig for now as they are replication quota configs
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
@@ -253,6 +257,7 @@ object LogConfig {
   val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
   val MessageTimestampDifferenceMaxMsDoc = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC
   val MessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
+  val LogDirectorySelectStrategyDoc = TopicConfig.LOG_DIRECTORY_SELECT_STRATEGY_DOC
 
   val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on " +
     "the leader side. The list should describe a set of replicas in the form " +
@@ -376,7 +381,8 @@ object LogConfig {
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
       .define(MessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
         MessageDownConversionEnableDoc, KafkaConfig.LogMessageDownConversionEnableProp)
-
+      .define(LogDirectorySelectStrategyProp, STRING, Defaults.LogDirectorySelectStrategy, in("Partition", "Size"),
+        MEDIUM, LogDirectorySelectStrategyDoc, KafkaConfig.LogDirectorySelectStrategyProp)
     // RemoteLogStorageEnableProp, LocalLogRetentionMsProp, LocalLogRetentionBytesProp do not have server default
     // config names.
     logConfigDef

@@ -25,6 +25,7 @@ import java.nio.file.Files
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.metrics.KafkaMetricsGroup
+import kafka.record.LogDirSelectType
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
@@ -846,6 +847,8 @@ class LogManager(logDirs: Seq[File],
         if (!isNew && offlineLogDirs.nonEmpty)
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
+        val config = fetchLogConfig(topicPartition.topic)
+
         val logDirs: List[File] = {
           val preferredLogDir = preferredLogDirs.get(topicPartition)
 
@@ -859,7 +862,7 @@ class LogManager(logDirs: Seq[File],
           if (preferredLogDir != null)
             List(new File(preferredLogDir))
           else
-            nextLogDirs()
+            nextLogDirs(config.logDirectorySelectStrategy)
         }
 
         val logDirName = {
@@ -876,7 +879,6 @@ class LogManager(logDirs: Seq[File],
           .getOrElse(Failure(new KafkaStorageException("No log directories available. Tried " + logDirs.map(_.getAbsolutePath).mkString(", "))))
           .get // If Failure, will throw
 
-        val config = fetchLogConfig(topicPartition.topic)
         val log = UnifiedLog(
           dir = logDir,
           config = config,
@@ -1122,23 +1124,40 @@ class LogManager(logDirs: Seq[File],
 
   /**
    * Provides the full ordered list of suggested directories for the next partition.
-   * Currently this is done by calculating the number of partitions in each directory and then sorting the
+   * Currently this is done by calculating the number of partitions or size in each directory and then sorting the
    * data directories by fewest partitions.
    */
-  private def nextLogDirs(): List[File] = {
+  private def nextLogDirs(logDirectorySelect: LogDirSelectType): List[File] = {
     if(_liveLogDirs.size == 1) {
       List(_liveLogDirs.peek())
     } else {
-      // count the number of logs in each parent directory (including 0 for empty directories
-      val logCounts = allLogs.groupBy(_.parentDir).map { case (parent, logs) => parent -> logs.size }
-      val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
-      val dirCounts = (zeros ++ logCounts).toBuffer
-
-      // choose the directory with the least logs in it
-      dirCounts.sortBy(_._2).map {
-        case (path: String, _: Int) => new File(path)
-      }.toList
+      logDirectorySelect match {
+        case LogDirSelectType.SIZE => bySize()
+        case _ => byPartition()
+      }
     }
+  }
+
+  private def byPartition() : List[File] = {
+    // count the number of logs in each parent directory (including 0 for empty directories
+    val logCounts = allLogs.groupBy(_.parentDir).map { case (parent, logs) => parent -> logs.size }
+    val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
+    val dirCounts = (zeros ++ logCounts).toBuffer
+
+    // choose the directory with the least logs in it
+    dirCounts.sortBy(_._2).map {
+      case (path: String, _: Int) => new File(path)
+    }.toList
+  }
+
+  private def bySize(): List[File] = {
+    val logSize = allLogs.groupBy(_.parentDir).map { case (parent, logs) => parent -> logs.map(_.size).sum }
+    val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0L)).toMap
+    val dirSize = (zeros ++ logSize).toBuffer
+
+    dirSize.sortBy(_._2).map {
+      case (path: String, _: Long) => new File(path)
+    }.toList
   }
 
   /**

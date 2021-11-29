@@ -207,4 +207,11 @@ public class TopicConfig {
         "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
         "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
         "does not apply to any message format conversion that might be required for replication to followers.";
+
+    public static final String LOG_DIRECTORY_SELECT_STRATEGY_CONFIG = "log.directory.select.strategy";
+    public static final String LOG_DIRECTORY_SELECT_STRATEGY_DOC = "This configuration controls the creation strategy " +
+            "of the partition directory, all directories under the Broker level configuration item `log.dirs` " +
+            "will be sorted. When set to <code>Partition</code>, the directory with the smallest number of " +
+            "partitions has priority allocation; When set to <code>Size</code> is sorted by directory size, " +
+            "the smallest directory has priority distribution ";
 }

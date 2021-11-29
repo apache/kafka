@@ -19,6 +19,7 @@ package kafka.log
 
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
+import kafka.record.LogDirSelectType
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
@@ -361,6 +362,45 @@ class LogManagerTest {
       assertEquals(partition + 1, logManager.allLogs.size, "We should have created the right number of logs")
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue(counts.max <= counts.min + 1, "Load should balance evenly")
+    }
+  }
+
+  @Test
+  def testLeastSizeAssignment(): Unit = {
+    // create a log manager with multiple data directories
+    val dirs = Seq(TestUtils.tempDir(),
+      TestUtils.tempDir(),
+      TestUtils.tempDir())
+    logManager.shutdown()
+//    val logProps = new Properties()
+//    logProps.put(LogConfig.LogDirectorySelectStrategyProp, LogDirSelectType.SIZE.name: java.lang.String)
+
+    val properties = new Properties()
+    properties.put(LogConfig.LogDirectorySelectStrategyProp, LogDirSelectType.SIZE.name: java.lang.String)
+    val configRepository = MockConfigRepository.forTopic(name, properties)
+
+    logManager = createLogManager(logDirs = dirs, configRepository = configRepository)
+
+//    val logConfig = LogConfig(logProps)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes)
+    val setSize = createRecords.sizeInBytes
+    val msgPerSeg = 10
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
+
+    val tps = Seq(
+      new TopicPartition("test-a", 0),
+      new TopicPartition("test-b", 0),
+      new TopicPartition("test-c", 0))
+
+    tps.foreach { tp =>
+      val log = logManager.getOrCreateLog(tp, topicId = None)
+      for (_ <- 1 to msgPerSeg)
+        log.appendAsLeader(createRecords, leaderEpoch = 0)
+      log.flush()
+
+      // verify that logs are always assigned to the least size partition
+      val logDirBySize = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.map(log => log.size).sum)
+      assertTrue(logDirBySize.max <= logDirBySize.min + segmentSize, "Load should balance evenly")
     }
   }
 
