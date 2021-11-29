@@ -280,10 +280,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+// This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
 
     // Exception includes a message that we verify is not included in error responses
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
+
 
     @Test
     public void testSerialization() {
@@ -306,6 +308,7 @@ public class RequestResponseTest {
         }
     }
 
+    // This test validates special cases that are not checked in testSerialization
     @Test
     public void testSerializationSpecialCases() {
         // Produce
@@ -323,16 +326,16 @@ public class RequestResponseTest {
         // Metadata
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2));
         // OffsetFetch
-        checkRequest(createOffsetFetchRequestWithMultipleGroups(8, true));
-        checkRequest(createOffsetFetchRequestWithMultipleGroups(8, false));
-        checkRequest(createOffsetFetchRequestForAllPartition(7, true));
-        checkRequest(createOffsetFetchRequestForAllPartition(8, true));
-        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups(8, true), unknownServerException);
-        checkErrorResponse(createOffsetFetchRequestForAllPartition(7, true),
+        checkRequest(createOffsetFetchRequestWithMultipleGroups((short) 8, true));
+        checkRequest(createOffsetFetchRequestWithMultipleGroups((short) 8, false));
+        checkRequest(createOffsetFetchRequestForAllPartition((short) 7, true));
+        checkRequest(createOffsetFetchRequestForAllPartition((short) 8, true));
+        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups((short) 8, true), unknownServerException);
+        checkErrorResponse(createOffsetFetchRequestForAllPartition((short) 7, true),
             new NotCoordinatorException("Not Coordinator"));
-        checkErrorResponse(createOffsetFetchRequestForAllPartition(8, true),
+        checkErrorResponse(createOffsetFetchRequestForAllPartition((short) 8, true),
             new NotCoordinatorException("Not Coordinator"));
-        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups(8, true),
+        checkErrorResponse(createOffsetFetchRequestWithMultipleGroups((short) 8, true),
             new NotCoordinatorException("Not Coordinator"));
         // StopReplica
         for (short version : STOP_REPLICA.allVersions()) {
@@ -360,11 +363,11 @@ public class RequestResponseTest {
         // DeleteAcls
         checkErrorResponse(createDeleteAclsRequest((short) 0), new SecurityDisabledException("Security is not enabled."));
         // DescribeConfigs
-        checkRequest(createDescribeConfigsRequestWithConfigEntries(0));
-        checkRequest(createDescribeConfigsRequestWithConfigEntries(1));
-        checkRequest(createDescribeConfigsRequestWithDocumentation(1));
-        checkRequest(createDescribeConfigsRequestWithDocumentation(2));
-        checkRequest(createDescribeConfigsRequestWithDocumentation(3));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries((short) 0));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries((short) 1));
+        checkRequest(createDescribeConfigsRequestWithDocumentation((short) 1));
+        checkRequest(createDescribeConfigsRequestWithDocumentation((short) 2));
+        checkRequest(createDescribeConfigsRequestWithDocumentation((short) 3));
         checkDescribeConfigsResponseVersions();
         // ElectLeaders
         checkRequest(createElectLeadersRequestNullPartitions());
@@ -577,11 +580,11 @@ public class RequestResponseTest {
         }
     }
 
-    private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
+    private void verifyFetchResponseFullWrite(short version, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
-        short responseHeaderVersion = FETCH.responseHeaderVersion(apiVersion);
-        Send send = fetchResponse.toSend(new ResponseHeader(correlationId, responseHeaderVersion), apiVersion);
+        short responseHeaderVersion = FETCH.responseHeaderVersion(version);
+        Send send = fetchResponse.toSend(new ResponseHeader(correlationId, responseHeaderVersion), version);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -596,10 +599,10 @@ public class RequestResponseTest {
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
-        assertEquals(fetchResponse.serialize(apiVersion), buf);
-        FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), apiVersion);
+        assertEquals(fetchResponse.serialize(version), buf);
+        FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), version);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, apiVersion));
+        assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, version));
     }
 
     @Test
@@ -945,8 +948,8 @@ public class RequestResponseTest {
         assertEquals(1, createHeartBeatResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createJoinGroupResponse(JOIN_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
-        assertEquals(2, createLeaderAndIsrResponse(4).errorCounts().get(Errors.NONE));
-        assertEquals(2, createLeaderAndIsrResponse(5).errorCounts().get(Errors.NONE));
+        assertEquals(2, createLeaderAndIsrResponse((short) 4).errorCounts().get(Errors.NONE));
+        assertEquals(2, createLeaderAndIsrResponse((short) 5).errorCounts().get(Errors.NONE));
         assertEquals(3, createLeaderEpochResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createLeaveGroupResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createListGroupsResponse(LIST_GROUPS.latestVersion()).errorCounts().get(Errors.NONE));
@@ -1458,7 +1461,7 @@ public class RequestResponseTest {
     }
 
     private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual,
-                                               int version) {
+                                               short version) {
         for (Map.Entry<ConfigResource, DescribeConfigsResult> resource : expected.resultMap().entrySet()) {
             List<DescribeConfigsResourceResult> actualEntries = actual.resultMap().get(resource.getKey()).configs();
             List<DescribeConfigsResourceResult> expectedEntries = expected.resultMap().get(resource.getKey()).configs();
@@ -1725,7 +1728,7 @@ public class RequestResponseTest {
         return new JoinGroupRequest.Builder(data).build(version);
     }
 
-    private JoinGroupResponse createJoinGroupResponse(int version) {
+    private JoinGroupResponse createJoinGroupResponse(short version) {
         List<JoinGroupResponseData.JoinGroupResponseMember> members = new ArrayList<>();
 
         for (int i = 0; i < 2; i++) {
@@ -1777,7 +1780,7 @@ public class RequestResponseTest {
         return new SyncGroupRequest.Builder(data).build(version);
     }
 
-    private SyncGroupResponse createSyncGroupResponse(int version) {
+    private SyncGroupResponse createSyncGroupResponse(short version) {
         SyncGroupResponseData data = new SyncGroupResponseData()
             .setErrorCode(Errors.NONE.code())
             .setProtocolType("consumer") // Added in v5 but ignorable
@@ -1798,7 +1801,7 @@ public class RequestResponseTest {
         return new ListGroupsRequest.Builder(data).build(version);
     }
 
-    private ListGroupsResponse createListGroupsResponse(int version) {
+    private ListGroupsResponse createListGroupsResponse(short version) {
         ListGroupsResponseData.ListedGroup group = new ListGroupsResponseData.ListedGroup()
                 .setGroupId("test-group")
                 .setProtocolType("consumer");
@@ -1902,7 +1905,7 @@ public class RequestResponseTest {
         }
     }
 
-    private ListOffsetsResponse createListOffsetResponse(int version) {
+    private ListOffsetsResponse createListOffsetResponse(short version) {
         if (version == 0) {
             ListOffsetsResponseData data = new ListOffsetsResponseData()
                     .setTopics(singletonList(new ListOffsetsTopicResponse()
@@ -2013,8 +2016,7 @@ public class RequestResponseTest {
             .build(version);
     }
 
-    private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(int version,
-        boolean requireStable) {
+    private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(short version, boolean requireStable) {
         Map<String, List<TopicPartition>> groupToPartitionMap = new HashMap<>();
         List<TopicPartition> topic1 = singletonList(
             new TopicPartition("topic1", 0));
@@ -2039,27 +2041,27 @@ public class RequestResponseTest {
             groupToPartitionMap,
             requireStable,
             false
-        ).build((short) version);
+        ).build(version);
     }
 
-    private OffsetFetchRequest createOffsetFetchRequestForAllPartition(int version, boolean requireStable) {
+    private OffsetFetchRequest createOffsetFetchRequestForAllPartition(short version, boolean requireStable) {
         if (version < 8) {
             return new OffsetFetchRequest.Builder(
                 "group1",
                 requireStable,
                 null,
                 false)
-                .build((short) version);
+                .build(version);
         }
         return new OffsetFetchRequest.Builder(
             Collections.singletonMap(
                 "group1", null),
             requireStable,
             false)
-            .build((short) version);
+            .build(version);
     }
 
-    private OffsetFetchResponse createOffsetFetchResponse(int version) {
+    private OffsetFetchResponse createOffsetFetchResponse(short version) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(
             100L, Optional.empty(), "", Errors.NONE));
@@ -2177,7 +2179,7 @@ public class RequestResponseTest {
         return new ControlledShutdownResponse(data);
     }
 
-    private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
+    private LeaderAndIsrRequest createLeaderAndIsrRequest(short version) {
         List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
@@ -2221,11 +2223,11 @@ public class RequestResponseTest {
         topicIds.put("topic5", Uuid.randomUuid());
         topicIds.put("topic20", Uuid.randomUuid());
 
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0,
+        return new LeaderAndIsrRequest.Builder(version, 1, 10, 0,
                 partitionStates, topicIds, leaders).build();
     }
 
-    private LeaderAndIsrResponse createLeaderAndIsrResponse(int version) {
+    private LeaderAndIsrResponse createLeaderAndIsrResponse(short version) {
         if (version < 5) {
             List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
             partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
@@ -2234,7 +2236,7 @@ public class RequestResponseTest {
                     .setErrorCode(Errors.NONE.code()));
             return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
                     .setErrorCode(Errors.NONE.code())
-                    .setPartitionErrors(partitions), (short) version);
+                    .setPartitionErrors(partitions), version);
         } else {
             List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partition = singletonList(
                     new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
@@ -2245,11 +2247,11 @@ public class RequestResponseTest {
                     .setTopicId(Uuid.randomUuid())
                     .setPartitionErrors(partition));
             return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-                    .setTopics(topics), (short) version);
+                    .setTopics(topics), version);
         }
     }
 
-    private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
+    private UpdateMetadataRequest createUpdateMetadataRequest(short version, String rack) {
         List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
@@ -2330,7 +2332,7 @@ public class RequestResponseTest {
                 .setEndpoints(endpoints2)
                 .setRack(rack)
         );
-        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
+        return new UpdateMetadataRequest.Builder(version, 1, 10, 0, partitionStates,
             liveBrokers, topicIds).build();
     }
 
@@ -2698,7 +2700,7 @@ public class RequestResponseTest {
         return new DeleteAclsRequest.Builder(data).build(version);
     }
 
-    private DeleteAclsResponse createDeleteAclsResponse(int version) {
+    private DeleteAclsResponse createDeleteAclsResponse(short version) {
         List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
         filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
                 new DeleteAclsResponseData.DeleteAclsMatchingAcl()
@@ -2722,7 +2724,7 @@ public class RequestResponseTest {
             .setErrorMessage("No security"));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(0)
-            .setFilterResults(filterResults), (short) version);
+            .setFilterResults(filterResults), version);
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(short version) {
@@ -2737,7 +2739,7 @@ public class RequestResponseTest {
                 .build(version);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(int version) {
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(short version) {
         return new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
             .setResources(asList(
                 new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -2751,10 +2753,10 @@ public class RequestResponseTest {
                 new DescribeConfigsRequestData.DescribeConfigsResource()
                     .setResourceType(ConfigResource.Type.TOPIC.id())
                     .setResourceName("topic a")
-                    .setConfigurationKeys(emptyList())))).build((short) version);
+                    .setConfigurationKeys(emptyList())))).build(version);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequestWithDocumentation(int version) {
+    private DescribeConfigsRequest createDescribeConfigsRequestWithDocumentation(short version) {
         DescribeConfigsRequestData data = new DescribeConfigsRequestData()
                 .setResources(singletonList(
                         new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -2764,7 +2766,7 @@ public class RequestResponseTest {
         if (version == 3) {
             data.setIncludeDocumentation(true);
         }
-        return new DescribeConfigsRequest.Builder(data).build((short) version);
+        return new DescribeConfigsRequest.Builder(data).build(version);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse(short version) {
@@ -2835,7 +2837,7 @@ public class RequestResponseTest {
         return new AlterConfigsResponse(data);
     }
 
-    private CreatePartitionsRequest createCreatePartitionsRequest(int version) {
+    private CreatePartitionsRequest createCreatePartitionsRequest(short version) {
         CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection();
         topics.add(new CreatePartitionsTopic()
                 .setName("my_topic")
@@ -2851,10 +2853,10 @@ public class RequestResponseTest {
                 .setValidateOnly(false)
                 .setTopics(topics);
 
-        return new CreatePartitionsRequest(data, (short) version);
+        return new CreatePartitionsRequest(data, version);
     }
 
-    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments(int version) {
+    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments(short version) {
         CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection();
         CreatePartitionsAssignment myTopicAssignment = new CreatePartitionsAssignment()
                 .setBrokerIds(singletonList(2));
@@ -2878,7 +2880,7 @@ public class RequestResponseTest {
                 .setValidateOnly(false)
                 .setTopics(topics);
 
-        return new CreatePartitionsRequest(data, (short) version);
+        return new CreatePartitionsRequest(data, version);
     }
 
     private CreatePartitionsResponse createCreatePartitionsResponse() {
