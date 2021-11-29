@@ -81,6 +81,9 @@ trait MetadataVersionChangeListener {
   def apply(version: MetadataVersionDelta): Unit
 }
 
+/**
+ * Represents the state of a metadata version change. Can be an upgrade, downgrade, or no change.
+ */
 sealed trait MetadataVersionDelta {
   val version: Short
 

@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.api.KAFKA_3_1_IV1
-
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -223,15 +221,7 @@ class BrokerServer(
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
 
-      val brokerFeatures: BrokerFeatures = config.interBrokerProtocolVersion match {
-        case KAFKA_3_1_IV1 =>
-          BrokerFeatures.createDefault()
-        case ibp if ibp < KAFKA_3_1_IV1 =>
-          BrokerFeatures.createEmpty()
-        case ibp if ibp > KAFKA_3_1_IV1 =>
-          throw new ConfigException("Cannot run KRaft mode with IBP greater than 3.1-IV1")
-        case _ => throw new IllegalStateException
-      }
+      val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
       val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 

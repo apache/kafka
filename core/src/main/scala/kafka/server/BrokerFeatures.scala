@@ -70,12 +70,9 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 object BrokerFeatures extends Logging {
 
   def createDefault(): BrokerFeatures = {
-    // The arguments are currently empty, but, in the future as we define features we should
-    // populate the required values here.
-    val supportedFeatures = Features.supportedFeatures(
+    new BrokerFeatures(Features.supportedFeatures(
       java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-        new SupportedVersionRange(MetadataVersions.V1.version(), MetadataVersions.latest().version())))
-    new BrokerFeatures(supportedFeatures)
+        new SupportedVersionRange(MetadataVersions.V1.version(), MetadataVersions.latest().version()))))
   }
 
   def createEmpty(): BrokerFeatures = {
