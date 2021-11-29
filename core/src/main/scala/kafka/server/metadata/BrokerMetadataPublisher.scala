@@ -125,19 +125,16 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       metadataCache.setImage(newImage)
 
       val metadataVersion = newImage.features().metadataVersion().asScala
-      val versionDelta = metadataVersionManager.delta(metadataVersion, highestOffsetAndEpoch.offset)
+      val versionDelta = metadataVersionManager.update(metadataVersion, highestOffsetAndEpoch.offset)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
-
-        // We need to learn about the metadata.version, if set, before other components load
-        metadataVersionManager.delta(metadataVersion, highestOffsetAndEpoch.offset)
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $versionDelta.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with metadata.version $versionDelta.")
       }
 
       // Apply feature deltas.

@@ -33,43 +33,50 @@ class MetadataVersionManager extends MetadataVersionProvider with Logging {
 
   this.logIdent = logContext.logPrefix()
 
-  @volatile var version: MetadataVersionDelta = NoVersion()
+  var version: MetadataVersions = MetadataVersions.UNINITIALIZED
 
   private val listeners: mutable.Set[MetadataVersionChangeListener] = mutable.HashSet()
 
   override def activeVersion(): MetadataVersions = {
-    version.asMetadataVersions()
+    version
   }
 
   /**
-   * This is called every time we publish metadata updates from BrokerMetadataPublisher
+   * This is called every time we publish metadata updates from BrokerMetadataPublisher. It will update its
+   * cached version as well as return an object representing the version change (if any).
+   *
+   * This method is not thread-safe and is intended to be called from the event processor of BrokerMetadataListener's
+   * internal queue.
    */
-  def delta(metadataVersionOpt: Option[VersionRange], highestMetadataOffset: Long): MetadataVersionDelta = {
-    metadataVersionOpt.foreach { metadataVersionChange =>
+  def update(metadataVersionOpt: Option[VersionRange], highestMetadataOffset: Long): MetadataVersionDelta = {
+    if (metadataVersionOpt.isEmpty && version == MetadataVersions.UNINITIALIZED) {
+      // No version initialized and no change
+      throw new IllegalStateException("Cannot proceed without metadata.version set")
+    } else if (metadataVersionOpt.isEmpty) {
+      // No change
+      Version(version.version)
+    } else {
+      // Check for new version
       val prev = version
-      val curr = metadataVersionChange.max
-      if (prev.version != curr) {
-        version = {
-          prev match {
-            case _: NoVersion => Version(curr)
-            case p: MetadataVersionDelta if p.version < curr => UpgradedVersion(p.version, curr)
-            case p: MetadataVersionDelta if p.version > curr => DowngradedVersion(p.version, curr)
-            case _: MetadataVersionDelta => throw new IllegalStateException()
-          }
-        }
-        info(s"Updating active metadata.version to $version at offset $highestMetadataOffset")
-        listeners.foreach { listener =>
-          try {
-            listener.apply(version)
-          } catch {
-            case t: Throwable => error(s"Had an error when calling MetadataVersionChangeListener", t)
-          }
-        }
-      } else {
-        version = Version(prev.version)
+      val updated = metadataVersionOpt.get.max
+      val delta = prev match {
+        case p if p.version < updated => UpgradedVersion(p.version, updated)
+        case p if p.version > updated => DowngradedVersion(p.version, updated)
+        case p if p.version == updated => Version(p.version)
+        case _ => throw new IllegalStateException("Should have a previous and current version to compare")
       }
+      version = MetadataVersions.fromValue(updated)
+
+      info(s"Updating active metadata.version to $version at offset $highestMetadataOffset")
+      listeners.foreach { listener =>
+        try {
+          listener.apply(delta)
+        } catch {
+          case t: Throwable => error(s"Had an error when calling a MetadataVersionChangeListener", t)
+        }
+      }
+      delta
     }
-    version
   }
 
   def listen(listener: MetadataVersionChangeListener): Unit = {
@@ -92,9 +99,6 @@ sealed trait MetadataVersionDelta {
   }
 }
 
-case class NoVersion() extends MetadataVersionDelta {
-  val version: Short = -1
-}
 case class Version(version: Short) extends MetadataVersionDelta {}
 case class UpgradedVersion(previous: Short, version: Short) extends MetadataVersionDelta {}
 case class DowngradedVersion(previous: Short, version: Short) extends MetadataVersionDelta {}

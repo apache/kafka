@@ -19,10 +19,10 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.log.{AppendOrigin, LogConfig}
-import kafka.server.metadata.MockConfigRepository
+import kafka.server.metadata.{MockConfigRepository, Version}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
@@ -339,14 +339,14 @@ class ReplicaManagerConcurrencyTest {
           val delta = new MetadataDelta(latestImage, () => MetadataVersions.latest)
           topic.initialize(delta)
           latestImage = delta.apply()
-          replicaManager.applyDelta(delta.topicsDelta, latestImage)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage, Version(1))
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
           val delta = new MetadataDelta(latestImage, () => MetadataVersions.latest)
           val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
           latestImage = delta.apply()
           future.complete(updatedLeaderAndIsr)
-          replicaManager.applyDelta(delta.topicsDelta, latestImage)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage, Version(1))
 
         case ShutdownEvent =>
       }

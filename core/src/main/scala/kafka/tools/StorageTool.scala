@@ -59,7 +59,7 @@ object StorageTool extends Logging {
         action(store()).
         `type`(classOf[Short]).
         setDefault(MetadataVersions.stable().version()).
-        help(s"The initial metadata.version to use. Default is the latest (${MetadataVersions.latest().version()}).")
+        help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
 
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")

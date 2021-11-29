@@ -19,40 +19,30 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.metadata.MetadataRecordType;
 
+import java.util.Optional;
+
+
 public enum MetadataVersions implements MetadataVersion {
-    UNINITIALIZED((short) 0, null, "Uninitialized version", false) {
-        @Override
-        public short recordVersion(MetadataRecordType type) {
-            return type.lowestSupportedVersion();
-        }
-    },
-    V1((short) 1, null, "Initial version", false) {
-        @Override
-        public short recordVersion(MetadataRecordType type) {
-            return type.lowestSupportedVersion();
-        }
-    },
-    V2((short) 2, V1, "Second version", true) {
-        @Override
-        public short recordVersion(MetadataRecordType type) {
-            if (type.equals(MetadataRecordType.FEATURE_LEVEL_RECORD)) {
-                return 1;
-            } else {
-                return V1.recordVersion(type);
-            }
-        }
-    };
+    UNINITIALIZED(0, null, "Uninitialized version", false, type -> {
+        throw new IllegalStateException("Cannot determine record version with uninitialized metadata.version");
+    }),
+    V1(1, null, "Initial version", false, MetadataVersions::recordResolverV1);
 
     private final short version;
     private final MetadataVersion previous;
     private final String description;
     private final boolean isBackwardsCompatible;
+    private final MetadataRecordVersionResolver resolver;
 
-    MetadataVersions(short version, MetadataVersion previous, String description, boolean isBackwardsCompatible) {
-        this.version = version;
+    MetadataVersions(int version, MetadataVersion previous, String description, boolean isBackwardsCompatible, MetadataRecordVersionResolver resolver) {
+        if (version > Short.MAX_VALUE || version < Short.MIN_VALUE) {
+            throw new IllegalArgumentException("version must be a short");
+        }
+        this.version = (short) version;
         this.previous = previous;
         this.description = description;
         this.isBackwardsCompatible = isBackwardsCompatible;
+        this.resolver = resolver;
     }
 
     public static MetadataVersions fromValue(short value) {
@@ -68,9 +58,8 @@ public enum MetadataVersions implements MetadataVersion {
         return V1;
     }
 
-
     public static MetadataVersions latest() {
-        return V2;
+        return V1;
     }
 
     public static boolean isBackwardsCompatible(MetadataVersions sourceVersion, MetadataVersions targetVersion) {
@@ -79,10 +68,16 @@ public enum MetadataVersions implements MetadataVersion {
         }
         MetadataVersion version = sourceVersion;
         while (version.isBackwardsCompatible() && version != targetVersion) {
-            version = version.previous();
+            Optional<MetadataVersion> prev = version.previous();
+            if (prev.isPresent()) {
+                version = prev.get();
+            } else {
+                break;
+            }
         }
         return version == targetVersion;
     }
+
 
     @Override
     public short version() {
@@ -90,8 +85,8 @@ public enum MetadataVersions implements MetadataVersion {
     }
 
     @Override
-    public MetadataVersion previous() {
-        return previous;
+    public Optional<MetadataVersion> previous() {
+        return Optional.ofNullable(previous);
     }
 
     @Override
@@ -102,5 +97,14 @@ public enum MetadataVersions implements MetadataVersion {
     @Override
     public String description() {
         return description;
+    }
+
+    @Override
+    public short recordVersion(MetadataRecordType type) {
+        return resolver.recordVersion(type);
+    }
+
+    private static short recordResolverV1(MetadataRecordType type) {
+        return type.lowestSupportedVersion();
     }
 }
