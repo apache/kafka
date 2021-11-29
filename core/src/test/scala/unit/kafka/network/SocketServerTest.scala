@@ -29,6 +29,7 @@ import java.util.{Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
+import kafka.cluster.EndPoint
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
@@ -868,6 +869,40 @@ class SocketServerTest {
   }
 
   @Test
+  def testExceptionInAcceptor(): Unit = {
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val serverMetrics = new Metrics()
+
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager) {
+
+      // same as SocketServer.createAcceptor,
+      // except the Acceptor overriding a method to inject the exception
+      override protected def createAcceptor(endPoint: EndPoint, metricPrefix: String): Acceptor = {
+        val sendBufferSize = config.socketSendBufferBytes
+        val recvBufferSize = config.socketReceiveBufferBytes
+        val listenBacklogSize = config.socketListenBacklogSize
+        new Acceptor(endPoint, sendBufferSize, recvBufferSize, listenBacklogSize, nodeId, connectionQuotas, metricPrefix, time) {
+          override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+            assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
+            throw new IOException("test injected IOException")
+          }
+        }
+      }
+    }
+
+    try {
+      overrideServer.startup()
+      val conn = connect(overrideServer)
+      conn.setSoTimeout(3000)
+      assertEquals(-1, conn.getInputStream.read())
+      assertEquals(0, overrideServer.connectionQuotas.get(conn.getInetAddress))
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
   def testConnectionRatePerIp(): Unit = {
     val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
@@ -1583,7 +1618,7 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
     }
   }
-  
+
   @Test
   def testUnmuteChannelWithBufferedReceives(): Unit = {
     val time = new MockTime()
@@ -1854,6 +1889,23 @@ class SocketServerTest {
     })
   }
 
+  @Test
+  def testListenBacklogSize(): Unit = {
+    val backlogSize = 128
+    props.put("socket.listen.backlog.size", backlogSize.toString)
+
+    // TCP listen backlog size is the max count of pending connections (i.e. connections such that
+    // 3-way handshake is done at kernel level and waiting to be accepted by the server application.
+    // From client perspective, such connections should be visible as already "connected")
+    // Hence, we can check if listen backlog size is properly configured by trying to connect the server
+    // without starting acceptor thread.
+    withTestableServer(KafkaConfig.fromProps(props), { testableServer =>
+      1 to backlogSize foreach { _ =>
+        assertTrue(connect(testableServer).isConnected)
+      }
+    }, false)
+  }
+
   private def sslServerProps: Properties = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
@@ -1863,9 +1915,10 @@ class SocketServerTest {
   }
 
   private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
-                                 testWithServer: TestableSocketServer => Unit): Unit = {
+                                 testWithServer: TestableSocketServer => Unit,
+                                 startProcessingRequests: Boolean = true): Unit = {
     val testableServer = new TestableSocketServer(config)
-    testableServer.startup()
+    testableServer.startup(startProcessingRequests = startProcessingRequests)
     try {
       testWithServer(testableServer)
     } finally {
