@@ -20,9 +20,9 @@ package kafka.server
 import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
-
 import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
+import kafka.tools.StorageTool
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 
@@ -140,10 +140,17 @@ case class MetaProperties(
   }
 }
 
+sealed trait BrokerMetadataCheckpointMissingPolicy {}
+object BrokerMetadataCheckpointMissingPolicy {
+  case object Fail extends BrokerMetadataCheckpointMissingPolicy
+  case object Ignore extends BrokerMetadataCheckpointMissingPolicy
+  case class Create(metaProperties: MetaProperties) extends BrokerMetadataCheckpointMissingPolicy
+}
+
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
     logDirs: collection.Seq[String],
-    ignoreMissing: Boolean
+    missingPolicy: BrokerMetadataCheckpointMissingPolicy
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
@@ -159,9 +166,15 @@ object BrokerMetadataCheckpoint extends Logging {
           case Some(properties) =>
             brokerMetadataMap += logDir -> properties
           case None =>
-            if (!ignoreMissing) {
-              throw new KafkaException(s"No `meta.properties` found in $logDir " +
-                "(have you run `kafka-storage.sh` to format the directory?)")
+            missingPolicy match {
+              case BrokerMetadataCheckpointMissingPolicy.Ignore =>
+              case BrokerMetadataCheckpointMissingPolicy.Fail =>
+                throw new KafkaException(s"No `meta.properties` found in $logDir " +
+                  "(have you run `kafka-storage.sh` to format the directory?)")
+              case BrokerMetadataCheckpointMissingPolicy.Create(metaProperties) =>
+                warn(s"Automatically formatting storage directory $logDir")
+                StorageTool.formatDirectory(logDir, metaProperties)
+                brokerMetadataMap += logDir -> metaProperties.toProperties
             }
         }
       } catch {

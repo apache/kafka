@@ -12,9 +12,10 @@
   */
 package kafka.server
 
+import org.apache.kafka.common.Uuid
+
 import java.io.File
 import java.util.Properties
-
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -118,10 +119,10 @@ class BrokerMetadataCheckpointTest {
     val invalidDir = TestUtils.tempFile("blah")
     try {
       // The `ignoreMissing` flag has no effect if there is an IO error
-      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir,
-        expectedOfflineDirs = Seq(invalidDir), ignoreMissing = true)
-      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir,
-        expectedOfflineDirs = Seq(invalidDir), ignoreMissing = false)
+      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir, BrokerMetadataCheckpointMissingPolicy.Ignore,
+        expectedOfflineDirs = Seq(invalidDir))
+      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir, BrokerMetadataCheckpointMissingPolicy.Fail,
+        expectedOfflineDirs = Seq(invalidDir))
     } finally {
       Utils.delete(invalidDir)
     }
@@ -131,12 +132,27 @@ class BrokerMetadataCheckpointTest {
   def testGetBrokerMetadataAndOfflineDirsIgnoreMissing(): Unit = {
     val tempDir = TestUtils.tempDirectory()
     try {
-      testEmptyGetBrokerMetadataAndOfflineDirs(tempDir,
-        expectedOfflineDirs = Seq(), ignoreMissing = true)
+      testEmptyGetBrokerMetadataAndOfflineDirs(tempDir, BrokerMetadataCheckpointMissingPolicy.Ignore,
+        expectedOfflineDirs = Seq())
 
       assertThrows(classOf[RuntimeException],
         () => BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-          Seq(tempDir.getAbsolutePath), false))
+          Seq(tempDir.getAbsolutePath), BrokerMetadataCheckpointMissingPolicy.Fail))
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testGetBrokerMetadataAndOfflineDirsCreateIfMissing(): Unit = {
+    val tempDir = TestUtils.tempDirectory()
+    try {
+      val metaProperties = new MetaProperties(Uuid.randomUuid().toString, 43)
+      testEmptyGetBrokerMetadataAndOfflineDirs(tempDir, BrokerMetadataCheckpointMissingPolicy.Create(metaProperties),
+        expectedOfflineDirs = Seq(), metaProperties.toProperties)
+
+      testEmptyGetBrokerMetadataAndOfflineDirs(tempDir, BrokerMetadataCheckpointMissingPolicy.Fail,
+        expectedOfflineDirs = Seq(), metaProperties.toProperties)
     } finally {
       Utils.delete(tempDir)
     }
@@ -144,13 +160,14 @@ class BrokerMetadataCheckpointTest {
 
   private def testEmptyGetBrokerMetadataAndOfflineDirs(
     logDir: File,
+    missingPolicy: BrokerMetadataCheckpointMissingPolicy,
     expectedOfflineDirs: Seq[File],
-    ignoreMissing: Boolean
+    expectedProperties: Properties = new Properties()
   ): Unit = {
     val (metaProperties, offlineDirs) = BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-      Seq(logDir.getAbsolutePath), ignoreMissing)
+      Seq(logDir.getAbsolutePath), missingPolicy)
     assertEquals(expectedOfflineDirs.map(_.getAbsolutePath), offlineDirs)
-    assertEquals(new Properties(), metaProperties.props)
+    assertEquals(expectedProperties, metaProperties.props)
   }
 
 }

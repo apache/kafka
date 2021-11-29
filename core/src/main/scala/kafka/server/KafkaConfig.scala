@@ -390,6 +390,8 @@ object KafkaConfig {
   val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
   val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
   val NodeIdProp = "node.id"
+  val ClusterIdProp = "cluster.id"
+  val AutoFormatStorageProp = "auto.format.storage"
   val MetadataLogDirProp = "metadata.log.dir"
   val MetadataSnapshotMaxNewRecordBytesProp = "metadata.log.max.record.bytes.between.snapshots"
   val ControllerListenerNamesProp = "controller.listener.names"
@@ -706,6 +708,9 @@ object KafkaConfig {
   val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode."
   val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
     "This is required configuration when running in KRaft mode."
+  val ClusterIdDoc = "The ID of the cluster for which this process belongs to. If defined, along with auto.format.storage storage directories " +
+    "are automatically formatted if necessary, in the same way as with kafka-storage.sh"
+  val AutoFormatStorageDoc = "If set to true, storage directories will be automatically formatted if necessary - as with kafka-storage.sh. cluster.id must also be set."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
@@ -1124,6 +1129,8 @@ object KafkaConfig {
        */
       .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .define(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
+      .define(ClusterIdProp, STRING, null, null, MEDIUM, ClusterIdDoc)
+      .define(AutoFormatStorageProp, BOOLEAN, false, null, MEDIUM, AutoFormatStorageDoc)
       .define(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
       .define(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
       .define(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
@@ -1593,6 +1600,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
   val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
+  val clusterId: String = getString(KafkaConfig.ClusterIdProp)
+  val autoFormatStorage: Boolean = getBoolean(KafkaConfig.AutoFormatStorageProp)
   val processRoles: Set[ProcessRole] = parseProcessRoles()
   val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
   val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)

@@ -624,6 +624,8 @@ class KafkaConfigTest {
         case KafkaConfig.BrokerHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ClusterIdProp => // ignore string
+        case KafkaConfig.AutoFormatStorageProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case KafkaConfig.MetadataLogDirProp => // ignore string
         case KafkaConfig.MetadataLogSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataLogSegmentMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
