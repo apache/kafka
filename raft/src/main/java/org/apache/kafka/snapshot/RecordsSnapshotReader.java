@@ -42,30 +42,22 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         this.iterator = iterator;
     }
 
-    /**
-     * Returns the end offset and epoch for the snapshot.
-     */
+    @Override
     public OffsetAndEpoch snapshotId() {
         return snapshotId;
     }
 
-    /**
-     * Returns the last log offset which is represented in the snapshot.
-     */
+    @Override
     public long lastContainedLogOffset() {
         return snapshotId.offset - 1;
     }
 
-    /**
-     * Returns the epoch of the last log offset which is represented in the snapshot.
-     */
+    @Override
     public int lastContainedLogEpoch() {
         return snapshotId.epoch;
     }
 
-    /**
-     * Returns the timestamp of the last log offset which is represented in the snapshot.
-     */
+    @Override
     public long lastContainedLogTimestamp() {
         if (!lastContainedLogTimestamp.isPresent()) {
             nextBatch.ifPresent(batch -> {
@@ -103,9 +95,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         return batch;
     }
 
-    /**
-     * Closes the snapshot reader.
-     */
+    @Override
     public void close() {
         iterator.close();
     }

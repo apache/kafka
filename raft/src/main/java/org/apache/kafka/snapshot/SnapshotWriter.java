@@ -81,9 +81,4 @@ public interface SnapshotWriter<T> extends AutoCloseable {
      */
     void close();
 
-    /**
-     * Initialize the snapshot with header
-     */
-    void initializeSnapshotWithHeader();
-
 }

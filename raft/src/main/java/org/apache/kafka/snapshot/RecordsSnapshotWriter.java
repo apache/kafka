@@ -68,7 +68,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
      *
      * @throws IllegalStateException if the snapshot is not empty
      */
-    public void initializeSnapshotWithHeader() {
+    private void initializeSnapshotWithHeader() {
         if (snapshot.sizeInBytes() != 0) {
             String message = String.format(
                 "Initializing writer with a non-empty snapshot: id = '%s'.",
@@ -118,8 +118,8 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
-        Optional<SnapshotWriter<T>> writer = supplier.get().map(snapshot -> {
-            return new RecordsSnapshotWriter<T>(
+        return supplier.get().map(snapshot -> {
+            RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
                     snapshot,
                     maxBatchSize,
                     memoryPool,
@@ -127,49 +127,33 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                     lastContainedLogTimestamp,
                     CompressionType.NONE,
                     serde);
+            writer.initializeSnapshotWithHeader();
+
+            return writer;
         });
-        writer.ifPresent(SnapshotWriter::initializeSnapshotWithHeader);
-        return writer;
     }
 
-    /**
-     * Returns the end offset and epoch for the snapshot.
-     */
+    @Override
     public OffsetAndEpoch snapshotId() {
         return snapshot.snapshotId();
     }
 
-    /**
-     * Returns the last log offset which is represented in the snapshot.
-     */
+    @Override
     public long lastContainedLogOffset() {
         return snapshot.snapshotId().offset - 1;
     }
 
-    /**
-     * Returns the epoch of the last log offset which is represented in the snapshot.
-     */
+    @Override
     public int lastContainedLogEpoch() {
         return snapshot.snapshotId().epoch;
     }
 
-    /**
-     * Returns true if the snapshot has been frozen, otherwise false is returned.
-     *
-     * Modification to the snapshot are not allowed once it is frozen.
-     */
+    @Override
     public boolean isFrozen() {
         return snapshot.isFrozen();
     }
 
-    /**
-     * Appends a list of values to the snapshot.
-     *
-     * The list of record passed are guaranteed to get written together.
-     *
-     * @param records the list of records to append to the snapshot
-     * @throws IllegalStateException if append is called when isFrozen is true
-     */
+    @Override
     public void append(List<T> records) {
         if (snapshot.isFrozen()) {
             String message = String.format(
@@ -187,11 +171,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
-    /**
-     * Freezes the snapshot by flushing all pending writes and marking it as immutable.
-     *
-     * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
-     */
+    @Override
     public void freeze() {
         finalizeSnapshotWithFooter();
         appendBatches(accumulator.drain());
@@ -199,11 +179,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         accumulator.close();
     }
 
-    /**
-     * Closes the snapshot writer.
-     *
-     * If close is called without first calling freeze the snapshot is aborted.
-     */
+    @Override
     public void close() {
         snapshot.close();
         accumulator.close();
