@@ -677,6 +677,13 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
         @Override
@@ -817,15 +824,17 @@ public final class QuorumController implements Controller {
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
 
-                    // Check if we need to bootstrap a metadata.version into the log
+                    // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
+                    // write any records to the log since we need the metadata.version to determine the correct
+                    // record version
                     if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
                         if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
-                            appendWriteEvent("initializeMetadataVersion", () -> {
+                            prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
                             });
                         } else {
-                            appendWriteEvent("initializeMetadataVersion", () -> {
+                            prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
                                 return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
                             });
@@ -841,7 +850,7 @@ public final class QuorumController implements Controller {
                 appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
                     log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
-                            writeOffset);
+                        lastCommittedOffset);
                     renounce();
                 });
             }

@@ -21,7 +21,11 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.controller.QuorumController.Builder;
+import org.apache.kafka.metadata.MetadataVersion;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
@@ -33,6 +37,8 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class QuorumControllerTestEnv implements AutoCloseable {
     private static final Logger log =
@@ -45,21 +51,26 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, Optional.empty());
+        this(logEnv, builderConsumer, Optional.empty(), MetadataVersions.V1);
     }
 
     public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
-        Optional<Long> sessionTimeoutMillis
+        Optional<Long> sessionTimeoutMillis,
+        MetadataVersion metadataVersion
     ) throws Exception {
         this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
+            ApiVersions apiVersions = new ApiVersions();
+            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i);
                 builder.setRaftClient(logEnv.logManagers().get(i));
+                builder.setInitialMetadataVersion(metadataVersion);
+                builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
                 if (sessionTimeoutMillis.isPresent()) {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(
                         sessionTimeoutMillis.get(), TimeUnit.MILLISECONDS));

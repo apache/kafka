@@ -167,7 +167,7 @@ class ControllerServer(
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
-      val quorumFeatures = new QuorumFeatures(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatures(), controllerNodes)
+      val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
       controller = new QuorumController.Builder(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
