@@ -14,20 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
-/**
- * Listen to cache flush events
- * @param <K> key type
- * @param <V> value type
- */
-public interface CacheFlushListener<K, V> {
+public class MonotonicProcessorRecordContext extends ProcessorRecordContext {
+    private long counter;
 
-    /**
-     * Called when records are flushed from the {@link ThreadCache}
-     */
-    void apply(final Record<K, Change<V>> record);
+    public MonotonicProcessorRecordContext(final String topic, final int partition) {
+        super(0, 0, partition, topic, new RecordHeaders());
+        this.counter = 0;
+    }
+
+    @Override
+    public long offset() {
+        final long ret = counter;
+        counter++;
+        return ret;
+    }
 }

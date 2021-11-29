@@ -113,10 +113,10 @@ final public class SnapshotWriter<T> implements AutoCloseable {
      * Create an instance of this class and initialize
      * the underlying snapshot with {@link SnapshotHeaderRecord}
      *
-     * @param snapshot a lambda to create the low level snapshot writer
+     * @param supplier a lambda to create the low level snapshot writer
      * @param maxBatchSize the maximum size in byte for a batch
      * @param memoryPool the memory pool for buffer allocation
-     * @param time the clock implementation
+     * @param snapshotTime the clock implementation
      * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
      * @param compressionType the compression algorithm to use
      * @param serde the record serialization and deserialization implementation

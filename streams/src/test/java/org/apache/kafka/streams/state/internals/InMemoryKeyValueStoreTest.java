@@ -47,6 +47,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     private KeyValueStore<Bytes, byte[]> byteStore;
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class);
+    private InMemoryKeyValueStore inMemoryKeyValueStore;
 
     @Before
     public void createStringKeyValueStore() {
@@ -58,6 +59,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             new Serdes.ByteArraySerde());
         byteStore = storeBuilder.build();
         byteStore.init(byteStoreContext, byteStore);
+        this.inMemoryKeyValueStore = getInMemoryStore();
     }
 
     @After
@@ -78,6 +80,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
+    }
+
+    InMemoryKeyValueStore getInMemoryStore() {
+        return new InMemoryKeyValueStore("in-memory-store-test");
     }
 
     @SuppressWarnings("unchecked")
@@ -236,5 +242,34 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
         assertThrows(NullPointerException.class, () -> byteStore.prefixScan("bb", null));
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "2")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            stringSerializer.serialize(null, "c")));
+
+        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
+        context.setRecordContext(recordContext);
+        inMemoryKeyValueStore.init((StateStoreContext) context, inMemoryKeyValueStore);
+
+        final Position expected = Position.emptyPosition();
+        long offset = 0;
+        for (final KeyValue<Bytes, byte[]> k : entries) {
+            inMemoryKeyValueStore.put(k.key, k.value);
+            expected.update("input", 0, offset);
+            offset++;
+        }
+
+        final Position actual = inMemoryKeyValueStore.getPosition();
+        assertThat(expected, is(actual));
     }
 }
