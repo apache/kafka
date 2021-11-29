@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -105,6 +106,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private final RocksDBMetricsRecorder metricsRecorder;
 
     protected volatile boolean open = false;
+    private StateStoreContext context;
+    private Position position;
 
     RocksDBStore(final String name,
                  final String metricsScope) {
@@ -117,6 +120,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.name = name;
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
+        this.position = Position.emptyPosition();
     }
 
     @SuppressWarnings("unchecked")
@@ -186,6 +190,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         addValueProvidersToMetricsRecorder();
     }
 
+    Position getPosition() {
+        return position;
+    }
+
     private void maybeSetUpStatistics(final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() != null) {
             userSpecifiedStatistics = true;
@@ -252,6 +260,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, new RocksDBBatchingRestoreCallback(this));
+        this.context = context;
     }
 
     @Override
@@ -281,6 +290,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         dbAccessor.put(key.get(), value);
+
+        if (context != null && context.recordMetadata().isPresent()) {
+            final RecordMetadata meta = context.recordMetadata().get();
+            position = position.update(meta.topic(), meta.partition(), meta.offset());
+        }
     }
 
     @Override
