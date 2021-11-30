@@ -22,6 +22,7 @@ import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineLong;
 
 import java.util.ArrayList;
@@ -34,10 +35,14 @@ public class ProducerIdControlManager {
 
     private final ClusterControlManager clusterControlManager;
     private final TimelineLong lastProducerId;
+    private final TimelineInteger brokerId;
+    private final TimelineLong brokerEpoch;
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
         this.lastProducerId = new TimelineLong(snapshotRegistry);
+        this.brokerId = new TimelineInteger(snapshotRegistry);
+        this.brokerEpoch = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
@@ -65,6 +70,8 @@ public class ProducerIdControlManager {
             throw new RuntimeException("Producer ID from record is not monotonically increasing");
         } else {
             lastProducerId.set(record.producerIdsEnd());
+            brokerId.set(record.brokerId());
+            brokerEpoch.set(record.brokerEpoch());
         }
     }
 
@@ -76,8 +83,8 @@ public class ProducerIdControlManager {
             records.add(new ApiMessageAndVersion(
                 new ProducerIdsRecord()
                     .setProducerIdsEnd(producerId)
-                    .setBrokerId(0)
-                    .setBrokerEpoch(0L),
+                    .setBrokerId(brokerId.get(epoch))
+                    .setBrokerEpoch(brokerEpoch.get(epoch)),
                 (short) 0));
         }
         return Collections.singleton(records).iterator();
