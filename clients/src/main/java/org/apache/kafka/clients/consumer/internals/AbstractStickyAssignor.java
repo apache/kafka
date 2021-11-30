@@ -87,7 +87,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     /**
-     * Returns true iff all consumers have an identical subscription. Also fills out the passed in
+     * Returns true if all consumers have an identical subscription. Also fills out the passed in
      * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions,
      * and the {@code partitionsWithMultiplePreviousOwners} with any partitions claimed by multiple previous owners
      */
