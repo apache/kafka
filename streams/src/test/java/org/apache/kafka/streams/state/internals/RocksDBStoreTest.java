@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -110,6 +111,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
+    Position position;
 
     @Before
     public void setUp() {
@@ -123,6 +125,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new StreamsConfig(props)
         );
         rocksDBStore = getRocksDBStore();
+        position = rocksDBStore.getPosition();
     }
 
     @After
@@ -381,6 +384,35 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             stringDeserializer.deserialize(
                 null,
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "2")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            stringSerializer.serialize(null, "c")));
+
+        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
+        context.setRecordContext(recordContext);
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+
+        final Position expected = Position.emptyPosition();
+        long offset = 0;
+        for (final KeyValue<Bytes, byte[]> k : entries) {
+            rocksDBStore.put(k.key, k.value);
+            expected.update("input", 0, offset);
+            offset++;
+        }
+
+        final Position actual = rocksDBStore.getPosition();
+        assertEquals(expected, actual);
     }
 
     @Test
@@ -786,6 +818,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         EasyMock.expect(context.appConfigs())
             .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
         EasyMock.replay(context);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -818,6 +852,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         EasyMock.expect(context.appConfigs())
                 .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
         EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
         EasyMock.replay(context);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
@@ -980,5 +1016,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final List<KeyValue<String, String>> result = bytes.stream().map(kv -> new KeyValue<String, String>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
         return result;
     }
+
 
 }

@@ -72,8 +72,10 @@ import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -331,7 +333,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+            RecordsSnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
         );
     }
 
@@ -2347,7 +2349,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int committedEpoch,
         long lastContainedLogTime
     ) {
-        return SnapshotWriter.createWithHeader(
+        return RecordsSnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
                 MAX_BATCH_SIZE_BYTES,
                 memoryPool,
