@@ -217,7 +217,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testFailIfNotReadyForSendNoProducerId() {
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
     @Test
@@ -236,7 +236,7 @@ public class TransactionManagerTest {
     @Test
     public void testFailIfNotReadyForSendNoOngoingTransaction() {
         doInitTransactions();
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
     @Test
@@ -438,13 +438,13 @@ public class TransactionManagerTest {
 
     @Test
     public void testNotReadyForSendBeforeInitTransactions() {
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
     @Test
     public void testNotReadyForSendBeforeBeginTransaction() {
         doInitTransactions();
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
     @Test
@@ -795,7 +795,7 @@ public class TransactionManagerTest {
     public void testInitializeTransactionsTwiceRaisesError() {
         doInitTransactions(producerId, epoch);
         assertTrue(transactionManager.hasProducerId());
-        assertThrows(KafkaException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
     }
 
     @Test
@@ -1325,10 +1325,10 @@ public class TransactionManagerTest {
         assertFalse(result.isAcked());
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        assertThrows(KafkaException.class, transactionManager::initializeTransactions);
-        assertThrows(KafkaException.class, transactionManager::beginTransaction);
-        assertThrows(KafkaException.class, transactionManager::beginCommit);
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
+        assertThrows(IllegalStateException.class, transactionManager::beginCommit);
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginAbort());
         result.await();
@@ -1359,10 +1359,10 @@ public class TransactionManagerTest {
         assertFalse(result.isAcked());
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        assertThrows(KafkaException.class, transactionManager::initializeTransactions);
-        assertThrows(KafkaException.class, transactionManager::beginTransaction);
-        assertThrows(KafkaException.class, transactionManager::beginAbort);
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
+        assertThrows(IllegalStateException.class, transactionManager::beginAbort);
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginCommit());
         result.await();
@@ -1389,15 +1389,15 @@ public class TransactionManagerTest {
         // to complete the call to `initTransactions`. Other transitions should be
         // rejected until they do.
 
-        assertThrows(KafkaException.class, transactionManager::beginTransaction);
-        assertThrows(KafkaException.class, transactionManager::beginAbort);
-        assertThrows(KafkaException.class, transactionManager::beginCommit);
-        assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
+        assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
+        assertThrows(IllegalStateException.class, transactionManager::beginAbort);
+        assertThrows(IllegalStateException.class, transactionManager::beginCommit);
+        assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.initializeTransactions());
         result.await();
         assertTrue(result.isAcked());
-        assertThrows(KafkaException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1791,19 +1791,8 @@ public class TransactionManagerTest {
 
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
-        try {
-            commitResult.await();
-            fail();  // the get() must throw an exception.
-        } catch (KafkaException e) {
-            // Expected
-        }
-
-        try {
-            responseFuture.get();
-            fail("Expected produce future to raise an exception");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof OutOfOrderSequenceException);
-        }
+        assertThrows(KafkaException.class, commitResult::await);
+        TestUtils.assertFutureThrows(responseFuture, OutOfOrderSequenceException.class);
 
         // Commit is not allowed, so let's abort and try again.
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -1992,12 +1981,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        try {
-            responseFuture.get();
-            fail("Expected produce future to raise an exception");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof KafkaException);
-        }
+        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
     }
 
     @Test
@@ -2023,12 +2007,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        try {
-            responseFuture.get();
-            fail("Expected produce future to raise an exception");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof KafkaException);
-        }
+        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
     }
 
     @Test
@@ -3190,12 +3169,12 @@ public class TransactionManagerTest {
 
     @Test
     public void testRetryAbortTransactionAfterCommitTimeout() {
-        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT));
+        assertThrows(IllegalStateException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT));
     }
 
     @Test
     public void testRetryCommitTransactionAfterAbortTimeout() {
-        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT));
+        assertThrows(IllegalStateException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT));
     }
 
     @Test

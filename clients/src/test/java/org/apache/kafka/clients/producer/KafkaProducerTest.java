@@ -1291,7 +1291,7 @@ public class KafkaProducerTest {
         assertThrows(TimeoutException.class, producer::initTransactions);
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
-            assertThrows(KafkaException.class, producer::beginTransaction);
+            assertThrows(IllegalStateException.class, producer::beginTransaction);
         } finally {
             producer.close(Duration.ofMillis(0));
         }

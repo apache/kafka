@@ -409,7 +409,7 @@ public class TransactionManager {
         maybeFailWithError();
 
         if (currentState != State.IN_TRANSACTION) {
-            throw new KafkaException("Cannot send offsets if a transaction is not in progress " +
+            throw new IllegalStateException("Cannot send offsets if a transaction is not in progress " +
                 "(currentState= " + currentState + ")");
         }
 
@@ -433,10 +433,10 @@ public class TransactionManager {
 
         if (isTransactional()) {
             if (!hasProducerId()) {
-                throw new KafkaException("Cannot add partition " + topicPartition +
+                throw new IllegalStateException("Cannot add partition " + topicPartition +
                     " to transaction before completing a call to initTransactions");
             } else if (currentState != State.IN_TRANSACTION) {
-                throw new KafkaException("Cannot add partition " + topicPartition +
+                throw new IllegalStateException("Cannot add partition " + topicPartition +
                     " to transaction while in state  " + currentState);
             } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
@@ -1074,7 +1074,7 @@ public class TransactionManager {
     private void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
-            throw new KafkaException(idString + "Invalid transition attempted from state "
+            throw new IllegalStateException(idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name());
         }
 
@@ -1184,18 +1184,14 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
-    private void throwPendingTransitionError(String operation) {
-        throw new KafkaException("Cannot attempt operation `" + operation + "` "
-            + "because the previous call to `" + pendingTransition.operation + "` "
-            + "timed out and must be retried");
-    }
-
     private void throwIfPendingState(String operation) {
         if (pendingTransition != null) {
             if (pendingTransition.result.isAcked()) {
                 pendingTransition = null;
             } else {
-                throwPendingTransitionError(operation);
+                throw new IllegalStateException("Cannot attempt operation `" + operation + "` "
+                    + "because the previous call to `" + pendingTransition.operation + "` "
+                    + "timed out and must be retried");
             }
         }
     }
@@ -1211,7 +1207,9 @@ public class TransactionManager {
             if (pendingTransition.result.isAcked()) {
                 pendingTransition = null;
             } else if (nextState != pendingTransition.state) {
-                throwPendingTransitionError(operation);
+                throw new IllegalStateException("Cannot attempt operation `" + operation + "` "
+                    + "because the previous call to `" + pendingTransition.operation + "` "
+                    + "timed out and must be retried");
             } else {
                 return pendingTransition.result;
             }
