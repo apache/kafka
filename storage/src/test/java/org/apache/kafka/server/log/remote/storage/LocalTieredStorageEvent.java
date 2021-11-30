@@ -46,6 +46,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
         DELETE_SEGMENT
     }
 
+    private final int brokerId;
     private final EventType type;
     private final RemoteLogSegmentId segmentId;
     private final int timestamp;
@@ -62,6 +63,9 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
      * @return true if this event matches the condition's characteristics, false otherwise.
      */
     public boolean matches(final LocalTieredStorageCondition condition) {
+        if (brokerId != condition.brokerId) {
+            return false;
+        }
         if (condition.eventType != type) {
             return false;
         }
@@ -116,6 +120,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
     }
 
     private LocalTieredStorageEvent(final Builder builder) {
+        this.brokerId = builder.brokerId;
         this.type = builder.eventType;
         this.segmentId = builder.segmentId;
         this.timestamp = builder.timestamp;
@@ -127,11 +132,12 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
     }
 
     public static Builder newBuilder(
-            final EventType type, final int time, final RemoteLogSegmentId segmentId) {
-        return new Builder(type, time, segmentId);
+            final int brokerId, final EventType type, final int time, final RemoteLogSegmentId segmentId) {
+        return new Builder(brokerId, type, time, segmentId);
     }
 
     public static class Builder {
+        private int brokerId;
         private EventType eventType;
         private RemoteLogSegmentId segmentId;
         private int timestamp;
@@ -170,7 +176,8 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
             return new LocalTieredStorageEvent(this);
         }
 
-        private Builder(final EventType type, final int time, final RemoteLogSegmentId segId) {
+        private Builder(final int brokerId, final EventType type, final int time, final RemoteLogSegmentId segId) {
+            this.brokerId = brokerId;
             this.eventType = requireNonNull(type);
             this.timestamp = time;
             this.segmentId = requireNonNull(segId);

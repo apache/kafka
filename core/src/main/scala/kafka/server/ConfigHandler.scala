@@ -93,7 +93,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         .groupBy(tp => replicaManager.onlinePartition(tp).exists(_.isLeader))
         .foreach {
           case (isLeader, partitions) =>
-            replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions.toSet, isLeader))
+            replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions.toSet, isLeader,
+              (tp, ex) => error(s"Error while stopping the partition: $tp, ex: $ex")))
         }
     }
   }
