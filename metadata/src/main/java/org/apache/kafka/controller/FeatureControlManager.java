@@ -25,10 +25,12 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -110,30 +112,38 @@ public class FeatureControlManager {
             .isPresent();
     }
 
+    boolean featureExists(String featureName) {
+        return quorumFeatures.localSupportedFeature(featureName).isPresent();
+    }
+
     private ApiError updateFeature(String featureName,
                                    short newVersion,
                                    boolean downgradeable,
                                    Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
                                    List<ApiMessageAndVersion> records) {
+        if (!featureExists(featureName)) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                    "The controller does not support the given feature.");
+        }
+
         final VersionRange currentRange = finalizedVersions.get(featureName);
         final VersionRange newRange;
         if (currentRange == null) {
-            // Never seen this feature before. Initialize its min version to the max of supported broker mins
-            Optional<Short> minFinalizedVersion = brokersAndFeatures.values().stream().map(brokerFeatures -> {
-                VersionRange brokerFeatureVersion = brokerFeatures.get(featureName);
-                if (brokerFeatureVersion != null) {
-                    return brokerFeatureVersion.min();
-                } else {
-                    return (short) -1;
-                }
-            }).max(Short::compareTo);
+            // Never seen this feature before. Initialize its min version to the max of version supported by the cluster
+            Stream<VersionRange> brokerVersions = brokersAndFeatures.values().stream()
+                .map(brokerFeatures -> brokerFeatures.get(featureName));
+            Optional<VersionRange> minQuorumVersion = quorumFeatures.quorumSupportedFeature(featureName);
+            Optional<Short> minClusterVersion = Stream.concat(brokerVersions, Stream.of(minQuorumVersion.orElse(null)))
+                .filter(Objects::nonNull)
+                .map(VersionRange::min)
+                .max(Short::compareTo);
 
-            if (minFinalizedVersion.isPresent()) {
-                newRange = VersionRange.of(minFinalizedVersion.get(), newVersion);
+            if (minClusterVersion.isPresent()) {
+                newRange = VersionRange.of(minClusterVersion.get(), newVersion);
             } else {
-                // No brokers know about this feature!
+                // No nodes know about this feature!
                 return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Cannot finalized this feature flag since no alive brokers support it.");
+                    "Cannot finalized this feature flag since no alive nodes support it.");
             }
         } else {
             newRange = VersionRange.of(currentRange.min(), newVersion);
@@ -199,16 +209,9 @@ public class FeatureControlManager {
             return new ApiError(Errors.INVALID_UPDATE_VERSION, "metadata.version cannot be less than 1");
         }
 
-        if (quorumSupported.get().max() < newVersion) {
+        if (!quorumSupported.get().contains(VersionRange.of(newVersion, newVersion))) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The controller quorum cannot support the given metadata.version " + newVersion);
-        }
-
-        final VersionRange newRange = VersionRange.of(quorumSupported.get().min(), newVersion);
-
-        if (!canSupportVersion(MetadataVersions.FEATURE_NAME, newRange)) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The active controller does not support the given metadata.version " + newRange.max());
         }
 
         VersionRange currentRange = finalizedVersions.get(MetadataVersions.FEATURE_NAME);
@@ -217,14 +220,14 @@ public class FeatureControlManager {
         }
 
         try {
-            MetadataVersions.fromValue(newRange.max());
+            MetadataVersions.fromValue(newVersion);
         } catch (IllegalArgumentException e) {
-            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newRange.max());
+            return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newVersion);
         }
 
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord().setName(MetadataVersions.FEATURE_NAME).
-                setMinFeatureLevel(newRange.min()).setMaxFeatureLevel(newRange.max()),
+                setMinFeatureLevel(newVersion).setMaxFeatureLevel(newVersion),
                 recordVersion));
         return ApiError.NONE;
     }

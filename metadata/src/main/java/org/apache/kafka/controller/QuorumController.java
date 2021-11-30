@@ -1453,24 +1453,15 @@ public final class QuorumController implements Controller {
                 }
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            // TODO move this part into FeatureControlManager
-            Map<Integer, Map<String, VersionRange>> brokerSupportedFeatures = clusterControl.brokerRegistrations()
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().supportedFeatures()));
-            ControllerResult<Map<String, ApiError>> result = featureControl.updateFeatures(updates, downgradeables, brokerSupportedFeatures);
-            return result;
+            return featureControl.updateFeatures(updates, downgradeables, clusterControl.brokerSupportedVersions());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            result.forEach((featureName, error) -> {
-                responseData.results().add(
-                    new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                        .setFeature(featureName)
-                        .setErrorCode(error.error().code())
-                        .setErrorMessage(error.message()));
-            });
-
+            result.forEach((featureName, error) -> responseData.results().add(
+                new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())));
             return responseData;
         });
     }

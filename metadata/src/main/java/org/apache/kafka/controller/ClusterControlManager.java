@@ -112,6 +112,9 @@ public class ClusterControlManager {
      */
     private final ReplicaPlacer replicaPlacer;
 
+    /**
+     * The metadata.version provider
+     */
     private final MetadataVersionProvider metadataVersionProvider;
 
     /**
@@ -173,6 +176,13 @@ public class ClusterControlManager {
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
         return brokerRegistrations;
+    }
+
+    Map<Integer, Map<String, VersionRange>> brokerSupportedVersions() {
+        return brokerRegistrations()
+            .entrySet()
+            .stream()
+            .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().supportedFeatures()));
     }
 
     Set<Integer> fencedBrokerIds() {

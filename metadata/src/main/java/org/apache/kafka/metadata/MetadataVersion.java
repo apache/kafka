@@ -17,7 +17,6 @@
 
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 
 import java.util.Optional;
@@ -38,14 +37,5 @@ public interface MetadataVersion extends Comparable<MetadataVersions> {
     @Override
     default int compareTo(MetadataVersions o) {
         return Short.compare(this.version(), o.version());
-    }
-
-    default short validatedRecordVersion(MetadataRecordType type) {
-        short version = recordVersion(type);
-        if (version >= type.lowestSupportedVersion() && version <= type.highestSupportedVersion()) {
-            return version;
-        } else {
-            throw new UnsupportedVersionException("Unsupported record version " + version + " for type " + type);
-        }
     }
 }
