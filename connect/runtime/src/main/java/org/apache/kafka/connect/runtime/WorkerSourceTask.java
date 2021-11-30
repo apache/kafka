@@ -36,6 +36,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
@@ -65,7 +66,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
@@ -260,6 +260,10 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
         } finally {
+            submittedRecords.awaitAllMessages(
+                    workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG),
+                    TimeUnit.MILLISECONDS
+            );
             // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit

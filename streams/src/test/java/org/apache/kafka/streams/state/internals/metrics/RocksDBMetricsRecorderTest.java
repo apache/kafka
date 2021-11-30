@@ -41,7 +41,6 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.resetToNice;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
@@ -55,7 +54,6 @@ import static org.powermock.api.easymock.PowerMock.verify;
 @PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
-    private final static String THREAD_ID = "thread-id";
     private final static TaskId TASK_ID1 = new TaskId(0, 0);
     private final static TaskId TASK_ID2 = new TaskId(0, 1);
     private final static String STORE_NAME = "store-name";
@@ -557,10 +555,10 @@ public class RocksDBMetricsRecorderTest {
 
     @Test
     public void shouldCorrectlyHandleHitRatioRecordingsWithZeroHitsAndMisses() {
-        resetToNice(statisticsToAdd1);
+        reset(statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
-        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
+        expect(statisticsToAdd1.getAndResetTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableHitRatioSensor.record(0, 0L);
         blockCacheDataHitRatioSensor.record(0, 0L);
@@ -581,10 +579,10 @@ public class RocksDBMetricsRecorderTest {
 
     @Test
     public void shouldCorrectlyHandleAvgRecordingsWithZeroSumAndCount() {
-        resetToNice(statisticsToAdd1);
+        reset(statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         expect(statisticsToAdd1.getHistogramData(anyObject())).andStubReturn(new HistogramData(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, 0.0));
-        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
+        expect(statisticsToAdd1.getAndResetTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableAvgFlushTimeSensor.record(0, 0L);
         compactionTimeAvgSensor.record(0, 0L);

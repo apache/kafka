@@ -236,6 +236,7 @@ public class MirrorMakerConfigTest {
         SourceAndTarget b = new SourceAndTarget("a", "b");
         Map<String, String> aProps = mirrorConfig.workerConfig(a);
         assertEquals("123", aProps.get("offset.storage.replication.factor"));
+        assertEquals("__", aProps.get("replication.policy.separator"));
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
         assertEquals("456", bProps.get("status.storage.replication.factor"));
         assertEquals("client-one", bProps.get("producer.client.id"),
@@ -254,6 +255,7 @@ public class MirrorMakerConfigTest {
             "security properties should be transformed in worker config");
         assertEquals("secret2", bProps.get("producer.ssl.key.password"),
             "security properties should be transformed in worker producer config");
+        assertEquals("__", bProps.get("replication.policy.separator"));
     }
 
     @Test
