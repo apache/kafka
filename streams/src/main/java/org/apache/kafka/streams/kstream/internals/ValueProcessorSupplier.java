@@ -27,31 +27,30 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 public class ValueProcessorSupplier<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn, KIn, VOut> {
 
-    private final ProcessorSupplier<KIn, VIn, KIn, VOut> transformerSupplier;
+    private final ProcessorSupplier<KIn, VIn, KIn, VOut> processorSupplier;
 
-    public ValueProcessorSupplier(
-        ProcessorSupplier<KIn, VIn, KIn, VOut> transformerSupplier) {
-        this.transformerSupplier = transformerSupplier;
+    public ValueProcessorSupplier(ProcessorSupplier<KIn, VIn, KIn, VOut> processorSupplier) {
+        this.processorSupplier = processorSupplier;
     }
 
     @Override
     public Processor<KIn, VIn, KIn, VOut> get() {
-        return new KStreamValueProcessor<>(transformerSupplier.get());
+        return new ValueProcessor<>(processorSupplier.get());
     }
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-        return transformerSupplier.stores();
+        return processorSupplier.stores();
     }
 
-    public static class KStreamValueProcessor<KIn, VIn, VOut> extends ContextualProcessor<KIn, VIn, KIn, VOut> {
+    public static class ValueProcessor<KIn, VIn, VOut> extends ContextualProcessor<KIn, VIn, KIn, VOut> {
 
         private final Processor<KIn, VIn, KIn, VOut> processor;
 
         private ValueProcessorContext<KIn, VOut> processorContext;
 
-        public KStreamValueProcessor(Processor<KIn, VIn, KIn, VOut> transformer) {
-            this.processor = transformer;
+        public ValueProcessor(Processor<KIn, VIn, KIn, VOut> processor) {
+            this.processor = processor;
         }
 
         @Override

@@ -135,7 +135,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
     private class KTableTransformValuesGetter implements KTableValueGetter<K, VOut> {
         private final KTableValueGetter<K, V> parentGetter;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<?, ?> internalProcessorContext;
         private final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
@@ -146,7 +146,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            internalProcessorContext = (InternalProcessorContext) context;
+            internalProcessorContext = (InternalProcessorContext<?, ?>) context;
             parentGetter.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(internalProcessorContext));
         }

@@ -4937,7 +4937,7 @@ public interface KStream<K, V> {
                  final Named named,
                  final String... stateStoreNames);
 
-    <VR> KStream<K, VR> processValues(final ProcessorSupplier<? super K, ? super V, ? extends K, ? extends VR> processorSupplier,
+    <VR> KStream<K, VR> processValues(final ProcessorSupplier<K, V, K, VR> processorSupplier,
         final Named named,
         final String... stateStoreNames);
 }

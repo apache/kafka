@@ -27,6 +27,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -796,6 +797,9 @@ public interface KTable<K, V> {
     <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                        final String... stateStoreNames);
 
+    <VR> KTable<K, VR> processValues(final ProcessorSupplier<K, V, K, VR> processorSupplier,
+        final String... stateStoreNames);
+
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possibly a new type), with default serializers, deserializers, and state store.
@@ -871,6 +875,10 @@ public interface KTable<K, V> {
                                        final Named named,
                                        final String... stateStoreNames);
 
+    <VR> KTable<K, VR> processValues(final ProcessorSupplier<K, V, K, VR> processorSupplier,
+        final Named named,
+        final String... stateStoreNames);
+
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possibly a new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
@@ -949,6 +957,10 @@ public interface KTable<K, V> {
     <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                        final String... stateStoreNames);
+
+    <VR> KTable<K, VR> processValues(final ProcessorSupplier<K, V, K, VR> processorSupplier,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+        final String... stateStoreNames);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -1030,6 +1042,11 @@ public interface KTable<K, V> {
                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                        final Named named,
                                        final String... stateStoreNames);
+
+    <VR> KTable<K, VR> processValues(final ProcessorSupplier<K, V, K, VR> processorSupplier,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+        final Named named,
+        final String... stateStoreNames);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper} and default serializers

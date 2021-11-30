@@ -1512,7 +1512,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public <VR> KStream<K, VR> processValues(
-        ProcessorSupplier<? super K, ? super V, ? extends K, ? extends VR> processorSupplier, Named named,
+        ProcessorSupplier<K, V, K, VR> processorSupplier, Named named,
         String... stateStoreNames) {
         Objects.requireNonNull(processorSupplier, "processorSupplier can't be null");
         Objects.requireNonNull(named, "named can't be null");
@@ -1525,7 +1525,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = new NamedInternal(named).name();
         final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
             name,
-            new ProcessorParameters<>(new ValueProcessorSupplier<>((ProcessorSupplier<K, V, K, VR>) processorSupplier), name),
+            new ProcessorParameters<>(new ValueProcessorSupplier<>(processorSupplier), name),
             stateStoreNames);
 
         builder.addGraphNode(graphNode, processNode);
