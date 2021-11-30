@@ -26,6 +26,9 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Used to track source records that have been (or are about to be) dispatched to a producer and their accompanying
@@ -41,10 +44,11 @@ class SubmittedRecords {
     private static final Logger log = LoggerFactory.getLogger(SubmittedRecords.class);
 
     // Visible for testing
-    final Map<Map<String, Object>, Deque<SubmittedRecord>> records;
+    final Map<Map<String, Object>, Deque<SubmittedRecord>> records = new HashMap<>();
+    private int numUnackedMessages = 0;
+    private CountDownLatch messageDrainLatch;
 
     public SubmittedRecords() {
-        this.records = new HashMap<>();
     }
 
     /**
@@ -68,6 +72,9 @@ class SubmittedRecords {
         SubmittedRecord result = new SubmittedRecord(partition, offset);
         records.computeIfAbsent(result.partition(), p -> new LinkedList<>())
                 .add(result);
+        synchronized (this) {
+            numUnackedMessages++;
+        }
         return result;
     }
 
@@ -89,7 +96,9 @@ class SubmittedRecords {
         if (deque.isEmpty()) {
             records.remove(record.partition());
         }
-        if (!result) {
+        if (result) {
+            messageAcked();
+        } else {
             log.warn("Attempted to remove record from submitted queue for partition {}, but the record has not been submitted or has already been removed", record.partition());
         }
         return result;
@@ -132,6 +141,28 @@ class SubmittedRecords {
         return new CommittableOffsets(offsets, totalCommittableMessages, totalUncommittableMessages, records.size(), largestDequeSize, largestDequePartition);
     }
 
+    /**
+     * Wait for all currently in-flight messages to be acknowledged, up to the requested timeout.
+     * This method is expected to be called from the same thread that calls {@link #committableOffsets()}.
+     * @param timeout the maximum time to wait
+     * @param timeUnit the time unit of the timeout argument
+     * @return whether all in-flight messages were acknowledged before the timeout elapsed
+     */
+    public boolean awaitAllMessages(long timeout, TimeUnit timeUnit) {
+        // Create a new message drain latch as a local variable to avoid SpotBugs warnings about inconsistent synchronization
+        // on an instance variable when invoking CountDownLatch::await outside a synchronized block
+        CountDownLatch messageDrainLatch;
+        synchronized (this) {
+            messageDrainLatch = new CountDownLatch(numUnackedMessages);
+            this.messageDrainLatch = messageDrainLatch;
+        }
+        try {
+            return messageDrainLatch.await(timeout, timeUnit);
+        } catch (InterruptedException e) {
+            return false;
+        }
+    }
+
     // Note that this will return null if either there are no committable offsets for the given deque, or the latest
     // committable offset is itself null. The caller is responsible for distinguishing between the two cases.
     private Map<String, Object> committableOffset(Deque<SubmittedRecord> queuedRecords) {
@@ -146,15 +177,25 @@ class SubmittedRecords {
         return queuedRecords.peek() != null && queuedRecords.peek().acked();
     }
 
-    static class SubmittedRecord {
+    // Synchronize in order to ensure that the number of unacknowledged messages isn't modified in the middle of a call
+    // to awaitAllMessages (which might cause us to decrement first, then create a new message drain latch, then count down
+    // that latch here, effectively double-acking the message)
+    private synchronized void messageAcked() {
+        numUnackedMessages--;
+        if (messageDrainLatch != null) {
+            messageDrainLatch.countDown();
+        }
+    }
+
+    class SubmittedRecord {
         private final Map<String, Object> partition;
         private final Map<String, Object> offset;
-        private volatile boolean acked;
+        private final AtomicBoolean acked;
 
         public SubmittedRecord(Map<String, Object> partition, Map<String, Object> offset) {
             this.partition = partition;
             this.offset = offset;
-            this.acked = false;
+            this.acked = new AtomicBoolean(false);
         }
 
         /**
@@ -162,11 +203,13 @@ class SubmittedRecords {
          * This is safe to be called from a different thread than what called {@link SubmittedRecords#submit(SourceRecord)}.
          */
         public void ack() {
-            this.acked = true;
+            if (this.acked.compareAndSet(false, true)) {
+                messageAcked();
+            }
         }
 
         private boolean acked() {
-            return acked;
+            return acked.get();
         }
 
         private Map<String, Object> partition() {
