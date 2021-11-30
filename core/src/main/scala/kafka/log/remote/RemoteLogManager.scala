@@ -127,7 +127,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private val poolSize = rlmConfig.remoteLogManagerThreadPoolSize
   private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
 
-  // topic ids received on leadership changes
+  // topic ids that are received on leadership changes, this map is NEVER cleared
   private val topicIds: mutable.Map[String, Uuid] = mutable.Map.empty
 
   @volatile private var closed = false
@@ -279,10 +279,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @param partitions  topic partitions that needs to be stopped.
    * @param delete      flag to indicate whether the given topic partitions to be deleted or not.
    */
-  def stopPartitions(partitions: Set[TopicPartition], delete: Boolean): Unit = {
-    // FIXME(@satishd) Need to check whether it is really needed to delete from remote.
-    //  This may be a delete request only for this replica. We should delete from remote storage only if
-    //  the topic partition is getting deleted.
+  def stopPartitions(partitions: Set[TopicPartition], delete: Boolean, errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
     debug(s"Stopping ${partitions.size} partitions, delete: $delete")
     val partitionsByTopic = partitions.groupBy(_.topic())
     partitionsByTopic.foreach { entry =>
@@ -294,24 +291,24 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       if (topicId.isDefined) {
         val tpIds = partitions.map(new TopicIdPartition(topicId.get, _))
         tpIds.foreach(tpId => {
-          val task = leaderOrFollowerTasks.remove(tpId)
-          if (task != null) {
-            info(s"Cancelling the RLM task for tp: ${tpId.topicPartition()}")
-            task.cancel()
-          }
-          if (delete) {
-            try {
+          val partition = tpId.topicPartition()
+          try {
+            val task = leaderOrFollowerTasks.remove(tpId)
+            if (task != null) {
+              info(s"Cancelling the RLM task for tp: $partition")
+              task.cancel()
+            }
+            if (delete) {
               debug(s"Deleting the remote log segments for partition: $tpId")
               remoteLogMetadataManager.listRemoteLogSegments(tpId).forEachRemaining(elt => deleteRemoteLogSegment(elt, _ => true))
-            } catch {
-              case ex: Exception => error(s"Error occurred while deleting the partition: ${tpId.topicPartition()}", ex)
             }
+          } catch {
+            case ex: Throwable => errorHandler(partition, ex)
           }
         })
-        try {
+        if (delete) {
+          // NOTE: this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
           remoteLogMetadataManager.onStopPartitions(tpIds.asJava)
-        } catch {
-          case ex: Exception => error(s"Error occurred while stopping partitions for topic: $topic", ex)
         }
       }
     }

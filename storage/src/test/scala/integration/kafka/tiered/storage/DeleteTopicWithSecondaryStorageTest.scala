@@ -19,11 +19,10 @@
 package integration.kafka.tiered.storage
 
 import kafka.tiered.storage.{TieredStorageTestBuilder, TieredStorageTestHarness}
-import org.apache.kafka.common.config.TopicConfig
 
 import scala.collection.Seq
 
-class DynamicRemoteLogStorageDisableTest extends TieredStorageTestHarness {
+class DeleteTopicWithSecondaryStorageTest extends TieredStorageTestHarness {
 
   private val (broker0, broker1, topicA, p0, p1) = (0, 1, "topicA", 0, 1)
 
@@ -38,31 +37,20 @@ class DynamicRemoteLogStorageDisableTest extends TieredStorageTestHarness {
       .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, ("k1", "v1"))
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 1, ("k2", "v2"))
-      .expectEarliestOffsetInLogDirectory(topicA, p0, 2)
+      .expectEarliestOffsetInLogDirectory(topicA, p0, earliestOffset = 2)
       // send records to partition 1
       .produce(topicA, p1, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 0, ("k1", "v1"))
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 1, ("k2", "v2"))
-      .expectEarliestOffsetInLogDirectory(topicA, p1, 2)
-      // disable remote log storage
-      .updateTopicConfig(topicA, Map(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG -> "false"), Seq.empty)
-      .produce(topicA, p0, ("k4", "v4"))
-      .produce(topicA, p1, ("k4", "v4"))
-      .expectEarliestOffsetInLogDirectory(topicA, p0, 2)
-      .expectEarliestOffsetInLogDirectory(topicA, p1, 2)
-      // read from the local-log-start-offset and verify that there no interactions with secondary storage
-      .expectFetchFromTieredStorage(broker0, topicA, p0, 0)
-      .consume(topicA, p0, 2, 2, 0)
-      .expectFetchFromTieredStorage(broker1, topicA, p1, 0)
-      .consume(topicA, p1, 2, 2, 0)
-
-      // produce some more messages and read from 0th offset and check whether on hitting offset-out-of-range error,
-      // the fetch offset gets reset to the configured earliest log offset (local-log-start-offset)
-      .produce(topicA, p0, ("k5", "v5"))
-      .produce(topicA, p1, ("k5", "v5"))
-      .expectFetchFromTieredStorage(broker0, topicA, p0, 0)
-      .consume(topicA, p0, 0, 3, 0)
-      .expectFetchFromTieredStorage(broker1, topicA, p1, 0)
-      .consume(topicA, p1, 0, 3, 0)
+      .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 2)
+      // Both leader and follower tries to delete the remote log segments. Each partition has two remote log segments.
+      .expectDeletionInRemoteStorage(broker0, topicA, p0, deleteSegmentCount = 2)
+      .expectDeletionInRemoteStorage(broker0, topicA, p1, deleteSegmentCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p0, deleteSegmentCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p1, deleteSegmentCount = 2)
+      // delete the topic
+      .deleteTopic(Set(topicA))
+      .expectEmptyRemoteStorage(topicA, p0)
+      .expectEmptyRemoteStorage(topicA, p1)
   }
 }

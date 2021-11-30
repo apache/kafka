@@ -462,12 +462,12 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     }
 
     private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentId segId) {
-        return LocalTieredStorageEvent.newBuilder(type, eventTimestamp.incrementAndGet(), segId);
+        return LocalTieredStorageEvent.newBuilder(brokerId, type, eventTimestamp.incrementAndGet(), segId);
     }
 
     private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentMetadata md) {
         return LocalTieredStorageEvent
-                .newBuilder(type, eventTimestamp.incrementAndGet(), md.remoteLogSegmentId())
+                .newBuilder(brokerId, type, eventTimestamp.incrementAndGet(), md.remoteLogSegmentId())
                 .withMetadata(md);
     }
 

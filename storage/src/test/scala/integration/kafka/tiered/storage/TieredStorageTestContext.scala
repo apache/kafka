@@ -109,6 +109,10 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
       .all().get(60, TimeUnit.SECONDS)
   }
 
+  def deleteTopic(topic: String): Unit = {
+    adminClient.deleteTopics(List(topic).asJavaCollection).all().get(60, TimeUnit.SECONDS)
+  }
+
   def produce(records: Iterable[ProducerRecord[String, String]], batchSize: Int) = {
     //
     // Send the given records trying to honor the batch size. This is attempted

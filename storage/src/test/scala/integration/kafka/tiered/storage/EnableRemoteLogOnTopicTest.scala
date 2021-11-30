@@ -21,7 +21,7 @@ package integration.kafka.tiered.storage
 import kafka.tiered.storage.{TieredStorageTestBuilder, TieredStorageTestHarness}
 import org.apache.kafka.common.config.TopicConfig
 
-class DynamicRemoteLogStorageEnableTest extends TieredStorageTestHarness {
+class EnableRemoteLogOnTopicTest extends TieredStorageTestHarness {
 
   private val (broker0, broker1, topicA, p0, p1) = (0, 1, "topicA", 0, 1)
 
@@ -35,10 +35,10 @@ class DynamicRemoteLogStorageEnableTest extends TieredStorageTestHarness {
         enableRemoteLogStorage = false)
       // send records to partition 0
       .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-      .expectEarliestOffsetInLogDirectory(topicA, p0, 0)
+      .expectEarliestOffsetInLogDirectory(topicA, p0, earliestOffset = 0)
       // send records to partition 1
       .produce(topicA, p1, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
-      .expectEarliestOffsetInLogDirectory(topicA, p1, 0)
+      .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 0)
       // enable remote log storage
       .updateTopicConfig(topicA, Map(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG -> "true"), Seq.empty)
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, ("k1", "v1"))
@@ -49,11 +49,11 @@ class DynamicRemoteLogStorageEnableTest extends TieredStorageTestHarness {
       .produce(topicA, p1, ("k4", "v4"))
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 2, ("k3", "v3"))
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 2, ("k3", "v3"))
-      .expectEarliestOffsetInLogDirectory(topicA, p0, 3)
-      .expectEarliestOffsetInLogDirectory(topicA, p1, 3)
-      .expectFetchFromTieredStorage(broker0, topicA, p0, 3)
-      .consume(topicA, p0, 0, 4, 3)
-      .expectFetchFromTieredStorage(broker1, topicA, p1, 3)
-      .consume(topicA, p1, 0, 4, 3)
+      .expectEarliestOffsetInLogDirectory(topicA, p0, earliestOffset = 3)
+      .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 3)
+      .expectFetchFromTieredStorage(broker0, topicA, p0, remoteFetchRequestCount = 3)
+      .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 4, expectedRecordsFromSecondTier = 3)
+      .expectFetchFromTieredStorage(broker1, topicA, p1, remoteFetchRequestCount = 3)
+      .consume(topicA, p1, fetchOffset = 0, expectedTotalRecord = 4, expectedRecordsFromSecondTier = 3)
   }
 }
