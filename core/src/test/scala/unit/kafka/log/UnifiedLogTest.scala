@@ -1099,7 +1099,7 @@ class UnifiedLogTest {
 
     // even if we flush within the active segment, the snapshot should remain
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
-    log.flush(4L)
+    log.flushUptoOffsetExclusive(4L)
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
   }
 
@@ -1639,6 +1639,7 @@ class UnifiedLogTest {
     log.roll()
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
     assertEquals(1, logDir.listFiles(_.getName.endsWith(".index")).length)
+    assertEquals(0, log.activeSegment.size)
     log.flush(true)
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
     assertEquals(2, logDir.listFiles(_.getName.endsWith(".index")).length)

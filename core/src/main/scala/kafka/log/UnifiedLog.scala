@@ -1498,25 +1498,25 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     producerStateManager.takeSnapshot()
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
-    scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
+    scheduler.schedule("flush-log", () => flushUptoOffsetExclusive(newSegment.baseOffset))
     newSegment
   }
 
   /**
    * Flush all local log segments
    *
-   * @param inclusive should be true during a clean shutdown, and false otherwise. The reason is that
+   * @param forceFlushActiveSegment should be true during a clean shutdown, and false otherwise. The reason is that
    * we have to pass logEngOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
    * active segments, which is important to make sure we don't lose the empty index file during shutdown.
    */
-  def flush(inclusive: Boolean): Unit = flush(logEndOffset, inclusive)
+  def flush(forceFlushActiveSegment: Boolean): Unit = flush(logEndOffset, forceFlushActiveSegment)
 
   /**
    * Flush local log segments for all offsets up to offset-1
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flush(offset: Long): Unit = flush(offset, false)
+  def flushUptoOffsetExclusive(offset: Long): Unit = flush(offset, false)
 
   /**
    * Flush local log segments for all offsets up to offset-1 if includingOffset=false; up to offset
@@ -1527,14 +1527,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private def flush(offset: Long, includingOffset: Boolean): Unit = {
     val flushOffset = if (includingOffset) offset + 1  else offset
-    val recoveryPoint = offset
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $flushOffset and recovery point $recoveryPoint") {
+    val newRecoveryPoint = offset
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $flushOffset and recovery point $newRecoveryPoint") {
       if (flushOffset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $flushOffset with recovery point $recoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+        debug(s"Flushing log up to offset $flushOffset with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: ${localLog.unflushedMessages}")
         localLog.flush(flushOffset)
         lock synchronized {
-          localLog.markFlushed(recoveryPoint)
+          localLog.markFlushed(newRecoveryPoint)
         }
       }
     }
