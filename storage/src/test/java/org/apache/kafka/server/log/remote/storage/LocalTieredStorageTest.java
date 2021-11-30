@@ -85,13 +85,15 @@ public final class LocalTieredStorageTest {
 
     private LocalTieredStorage tieredStorage;
     private Verifier remoteStorageVerifier;
+    private String storageDir;
 
     private void init(Map<String, Object> extraConfig, String testName) {
         tieredStorage = new LocalTieredStorage();
         remoteStorageVerifier = new Verifier(tieredStorage, topicIdPartition);
+        storageDir = generateStorageId(testName);
 
         Map<String, Object> config = new HashMap<>();
-        config.put(LocalTieredStorage.STORAGE_DIR_PROP, generateStorageId(testName));
+        config.put(LocalTieredStorage.STORAGE_DIR_PROP, storageDir);
         config.put(LocalTieredStorage.DELETE_ON_CLOSE_PROP, "true");
         config.put(LocalTieredStorage.BROKER_ID, 1);
         config.putAll(extraConfig);
@@ -108,6 +110,7 @@ public final class LocalTieredStorageTest {
     public void after() throws IOException {
         tieredStorage.clear();
         localLogSegments.deleteAll();
+        Files.deleteIfExists(Paths.get(storageDir));
     }
 
     @Test
@@ -337,7 +340,6 @@ public final class LocalTieredStorageTest {
     }
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
-        // FIXME(@kamalcph): Check whether the provided segement size and leader epochs are valid or not
         return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000L,
                 1024, Collections.singletonMap(0, 0L));
     }
@@ -512,7 +514,6 @@ public final class LocalTieredStorageTest {
         }
 
         private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
-            // FIXME(@kamalcph): Check whether the provided segement size and leader epochs are valid or not
             return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000,
                     1024, Collections.singletonMap(0, 0L));
         }
