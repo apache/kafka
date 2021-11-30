@@ -366,6 +366,16 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
     assertEquals(Some(SecurityProtocol.SSL),
       KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(controllerListenerName))
+    // ensure we don't map it to PLAINTEXT when anything is explicitly given
+    // (i.e. it is only part of the default value, even with KRaft)
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT")
+    assertBadConfigContainingMessage(props,
+      "Controller listener with name CONTROLLER defined in controller.listener.names not found in listener.security.protocol.map.")
+    // ensure we can map it to a non-PLAINTEXT security protocol by default (i.e. when nothing is given)
+    props.remove(KafkaConfig.ListenerSecurityProtocolMapProp)
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    assertEquals(Some(SecurityProtocol.SSL),
+      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(new ListenerName("SSL")))
   }
 
   @Test

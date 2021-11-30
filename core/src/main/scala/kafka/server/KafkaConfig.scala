@@ -27,7 +27,7 @@ import kafka.log.LogConfig
 import kafka.log.LogConfig.MessageFormatVersion
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
-import kafka.server.KafkaConfig.ControllerListenerNamesProp
+import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
@@ -1966,9 +1966,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       .map { case (listenerName, protocolName) =>
         ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
       }
-    val controllerListenerName = new ListenerName("CONTROLLER")
-    if (usesSelfManagedQuorum && !explicitMap.contains(controllerListenerName)) {
-      explicitMap ++ Map(controllerListenerName -> SecurityProtocol.PLAINTEXT)
+    if (usesSelfManagedQuorum && !originals.containsKey(ListenerSecurityProtocolMapProp)) {
+      // Nothing was specified explicitly, so we are using the default value;
+      // therefore, since we are using KRaft, add the CONTROLLER:PLAINTEXT mapping
+      explicitMap ++ Map(new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT)
     } else {
       explicitMap
     }
@@ -2056,7 +2057,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         // validations for KRaft broker-only setup
         // nodeId must not appear in controller.quorum.voters
         // controller.listener.names must be non-empty
-        // none of them can appear in listeners
+        // none of them can appear in listeners and they must all appear in listener.security.protocol.map
         // warn that only the first one is used if there is more than one
         require(!addressSpecsByNodeId.containsKey(nodeId),
           s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${addressSpecsByNodeId.asScala.keySet.toSet}")
@@ -2064,6 +2065,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
         require(controllerListeners.isEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
+        controllerListenerNames.filter(_.nonEmpty).foreach { name =>
+          val listenerName = ListenerName.normalised(name)
+          if (!listenerSecurityProtocolMap.contains(listenerName)) {
+            throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
+              s"${KafkaConfig.ControllerListenerNamesProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}.")
+          }
+        }
         if (controllerListenerNames.size > 1) {
           warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: $controllerListenerNames")
         }
