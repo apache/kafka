@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -23,9 +24,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -242,6 +245,95 @@ public class SubmittedRecordsTest {
         assertMetadataNoPending(committableOffsets, 1);
 
         assertNoEmptyDeques();
+    }
+
+    @Test
+    public void testAwaitMessagesNoneSubmitted() {
+        assertTrue(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesAfterAllAcknowledged() {
+        SubmittedRecord recordToAck = submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+        recordToAck.ack();
+        assertTrue(submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesAfterAllRemoved() {
+        SubmittedRecord recordToRemove1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord recordToRemove2 = submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(
+                "Await should fail since neither of the in-flight records has been removed so far",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove1);
+        assertFalse(
+                "Await should fail since only one of the two submitted records has been removed so far",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove1);
+        assertFalse(
+                "Await should fail since only one of the two submitted records has been removed so far, "
+                        + "even though that record has been removed twice",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+
+        submittedRecords.removeLastOccurrence(recordToRemove2);
+        assertTrue(
+                "Await should succeed since both submitted records have now been removed",
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+        );
+    }
+
+    @Test
+    public void testAwaitMessagesTimesOut() {
+        submittedRecords.submit(PARTITION1, newOffset());
+        assertFalse(submittedRecords.awaitAllMessages(10, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testAwaitMessagesReturnsAfterAsynchronousAck() throws Exception {
+        SubmittedRecord inFlightRecord1 = submittedRecords.submit(PARTITION1, newOffset());
+        SubmittedRecord inFlightRecord2 = submittedRecords.submit(PARTITION2, newOffset());
+
+        AtomicBoolean awaitResult = new AtomicBoolean();
+        CountDownLatch awaitComplete = new CountDownLatch(1);
+        new Thread(() -> {
+            awaitResult.set(submittedRecords.awaitAllMessages(5, TimeUnit.SECONDS));
+            awaitComplete.countDown();
+        }).start();
+
+        assertTrue(
+                "Should not have finished awaiting message delivery before either in-flight record was acknowledged",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord1.ack();
+        assertTrue(
+                "Should not have finished awaiting message delivery before one in-flight record was acknowledged",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord1.ack();
+        assertTrue(
+                "Should not have finished awaiting message delivery before one in-flight record was acknowledged, "
+                        + "even though the other record has been acknowledged twice",
+                awaitComplete.getCount() > 0
+        );
+
+        inFlightRecord2.ack();
+        assertTrue(
+                "Should have finished awaiting message delivery after both in-flight records were acknowledged",
+                awaitComplete.await(1, TimeUnit.SECONDS)
+        );
+        assertTrue(
+                "Await of in-flight messages should have succeeded",
+                awaitResult.get()
+        );
     }
 
     private void assertNoRemainingDeques() {
