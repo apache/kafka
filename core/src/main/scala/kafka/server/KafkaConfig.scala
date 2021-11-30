@@ -2051,6 +2051,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
         s"${KafkaConfig.ControllerListenerNamesProp} must only contain values appearing in the '${KafkaConfig.ListenersProp}' configuration when running the KRaft controller role")
     }
+    def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
+      require(advertisedListenerNames.nonEmpty,
+        "There must be at least one advertised listener." + (
+          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in ${ControllerListenerNamesProp}?" else ""))
+    }
     if (processRoles == Set(BrokerRole)) {
       // KRaft broker-only
       validateCanParseControllerQuorumVotersForKRaft()
@@ -2077,6 +2082,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       if (controllerListenerNames.size > 1) {
         warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: ${controllerListenerNames.asJava.toString}")
       }
+      validateAdvertisedListenersNonEmptyForBroker()
     } else if (processRoles == Set(ControllerRole)) {
       // KRaft controller-only
       validateCanParseControllerQuorumVotersForKRaft()
@@ -2095,18 +2101,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControllerQuorumVotersMustContainNodeIDForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
+      validateAdvertisedListenersNonEmptyForBroker()
     } else {
       // ZK-based
       // controller listener names must be empty when not in KRaft mode
       require(!controllerListenerNames.exists(_.nonEmpty), s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava.toString}")
+      validateAdvertisedListenersNonEmptyForBroker()
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
-      require(advertisedListenerNames.nonEmpty,
-        "There must be at least one advertised listener." + (
-          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in ${ControllerListenerNamesProp}?" else ""))
+      validateAdvertisedListenersNonEmptyForBroker()
       require(advertisedListenerNames.contains(interBrokerListenerName),
         s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
           s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
