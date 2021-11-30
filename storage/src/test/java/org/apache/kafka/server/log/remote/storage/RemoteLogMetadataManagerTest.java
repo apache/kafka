@@ -49,7 +49,7 @@ public class RemoteLogMetadataManagerTest {
 
     private final Time time = new MockTime(1);
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
+    @ParameterizedTest(name = "testFetchSegments = {0}")
     @MethodSource("remoteLogMetadataManagers")
     public void testFetchSegments(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
         try {
@@ -81,7 +81,7 @@ public class RemoteLogMetadataManagerTest {
         }
     }
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
+    @ParameterizedTest(name = "testRemotePartitionDeletion = {0}")
     @MethodSource("remoteLogMetadataManagers")
     public void testRemotePartitionDeletion(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
         try {
@@ -146,6 +146,9 @@ public class RemoteLogMetadataManagerTest {
     }
 
     private static Collection<Arguments> remoteLogMetadataManagers() {
-        return Arrays.asList(Arguments.of(new InmemoryRemoteLogMetadataManager()), Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
+        return Arrays.asList(
+                Arguments.of(new InmemoryRemoteLogMetadataManager()),
+                Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness())
+        );
     }
 }
