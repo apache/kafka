@@ -372,8 +372,6 @@ class LogManagerTest {
       TestUtils.tempDir(),
       TestUtils.tempDir())
     logManager.shutdown()
-//    val logProps = new Properties()
-//    logProps.put(LogConfig.LogDirectorySelectStrategyProp, LogDirSelectType.SIZE.name: java.lang.String)
 
     val properties = new Properties()
     properties.put(LogConfig.LogDirectorySelectStrategyProp, LogDirSelectType.SIZE.name: java.lang.String)
@@ -381,7 +379,6 @@ class LogManagerTest {
 
     logManager = createLogManager(logDirs = dirs, configRepository = configRepository)
 
-//    val logConfig = LogConfig(logProps)
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes)
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
