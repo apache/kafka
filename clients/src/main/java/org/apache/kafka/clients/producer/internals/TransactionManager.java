@@ -409,7 +409,8 @@ public class TransactionManager {
         maybeFailWithError();
 
         if (currentState != State.IN_TRANSACTION) {
-            throw new KafkaException("Cannot send offsets to transaction either because in state " + currentState);
+            throw new KafkaException("Cannot send offsets if a transaction is not in progress " +
+                "(currentState= " + currentState + ")");
         }
 
         log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
@@ -433,7 +434,7 @@ public class TransactionManager {
         if (isTransactional()) {
             if (!hasProducerId()) {
                 throw new KafkaException("Cannot add partition " + topicPartition +
-                    "to transaction before completing a call to initTransactions");
+                    " to transaction before completing a call to initTransactions");
             } else if (currentState != State.IN_TRANSACTION) {
                 throw new KafkaException("Cannot add partition " + topicPartition +
                     " to transaction while in state  " + currentState);
