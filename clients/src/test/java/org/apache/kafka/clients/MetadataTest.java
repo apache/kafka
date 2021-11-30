@@ -381,13 +381,12 @@ public class MetadataTest {
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         // Start with a topic with no topic ID
-        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10);
+        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 100);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
-        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+        assertEquals(Optional.of(100), metadata.lastSeenLeaderEpoch(tp));
 
-        // We should treat an added topic ID as though it is the same topic. Handle only when epoch increases.
-        // Don't update to an older one
-        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 1, topicIds);
+        // If the Older topic Id is null, we should go with the new TopicId as the leader Epoch
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 2L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
