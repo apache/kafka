@@ -38,6 +38,10 @@ buildscript {
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
+    // Override jgit dependency used by grgit and spotless as we appear to auto resolve to 
+    // 5.13.0.202109080827-r and the latest version requires java 9.
+    // Requires force=true to be used in spotless as reported by ./gradlew buildEnvironment.
+    classpath("org.eclipse.jgit:org.eclipse.jgit:$versions.jgit") { force = true }
   }
 }
 
