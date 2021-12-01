@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Contains various sensors used for monitoring errors.
  */
-public class  ErrorHandlingMetrics extends AutoCloseable{
+public class ErrorHandlingMetrics extends AutoCloseable{
 
     private final Time time = new SystemTime();
 
