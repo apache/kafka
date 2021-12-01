@@ -16,23 +16,16 @@
  */
 package kafka.log.remote
 
-import java.io.{Closeable, File, InputStream}
-import java.nio.ByteBuffer
-import java.nio.file.Files
-import java.util
-import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.Optional
-import java.lang
 import kafka.cluster.Partition
 import kafka.log.{AbortedTxn, Log, OffsetPosition}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server._
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.{Endpoint, KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common._
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.FetchResponseData.AbortedTransaction
@@ -41,13 +34,19 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RemoteLogInpu
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
-import org.apache.kafka.server.log.remote.storage.{LogSegmentData, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage._
 
+import java.io.{Closeable, File, InputStream}
+import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.security.{AccessController, PrivilegedAction}
-import scala.collection.mutable
+import java.util.Optional
+import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicInteger
+import java.{lang, util}
 import scala.collection.Searching._
-import scala.collection.Set
 import scala.collection.mutable.ListBuffer
+import scala.collection.{Set, mutable}
 import scala.jdk.CollectionConverters._
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
@@ -276,17 +275,14 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
    * is set as true.
    *
-   * @param partitions  topic partitions that needs to be stopped.
+   * @param allPartitions  topic partitions that needs to be stopped.
    * @param delete      flag to indicate whether the given topic partitions to be deleted or not.
    */
-  def stopPartitions(partitions: Set[TopicPartition], delete: Boolean, errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
-    debug(s"Stopping ${partitions.size} partitions, delete: $delete")
-    val partitionsByTopic = partitions.groupBy(_.topic())
-    partitionsByTopic.foreach { entry =>
+  def stopPartitions(allPartitions: Set[TopicPartition], delete: Boolean, errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
+    debug(s"Stopping ${allPartitions.size} partitions, delete: $delete")
+    val partitionsByTopic = allPartitions.groupBy(_.topic())
+    partitionsByTopic.forKeyValue((topic, partitions) => {
       // FIXME: When to remove the topicId from topicIds map? (leaving them can lead to memory leak)
-      val topic = entry._1
-      val partitions = entry._2
-
       val topicId = topicIds.get(topic)
       if (topicId.isDefined) {
         val tpIds = partitions.map(new TopicIdPartition(topicId.get, _))
@@ -311,7 +307,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           remoteLogMetadataManager.onStopPartitions(tpIds.asJava)
         }
       }
-    }
+    })
   }
 
   private def deleteRemoteLogSegment(segmentMetadata: RemoteLogSegmentMetadata, predicate: RemoteLogSegmentMetadata => Boolean): Boolean = {

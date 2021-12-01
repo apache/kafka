@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
 class CommittedOffsetsFile {
     private static final String SEPARATOR = " ";
     private final File offsetsFile;
+    private static final int CURRENT_VERSION = 0;
 
     private static final Pattern MINIMUM_ONE_WHITESPACE = Pattern.compile("\\s+");
 
@@ -47,6 +48,10 @@ class CommittedOffsetsFile {
         // Overwrite the file if it exists.
         FileOutputStream fos = new FileOutputStream(newOffsetsFile);
         try (final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fos, StandardCharsets.UTF_8))) {
+            // Write version
+            writer.write(Integer.toString(CURRENT_VERSION));
+            writer.newLine();
+
             for (Map.Entry<Integer, Long> entry : committedOffsets.entrySet()) {
                 writer.write(entry.getKey() + SEPARATOR + entry.getValue());
                 writer.newLine();
@@ -63,7 +68,16 @@ class CommittedOffsetsFile {
         Map<Integer, Long> partitionToOffsets = new HashMap<>();
 
         try (BufferedReader bufferedReader = Files.newBufferedReader(offsetsFile.toPath(), StandardCharsets.UTF_8)) {
-            String line;
+            String line = bufferedReader.readLine();
+            if (line == null || line.isEmpty()) {
+                throw new IOException("No version header present.");
+            }
+            // Read version
+            int version = Integer.parseInt(line);
+            if (version != CURRENT_VERSION) {
+                throw new IOException("Invalid version: " + version);
+            }
+
             while ((line = bufferedReader.readLine()) != null) {
                 String[] strings = MINIMUM_ONE_WHITESPACE.split(line);
                 if (strings.length != 2) {
