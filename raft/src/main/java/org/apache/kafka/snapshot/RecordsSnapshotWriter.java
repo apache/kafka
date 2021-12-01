@@ -125,7 +125,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                     memoryPool,
                     snapshotTime,
                     lastContainedLogTimestamp,
-                    CompressionType.NONE,
+                    compressionType,
                     serde);
             writer.initializeSnapshotWithHeader();
 
