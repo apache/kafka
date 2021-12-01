@@ -26,13 +26,14 @@ import kafka.utils.{TestUtils, nonthreadsafe}
 import kafka.utils.RecordsKeyValueMatcher.correspondTo
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{ElectionType, TopicPartition}
+import org.apache.kafka.common.{ElectionType, TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.{DELETE_SEGMENT, FETCH_SEGMENT, OFFLOAD_SEGMENT}
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset
 import org.apache.kafka.common.serialization.{Serde, Serdes}
+import org.apache.kafka.server.log.remote.metadata.storage.{RemoteLogMetadataTopicPartitioner, TopicBasedRemoteLogMetadataManagerConfig}
 import org.hamcrest.MatcherAssert.assertThat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 
@@ -188,7 +189,8 @@ final class DeleteTopicAction(val topic: String, val deleteSegmentSpecs: Seq[Rem
         case _: TimeoutException =>
           // In stop partitions call, all the replica tries to delete the remote log segments. Once the segment deletion
           // is successful, the replica sends DELETE_SEGMENT_FINISHED event to __remote_log_metadata topic.
-          // And, other replica's which listens to the internal topic, skips deleting those remote log segments.
+          // And, other replica's which listens to the internal topic, updates it's internal cache and skips deleting
+          // those remote log segments.
       }
     }
   }
@@ -544,11 +546,54 @@ final class ShrinkReplicaAction(val topicPartition: TopicPartition, val replicaI
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
       }
-    }, msg = s"Unable to shrink the replicas of $topicPartition, replicaIds: $replicaIds, actual-replica-ids: $actualReplicaIds")
+    }, msg = s"Unable to shrink the replicas of $topicPartition, replica-ids: $replicaIds, actual-replica-ids: $actualReplicaIds")
   }
 
   override def describe(output: PrintStream): Unit = {
-    output.println(s"shrink-replica-action topic-partition: $topicPartition replicaIds: $replicaIds")
+    output.println(s"shrink-replica-action topic-partition: $topicPartition replica-ids: $replicaIds")
+  }
+}
+
+final class ReassignReplicaAction(val topicPartition: TopicPartition, val replicaIds: Seq[Int]) extends TieredStorageTestAction {
+  override protected def doExecute(context: TieredStorageTestContext): Unit = {
+    val topic = topicPartition.topic()
+    val partition = topicPartition.partition()
+    val assignment = replicaIds.map(replicaId => new Integer(replicaId)).toSeq.asJava
+    val proposed = Map(topicPartition -> Optional.of(new NewPartitionReassignment(assignment)))
+    context.admin().alterPartitionReassignments(proposed.asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicDescription = context.admin().describeTopics(List(topic).asJava).all.get.get(topic)
+        val actualReplicaIds = Option(topicDescription.partitions.get(partition).replicas()).map(e => e.asScala.map(_.id()).toSet)
+        actualReplicaIds.exists(_.equals(replicaIds.toSet))
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, msg = s"Unable to reassign the replicas of $topicPartition, replica-ids: $replicaIds")
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"reassign-replica-action topic-partition: $topicPartition replica-ids: $replicaIds")
+  }
+}
+
+final class ExpectUserTopicMappedToMetadataPartitionsAction(val topic: String, val metadataPartitions: Seq[Int]) extends TieredStorageTestAction {
+  override protected def doExecute(context: TieredStorageTestContext): Unit = {
+    val metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME
+    val topicDescriptions = context.admin().describeTopics(List(topic, metadataTopic).asJava).all.get
+    val metadataTopicPartitionCount = topicDescriptions.get(metadataTopic).partitions().size()
+    val partitioner = new RemoteLogMetadataTopicPartitioner(metadataTopicPartitionCount)
+
+    val topicId = topicDescriptions.get(topic).topicId()
+    val actualMetadataPartitions = topicDescriptions.get(topic).partitions().asScala.
+      map(info => new TopicIdPartition(topicId, new TopicPartition(topic, info.partition())))
+      .map(partitioner.metadataPartition)
+    assertTrue(metadataPartitions.forall(actualMetadataPartitions.contains))
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"expect-user-topic-mapped-to-metadata-partition topic: $topic metadata-partitions: $metadataPartitions")
   }
 }
 
@@ -620,8 +665,8 @@ final class TieredStorageTestBuilder {
         .flatMap {
           case (partition, buffer) =>
             buffer.map {
-              case(sourceBroker, segmentDeleteCount) =>
-                RemoteDeleteSegmentSpec(sourceBroker, partition, segmentDeleteCount)
+              case(sourceBroker, atMostDeleteSegmentCallCount) =>
+                RemoteDeleteSegmentSpec(sourceBroker, partition, atMostDeleteSegmentCallCount)
             }
         }.toSeq
       actions += new DeleteTopicAction(topic, deleteSegmentSpecs)
@@ -718,9 +763,9 @@ final class TieredStorageTestBuilder {
     this
   }
 
-  def expectDeletionInRemoteStorage(fromBroker: Int, topic: String, partition: Int, deleteSegmentCount: Int): this.type = {
+  def expectDeletionInRemoteStorage(fromBroker: Int, topic: String, partition: Int, atMostDeleteSegmentCallCount: Int): this.type = {
     val topicPartition = new TopicPartition(topic, partition)
-    val attributes = (fromBroker, deleteSegmentCount)
+    val attributes = (fromBroker, atMostDeleteSegmentCallCount)
     deletables.get(topicPartition) match {
       case Some(buffer) => buffer += attributes
       case None => deletables += topicPartition -> mutable.Buffer(attributes)
@@ -766,6 +811,20 @@ final class TieredStorageTestBuilder {
 
     val topicPartition = new TopicPartition(topic, partition)
     actions += new ShrinkReplicaAction(topicPartition, replicaIds)
+    this
+  }
+
+  def reassignReplica(topic: String, partition: Int, replicaIds: Seq[Int]): this.type = {
+    maybeCreateProduceAction()
+    maybeCreateConsumeActions()
+
+    val topicPartition = new TopicPartition(topic, partition)
+    actions += new ReassignReplicaAction(topicPartition, replicaIds)
+    this
+  }
+
+  def expectUserTopicMappedToMetadataPartitions(topic: String, metadataPartitions: Seq[Int]): this.type = {
+    actions += new ExpectUserTopicMappedToMetadataPartitionsAction(topic, metadataPartitions)
     this
   }
 

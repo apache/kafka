@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package integration.kafka.tiered.storage
 
 import kafka.tiered.storage.{TieredStorageTestBuilder, TieredStorageTestHarness}
@@ -26,10 +43,10 @@ class DeleteTopicWithSecondaryStorageTest extends TieredStorageTestHarness {
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 1, ("k2", "v2"))
       .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 2)
       // Both leader and follower tries to delete the remote log segments. Each partition has two remote log segments.
-      .expectDeletionInRemoteStorage(broker0, topicA, p0, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker0, topicA, p1, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker1, topicA, p0, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker1, topicA, p1, deleteSegmentCount = 2)
+      .expectDeletionInRemoteStorage(broker0, topicA, p0, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker0, topicA, p1, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p0, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p1, atMostDeleteSegmentCallCount = 2)
       // delete the topic
       .deleteTopic(Set(topicA))
       .expectEmptyRemoteStorage(topicA, p0)
