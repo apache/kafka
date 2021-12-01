@@ -1508,7 +1508,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param forceFlushActiveSegment should be true during a clean shutdown, and false otherwise. The reason is that
    * we have to pass logEndOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
    * active segments, which is important to make sure we persist the active segment file during shutdown, particularly
-   * when its empty.
+   * when it's empty.
    */
   def flush(forceFlushActiveSegment: Boolean): Unit = flush(logEndOffset, forceFlushActiveSegment)
 
