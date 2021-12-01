@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Contains various sensors used for monitoring errors.
  */
-public class  ErrorHandlingMetrics {
+public class  ErrorHandlingMetrics extends AutoCloseable{
 
     private final Time time = new SystemTime();
 
@@ -146,7 +146,7 @@ public class  ErrorHandlingMetrics {
     /**
      * Close the task Error metrics group when the task is closed
      */
-    public  void closeTaskErrorMetricGroup() {
+    public void close() {
         log.debug("Removing error handling metrics of group {}", metricGroup.groupId());
         metricGroup.close();
     }
