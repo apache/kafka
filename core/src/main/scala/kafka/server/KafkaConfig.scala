@@ -1914,7 +1914,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   // Use advertised listeners if defined, fallback to listeners otherwise
-  def advertisedListeners: Seq[EndPoint] = {
+  def effectiveAdvertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
@@ -2015,11 +2015,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       "offsets.commit.required.acks must be greater or equal -1 and less or equal to offsets.topic.replication.factor")
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
-    val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
+    val advertisedListenerNames = effectiveAdvertisedListeners.map(_.listenerName).toSet
 
     // validate KRaft-related configs
     val voterAddressSpecsByNodeId = RaftConfig.parseVoterConnections(quorumVoters)
-    def validateCanParseControllerQuorumVotersForKRaft(): Unit = {
+    def validateNonEmptyQuorumVotersForKRaft(): Unit = {
       if (voterAddressSpecsByNodeId.isEmpty) {
         throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
       }
@@ -2028,12 +2028,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       require(controlPlaneListenerName.isEmpty,
         s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode. KRaft uses ${KafkaConfig.ControllerListenerNamesProp} instead.")
     }
-    def sourceOfAdvertisedListeners: String = {
+    val sourceOfAdvertisedListeners: String =
       if (getString(KafkaConfig.AdvertisedListenersProp) != null)
         s"${KafkaConfig.AdvertisedListenersProp}"
       else
         s"${KafkaConfig.ListenersProp}"
-    }
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
       require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
         s"$sourceOfAdvertisedListeners must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
@@ -2058,7 +2057,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
     if (processRoles == Set(BrokerRole)) {
       // KRaft broker-only
-      validateCanParseControllerQuorumVotersForKRaft()
+      validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
@@ -2085,17 +2084,17 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateAdvertisedListenersNonEmptyForBroker()
     } else if (processRoles == Set(ControllerRole)) {
       // KRaft controller-only
-      validateCanParseControllerQuorumVotersForKRaft()
+      validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       // advertised listeners must be empty when not also running the broker role
-      require(advertisedListeners.isEmpty,
+      require(effectiveAdvertisedListeners.isEmpty,
         s"$sourceOfAdvertisedListeners must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
       validateControllerQuorumVotersMustContainNodeIDForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
     } else if (processRoles == Set(BrokerRole, ControllerRole)) {
       // KRaft colocated broker and controller
-      validateCanParseControllerQuorumVotersForKRaft()
+      validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       validateControllerQuorumVotersMustContainNodeIDForKRaftController()
@@ -2123,7 +2122,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       )
     }
 
-    require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
+    require(!effectiveAdvertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 

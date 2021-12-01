@@ -223,7 +223,7 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
     brokers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.securityProtocol == protocol).getOrElse(
+      val listener = s.config.effectiveAdvertisedListeners.find(_.securityProtocol == protocol).getOrElse(
         sys.error(s"Could not find listener with security protocol $protocol"))
       formatAddress(listener.host, boundPort(s, protocol))
     }.mkString(",")
@@ -231,7 +231,7 @@ object TestUtils extends Logging {
 
   def bootstrapServers[B <: KafkaBroker](brokers: Seq[B], listenerName: ListenerName): String = {
     brokers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
+      val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")

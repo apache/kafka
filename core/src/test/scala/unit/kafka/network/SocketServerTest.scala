@@ -296,7 +296,7 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startProcessingRequests = false)
 
-    val updatedEndPoints = config.advertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 

@@ -81,7 +81,7 @@ class BrokerLifecycleManagerTest {
       time, controllerNodeProvider, nodeApiVersions)
     val clusterId = "x4AJGXQSRnephtTZzujw4w"
     val advertisedListeners = new ListenerCollection()
-    config.advertisedListeners.foreach { ep =>
+    config.effectiveAdvertisedListeners.foreach { ep =>
       advertisedListeners.add(new Listener().setHost(ep.host).
         setName(ep.listenerName.value()).
         setPort(ep.port.shortValue()).

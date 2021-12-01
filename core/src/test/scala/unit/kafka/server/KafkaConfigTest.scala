@@ -156,7 +156,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
 
-    val endpoints = serverConfig.advertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedListeners
     assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
@@ -172,7 +172,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.advertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedListeners
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
@@ -220,7 +220,7 @@ class KafkaConfigTest {
     assertEquals(SecurityProtocol.SSL, controlEndpoint.securityProtocol)
 
     //advertised listener should contain control-plane listener
-    val advertisedEndpoints = serverConfig.advertisedListeners
+    val advertisedEndpoints = serverConfig.effectiveAdvertisedListeners
     assertTrue(advertisedEndpoints.exists { endpoint =>
       endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
     })
@@ -353,6 +353,19 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testFoo(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092,CONTROLLER://:9093")
+//    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "DEFAULT:PLAINTEXT,CONTROLLER:PLAINTEXT")
+//    props.put(KafkaConfig.InterBrokerListenerNameProp, "DEFAULT")
+    KafkaConfig.fromProps(props)
+  }
+
+  @Test
   def testControllerListenerNameMapsToPlaintextByDefaultForKRaft(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
@@ -416,7 +429,7 @@ class KafkaConfigTest {
       EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
       EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
     assertEquals(expectedListeners, config.listeners)
-    assertEquals(expectedListeners, config.advertisedListeners)
+    assertEquals(expectedListeners, config.effectiveAdvertisedListeners)
     val expectedSecurityProtocolMap = Map(
       new ListenerName("CLIENT") -> SecurityProtocol.SSL,
       new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
@@ -447,7 +460,7 @@ class KafkaConfigTest {
       EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
       EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
     )
-    assertEquals(expectedAdvertisedListeners, config.advertisedListeners)
+    assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedListeners)
 
     val expectedSecurityProtocolMap = Map(
       new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
@@ -515,7 +528,7 @@ class KafkaConfigTest {
     val conf = KafkaConfig.fromProps(props)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.advertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+    assertEquals(conf.effectiveAdvertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
   @nowarn("cat=deprecation")
@@ -1068,7 +1081,7 @@ class KafkaConfigTest {
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
-    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.advertisedListeners.map(_.connectionString))
+    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedListeners.map(_.connectionString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
