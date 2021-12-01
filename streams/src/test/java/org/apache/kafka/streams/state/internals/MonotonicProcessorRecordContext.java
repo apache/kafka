@@ -22,16 +22,30 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 public class MonotonicProcessorRecordContext extends ProcessorRecordContext {
     private long counter;
+    private final boolean automatic;
 
     public MonotonicProcessorRecordContext(final String topic, final int partition) {
+        this(topic, partition, true);
+    }
+
+    public MonotonicProcessorRecordContext(final String topic, final int partition, final boolean automatic) {
         super(0, 0, partition, topic, new RecordHeaders());
         this.counter = 0;
+        this.automatic = automatic;
     }
 
     @Override
     public long offset() {
         final long ret = counter;
-        counter++;
+        if (automatic) {
+            counter++;
+        }
         return ret;
+    }
+
+    public void kick() {
+        if (!automatic) {
+            counter++;
+        }
     }
 }

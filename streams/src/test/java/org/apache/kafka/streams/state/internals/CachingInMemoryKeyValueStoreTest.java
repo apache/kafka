@@ -217,6 +217,29 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         assertEquals(0, underlyingStore.approximateNumEntries());
     }
 
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(bytesKey("key1"), bytesValue("value1")));
+        entries.add(new KeyValue<>(bytesKey("key2"), bytesValue("value2")));
+        entries.add(new KeyValue<>(bytesKey("key3"), bytesValue("value3")));
+        entries.add(new KeyValue<>(bytesKey("key4"), bytesValue("value4")));
+        entries.add(new KeyValue<>(bytesKey("key5"), bytesValue("value5")));
+
+        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0, false);
+        context.setRecordContext(recordContext);
+
+        final Position expected = Position.emptyPosition();
+        for (final KeyValue<Bytes, byte[]> k : entries) {
+            store.put(k.key, k.value);
+            expected.update(recordContext.topic(), recordContext.partition(), recordContext.offset());
+            recordContext.kick();
+        }
+
+        final Position actual = store.getPosition();
+        assertEquals(expected, actual);
+    }
+
     private byte[] bytesValue(final String value) {
         return value.getBytes();
     }
