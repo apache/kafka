@@ -75,7 +75,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
-    private Position position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     public InMemoryWindowStore(final String name,
@@ -154,10 +154,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             }
         }
 
-        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 
     @Override

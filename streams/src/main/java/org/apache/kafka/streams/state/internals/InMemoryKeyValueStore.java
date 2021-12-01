@@ -134,10 +134,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             map.put(key, value);
         }
 
-        if (context != null && context.recordMetadata().isPresent()) {
-            final RecordMetadata meta = context.recordMetadata().get();
-            position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override

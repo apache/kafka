@@ -166,7 +166,7 @@ public class CachingKeyValueStore
                 context.partition(),
                 context.topic()));
 
-        position = position.withComponent(context.topic(), context.partition(), context.offset());
+        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override

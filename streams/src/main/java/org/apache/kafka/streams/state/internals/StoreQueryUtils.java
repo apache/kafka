@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
@@ -48,5 +51,15 @@ public final class StoreQueryUtils {
             );
         }
         return result;
+    }
+
+    public static void updatePosition(
+        final Position position,
+        final StateStoreContext stateStoreContext) {
+
+        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
+            position.withComponent(meta.topic(), meta.partition(), meta.offset());
+        }
     }
 }

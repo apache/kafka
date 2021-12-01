@@ -33,7 +33,7 @@ public class RocksDBSessionStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
     implements SessionStore<Bytes, byte[]> {
 
-    private Position position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
@@ -149,9 +149,6 @@ public class RocksDBSessionStore
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
 
-        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 }

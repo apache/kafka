@@ -38,7 +38,7 @@ public class RocksDBWindowStore
 
     private int seqnum = 0;
 
-    private Position position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -67,10 +67,7 @@ public class RocksDBWindowStore
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
 
-            if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-                final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-                position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
-            }
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 

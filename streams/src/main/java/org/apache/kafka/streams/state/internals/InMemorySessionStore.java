@@ -73,7 +73,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private StateStoreContext stateStoreContext;
-    private Position position;
+    private final Position position;
 
     InMemorySessionStore(final String name,
                          final long retentionPeriod,
@@ -152,10 +152,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             }
         }
 
-        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position = position.withComponent(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 
     @Override
