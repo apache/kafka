@@ -24,7 +24,10 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -68,6 +71,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
+    private Position position;
+    private StateStoreContext stateStoreContext;
+
     public InMemoryWindowStore(final String name,
                                final long retentionPeriod,
                                final long windowSize,
@@ -78,6 +84,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -107,6 +114,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        init(StoreToProcessorContextAdapter.adapt(context), root);
+        this.stateStoreContext = context;
+    }
+
+    Position getPosition() {
+        return position;
+    }
+
+    @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
@@ -130,6 +148,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                     return kvMap;
                 });
             }
+        }
+
+        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
+            position = position.update(meta.topic(), meta.partition(), meta.offset());
         }
     }
 

@@ -77,7 +77,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     private MockRecordCollector recordCollector;
 
-    private InternalMockProcessorContext context;
+    InternalMockProcessorContext context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,

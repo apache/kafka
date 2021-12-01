@@ -24,7 +24,10 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -65,12 +68,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
+    private StateStoreContext stateStoreContext;
+    private Position position;
+
     InMemorySessionStore(final String name,
                          final long retentionPeriod,
                          final String metricScope) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -106,6 +113,17 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        init(StoreToProcessorContextAdapter.adapt(context), root);
+        this.stateStoreContext = context;
+    }
+
+    Position getPosition() {
+        return position;
+    }
+
+    @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         removeExpiredSegments();
 
@@ -128,6 +146,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             } else {
                 remove(sessionKey);
             }
+        }
+
+        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
+            position = position.update(meta.topic(), meta.partition(), meta.offset());
         }
     }
 
