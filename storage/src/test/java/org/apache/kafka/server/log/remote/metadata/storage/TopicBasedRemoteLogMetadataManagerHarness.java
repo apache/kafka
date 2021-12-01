@@ -57,14 +57,21 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
 
     public void initialize(Set<TopicIdPartition> topicIdPartitions,
                            boolean startConsumerThread) {
+        initialize(topicIdPartitions, startConsumerThread, null);
+    }
+
+    public void initialize(Set<TopicIdPartition> topicIdPartitions,
+                           boolean startConsumerThread,
+                           RemoteLogMetadataTopicPartitioner remoteLogMetadataTopicPartitioner) {
         // Call setup to start the cluster.
         super.setUp();
 
-        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread);
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, remoteLogMetadataTopicPartitioner);
     }
 
     public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
-                                                   boolean startConsumerThread) {
+                                                   boolean startConsumerThread,
+                                                   RemoteLogMetadataTopicPartitioner remoteLogMetadataTopicPartitioner) {
         String logDir = org.apache.kafka.test.TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
         topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread) {
             @Override
@@ -99,6 +106,10 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
         // Add override properties.
         configs.putAll(overrideRemoteLogMetadataManagerProps);
         log.debug("TopicBasedRemoteLogMetadataManager configs after adding overridden properties: {}", configs);
+
+        if (remoteLogMetadataTopicPartitioner != null) {
+            topicBasedRemoteLogMetadataManager.setRlmmTopicPartitioner(remoteLogMetadataTopicPartitioner);
+        }
 
         topicBasedRemoteLogMetadataManager.configure(configs);
         try {

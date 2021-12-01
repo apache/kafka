@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -35,7 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * This class manages the consumer thread viz {@link ConsumerTask} that polls messages from the assigned metadata topic partitions.
+ * This class manages the consumer thread viz {@link PrimaryConsumerTask} that polls messages from the assigned metadata topic partitions.
  * It also provides a way to wait until the given record is received by the consumer before it is timed out with an interval of
  * {@link TopicBasedRemoteLogMetadataManagerConfig#consumeWaitMs()}.
  */
@@ -47,7 +46,7 @@ public class ConsumerManager implements Closeable {
 
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
     private final Time time;
-    private final ConsumerTask consumerTask;
+    private final PrimaryConsumerTask consumerTask;
     private final Thread consumerTaskThread;
 
     public ConsumerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
@@ -58,9 +57,9 @@ public class ConsumerManager implements Closeable {
         this.time = time;
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
         Path committedOffsetsPath = new File(rlmmConfig.logDir(), COMMITTED_OFFSETS_FILE_NAME).toPath();
-        consumerTask = new ConsumerTask(consumer, remotePartitionMetadataEventHandler, topicPartitioner, committedOffsetsPath, time, 60_000L);
+        consumerTask = new PrimaryConsumerTask(rlmmConfig.consumerProperties(), remotePartitionMetadataEventHandler,
+                                               topicPartitioner, committedOffsetsPath, time, 60_000L);
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
@@ -83,8 +82,9 @@ public class ConsumerManager implements Closeable {
         final int partition = recordMetadata.partition();
 
         // If the current assignment does not have the subscription for this partition then return immediately.
-        if (!consumerTask.isPartitionAssigned(partition)) {
-            throw new KafkaException("This consumer is not subscribed to the target partition " + partition + "on which message is produced.");
+        if (!consumerTask.isMetadataPartitionAssigned(partition)) {
+            throw new KafkaException(
+                    "This consumer is not subscribed to the target partition " + partition + " on which message is produced.");
         }
 
         final long offset = recordMetadata.offset();
@@ -95,12 +95,13 @@ public class ConsumerManager implements Closeable {
                 break;
             }
 
-            log.debug("Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
+            log.debug(
+                    "Committed offset [{}] for partition [{}], but the target offset: [{}],  Sleeping for [{}] to retry again",
                     offset, partition, receivedOffset, CONSUME_RECHECK_INTERVAL_MS);
 
             if (time.milliseconds() - startTimeMs > rlmmConfig.consumeWaitMs()) {
                 log.warn("Committed offset for partition:[{}] is : [{}], but the target offset: [{}] ",
-                        partition, receivedOffset, offset);
+                         partition, receivedOffset, offset);
                 throw new TimeoutException("Timed out in catching up with the expected offset by consumer.");
             }
 
@@ -129,7 +130,11 @@ public class ConsumerManager implements Closeable {
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
 
-    public Optional<Long> receivedOffsetForPartition(int metadataPartition) {
+    Optional<Long> receivedOffsetForPartition(int metadataPartition) {
         return consumerTask.receivedOffsetForPartition(metadataPartition);
+    }
+
+    boolean isUserPartitionAssignedToPrimary(TopicIdPartition partition) {
+        return consumerTask.isUserPartitionAssignedToPrimary(partition);
     }
 }

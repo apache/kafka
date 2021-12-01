@@ -589,7 +589,8 @@ final class ExpectUserTopicMappedToMetadataPartitionsAction(val topic: String, v
     val actualMetadataPartitions = topicDescriptions.get(topic).partitions().asScala.
       map(info => new TopicIdPartition(topicId, new TopicPartition(topic, info.partition())))
       .map(partitioner.metadataPartition)
-    assertTrue(metadataPartitions.forall(actualMetadataPartitions.contains))
+    assertTrue(metadataPartitions.forall(actualMetadataPartitions.contains),
+      s"metadata-partition distribution expected: $metadataPartitions, actual: $actualMetadataPartitions")
   }
 
   override def describe(output: PrintStream): Unit = {
