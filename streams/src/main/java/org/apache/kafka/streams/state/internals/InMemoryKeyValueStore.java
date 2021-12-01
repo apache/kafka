@@ -21,6 +21,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -40,9 +43,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
     private volatile boolean open = false;
+    private StateStoreContext context;
+    private Position position;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -63,6 +69,13 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        init(StoreToProcessorContextAdapter.adapt(context), root);
+        this.context = context;
+    }
+
+    @Override
     public boolean persistent() {
         return false;
     }
@@ -70,6 +83,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    Position getPosition() {
+        return position;
     }
 
     @Override
@@ -97,6 +114,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             map.remove(key);
         } else {
             map.put(key, value);
+        }
+
+        if (context != null && context.recordMetadata().isPresent()) {
+            final RecordMetadata meta = context.recordMetadata().get();
+            position = position.update(meta.topic(), meta.partition(), meta.offset());
         }
     }
 

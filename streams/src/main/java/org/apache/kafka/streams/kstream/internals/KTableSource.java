@@ -147,7 +147,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                     oldValue = null;
                 }
                 store.put(record.key(), ValueAndTimestamp.make(record.value(), record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), record.value(), oldValue);
+                tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(record.value(), null)));
             }

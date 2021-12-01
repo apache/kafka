@@ -29,6 +29,7 @@ import java.util.{Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
+import kafka.cluster.EndPoint
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
@@ -862,6 +863,40 @@ class SocketServerTest {
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testExceptionInAcceptor(): Unit = {
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val serverMetrics = new Metrics()
+
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager) {
+
+      // same as SocketServer.createAcceptor,
+      // except the Acceptor overriding a method to inject the exception
+      override protected def createAcceptor(endPoint: EndPoint, metricPrefix: String): Acceptor = {
+        val sendBufferSize = config.socketSendBufferBytes
+        val recvBufferSize = config.socketReceiveBufferBytes
+        val listenBacklogSize = config.socketListenBacklogSize
+        new Acceptor(endPoint, sendBufferSize, recvBufferSize, listenBacklogSize, nodeId, connectionQuotas, metricPrefix, time) {
+          override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+            assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
+            throw new IOException("test injected IOException")
+          }
+        }
+      }
+    }
+
+    try {
+      overrideServer.startup()
+      val conn = connect(overrideServer)
+      conn.setSoTimeout(3000)
+      assertEquals(-1, conn.getInputStream.read())
+      assertEquals(0, overrideServer.connectionQuotas.get(conn.getInetAddress))
     } finally {
       shutdownServerAndMetrics(overrideServer)
     }

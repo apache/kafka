@@ -19,9 +19,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -49,9 +51,10 @@ public class CachingKeyValueStore
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
     private String cacheName;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private Position position;
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
@@ -78,8 +81,13 @@ public class CachingKeyValueStore
         streamThread = Thread.currentThread();
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    Position getPosition() {
+        return position;
+    }
+
+    private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
+        this.position = Position.emptyPosition();
 
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
@@ -90,7 +98,7 @@ public class CachingKeyValueStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext context) {
+                                    final InternalProcessorContext<?, ?> context) {
         if (flushListener != null) {
             final byte[] rawNewValue = entry.newValue();
             final byte[] rawOldValue = rawNewValue == null || sendOldValues ? wrapped().get(entry.key()) : null;
@@ -105,10 +113,11 @@ public class CachingKeyValueStore
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
-                        entry.key().get(),
-                        rawNewValue,
-                        sendOldValues ? rawOldValue : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            entry.key().get(),
+                            new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }
@@ -155,6 +164,8 @@ public class CachingKeyValueStore
                 context.timestamp(),
                 context.partition(),
                 context.topic()));
+
+        position = position.update(context.topic(), context.partition(), context.offset());
     }
 
     @Override

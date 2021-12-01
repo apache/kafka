@@ -164,6 +164,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // yet know what ports each controller will pick.  Set it to a dummy string \
                     // for now as a placeholder.
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+
+                    // reduce log cleaner offset map memory usage
+                    props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
+
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
