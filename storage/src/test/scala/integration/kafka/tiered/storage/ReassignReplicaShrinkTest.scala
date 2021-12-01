@@ -32,23 +32,31 @@ class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
     val assignment = Map(p0 -> Seq(broker0, broker1), p1 -> Seq(broker1, broker0))
     builder
       .createTopic(topicA, partitionsCount = 2, replicationFactor = 2, maxBatchCountPerSegment = 1, assignment)
-      // send records to partition 0
+      // send records to partition 0, expect that the segments are uploaded and removed from local log dir
       .produce(topicA, p0, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 0, ("k1", "v1"))
       .expectSegmentToBeOffloaded(broker0, topicA, p0, baseOffset = 1, ("k2", "v2"))
       .expectEarliestOffsetInLogDirectory(topicA, p0, earliestOffset = 2)
-      // send records to partition 1
+      // send records to partition 1, expect that the segments are uploaded and removed from local log dir
       .produce(topicA, p1, ("k1", "v1"), ("k2", "v2"), ("k3", "v3"))
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 0, ("k1", "v1"))
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 1, ("k2", "v2"))
       .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 2)
+      // shrink the replication factor to 1
       .shrinkReplica(topicA, p0, replicaIds = Seq(broker1))
       .shrinkReplica(topicA, p1, replicaIds = Seq(broker0))
       .expectLeader(topicA, p0, broker1)
       .expectLeader(topicA, p1, broker0)
-      .expectFetchFromTieredStorage(fromBroker = 1, topicA, p0, remoteFetchRequestCount = 2)
-      .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 3, expectedRecordsFromSecondTier = 2)
-      .expectFetchFromTieredStorage(fromBroker = 0, topicA, p1, remoteFetchRequestCount = 2)
-      .consume(topicA, p1, fetchOffset = 0, expectedTotalRecord = 3, expectedRecordsFromSecondTier = 2)
+      // produce some more events
+      .produce(topicA, p0, ("k4", "v4"))
+      .produce(topicA, p1, ("k4", "v4"))
+      // verify the earliest offset in local log dir
+      .expectEarliestOffsetInLogDirectory(topicA, p0, earliestOffset = 3)
+      .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 3)
+      // consume from the beginning of the topic to read data from local and remote storage
+      .expectFetchFromTieredStorage(broker1, topicA, p0, remoteFetchRequestCount = 3)
+      .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 4, expectedRecordsFromSecondTier = 3)
+      .expectFetchFromTieredStorage(broker0, topicA, p1, remoteFetchRequestCount = 3)
+      .consume(topicA, p1, fetchOffset = 0, expectedTotalRecord = 4, expectedRecordsFromSecondTier = 3)
   }
 }

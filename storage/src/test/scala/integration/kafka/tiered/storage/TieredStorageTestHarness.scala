@@ -39,13 +39,7 @@ import scala.util.{Failure, Success, Try}
   */
 abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
-  def storageConfigPrefix(key: String = ""): String = {
-    LocalTieredStorage.STORAGE_CONFIG_PREFIX + key
-  }
-
-  def metadataConfigPrefix(key: String = ""): String = {
-    "rlmm.config." + key
-  }
+  protected def numMetadataPartitions: Int = 5
 
   override def generateConfigs: Seq[KafkaConfig] = {
     val overridingProps = new Properties()
@@ -69,7 +63,7 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, metadataConfigPrefix())
 
     overridingProps.setProperty(
-      metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), 5.toString)
+      metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), numMetadataPartitions.toString)
     overridingProps.setProperty(
       metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP), brokerCount.toString)
 
@@ -139,6 +133,10 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     super.tearDown()
     contextOpt.foreach(_.printReport(Console.out))
   }
+
+  private def storageConfigPrefix(key: String = "") = LocalTieredStorage.STORAGE_CONFIG_PREFIX + key
+
+  private def metadataConfigPrefix(key: String = "") = "rlmm.config." + key
 }
 
 object TieredStorageTestHarness {

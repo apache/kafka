@@ -44,10 +44,10 @@ class DeleteTopicWithSecondaryStorageTest extends TieredStorageTestHarness {
       .expectSegmentToBeOffloaded(broker1, topicA, p1, baseOffset = 1, ("k2", "v2"))
       .expectEarliestOffsetInLogDirectory(topicA, p1, earliestOffset = 2)
       // Both leader and follower tries to delete the remote log segments. Each partition has two remote log segments.
-      .expectDeletionInRemoteStorage(broker0, topicA, p0, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker0, topicA, p1, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker1, topicA, p0, deleteSegmentCount = 2)
-      .expectDeletionInRemoteStorage(broker1, topicA, p1, deleteSegmentCount = 2)
+      .expectDeletionInRemoteStorage(broker0, topicA, p0, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker0, topicA, p1, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p0, atMostDeleteSegmentCallCount = 2)
+      .expectDeletionInRemoteStorage(broker1, topicA, p1, atMostDeleteSegmentCallCount = 2)
       // delete the topic
       .deleteTopic(Set(topicA))
       .expectEmptyRemoteStorage(topicA, p0)
