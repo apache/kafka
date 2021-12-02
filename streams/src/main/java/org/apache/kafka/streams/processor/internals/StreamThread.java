@@ -596,6 +596,14 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                checkForTopologyUpdates();
+                // If we received the shutdown signal while waiting for a topology to be added, we can
+                // stop polling regardless of the rebalance status since we know there are no tasks left
+                if (!isRunning() && topologyMetadata.isEmpty()) {
+                    log.info("Shutting down thread with empty topology.");
+                    break;
+                }
+
                 maybeSendShutdown();
                 final long size = cacheResizeSize.getAndSet(-1L);
                 if (size != -1L) {
@@ -634,8 +642,12 @@ public class StreamThread extends Thread {
                           StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(e);
+                this.streamsUncaughtExceptionHandler.accept(new StreamsException(e));
                 return false;
+            } catch (final StreamsException e) {
+                throw e;
+            } catch (final Exception e) {
+                throw new StreamsException(e);
             }
         }
         return true;
@@ -910,8 +922,6 @@ public class StreamThread extends Thread {
     }
 
     private long pollPhase() {
-        checkForTopologyUpdates();
-
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 

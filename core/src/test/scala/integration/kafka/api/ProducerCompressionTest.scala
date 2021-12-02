@@ -19,19 +19,19 @@ package kafka.api.test
 
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.util.{Collections, Properties}
 import scala.jdk.CollectionConverters._
 
-class ProducerCompressionTest extends ZooKeeperTestHarness {
+class ProducerCompressionTest extends QuorumTestHarness {
 
   private val brokerId = 0
   private val topic = "topic"
@@ -40,8 +40,8 @@ class ProducerCompressionTest extends ZooKeeperTestHarness {
   private var server: KafkaServer = null
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
   }

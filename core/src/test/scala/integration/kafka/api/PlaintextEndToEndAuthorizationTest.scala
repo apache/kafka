@@ -20,7 +20,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
 
@@ -71,9 +71,9 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
   @Test

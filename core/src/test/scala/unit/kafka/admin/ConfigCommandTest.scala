@@ -21,9 +21,9 @@ import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig}
+import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{Exit, Logging}
-import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
+class ConfigCommandTest extends QuorumTestHarness with Logging {
 
   @Test
   def shouldExitWithNonZeroStatusOnArgError(): Unit = {

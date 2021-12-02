@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -44,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -117,7 +117,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
-                      final StreamsConfig config,
+                      final TaskConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
@@ -132,7 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            config.taskTimeoutMs,
             "task",
             StreamTask.class
         );
@@ -143,7 +143,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         this.time = time;
         this.recordCollector = recordCollector;
-        eosEnabled = StreamThread.eosEnabled(config);
+        this.eosEnabled = config.eosEnabled;
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;
@@ -171,19 +171,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
-        maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        maxBufferedSize = config.maxBufferedSize;
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
 
-        recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
+        recordQueueCreator = new RecordQueueCreator(this.logContext, config.timestampExtractor, config.deserializationExceptionHandler);
 
         recordInfo = new PartitionGroup.RecordInfo();
 
         final Sensor enforcedProcessingSensor;
         enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
-        final long maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        final long maxTaskIdleMs = config.maxTaskIdleMs;
         partitionGroup = new PartitionGroup(
             logContext,
             createPartitionQueues(),

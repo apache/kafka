@@ -26,6 +26,10 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+    // Override jgit dependency used by grgit and spotless as we appear to auto resolve to 
+    // 5.13.0.202109080827-r and the latest version requires java 9.
+    // Requires force=true to be used in spotless as reported by ./gradlew buildEnvironment.
+    classpath("org.eclipse.jgit:org.eclipse.jgit:$versions.jgit") { force = true }
   }
 }
 
@@ -829,6 +833,7 @@ project(':core') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
+    implementation libs.jose4j
     implementation libs.metrics
     implementation libs.scalaCollectionCompat
     implementation libs.scalaJava8Compat
@@ -1200,6 +1205,7 @@ project(':clients') {
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
+    compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
@@ -1208,6 +1214,7 @@ project(':clients') {
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
+    testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
   }
 
@@ -1604,6 +1611,7 @@ project(':tools') {
     implementation libs.slf4jApi
     implementation libs.log4j
 
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
@@ -1701,6 +1709,7 @@ project(':shell') {
     implementation project(':metadata')
     implementation project(':raft')
 
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
@@ -2377,6 +2386,7 @@ project(':connect:runtime') {
 
     implementation libs.slf4jApi
     implementation libs.log4j
+    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet

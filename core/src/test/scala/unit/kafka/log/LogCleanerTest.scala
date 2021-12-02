@@ -1813,7 +1813,6 @@ class LogCleanerTest {
   private def appendTransactionalAsLeader(log: UnifiedLog,
                                           producerId: Long,
                                           producerEpoch: Short,
-                                          leaderEpoch: Int = 0,
                                           origin: AppendOrigin = AppendOrigin.Client): Seq[Int] => LogAppendInfo = {
     appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true, origin = origin)
   }

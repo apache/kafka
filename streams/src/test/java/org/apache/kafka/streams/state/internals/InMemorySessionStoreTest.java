@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -29,6 +32,8 @@ import java.util.HashSet;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -81,6 +86,33 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
         iterator.close();
         assertFalse(sessionStore.findSessions("a", "b", 0L, 20L).hasNext());
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+
+        final List<KeyValue<Windowed<String>, Long>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(new Windowed<String>("a", new SessionWindow(0, 0)), 1L));
+        entries.add(new KeyValue<>(new Windowed<String>("aa", new SessionWindow(0, 10)), 2L));
+        entries.add(new KeyValue<>(new Windowed<String>("a", new SessionWindow(10, 20)), 3L));
+
+        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
+        context.setRecordContext(recordContext);
+
+        final Position expected = Position.emptyPosition();
+        long offset = 0;
+        for (final KeyValue<Windowed<String>, Long> k : entries) {
+            sessionStore.put(k.key, k.value);
+            expected.update("input", 0, offset);
+            offset++;
+        }
+
+        final MeteredSessionStore<String, Long> meteredSessionStore = (MeteredSessionStore<String, Long>) sessionStore;
+        final ChangeLoggingSessionBytesStore changeLoggingSessionBytesStore = (ChangeLoggingSessionBytesStore) meteredSessionStore.wrapped();
+        final InMemorySessionStore inMemorySessionStore = (InMemorySessionStore) changeLoggingSessionBytesStore.wrapped();
+
+        final Position actual = inMemorySessionStore.getPosition();
+        assertThat(expected, is(actual));
     }
 
 }

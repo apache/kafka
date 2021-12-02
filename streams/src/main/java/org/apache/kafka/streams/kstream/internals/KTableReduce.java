@@ -26,7 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KTableReduce<K, V> implements KTableNewProcessorSupplier<K, V, K, V> {
+public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
     private final String storeName;
     private final Reducer<V> addReducer;
@@ -107,7 +107,9 @@ public class KTableReduce<K, V> implements KTableNewProcessorSupplier<K, V, K, V
 
             // update the store with the new value
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
-            tupleForwarder.maybeForward(record.key(), newAgg, sendOldValues ? oldAgg : null, newTimestamp);
+            tupleForwarder.maybeForward(
+                record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
         }
     }
 

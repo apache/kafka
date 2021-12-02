@@ -324,7 +324,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return null;
     }
 
-    static interface SecurityStore {
+    interface SecurityStore {
         KeyStore get();
         char[] keyPassword();
         boolean modified();
@@ -480,7 +480,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             } catch (InvalidConfigurationException e) {
                 throw e;
             } catch (Exception e) {
-                throw new InvalidConfigurationException("Invalid PEM keystore configs", e);
+                throw new InvalidConfigurationException("Invalid PEM truststore configs", e);
             }
         }
 
