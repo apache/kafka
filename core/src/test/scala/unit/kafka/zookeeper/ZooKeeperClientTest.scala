@@ -649,9 +649,18 @@ class ZooKeeperClientTest extends QuorumTestHarness {
     }
 
     zooKeeperClient.close()
-    zooKeeperClient = newZooKeeperClient()
+    @volatile var connectionStateOverride: Option[States] = None
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout,
+      zkMaxInFlightRequests, time, "testMetricGroup", "testMetricType", new ZKClientConfig, "ZooKeeperClientTest") {
+      override def connectionState: States = connectionStateOverride.getOrElse(super.connectionState)
+    }
     zooKeeperClient.registerStateChangeHandler(changeHandler)
 
+    connectionStateOverride = Some(States.CONNECTED)
+    zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.AuthFailed, null))
+    assertFalse(sessionInitializedCountDownLatch.await(10, TimeUnit.MILLISECONDS), "Unexpected session initialization when connection is alive")
+
+    connectionStateOverride = Some(States.AUTH_FAILED)
     zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.AuthFailed, null))
     assertTrue(sessionInitializedCountDownLatch.await(5, TimeUnit.SECONDS), "Failed to receive session initializing notification")
   }
