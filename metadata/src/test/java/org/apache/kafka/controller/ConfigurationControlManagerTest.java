@@ -73,7 +73,7 @@ public class ConfigurationControlManagerTest {
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
     }
 
-    private static ConfigurationValidator NOOP_VALIDATOR = (__, ___) -> {};
+    private final static ConfigurationValidator NOOP_VALIDATOR = (__, ___) -> { };
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
 
