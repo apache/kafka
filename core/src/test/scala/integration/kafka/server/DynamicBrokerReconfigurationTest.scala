@@ -1095,7 +1095,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val listeners = config.listeners
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",") + s",$listenerName://localhost:0"
-    val listenerMap = config.listenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap
       .map { case (name, protocol) => s"${name.value}:${protocol.name}" }
       .mkString(",") + s",$listenerName:${securityProtocol.name}"
 
@@ -1174,7 +1174,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .filter(e => e.listenerName.value != securityProtocol.name)
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",")
-    val listenerMap = config.listenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap
       .filter { case (listenerName, _) => listenerName.value != securityProtocol.name }
       .map { case (listenerName, protocol) => s"${listenerName.value}:${protocol.name}" }
       .mkString(",")

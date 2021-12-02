@@ -353,19 +353,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testFoo(): Unit = {
-    val props = new Properties()
-    props.put(KafkaConfig.ProcessRolesProp, "broker,controller")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.put(KafkaConfig.NodeIdProp, "1")
-    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
-    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://:9092,CONTROLLER://:9093")
-//    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "DEFAULT:PLAINTEXT,CONTROLLER:PLAINTEXT")
-//    props.put(KafkaConfig.InterBrokerListenerNameProp, "DEFAULT")
-    KafkaConfig.fromProps(props)
-  }
-
-  @Test
   def testControllerListenerNameMapsToPlaintextByDefaultForKRaft(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
@@ -374,11 +361,11 @@ class KafkaConfigTest {
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
     val controllerListenerName = new ListenerName("CONTROLLER")
     assertEquals(Some(SecurityProtocol.PLAINTEXT),
-      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(controllerListenerName))
+      KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when it is explicitly given otherwise
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
     assertEquals(Some(SecurityProtocol.SSL),
-      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(controllerListenerName))
+      KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when anything is explicitly given
     // (i.e. it is only part of the default value, even with KRaft)
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT")
@@ -388,7 +375,21 @@ class KafkaConfigTest {
     props.remove(KafkaConfig.ListenerSecurityProtocolMapProp)
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     assertEquals(Some(SecurityProtocol.SSL),
-      KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(new ListenerName("SSL")))
+      KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("SSL")))
+  }
+
+  @Test
+  def testMultipleControllerListenerNamesMapToPlaintextByDefaultForKRaft(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "controller")
+    props.put(KafkaConfig.ListenersProp, "CONTROLLER1://localhost:9092,CONTROLLER2://localhost:9093")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER1,CONTROLLER2")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    props.put(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+      KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER1")))
+    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+      KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER2")))
   }
 
   @Test
@@ -401,7 +402,7 @@ class KafkaConfigTest {
       "Error creating broker listeners from 'CONTROLLER://localhost:9092': No security protocol defined for listener CONTROLLER")
     // Valid now
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092")
-    assertEquals(None, KafkaConfig.fromProps(props).listenerSecurityProtocolMap.get(new ListenerName("CONTROLLER")))
+    assertEquals(None, KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER")))
   }
 
   @Test
@@ -435,7 +436,7 @@ class KafkaConfigTest {
       new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
       new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
     )
-    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+    assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
 
   @Test
@@ -466,7 +467,7 @@ class KafkaConfigTest {
       new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
       new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT
     )
-    assertEquals(expectedSecurityProtocolMap, config.listenerSecurityProtocolMap)
+    assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
 
   @Test
