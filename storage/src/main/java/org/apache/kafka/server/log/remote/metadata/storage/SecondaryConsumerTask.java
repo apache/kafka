@@ -106,10 +106,13 @@ public class SecondaryConsumerTask {
 
             // Compute end-offsets, if the primary consumer is already consuming then consume until the processed offset and
             // start processing from that offset when these partitions are moved to the primary consumer.
-            Map<TopicPartition, Long> targetEndOffsets = new HashMap<>(consumer.endOffsets(metadataTopicPartitions));
+            Map<TopicPartition, Long> targetOffsets = new HashMap<>();
+            consumer.endOffsets(metadataTopicPartitions).forEach(
+                (topicPartition, endOffset) -> targetOffsets.put(topicPartition, endOffset - 1));
+
             metadataPartitionToConsumedOffsets.forEach((partition, offset) -> {
                 if (metadataPartitions.contains(partition)) {
-                    targetEndOffsets.merge(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partition), offset, Math::min);
+                    targetOffsets.merge(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partition), offset, Math::min);
                 }
             });
 
@@ -130,7 +133,7 @@ public class SecondaryConsumerTask {
                     consumedOffsets.put(record.partition(), record.offset());
                 }
                 List<TopicPartition> completedPartitions = new ArrayList<>();
-                targetEndOffsets.forEach((tp, endOffset) -> {
+                targetOffsets.forEach((tp, endOffset) -> {
                     if (consumedOffsets.getOrDefault(tp.partition(), -1L) >= endOffset) {
                         remainingPartitions.remove(tp.partition());
                         completedPartitions.add(tp);
@@ -150,6 +153,9 @@ public class SecondaryConsumerTask {
             return true;
         } finally {
             lastProcessedTimestamp = time.milliseconds();
+            if (closing) {
+                closeConsumer();
+            }
         }
     }
 

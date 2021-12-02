@@ -178,7 +178,7 @@ class PrimaryConsumerTask implements Runnable, Closeable {
         } catch (Exception e) {
             log.error("Error occurred in consumer task, close:[{}]", closing, e);
         } finally {
-            closeConsumer();
+            closeConsumers();
         }
 
         log.info("Exiting from consumer task thread");
@@ -225,13 +225,17 @@ class PrimaryConsumerTask implements Runnable, Closeable {
         }
     }
 
-    private void closeConsumer() {
+    private void closeConsumers() {
+        log.info("Closing the consumer instances");
         try {
-            log.info("Closing the consumer instances");
-            consumer.close(Duration.ofSeconds(30));
             secondaryConsumerTask.closeConsumer();
         } catch (Exception e) {
-            log.error("Error encountered while closing the primary/secondary consumer", e);
+            log.error("Error encountered while closing the secondary consumer", e);
+        }
+        try {
+            consumer.close(Duration.ofSeconds(30));
+        } catch (Exception e) {
+            log.error("Error encountered while closing the primary consumer", e);
         }
     }
 
@@ -367,8 +371,17 @@ class PrimaryConsumerTask implements Runnable, Closeable {
                 // maybeWaitForPartitionsAssignment() where it waits on assignPartitionsLock. It should not wait
                 // if the closing is already set.
                 closing = true;
-                consumer.wakeup();
-                secondaryConsumerTask.close();
+                try {
+                    secondaryConsumerTask.close();
+                } catch (Exception e) {
+                    // ignore error;
+                }
+                try {
+                    consumer.wakeup();
+                } catch (Exception e) {
+                    // ignore error.
+                }
+                // Resources are closed through closeConsumers() when the thread is completed in #run() method.
                 assignmentLock.notifyAll();
                 syncCommittedDataAndOffsets(true);
             }
