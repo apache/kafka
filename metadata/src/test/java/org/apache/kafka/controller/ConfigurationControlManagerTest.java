@@ -73,14 +73,7 @@ public class ConfigurationControlManagerTest {
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
     }
 
-    static class ExampleConfigurationValidator implements ConfigurationValidator {
-        static final ExampleConfigurationValidator INSTANCE = new ExampleConfigurationValidator();
-
-        @Override
-        public void validate(ConfigResource resource, Map<String, String> config) {
-        }
-    }
-
+    private static ConfigurationValidator NOOP_VALIDATOR = (__, ___) -> {};
     static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
     static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
 
@@ -102,7 +95,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ExampleConfigurationValidator.INSTANCE);
+                Optional.empty(), NOOP_VALIDATOR);
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
@@ -161,7 +154,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ExampleConfigurationValidator.INSTANCE);
+                Optional.empty(), NOOP_VALIDATOR);
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
@@ -228,7 +221,7 @@ public class ConfigurationControlManagerTest {
                 entry("quux", "456")))));
         ConfigurationControlManager manager = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, CONFIGS, Optional.of(policy),
-                ExampleConfigurationValidator.INSTANCE);
+            NOOP_VALIDATOR);
 
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
@@ -253,7 +246,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ExampleConfigurationValidator.INSTANCE);
+                Optional.empty(), NOOP_VALIDATOR);
         assertTrue(manager.isSplittable(BROKER, "foo.bar"));
         assertFalse(manager.isSplittable(BROKER, "baz"));
         assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
@@ -266,7 +259,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ExampleConfigurationValidator.INSTANCE);
+                Optional.empty(), NOOP_VALIDATOR);
         assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
         assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
         assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
@@ -278,7 +271,7 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS,
-                Optional.empty(), ExampleConfigurationValidator.INSTANCE);
+                Optional.empty(), NOOP_VALIDATOR);
         List<ApiMessageAndVersion> expectedRecords1 = asList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
