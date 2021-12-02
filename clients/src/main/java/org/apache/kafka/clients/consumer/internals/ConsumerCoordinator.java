@@ -104,7 +104,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // of offset commit requests, which may be invoked from the heartbeat thread
     private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
 
-    private boolean isLeader = false;
     private Set<String> joinedSubscription;
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
@@ -217,6 +216,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
+
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         List<String> topics = new ArrayList<>(joinedSubscription);
@@ -350,10 +350,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
         log.debug("Executing onJoinComplete with generation {} and memberId {}", generation, memberId);
-
-        // Only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
-        if (!isLeader)
-            assignmentSnapshot = null;
 
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
@@ -607,6 +603,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
+    protected void onFollowerJoined() {
+        assignmentSnapshot = metadataSnapshot;
+    }
+
+    @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
                                                         List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
@@ -632,8 +633,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // the leader will begin watching for changes to any of the topics the group is interested in,
         // which ensures that all metadata changes will eventually be seen
         updateGroupSubscription(allSubscribedTopics);
-
-        isLeader = true;
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
 
@@ -749,8 +748,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
-        isLeader = false;
         subscriptions.resetGroupSubscription();
+        assignmentSnapshot = null;
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);

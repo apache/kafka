@@ -192,6 +192,11 @@ public abstract class AbstractCoordinator implements Closeable {
     protected abstract void onJoinPrepare(int generation, String memberId);
 
     /**
+     * TODO
+     */
+    protected void onFollowerJoined() { }
+
+    /**
      * Perform assignment for the group. This is used by the leader to push state to all the members
      * of the group (e.g. to push partition assignments in the case of the new consumer)
      * @param leaderId The id of the leader (which is this member)
@@ -672,6 +677,8 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private RequestFuture<ByteBuffer> onJoinFollower() {
+        onFollowerJoined();
+
         // send follower's sync group with an empty assignment
         SyncGroupRequest.Builder requestBuilder =
                 new SyncGroupRequest.Builder(
