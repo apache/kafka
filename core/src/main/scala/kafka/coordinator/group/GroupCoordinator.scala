@@ -1295,25 +1295,20 @@ class GroupCoordinator(val brokerId: Int,
                 error = error
               ))
             } else {
-              // If the leader re-joins the group, we give it back all the member metadata. The
-              // leader will perform an assignment based on it however as the group is in the
-              // stable state, the assignment sent via the SyncGroup will be ignored. This is
-              // important thought because it allows the leader to rebuild its internal state
-              // which is required to detect futures changes (e.g. new subscription or new
-              // partitions).
               group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                members = if (group.isLeader(newMemberId)) {
-                  group.currentMemberMetadata
-                } else {
-                  List.empty
-                },
+                members = List.empty,
                 memberId = newMemberId,
                 generationId = group.generationId,
                 protocolType = group.protocolType,
                 protocolName = group.protocolName,
-                leaderId = group.leaderOrNull,
-                error = Errors.NONE
-              ))
+                // We want to avoid current leader performing trivial assignment while the group
+                // is in stable stage, because the new assignment in leader's next sync call
+                // won't be broadcast by a stable group. This could be guaranteed by
+                // always returning the old leader id so that the current leader won't assume itself
+                // as a leader based on the returned message, since the new member.id won't match
+                // returned leader id, therefore no assignment will be performed.
+                leaderId = currentLeader,
+                error = Errors.NONE))
             }
           }, requestLocal)
         } else {
