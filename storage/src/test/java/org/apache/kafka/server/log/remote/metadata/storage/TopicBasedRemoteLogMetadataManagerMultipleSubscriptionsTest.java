@@ -69,7 +69,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     @Test
     public void testMultiplePartitionSubscriptions() throws Exception {
         // Create topics.
-        String leaderTopic = "new-leader";
+        String leaderTopic = "leader";
         HashMap<Object, Seq<Object>> assignedLeaderTopicReplicas = new HashMap<>();
         List<Object> leaderTopicReplicas = new ArrayList<>();
         // Set broker id 0 as the first entry which is taken as the leader.
@@ -79,7 +79,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         assignedLeaderTopicReplicas.put(0, JavaConverters.asScalaBuffer(leaderTopicReplicas));
         remoteLogMetadataManagerHarness.createTopic(leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas));
 
-        String followerTopic = "new-follower";
+        String followerTopic = "follower";
         HashMap<Object, Seq<Object>> assignedFollowerTopicReplicas = new HashMap<>();
         List<Object> followerTopicReplicas = new ArrayList<>();
         // Set broker id 1 as the first entry which is taken as the leader.
@@ -89,15 +89,31 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         assignedFollowerTopicReplicas.put(0, JavaConverters.asScalaBuffer(followerTopicReplicas));
         remoteLogMetadataManagerHarness.createTopic(followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas));
 
+        String topicWithNoMessages = "no-messages-topic";
+        HashMap<Object, Seq<Object>> assignedTopicReplicas = new HashMap<>();
+        List<Object> noMessagesTopicReplicas = new ArrayList<>();
+        // Set broker id 1 as the first entry which is taken as the leader.
+        noMessagesTopicReplicas.add(1);
+        noMessagesTopicReplicas.add(2);
+        noMessagesTopicReplicas.add(0);
+        assignedTopicReplicas.put(0, JavaConverters.asScalaBuffer(noMessagesTopicReplicas));
+        remoteLogMetadataManagerHarness.createTopic(topicWithNoMessages, JavaConverters.mapAsScalaMap(assignedTopicReplicas));
+
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
+        final TopicIdPartition emptyTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
 
         RemoteLogMetadataTopicPartitioner partitioner = new RemoteLogMetadataTopicPartitioner(10) {
             @Override
             public int metadataPartition(TopicIdPartition topicIdPartition) {
-                // Always return partition 0. So that, any new user partition added to RLMM will use the same metadata
-                // partition. That will make the secondary consumer assignment.
-                return 0;
+                // Always return partition 0 except for noMessagesTopicIdPartition. So that, any new user
+                // partition(other than noMessagesTopicIdPartition) added to RLMM will use the same metadata partition.
+                // That will make the secondary consumer assignment.
+                if (emptyTopicIdPartition.equals(topicIdPartition)) {
+                    return 1;
+                } else {
+                    return 0;
+                }
             }
         };
 
@@ -132,7 +148,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         Assertions.assertThrows(RemoteStorageException.class, () -> rlmm().listRemoteLogSegments(followerTopicIdPartition));
 
         // Register follower partition
-        rlmm().onPartitionLeadershipChanges(Collections.emptySet(),
+        rlmm().onPartitionLeadershipChanges(Collections.singleton(emptyTopicIdPartition),
                                                       Collections.singleton(followerTopicIdPartition));
 
         // Wait until this partition metadata is loaded by the secondary consumer and moved it to primary consumer.
