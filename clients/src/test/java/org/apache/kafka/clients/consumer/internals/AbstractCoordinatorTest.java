@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -486,6 +487,43 @@ public class AbstractCoordinatorTest {
         ensureActiveGroup(rejoinedGeneration, memberId);
     }
 
+    @Test
+    public void testRejoinReason() {
+        setupCoordinator();
+
+        String memberId = "memberId";
+        int generation = 5;
+
+        // test initial reason
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        expectJoinGroup("", "initialized abstract coordinator", generation, memberId);
+
+        // successful sync group response should reset reason
+        expectSyncGroup(generation, memberId);
+        ensureActiveGroup(generation, memberId);
+        assertEquals("", coordinator.rejoinReason());
+
+        // Force a rebalance
+        expectJoinGroup(memberId, "Manual test trigger", generation, memberId);
+        expectSyncGroup(generation, memberId);
+        coordinator.requestRejoin("Manual test trigger");
+        ensureActiveGroup(generation, memberId);
+        assertEquals("", coordinator.rejoinReason());
+
+        // max group size reached
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
+        coordinator.requestRejoin("Manual test trigger 2");
+        try {
+            coordinator.joinGroupIfNeeded(mockTime.timer(100L));
+        } catch (GroupMaxSizeReachedException e) {
+            // next join group request should contain exception message
+            expectJoinGroup(memberId, e.getMessage(), generation, memberId);
+            expectSyncGroup(generation, memberId);
+            ensureActiveGroup(generation, memberId);
+            assertEquals("", coordinator.rejoinReason());
+        }
+    }
+
     private void ensureActiveGroup(
         int generation,
         String memberId
@@ -542,7 +580,16 @@ public class AbstractCoordinatorTest {
     }
 
     private void expectJoinGroup(
+            String expectedMemberId,
+            int responseGeneration,
+            String responseMemberId
+    ) {
+        expectJoinGroup(expectedMemberId, null, responseGeneration, responseMemberId);
+    }
+
+    private void expectJoinGroup(
         String expectedMemberId,
+        String expectedReason,
         int responseGeneration,
         String responseMemberId
     ) {
@@ -559,8 +606,10 @@ public class AbstractCoordinatorTest {
                 return false;
             }
             JoinGroupRequestData joinGroupRequest = ((JoinGroupRequest) body).data();
+            boolean isReasonMatching = expectedReason == null || joinGroupRequest.reason().equals(expectedReason);
             return joinGroupRequest.memberId().equals(expectedMemberId)
-                && joinGroupRequest.protocolType().equals(PROTOCOL_TYPE);
+                && joinGroupRequest.protocolType().equals(PROTOCOL_TYPE)
+                && isReasonMatching;
         }, response);
     }
 

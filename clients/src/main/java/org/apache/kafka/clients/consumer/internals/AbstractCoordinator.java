@@ -133,6 +133,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
 
     private Node coordinator = null;
+    private String rejoinReason = "initialized abstract coordinator";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private HeartbeatThread heartbeatThread = null;
@@ -467,6 +468,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
 
                 resetJoinGroupFuture();
+                rejoinReason = exception.getMessage();
                 rejoinNeeded = true;
 
                 if (exception instanceof UnknownMemberIdException ||
@@ -542,6 +544,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
+                        .setReason(this.rejoinReason)
         );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
@@ -760,6 +763,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             } else {
                                 log.info("Successfully synced group in generation {}", generation);
                                 state = MemberState.STABLE;
+                                rejoinReason = "";
                                 rejoinNeeded = false;
                                 // record rebalance latency
                                 lastRebalanceEndMs = time.milliseconds();
@@ -998,6 +1002,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     public synchronized void requestRejoin(final String reason) {
         log.info("Request joining group due to: {}", reason);
+        this.rejoinReason = reason;
         this.rejoinNeeded = true;
     }
 
@@ -1530,6 +1535,10 @@ public abstract class AbstractCoordinator implements Closeable {
     // For testing only below
     final Heartbeat heartbeat() {
         return heartbeat;
+    }
+
+    final String rejoinReason() {
+        return rejoinReason;
     }
 
     final synchronized void setLastRebalanceTime(final long timestamp) {

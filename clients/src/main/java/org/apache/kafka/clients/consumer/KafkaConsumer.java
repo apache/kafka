@@ -2303,16 +2303,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.IllegalStateException if the consumer does not use group subscription
      */
     @Override
-    public void enforceRebalance() {
+    public void enforceRebalance(final String reason) {
         acquireAndEnsureOpen();
         try {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin("rebalance enforced by user");
+            String defaultReason = "rebalance enforced by user";
+            coordinator.requestRejoin(reason == null ? defaultReason : defaultReason + ": " + reason);
         } finally {
             release();
         }
+    }
+
+    @Override
+    public void enforceRebalance() {
+        enforceRebalance(null);
     }
 
     /**
