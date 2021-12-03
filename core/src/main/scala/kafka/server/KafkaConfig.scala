@@ -1962,20 +1962,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def effectiveListenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
-    var retval = getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
+    val mapValue = getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
       .map { case (listenerName, protocolName) =>
         ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
       }
     if (usesSelfManagedQuorum && !originals.containsKey(ListenerSecurityProtocolMapProp)) {
       // Nothing was specified explicitly, so we are using the default value; therefore, since we are using KRaft,
       // add the PLAINTEXT mappings for all controller listener names that are not security protocols
-      controllerListenerNames.filter(_.nonEmpty).foreach { cln =>
-        if (!SecurityProtocol.values().exists(_.name.equals(cln))) {
-          retval = retval.concat(Map(new ListenerName(cln) -> SecurityProtocol.PLAINTEXT))
-        }
-      }
+      mapValue ++ controllerListenerNames.filter(cln => cln.nonEmpty && !SecurityProtocol.values().exists(_.name.equals(cln))).map(
+        new ListenerName(_) -> SecurityProtocol.PLAINTEXT)
+    } else {
+      mapValue
     }
-    retval
   }
 
   // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
