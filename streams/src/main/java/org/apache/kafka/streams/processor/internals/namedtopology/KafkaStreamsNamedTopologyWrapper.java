@@ -16,10 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
+import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -27,12 +33,20 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
+
 
 /**
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
@@ -47,6 +61,8 @@ import java.util.concurrent.ConcurrentSkipListMap;
  */
 @Unstable
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
+
+    private final Logger log = LoggerFactory.getLogger(KafkaStreamsNamedTopologyWrapper.class);
 
     /**
      * An empty Kafka Streams application that allows NamedTopologies to be added at a later point
@@ -118,40 +134,115 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     /**
      * Add a new NamedTopology to a running Kafka Streams app. If multiple instances of the application are running,
-     * you should inform all of them by calling {@link #addNamedTopology(NamedTopology)} on each client in order for
+     * you should inform all of them by calling {@code #addNamedTopology(NamedTopology)} on each client in order for
      * it to begin processing the new topology.
+     * This method is not purely Async.
      *
      * @throws IllegalArgumentException if this topology name is already in use
      * @throws IllegalStateException    if streams has not been started or has already shut down
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
-    public void addNamedTopology(final NamedTopology newTopology) {
+    public AddNamedTopologyResult addNamedTopology(final NamedTopology newTopology) {
+        log.debug("Adding topology: {}", newTopology.name());
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
             throw new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
                                                    " as another of the same name already exists");
         }
-        topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder());
+        return new AddNamedTopologyResult(
+            topologyMetadata.registerAndBuildNewTopology(newTopology.internalTopologyBuilder())
+        );
     }
 
     /**
      * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
-     * running, you should inform all of them by calling {@link #removeNamedTopology(String)} on each client to ensure
+     * running, you should inform all of them by calling {@code #removeNamedTopology(String)} on each client to ensure
      * it stops processing the old topology.
+     * This method is not purely Async.
+     *
+     * @param topologyToRemove          name of the topology to be removed
+     * @param resetOffsets              whether to reset the committed offsets for any source topics
      *
      * @throws IllegalArgumentException if this topology name cannot be found
      * @throws IllegalStateException    if streams has not been started or has already shut down
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
-    public void removeNamedTopology(final String topologyToRemove) {
+    public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove, final boolean resetOffsets) {
+        log.debug("Removing topology: {}", topologyToRemove);
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {
             throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
         }
+        final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
+            .stream()
+            .flatMap(t -> {
+                final Set<TaskMetadata> tasks = new HashSet<>(t.activeTasks());
+                return tasks.stream();
+            })
+            .flatMap(t -> t.topicPartitions().stream())
+            .filter(t -> topologyMetadata.sourceTopicsForTopology(topologyToRemove).contains(t.topic()))
+            .collect(Collectors.toSet());
 
-        topologyMetadata.unregisterTopology(topologyToRemove);
+        final KafkaFuture<Void> removeTopologyFuture = topologyMetadata.unregisterTopology(topologyToRemove);
+
+        if (resetOffsets) {
+            final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            log.info("Resetting offsets for the following partitions of NamedTopology {}: {}", topologyToRemove, partitionsToReset);
+            if (!partitionsToReset.isEmpty()) {
+                removeTopologyFuture.whenComplete((v, throwable) -> {
+                    if (throwable != null) {
+                        future.completeExceptionally(throwable);
+                    }
+                    DeleteConsumerGroupOffsetsResult deleteOffsetsResult = null;
+                    while (deleteOffsetsResult == null) {
+                        try {
+                            deleteOffsetsResult = adminClient.deleteConsumerGroupOffsets(
+                                applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), partitionsToReset);
+                            deleteOffsetsResult.all().get();
+                        } catch (final InterruptedException ex) {
+                            ex.printStackTrace();
+                            break;
+                        } catch (final ExecutionException ex) {
+                            if (ex.getCause() != null &&
+                                ex.getCause() instanceof GroupSubscribedToTopicException &&
+                                ex.getCause()
+                                    .getMessage()
+                                    .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
+                                ex.printStackTrace();
+                            } else {
+                                future.completeExceptionally(ex);
+                            }
+                        }
+                        try {
+                            Thread.sleep(100);
+                        } catch (final InterruptedException ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                    future.complete(null);
+                });
+                return new RemoveNamedTopologyResult(removeTopologyFuture, future);
+            }
+        }
+        return new RemoveNamedTopologyResult(removeTopologyFuture);
+    }
+
+    /**
+     * Remove an existing NamedTopology from a running Kafka Streams app. If multiple instances of the application are
+     * running, you should inform all of them by calling {@code #removeNamedTopology(String)} on each client to ensure
+     * it stops processing the old topology.
+     * This method is not purely Async.
+     *
+     * @param topologyToRemove          name of the topology to be removed
+     *
+     * @throws IllegalArgumentException if this topology name cannot be found
+     * @throws IllegalStateException    if streams has not been started or has already shut down
+     * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
+     */
+    public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove) {
+        return removeNamedTopology(topologyToRemove, false);
     }
 
     /**
