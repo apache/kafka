@@ -147,7 +147,7 @@ public class KafkaOffsetBackingStoreTest {
 
         doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
                 capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
-                capturedNewTopic.capture(), capturedAdminSupplier.capture());
+                capturedNewTopic.capture(), capturedAdminSupplier.capture(), any(), any());
     }
 
     @After

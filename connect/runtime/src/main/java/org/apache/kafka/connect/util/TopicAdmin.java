@@ -38,12 +38,15 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -326,6 +329,41 @@ public class TopicAdmin implements AutoCloseable {
      */
     public Set<String> createTopics(NewTopic... topics) {
         return createOrFindTopics(topics).createdTopics();
+    }
+
+    /**
+     * Implements a retry logic around creating topic(s) in case it'd fail due to InvalidReplicationFactorException
+     *
+     * @param topicDescription
+     * @param timeoutMs
+     * @param backOffMs
+     * @param time
+     * @return the same as {@link TopicAdmin#createTopics(NewTopic...)}
+     */
+    public Set<String> createTopicsWithRetry(NewTopic topicDescription, long timeoutMs, long backOffMs, Time time) {
+        Timer timer = time.timer(timeoutMs);
+        do {
+            try {
+                return createTopics(topicDescription);
+            } catch (ConnectException e) {
+                if (timer.notExpired() && retryableTopicCreationException(e)) {
+                    log.info("'{}' topic creation failed due to '{}', retrying, {}ms remaining",
+                            topicDescription.name(), e.getMessage(), timer.remainingMs());
+                } else {
+                    throw e;
+                }
+            }
+            timer.sleep(backOffMs);
+        } while (timer.notExpired());
+        throw new TimeoutException("Timeout expired while trying to create topic(s)");
+    }
+
+    private boolean retryableTopicCreationException(ConnectException e) {
+        // createTopics wraps the exception into ConnectException
+        // which can be an ExecutionException from future get which was caused by InvalidReplicationFactorException
+        // or can be a TimeoutException
+        return e.getCause() instanceof ExecutionException && e.getCause().getCause() instanceof InvalidReplicationFactorException
+                || e.getCause() instanceof TimeoutException;
     }
 
     /**
