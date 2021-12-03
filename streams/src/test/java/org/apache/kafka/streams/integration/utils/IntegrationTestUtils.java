@@ -32,6 +32,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.utils.Time;
@@ -50,6 +51,8 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -103,6 +106,40 @@ public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 60 * 1000L;
     private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
+
+    /**
+     * Repeatedly runs the query until the response is valid and then return the response.
+     * <p>
+     * Validity in this case means that the response contains all the desired partitions or that
+     * it's a global response.
+     * <p>
+     * Once position bounding is generally supported, we should migrate tests to wait on the
+     * expected response position.
+     */
+    public static <R> StateQueryResult<R> iqv2WaitForPartitionsOrGlobal(
+        final KafkaStreams kafkaStreams,
+        final StateQueryRequest<R> request,
+        final Set<Integer> partitions) {
+
+        final long start = System.currentTimeMillis();
+        final long deadline = start + DEFAULT_TIMEOUT;
+
+        do {
+            final StateQueryResult<R> result = kafkaStreams.query(request);
+            if (result.getPartitionResults().keySet().containsAll(partitions)
+                || result.getGlobalResult() != null) {
+                return result;
+            } else {
+                try {
+                    Thread.sleep(100L);
+                } catch (final InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        } while (System.currentTimeMillis() < deadline);
+
+        throw new TimeoutException("The query never returned the desired partitions");
+    }
 
     /*
      * Records state transition for StreamThread

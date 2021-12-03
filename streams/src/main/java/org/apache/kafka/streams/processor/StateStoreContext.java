@@ -46,8 +46,8 @@ public interface StateStoreContext {
 
     /**
      * Return the metadata of the current topic/partition/offset if available.
-     * This is defined as the metadata of the record that is currently been
-     * processed by the StreamTask that holds the store.
+     * This is defined as the metadata of the record that is currently being
+     * processed (or was last processed) by the StreamTask that holds the store.
      * <p>
      * Note that the metadata is not defined during all store interactions, for
      * example, while the StreamTask is running a punctuation.
