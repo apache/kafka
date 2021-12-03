@@ -669,6 +669,8 @@ public class KafkaStreams implements AutoCloseable {
 
                     if (newState == GlobalStreamThread.State.RUNNING) {
                         maybeSetRunning();
+                    } if (newState == GlobalStreamThread.State.PENDING_SHUTDOWN) {
+                        setState(State.PENDING_SHUTDOWN);
                     }
                 }
             }

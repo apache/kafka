@@ -92,6 +92,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
@@ -272,12 +273,12 @@ public class KafkaStreamsTest {
             for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
-            globalThreadState.set(GlobalStreamThread.State.DEAD);
+            globalThreadState.set(DEAD);
             threadStatelistenerCapture.getValue().onChange(globalStreamThread,
                 GlobalStreamThread.State.PENDING_SHUTDOWN,
                 GlobalStreamThread.State.RUNNING);
             threadStatelistenerCapture.getValue().onChange(globalStreamThread,
-                GlobalStreamThread.State.DEAD,
+                DEAD,
                 GlobalStreamThread.State.PENDING_SHUTDOWN);
             return null;
         }).anyTimes();
@@ -525,7 +526,7 @@ public class KafkaStreamsTest {
             final GlobalStreamThread globalStreamThread = streams.globalStreamThread;
             globalStreamThread.shutdown();
             waitForCondition(
-                () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
+                () -> globalStreamThread.state() == DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
             waitForCondition(
@@ -602,11 +603,13 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldNotAddThreadWhenError() {
+    public void shouldNotAddThreadWhenError() throws Exception {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
+            streams.globalStreamThread = globalStreamThread;
             streams.start();
             globalStreamThread.shutdown();
+            //waitForCondition(() -> streams.state == State.ERROR, "");
             assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(oldSize));
         }
