@@ -301,8 +301,6 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private final Runnable shutdownErrorHook;
 
-    private long lastSeenTopologyVersion = 0L;
-
     // These must be Atomic references as they are shared and used to signal between the assignor and the stream thread
     private final AtomicInteger assignmentErrorCode;
     private final AtomicLong nextProbingRebalanceMs;
@@ -530,6 +528,7 @@ public class StreamThread extends Thread {
 
         this.time = time;
         this.topologyMetadata = topologyMetadata;
+        this.topologyMetadata.registerThread(getName());
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
@@ -908,14 +907,16 @@ public class StreamThread extends Thread {
 
     // Check if the topology has been updated since we last checked, ie via #addNamedTopology or #removeNamedTopology
     private void checkForTopologyUpdates() {
-        if (lastSeenTopologyVersion < topologyMetadata.topologyVersion() || topologyMetadata.isEmpty()) {
-            lastSeenTopologyVersion = topologyMetadata.topologyVersion();
+        if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
             taskManager.handleTopologyUpdates();
+            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
+            if (topologyMetadata.isEmpty()) {
+                mainConsumer.unsubscribe();
+            }
+            topologyMetadata.maybeNotifyTopologyVersionWaiters(getName());
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
-            // TODO KAFKA-12648 Pt.4: optimize to avoid always triggering a rebalance for each thread on every update
-            log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
             subscribeConsumer();
             mainConsumer.enforceRebalance();
         }
@@ -1163,6 +1164,8 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelMetrics(getName());
 
         setState(State.DEAD);
+
+        topologyMetadata.unregisterThread(threadMetadata.threadName());
 
         log.info("Shutdown complete");
     }
