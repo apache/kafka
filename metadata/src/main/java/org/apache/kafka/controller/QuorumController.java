@@ -140,7 +140,7 @@ public final class QuorumController implements Controller {
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
-        private ConfigurationValidator configurationValidator = (__, ___) -> { };
+        private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;

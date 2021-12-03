@@ -23,6 +23,8 @@ import java.util.Map;
 
 
 public interface ConfigurationValidator {
+    ConfigurationValidator NO_OP = (__, ___) -> { };
+
     /**
      * Throws an ApiException if a configuration is invalid for the given resource.
      *

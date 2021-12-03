@@ -41,7 +41,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
             properties.setProperty(e.getKey(), e.getValue())
           }
         })
-        if (!nullTopicConfigs.isEmpty) {
+        if (nullTopicConfigs.nonEmpty) {
           throw new InvalidRequestException("Null value not supported for topic configs : " +
             nullTopicConfigs.mkString(","))
         }
@@ -49,6 +49,8 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
       case BROKER =>
         // TODO: add broker configuration validation
       case _ =>
+        // Note: we should never handle BROKER_LOGGER resources here, since changes to
+        // those resources are not persisted in the metadata.
         throw new InvalidRequestException(s"Unknown resource type ${resource.`type`}")
     }
   }
