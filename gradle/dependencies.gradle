@@ -75,7 +75,7 @@ versions += [
   jline: "3.12.1",
   jmh: "1.32",
   hamcrest: "2.2",
-  log4j: "1.2.17",
+  log4j: "1.2.17-cp2",
   scalaLogging: "3.9.3",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
@@ -132,6 +132,7 @@ libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
+  commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -174,7 +175,7 @@ libs += [
   kafkaStreams_26: "org.apache.kafka:kafka-streams:$versions.kafka_26",
   kafkaStreams_27: "org.apache.kafka:kafka-streams:$versions.kafka_27",
   kafkaStreams_28: "org.apache.kafka:kafka-streams:$versions.kafka_28",
-  log4j: "log4j:log4j:$versions.log4j",
+  log4j: "io.confluent:confluent-log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
@@ -199,5 +200,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
