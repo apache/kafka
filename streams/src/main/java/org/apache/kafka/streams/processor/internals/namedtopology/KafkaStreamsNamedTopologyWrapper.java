@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -271,12 +272,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         return topologyMetadata.topologyDescriptionString();
     }
 
-    /**
-     * See {@link KafkaStreams#store(StoreQueryParameters)}
-     */
-    public <T> T store(final NamedTopologyStoreQueryParameters<T> storeQueryParameters) {
-        final String topologyName = storeQueryParameters.topologyName;
-        final String storeName = storeQueryParameters.storeName();
+    private void verifyTopologyStateStore(final String topologyName, final String storeName) {
         final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
         if (builder == null) {
             throw new UnknownStateStoreException(
@@ -289,6 +285,23 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                     " because no such state store exists in this topology."
             );
         }
+    }
+
+    /**
+     * See {@link KafkaStreams#store(StoreQueryParameters)}
+     */
+    public <T> T store(final NamedTopologyStoreQueryParameters<T> storeQueryParameters) {
+        final String topologyName = storeQueryParameters.topologyName;
+        final String storeName = storeQueryParameters.storeName();
+        verifyTopologyStateStore(topologyName, storeName);
         return super.store(storeQueryParameters);
+    }
+
+    /**
+     * See {@link KafkaStreams#streamsMetadataForStore(String)}
+     */
+    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) {
+        verifyTopologyStateStore(topologyName, storeName);
+        return streamsMetadataState.getAllMetadataForStore(storeName, topologyName);
     }
 }

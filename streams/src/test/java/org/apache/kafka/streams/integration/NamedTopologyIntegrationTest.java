@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -347,6 +348,11 @@ public class NamedTopologyIntegrationTest {
         final ReadOnlyKeyValueStore<String, Long> store =
             streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType("topology-1", "store", QueryableStoreTypes.keyValueStore()));
         assertThat(store.get("A"), equalTo(2L));
+
+//        Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
+        Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
+
+//        System.out.println(test1);
     }
 
     @Test

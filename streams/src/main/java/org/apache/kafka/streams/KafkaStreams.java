@@ -164,7 +164,7 @@ public class KafkaStreams implements AutoCloseable {
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;
-    private final StreamsMetadataState streamsMetadataState;
+    protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
     protected final Admin adminClient;
