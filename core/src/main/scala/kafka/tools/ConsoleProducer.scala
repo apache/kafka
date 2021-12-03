@@ -328,7 +328,7 @@ object ConsoleProducer {
           case (line, false, false) => new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
         }
       } catch {
-        case _: MatchError => onMatchError(line)
+        case _: Throwable => onMatchError(line)
       }
     }
 
