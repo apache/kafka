@@ -725,17 +725,13 @@ public class Fetcher<K, V> implements Closeable {
                             completedFetch.nextFetchOffset,
                             completedFetch.lastEpoch,
                             position.currentLeader);
-                    log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
+                    log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
+                            position, nextPosition, completedFetch.partition, partRecords.size());
                     subscriptions.position(completedFetch.partition, nextPosition);
                     positionAdvanced = true;
                     if (partRecords.isEmpty()) {
-                        log.debug(
-                                "Advanced position for partition {} without receiving any user-visible records. " 
-                                        + "This is likely due to skipping over control records in the current fetch, " 
-                                        + "and may result in the consumer returning an empty record batch when " 
-                                        + "polled before its poll timeout has elapsed.",
-                                completedFetch.partition
-                        );
+                        log.trace("Returning empty records from `poll()` " 
+                                + "since the consumer's position has advanced for at least one topic partition");
                     }
                 }
 

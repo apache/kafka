@@ -1176,7 +1176,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offset for the subscribed list of partitions
      *
      * <p>
-     * This method returns immediately if there are records available or if the position advances past control records.
+     * This method returns immediately if there are records available or if the position advances past control records
+     * or aborted transactions when isolation.level=READ_COMMITTED.
      * Otherwise, it will await the passed timeout. If the timeout expires, an empty record set will be returned.
      * Note that this method may block beyond the timeout in order to execute custom
      * {@link ConsumerRebalanceListener} callbacks.
