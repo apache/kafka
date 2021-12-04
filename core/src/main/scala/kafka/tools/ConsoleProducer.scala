@@ -211,23 +211,24 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024*100)
-    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
-      "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
-      "\tparse.key=false\n" +
-      "\tparse.headers=false\n" +
-      "\tignore.error=false\n" +
-      "Default parsing pattern when:\n" +
-      "\tparse.headers=true & parse.key=true:\n" +
-      "\t \"h1:v1,h2...\\tkey\\tvalue\"\n" +
-      "\tparse.headers=false & parse.key=true:\n" +
-      "\t \"key\\tvalue\"\n" +
-      "\tparse.headers=true & parse.key=false:\n" +
-      "\t \"h1:v1,h2...\\tvalue\"\n" +
-      "Customize pattern via (defaults shown)\n" +
-      "\tkey.separator=\\t\n" +
-      "\theaders.delimiter=\\t\n" +
-      "\theaders.separator=,\n" +
-      "\theaders.key.separator=:"
+    val propertyOpt = parser.accepts("property",
+      """A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader.
+        |Default properties include:
+        | parse.key=false
+        | parse.headers=false
+        | ignore.error=false
+        | key.separator=\t
+        | headers.delimiter=\t
+        | headers.separator=,
+        | headers.key.separator=:
+        |Default parsing pattern when:
+        | parse.headers=true & parse.key=true:
+        |  "h1:v1,h2...\tkey\tvalue"
+        | parse.headers=false & parse.key=true:
+        |  "key\tvalue"
+        | parse.headers=true & parse.key=false:
+        |  "h1:v1,h2...\tvalue"
+      """.stripMargin
       )
       .withRequiredArg
       .describedAs("prop")
