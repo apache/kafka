@@ -75,7 +75,7 @@ class LineMessageReaderTest {
     props.put("parse.key", "false")
 
     val expectedHeaders: lang.Iterable[Header] = asList(new RecordHeader("headerKey", "headerValue".getBytes()))
-    runTest(defaultTestProps, input, record(null, "value", expectedHeaders))
+    runTest(props, input, record(null, "value", expectedHeaders))
   }
 
   @Test

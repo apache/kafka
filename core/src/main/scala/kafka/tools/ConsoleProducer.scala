@@ -22,8 +22,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.lang
 import java.util.Arrays.asList
-
-
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
@@ -36,6 +34,7 @@ import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
+import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
@@ -290,6 +289,8 @@ object ConsoleProducer {
     var ignoreError = false
     var lineNumber = 0
     var printPrompt = System.console != null
+    var headerSeparatorPattern: Pattern = _
+    var headerKeySeparatorPattern: Pattern = _
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -303,34 +304,58 @@ object ConsoleProducer {
         headersDelimiter = props.getProperty("headers.delimiter")
       if (props.containsKey("headers.separator"))
         headersSeparator = props.getProperty("headers.separator")
+        headerSeparatorPattern = Pattern.compile(headersSeparator)
       if (props.containsKey("headers.key.separator"))
         headerKeySeparator = props.getProperty("headers.key.separator")
+        headerKeySeparatorPattern = Pattern.compile(headerKeySeparator)
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
-    override def readMessage() = {
+    override def readMessage(): ProducerRecord[Array[Byte],Array[Byte]] = {
       lineNumber += 1
       if (printPrompt) print(">")
       val line = reader.readLine()
       try{
         (line, parseKey, parseHeader) match {
           case (null, _, _) => null
-          case (line, true, true) =>
-            val Array(headers, key, value) = line.split("[" + headersDelimiter + keySeparator + "]")
-            new ProducerRecord(topic, null, null, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
-          case (line, true, false) =>
-            val Array(key, value) = line.split("[" + keySeparator + "]")
-            new ProducerRecord(topic, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8))
-          case (line, false, true) =>
-            val Array(headers, value) = line.split("[" + headersDelimiter + "]")
-            new ProducerRecord(topic, null, null, null, value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
-          case (line, false, false) => new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+          case (line, true, true) => parseHeaderKeyValue(line)
+          case (line, true, false) => parseKeyValue(line)
+          case (line, false, true) => parseHeaderValue(line)
+          case (line, false, false) => parseValue(line)
         }
       } catch {
         case _: Throwable => onMatchError(line)
       }
+    }
+
+    private def parseHeaderKeyValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
+      val headerIndex = line.indexOf(headersDelimiter)
+      val headers = line.substring(0, headerIndex)
+      val keyValue = line.substring(headerIndex + 1)
+      val keyIndex = keyValue.indexOf(keySeparator)
+      val key = keyValue.substring(0, keyIndex)
+      val value = keyValue.substring(keyIndex + 1)
+      new ProducerRecord(topic, null, null, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
+    }
+
+    private def parseKeyValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
+      val keyIndex = line.indexOf(keySeparator)
+      val key = line.substring(0, keyIndex)
+      val value = line.substring(keyIndex + 1)
+      new ProducerRecord(topic, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8))
+    }
+
+    private def parseHeaderValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
+      val headerIndex = line.indexOf(headersDelimiter)
+      val headers = line.substring(0, headerIndex)
+      val value = line.substring(headerIndex + 1)
+      new ProducerRecord(topic, null, null, null, value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
+    }
+
+    private def parseValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
+      new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
     }
 
     private def onMatchError(line: String): ProducerRecord[Array[Byte], Array[Byte]] = {
@@ -343,13 +368,12 @@ object ConsoleProducer {
 
     def mapHeaders(headers: String): lang.Iterable[Header] = {
       asList(
-        headers.split(headersSeparator)
-          .map(_.split(headerKeySeparator))
+        headerSeparatorPattern.split(headers)
+          .map(keyValue => headerKeySeparatorPattern.split(keyValue))
           .map(keyValue => new RecordHeader(keyValue(0), keyValue(1).getBytes(StandardCharsets.UTF_8)))
           : _*
       )
     }
-
 
     def illustratePattern(): String = {
       val valuePattern = "value"
