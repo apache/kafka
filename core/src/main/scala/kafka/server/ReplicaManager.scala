@@ -2299,10 +2299,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  /**
-   * Visible for testing
-   * @return true if we need not to retry, which means the response contains no error or only UNKNOWN_TOPIC_OR_PARTITION error
-   */
+  // Visible for testing
   def handleAlterReplicaStateResponse(result: Either[Errors, TopicPartition]): Unit = {
     result match {
       case Left(error: Errors) => error match {

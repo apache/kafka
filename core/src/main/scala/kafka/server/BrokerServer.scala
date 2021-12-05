@@ -259,15 +259,15 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
-      val alterReplicaStateChannelManager = new BrokerToControllerChannelManagerImpl(
+      val alterReplicaStateChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
         time = time,
         metrics = metrics,
         config = config,
-        channelName = "alterReplicaStateChannel",
+        channelName = "alterReplicaState",
         threadNamePrefix = threadNamePrefix,
         retryTimeoutMs = Long.MaxValue)
-      if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported) {
+      if (config.interBrokerProtocolVersion.isKRaftAlterReplicaStateSupported) {
         alterReplicaStateChannelManager.start()
       }
 

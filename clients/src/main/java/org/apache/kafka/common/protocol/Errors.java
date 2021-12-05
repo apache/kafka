@@ -366,7 +366,10 @@ public enum Errors {
     INCONSISTENT_CLUSTER_ID(104, "The clusterId in the request does not match that found on the server", InconsistentClusterIdException::new),
     TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found", TransactionalIdNotFoundException::new),
     FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage", FetchSessionTopicIdException::new),
-    UNKNOWN_REPLICA_STATE(107, "Replica state change only support OfflineState, see ReplicaState.state ", UnknownReplicaStateException::new);
+    UNKNOWN_REPLICA_STATE(
+        107,
+        "Replica state change only supports OfflineState, see AlterReplicaStateRequest.OFFLINE_REPLICA_STATE",
+         UnknownReplicaStateException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

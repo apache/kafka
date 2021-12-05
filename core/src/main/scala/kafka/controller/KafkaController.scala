@@ -2445,11 +2445,11 @@ class KafkaController(val config: KafkaConfig,
 
   def alterReplicaState(alterReplicaStateRequest: AlterReplicaStateRequest,
                         callback: AlterReplicaStateResponseData => Unit): Unit = {
-    val alterReplicaStateRequestDataData = alterReplicaStateRequest.data()
-    val newState = alterReplicaStateRequestDataData.newState()
-    val reason = alterReplicaStateRequestDataData.reason()
+    val alterReplicaStateRequestData = alterReplicaStateRequest.data()
+    val newState = alterReplicaStateRequestData.newState()
+    val reason = alterReplicaStateRequestData.reason()
     val replicasToAlterState = mutable.Set[TopicPartition]()
-    alterReplicaStateRequestDataData.topics.forEach { topicReq =>
+    alterReplicaStateRequestData.topics.forEach { topicReq =>
       topicReq.partitions.forEach { partitionReq =>
         val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
         replicasToAlterState.add(tp)
@@ -2488,8 +2488,8 @@ class KafkaController(val config: KafkaConfig,
       callback.apply(resp)
     }
 
-    eventManager.put(AlterReplicaStateReceived(alterReplicaStateRequestDataData.brokerId,
-      alterReplicaStateRequestDataData.brokerEpoch, replicasToAlterState, newState, reason, responseCallback))
+    eventManager.put(AlterReplicaStateReceived(alterReplicaStateRequestData.brokerId,
+      alterReplicaStateRequestData.brokerEpoch, replicasToAlterState, newState, reason, responseCallback))
   }
 
   def processAlterReplicaState(brokerId: Int, brokerEpoch: Long,

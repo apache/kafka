@@ -319,15 +319,15 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
-        val alterReplicaStateChannelManager = new BrokerToControllerChannelManagerImpl(
+        val alterReplicaStateChannelManager = BrokerToControllerChannelManager(
           controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
           time = time,
           metrics = metrics,
           config = config,
-          channelName = "alterReplicaStateChannel",
+          channelName = "alterReplicaState",
           threadNamePrefix = threadNamePrefix,
           retryTimeoutMs = Long.MaxValue)
-        if (config.interBrokerProtocolVersion >= kafka.api.KAFKA_3_0_IV1) {
+        if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported) {
           alterReplicaStateChannelManager.start()
         }
 
