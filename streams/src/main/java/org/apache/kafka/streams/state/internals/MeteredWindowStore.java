@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -33,14 +34,26 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -61,6 +74,19 @@ public class MeteredWindowStore<K, V>
     private Sensor e2eLatencySensor;
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
+
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, QueryHandler> queryHandlers =
+            mkMap(
+                    mkEntry(
+                            WindowRangeQuery.class,
+                            (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
+                    ),
+                    mkEntry(
+                            WindowKeyQuery.class,
+                            (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(query, positionBound, collectExecutionInfo)
+                    )
+            );
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
@@ -304,8 +330,96 @@ public class MeteredWindowStore<K, V>
         }
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final boolean collectExecutionInfo) {
+        final long start = time.nanoseconds();
+        final QueryResult<R> result;
+
+        final QueryHandler handler = queryHandlers.get(query.getClass());
+        if (handler == null) {
+            result = wrapped().query(query, positionBound, collectExecutionInfo);
+            if (collectExecutionInfo) {
+                result.addExecutionInfo(
+                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    collectExecutionInfo,
+                    this
+            );
+            if (collectExecutionInfo) {
+                result.addExecutionInfo(
+                        "Handled in " + getClass() + " with serdes "
+                                + serdes + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final boolean collectExecutionInfo) {
+        final QueryResult<R> result;
+        final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
+        if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery = WindowRangeQuery.withWindowStartRange(typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+            if (rawResult.isSuccess()) {
+                final MeteredWindowedKeyValueIterator typedResult = new MeteredWindowedKeyValueIterator(rawResult.getResult(),
+                        fetchSensor,
+                        streamsMetrics,
+                        serdes,
+                        time);
+                final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult = QueryResult.forResult(typedResult);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            result = null;
+        }
+        return result;
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                           final PositionBound positionBound,
+                                           final boolean collectExecutionInfo) {
+        final QueryResult<R> queryResult;
+        final WindowKeyQuery<K, V> typedQuery = (WindowKeyQuery<K, V>) query;
+        if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
+            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery = WindowKeyQuery.withKeyAndWindowBounds(keyBytes(typedQuery.getKey()), typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+            if (rawResult.isSuccess()) {
+                final MeteredWindowStoreIterator typedResult = new MeteredWindowStoreIterator<V>(rawResult.getResult(),
+                        fetchSensor,
+                        streamsMetrics,
+                        serdes,
+                        time);
+                QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult = QueryResult.forResult(typedResult);
+                queryResult = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                queryResult = (QueryResult<R>) rawResult;
+            }
+        } else {
+            queryResult = null;
+        }
+        return queryResult;
+    }
+
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    protected V outerValue(final byte[] value) {
+        return value != null ? serdes.valueFrom(value) : null;
     }
 
     private void maybeRecordE2ELatency() {

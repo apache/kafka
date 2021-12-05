@@ -33,6 +33,8 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -40,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -350,9 +353,35 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return open;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
+
+        if (query instanceof WindowKeyQuery) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
+            if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
+                final Bytes key = windowKeyQuery.getKey();
+                final Instant lower = windowKeyQuery.getTimeFrom().get();
+                final Instant upper = windowKeyQuery.getTimeTo().get();
+                final WindowStoreIterator<byte[]> iterator = this.fetch(key, lower, upper);
+                final R result = (R) iterator;
+                final QueryResult<R> queryResult = QueryResult.forResult(result);
+                return queryResult;
+            }
+        } else if (query instanceof WindowRangeQuery) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            if (windowRangeQuery.getTimeFrom().isPresent() &&
+                    windowRangeQuery.getTimeTo().isPresent()) {
+                final Instant windowLower = windowRangeQuery.getTimeFrom().get();
+                final Instant windowUpper = windowRangeQuery.getTimeTo().get();
+                final KeyValueIterator<Windowed<Bytes>, byte[]> kvIterator = this.fetchAll(windowLower, windowUpper);
+                final R result = (R) kvIterator;
+                final QueryResult<R> queryResult = QueryResult.forResult(result);
+                return queryResult;
+            }
+        }
+
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,

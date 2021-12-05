@@ -24,6 +24,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -53,13 +54,25 @@ public class RocksDBSessionStore
     @Override
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
+
+        if (query instanceof WindowRangeQuery) {
+            @SuppressWarnings("unchecked") final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            if (windowRangeQuery.getKey().isPresent()) {
+                final Bytes key = windowRangeQuery.getKey().get();
+                final KeyValueIterator<Windowed<Bytes>, byte[]> keyValueIterator = this.fetch(key);
+                @SuppressWarnings("unchecked") final R result = (R) keyValueIterator;
+                final QueryResult<R> queryResult = QueryResult.forResult(result);
+                return queryResult;
+            }
+        }
+
         return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            collectExecutionInfo,
-            this,
-            position,
-            stateStoreContext.taskId().partition()
+                query,
+                positionBound,
+                collectExecutionInfo,
+                this,
+                position,
+                stateStoreContext.taskId().partition()
         );
     }
 
