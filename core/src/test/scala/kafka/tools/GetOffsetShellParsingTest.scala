@@ -28,202 +28,202 @@ class GetOffsetShellParsingTest {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForTopicName(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList("test", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertFalse(topicFilter.apply("test1"))
-    assertFalse(topicFilter.apply("__consumer_offsets"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("test1"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertFalse(partitionFilter.apply(partitionInfo("test1", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForInternalTopicName(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList("__consumer_offsets", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList("__consumer_offsets", excludeInternal)
 
-    assertNotEquals(excludeInternal, topicFilter.apply("__consumer_offsets"))
-    assertFalse(topicFilter.apply("test1"))
-    assertFalse(topicFilter.apply("test2"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("test1"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("test2"))
 
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 1)))
-    assertFalse(partitionFilter.apply(partitionInfo("test1", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 0)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 1)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 0)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForTopicNameList(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList("test,test1,__consumer_offsets", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test,test1,__consumer_offsets", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertFalse(topicFilter.apply("test2"))
-    assertNotEquals(excludeInternal, topicFilter.apply("__consumer_offsets"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("test2"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 1)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 0)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 1)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 0)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForRegex(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("test2"))
-    assertFalse(topicFilter.apply("__consumer_offsets"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test2"))
+    assertFalse(topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test2", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForPartitionIndexSpec(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":0", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":0", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("test2"))
-    assertNotEquals(excludeInternal, topicFilter.apply("__consumer_offsets"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test2"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 1)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 1)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 1)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForPartitionRangeSpec(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("test2"))
-    assertNotEquals(excludeInternal, topicFilter.apply("__consumer_offsets"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test2"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 3)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 3)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 3)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 3)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForPartitionLowerBoundSpec(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("test2"))
-    assertNotEquals(excludeInternal, "__consumer_offsets")
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test2"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("test2", 0)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 0)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterForPartitionUpperBoundSpec(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternal)
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("test2"))
-    assertTrue(topicFilter.apply("test3"))
-    assertNotEquals(excludeInternal, topicFilter.apply("__consumer_offsets"))
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternal)
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test2"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test3"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test2", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("test3", 3)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test2", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test3", 3)))
 
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 3)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 3)))
   }
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testTopicPartitionFilterComplex(excludeInternal: Boolean): Unit = {
-    val (topicFilter, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*:0,__consumer_offsets:1-2,.*:3", excludeInternal)
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*:0,__consumer_offsets:1-2,.*:3", excludeInternal)
 
-    assertTrue(topicFilter.apply("test"))
-    assertTrue(topicFilter.apply("test1"))
-    assertTrue(topicFilter.apply("custom"))
-    assertNotEquals(excludeInternal, "__consumer_offsets")
+    assertTrue(topicPartitionFilter.isTopicAllowed("test"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("test1"))
+    assertTrue(topicPartitionFilter.isTopicAllowed("custom"))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isTopicAllowed("__consumer_offsets"))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
 
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test1", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("test1", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test1", 1)))
 
-    assertTrue(partitionFilter.apply(partitionInfo("custom", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("custom", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("custom", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("custom", 0)))
 
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 1)))
-    assertNotEquals(excludeInternal, partitionFilter.apply(partitionInfo("__consumer_offsets", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("__consumer_offsets", 2)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 1)))
+    assertNotEquals(excludeInternal, topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("__consumer_offsets", 2)))
   }
 
   @Test
   def testPartitionFilterForSingleIndex(): Unit = {
-    val (_, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1", excludeInternalTopics = false)
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 2)))
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1", excludeInternalTopics = false)
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 2)))
   }
 
   @Test
   def testPartitionFilterForRange(): Unit = {
-    val (_, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternalTopics = false)
-    assertFalse(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 4)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 5)))
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternalTopics = false)
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 4)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 5)))
   }
 
   @Test
   def testPartitionFilterForLowerBound(): Unit = {
-    val (_, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":3-", excludeInternalTopics = false)
-    assertFalse(partitionFilter.apply(partitionInfo("test", 0)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 1)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 2)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 3)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 4)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 5)))
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":3-", excludeInternalTopics = false)
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 2)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 3)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 4)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 5)))
   }
 
   @Test
   def testPartitionFilterForUpperBound(): Unit = {
-    val (_, partitionFilter) = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternalTopics = false)
-    assertTrue(partitionFilter.apply(partitionInfo("test", 0)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 1)))
-    assertTrue(partitionFilter.apply(partitionInfo("test", 2)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 3)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 4)))
-    assertFalse(partitionFilter.apply(partitionInfo("test", 5)))
+    val topicPartitionFilter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternalTopics = false)
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 0)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 4)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("test", 5)))
   }
 
   @Test
