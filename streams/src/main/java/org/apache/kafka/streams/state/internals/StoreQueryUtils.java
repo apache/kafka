@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -54,7 +55,8 @@ public final class StoreQueryUtils {
         );
     }
 
-    private static final Map<Class<?>, QueryHandler> QUERY_HANDLER_MAP =
+    @SuppressWarnings("rawtypes")
+    private static final Map<Class, QueryHandler> QUERY_HANDLER_MAP =
         mkMap(
             mkEntry(
                 PingQuery.class,
@@ -63,13 +65,16 @@ public final class StoreQueryUtils {
             mkEntry(
                 RangeQuery.class,
                 StoreQueryUtils::runRangeQuery
+            ),
+            mkEntry(KeyQuery.class,
+                    StoreQueryUtils::runKeyQuery
             )
         );
 
     // make this class uninstantiable
+
     private StoreQueryUtils() {
     }
-
     @SuppressWarnings("unchecked")
     public static <R> QueryResult<R> handleBasicQueries(
         final Query<R> query,
@@ -153,7 +158,7 @@ public final class StoreQueryUtils {
         final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
         final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
         final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
-        KeyValueIterator<Bytes, byte[]> iterator = null;
+        final KeyValueIterator<Bytes, byte[]> iterator;
         try {
             if (!lowerRange.isPresent() && !upperRange.isPresent()) {
                 iterator = kvStore.all();
@@ -162,12 +167,36 @@ public final class StoreQueryUtils {
             }
             final R result = (R) iterator;
             return QueryResult.forResult(result);
-        } catch (final Throwable t) {
-            final String message = parseStoreException(t, store, query);
+        } catch (final Exception e) {
+            final String message = parseStoreException(e, store, query);
             return QueryResult.forFailure(
                 FailureReason.STORE_EXCEPTION,
                 message
             );
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                                  final PositionBound positionBound,
+                                                  final boolean collectExecutionInfo,
+                                                  final StateStore store) {
+        if (store instanceof KeyValueStore) {
+            final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
+            final KeyValueStore<Bytes, byte[]> keyValueStore =
+                (KeyValueStore<Bytes, byte[]>) store;
+            try {
+                final byte[] bytes = keyValueStore.get(rawKeyQuery.getKey());
+                return (QueryResult<R>) QueryResult.forResult(bytes);
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
+            }
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
         }
     }
 
