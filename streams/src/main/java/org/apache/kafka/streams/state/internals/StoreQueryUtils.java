@@ -19,14 +19,72 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RawKeyQuery;
+import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
 public final class StoreQueryUtils {
+
+    /**
+     * a utility interface to facilitate stores' query dispatch logic,
+     * allowing them to generically store query execution logic as the values
+     * in a map.
+     */
+    @FunctionalInterface
+    public interface QueryHandler {
+        QueryResult<?> apply(
+            final Query<?> query,
+            final PositionBound positionBound,
+            final boolean collectExecutionInfo,
+            final StateStore store
+        );
+    }
+
+
+    private static Map<Class, QueryHandler> queryHandlers =
+        mkMap(
+            mkEntry(
+                PingQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> QueryResult.forResult(true)
+            ),
+            mkEntry(RawKeyQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> {
+                    if (store instanceof KeyValueStore) {
+                        final RawKeyQuery rawKeyQuery = (RawKeyQuery) query;
+                        final KeyValueStore keyValueStore = (KeyValueStore) store;
+                        try {
+                            @SuppressWarnings("unchecked") final byte[] bytes =
+                                (byte[]) keyValueStore.get(rawKeyQuery.getKey());
+                            return QueryResult.forResult(bytes);
+                        } catch (final Throwable t) {
+                            final StringWriter stringWriter = new StringWriter();
+                            final PrintWriter printWriter = new PrintWriter(stringWriter);
+                            printWriter.println(
+                                store.getClass() + " failed to handle query " + query + ":");
+                            t.printStackTrace(printWriter);
+                            printWriter.flush();
+                            final String message = stringWriter.toString();
+                            return QueryResult.forFailure(
+                                FailureReason.STORE_EXCEPTION,
+                                message
+                            );
+                        }
+                    } else {
+                        return QueryResult.forUnknownQueryType(query, store);
+                    }
+                })
+        );
 
     // make this class uninstantiable
     private StoreQueryUtils() {
@@ -42,16 +100,21 @@ public final class StoreQueryUtils {
         final int partition
     ) {
 
-        final QueryResult<R> result;
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        if (query instanceof PingQuery) {
-            if (!isPermitted(position, positionBound, partition)) {
-                result = QueryResult.notUpToBound(position, positionBound, partition);
-            } else {
-                result = (QueryResult<R>) QueryResult.forResult(true);
-            }
-        } else {
+        final QueryResult<R> result;
+
+        final QueryHandler handler = queryHandlers.get(query.getClass());
+        if (handler == null) {
             result = QueryResult.forUnknownQueryType(query, store);
+        } else if (!isPermitted(position, positionBound, partition)) {
+            result = QueryResult.notUpToBound(position, positionBound, partition);
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                query,
+                positionBound,
+                collectExecutionInfo,
+                store
+            );
         }
         if (collectExecutionInfo) {
             result.addExecutionInfo(

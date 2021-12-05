@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -48,6 +49,7 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.PingQuery;
@@ -77,6 +79,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
@@ -122,6 +125,11 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         GLOBAL_IN_MEMORY_LRU {
             @Override
@@ -133,6 +141,11 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         GLOBAL_ROCKS_KV {
             @Override
@@ -141,7 +154,17 @@ public class IQv2StoreIntegrationTest {
             }
 
             @Override
+            public boolean timestamped() {
+                return false;
+            }
+
+            @Override
             public boolean global() {
+                return true;
+            }
+
+            @Override
+            public boolean keyValue() {
                 return true;
             }
         },
@@ -155,11 +178,21 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         IN_MEMORY_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryKeyValueStore(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
             }
         },
         IN_MEMORY_LRU {
@@ -167,17 +200,37 @@ public class IQv2StoreIntegrationTest {
             public StoreSupplier<?> supplier() {
                 return Stores.lruMap(STORE_NAME, 100);
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         ROCKS_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentKeyValueStore(STORE_NAME);
             }
+
+            @Override
+            public boolean timestamped() {
+                return false;
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         TIME_ROCKS_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedKeyValueStore(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
             }
         },
         IN_MEMORY_WINDOW {
@@ -216,7 +269,15 @@ public class IQv2StoreIntegrationTest {
 
         public abstract StoreSupplier<?> supplier();
 
+        public boolean timestamped() {
+            return true; // most stores are timestamped
+        };
+
         public boolean global() {
+            return false;
+        }
+
+        public boolean keyValue() {
             return false;
         }
     }
@@ -426,6 +487,22 @@ public class IQv2StoreIntegrationTest {
             shouldHandlePingQuery();
             shouldCollectExecutionInfo();
             shouldCollectExecutionInfoUnderFailure();
+
+            if (storeToTest.keyValue()) {
+                if (storeToTest.timestamped()) {
+                    shouldHandleKeyQuery(
+                        2,
+                        (Function<ValueAndTimestamp<Integer>, Integer>) ValueAndTimestamp::value,
+                        2
+                    );
+                } else {
+                    shouldHandleKeyQuery(
+                        2,
+                        Function.identity(),
+                        2
+                    );
+                }
+            }
         }
     }
 
@@ -511,6 +588,43 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.getExecutionInfo(), is(empty()));
             });
         assertThat(result.getPosition(), is(INPUT_POSITION));
+    }
+
+    public <V> void shouldHandleKeyQuery(
+        final Integer key,
+        final Function<V, Integer> valueExtactor,
+        final Integer expectedValue) {
+
+        final KeyQuery<Integer, V> query = KeyQuery.withKey(key);
+        final StateQueryRequest<V> request =
+            inStore(STORE_NAME)
+                .withQuery(query)
+                .withPartitions(mkSet(0, 1))
+                .withPositionBound(PositionBound.at(INPUT_POSITION));
+
+        final StateQueryResult<V> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<V> queryResult =
+            result.getGlobalResult() != null
+                ? result.getGlobalResult()
+                : result.getOnlyPartitionResult();
+        final boolean failure = queryResult.isFailure();
+        if (failure) {
+            throw new AssertionError(queryResult.toString());
+        }
+        assertThat(queryResult.isSuccess(), is(true));
+
+        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
+        assertThrows(IllegalArgumentException.class,
+            queryResult::getFailureMessage);
+
+        final V result1 = queryResult.getResult();
+        final Integer integer = valueExtactor.apply(result1);
+        assertThat(integer, is(expectedValue));
+
+        assertThat(queryResult.getExecutionInfo(), is(empty()));
+
     }
 
     public void shouldCollectExecutionInfo() {

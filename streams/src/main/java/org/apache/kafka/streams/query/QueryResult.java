@@ -29,10 +29,10 @@ import java.util.List;
  */
 public final class QueryResult<R> {
 
-    private final List<String> executionInfo = new LinkedList<>();
     private final FailureReason failureReason;
     private final String failure;
     private final R result;
+    private List<String> executionInfo = new LinkedList<>();
     private Position position;
 
     private QueryResult(final R result) {
@@ -195,6 +195,18 @@ public final class QueryResult<R> {
                     + failure);
         }
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <V> QueryResult<V> swapResult(final V value) {
+        if (isFailure()) {
+            return (QueryResult<V>) this;
+        } else {
+            final QueryResult<V> result = new QueryResult<>(value);
+            result.executionInfo = executionInfo;
+            result.position = position;
+            return result;
+        }
     }
 
     @Override
