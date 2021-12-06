@@ -95,6 +95,7 @@ class TieredReplicationTest(ReplicationTest):
             [config_property.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME, "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager"],
             [config_property.REMOTE_LOG_METADATA_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_METADATA_MANAGER_PREFIX_CONFIG],
             [config_property.REMOTE_LOG_METADATA_TOPIC_NUM_PARTITIONS, "5"],
+            [config_property.REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS, "2000"],
 
             [config_property.REMOTE_LOG_STORAGE_MANAGER_IMPL_PREFIX, config_property.REMOTE_LOG_STORAGE_MANAGER_PREFIX_CONFIG],
             [config_property.HDFS_BASE_DIR, "/test"],

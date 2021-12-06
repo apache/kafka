@@ -104,6 +104,7 @@ class PrimaryConsumerTask implements Runnable, Closeable {
                                RemotePartitionMetadataEventHandler handler,
                                RemoteLogMetadataTopicPartitioner partitioner,
                                Path committedOffsetsPath,
+                               long secondaryConsumerSubscriptionIntervalMs,
                                Time time,
                                long offsetSyncIntervalMs) {
         this.handler = Objects.requireNonNull(handler);
@@ -112,7 +113,7 @@ class PrimaryConsumerTask implements Runnable, Closeable {
         this.offsetSyncIntervalMs = offsetSyncIntervalMs;
 
         consumer = createPrimaryConsumer(consumerProperties);
-        secondaryConsumerTask = new SecondaryConsumerTask(consumerProperties, time, partitioner, serde, handler,
+        secondaryConsumerTask = new SecondaryConsumerTask(consumerProperties, secondaryConsumerSubscriptionIntervalMs, time, partitioner, serde, handler,
                 POLL_INTERVAL_MS);
         initialize(committedOffsetsPath);
     }
@@ -121,7 +122,7 @@ class PrimaryConsumerTask implements Runnable, Closeable {
         Map<String, Object> props = new HashMap<>(consumerProperties);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG,
                 props.getOrDefault(CommonClientConfigs.CLIENT_ID_CONFIG, "rlmm_consumer_") + " _primary");
-        return new KafkaConsumer<>(consumerProperties);
+        return new KafkaConsumer<>(props);
     }
 
     private void initialize(Path committedOffsetsPath) {

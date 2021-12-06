@@ -50,11 +50,13 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.num.partitions";
     public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP = "remote.log.metadata.topic.retention.ms";
     public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP = "remote.log.metadata.publish.wait.ms";
+    public static final String REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_PROP = "remote.log.metadata.secondary.consumer.subscription.interval.ms";
 
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 50;
     public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS = -1L;
     public static final short DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
     public static final long DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS = 120 * 1000L;
+    public static final long DEFAULT_REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS = 120 * 1000L;
 
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor of remote log metadata Topic.";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC = "The number of partitions for remote log metadata Topic.";
@@ -64,6 +66,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             "tiered storage in the cluster.";
     public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC = "The amount of time in milli seconds to wait for the local consumer to " +
             "receive the published event.";
+    public static final String REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_DOC = "The interval amount of time in milli seconds " +
+            "to subscribe with the updated subscriptions by the secondary consumer.";
 
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
@@ -76,15 +80,37 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
 
     private static final ConfigDef CONFIG = new ConfigDef();
+
     static {
-        CONFIG.define(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, SHORT, DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR, atLeast(1), LOW,
+        CONFIG.define(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP,
+                      SHORT,
+                      DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR,
+                      atLeast(1),
+                      LOW,
                       REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC)
-              .define(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, INT, DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS, atLeast(1), LOW,
-                      REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC)
-              .define(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS, LOW,
-                      REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_DOC)
-              .define(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS, atLeast(0), LOW,
-                      REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC);
+                .define(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS,
+                        atLeast(1),
+                        LOW,
+                        REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC)
+                .define(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS,
+                        LOW,
+                        REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_DOC)
+                .define(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS,
+                        atLeast(0),
+                        LOW,
+                        REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC)
+                .define(REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS,
+                        atLeast(1),
+                        LOW,
+                        REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_DOC);
     }
 
     private final String clientIdPrefix;
@@ -94,6 +120,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private final long consumeWaitMs;
     private final long metadataTopicRetentionMs;
     private final short metadataTopicReplicationFactor;
+    private final long secondaryConsumerSubscriptionIntervalMs;
 
     private Map<String, Object> consumerProps;
     private Map<String, Object> producerProps;
@@ -112,6 +139,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         logDir = getLogDirectory(props);
 
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
+        secondaryConsumerSubscriptionIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_PROP);
         metadataTopicPartitionsCount = (int) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         metadataTopicReplicationFactor = (short) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP);
         metadataTopicRetentionMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP);
@@ -175,6 +203,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return logDir;
     }
 
+    public long secondaryConsumerSubscriptionIntervalMs() {
+        return secondaryConsumerSubscriptionIntervalMs;
+    }
+
     public Map<String, Object> consumerProperties() {
         return consumerProps;
     }
@@ -214,6 +246,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicPartitionsCount=" + metadataTopicPartitionsCount +
                 ", bootstrapServers='" + bootstrapServers + '\'' +
                 ", consumeWaitMs=" + consumeWaitMs +
+                ", secondaryConsumerSubscriptionIntervalMs=" + secondaryConsumerSubscriptionIntervalMs +
                 ", metadataTopicRetentionMillis=" + metadataTopicRetentionMs +
                 ", consumerProps=" + consumerProps +
                 ", producerProps=" + producerProps +

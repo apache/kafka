@@ -67,6 +67,10 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     overridingProps.setProperty(
       metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP), brokerCount.toString)
 
+    // Set secondary consumer subscription interval as 2 secs.
+    overridingProps.setProperty(metadataConfigPrefix(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS_PROP),
+      2000.toString);
+
     //
     // This configuration ensures inactive log segments are deleted fast enough so that
     // the integration tests can confirm a given log segment is present only in the second-tier storage.
