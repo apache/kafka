@@ -42,10 +42,10 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 
 public class SecondaryConsumerTask {
     private static final Logger log = LoggerFactory.getLogger(SecondaryConsumerTask.class);
-    private static final long SECONDARY_CONSUMPTION_CHECK_INTERVAL_MS = 2_000L;
 
     private final KafkaConsumer<byte[], byte[]> consumer;
     private long lastProcessedTimestamp;
+    private final long subscriptionIntervalMs;
     private final Time time;
     private final RemoteLogMetadataTopicPartitioner partitioner;
     private final RemoteLogMetadataSerde serde;
@@ -57,12 +57,14 @@ public class SecondaryConsumerTask {
     private final UserPartitions userPartitions = new UserPartitions();
 
     public SecondaryConsumerTask(Map<String, Object> consumerProperties,
+                                 long subscriptionIntervalMs,
                                  Time time,
                                  RemoteLogMetadataTopicPartitioner partitioner,
                                  RemoteLogMetadataSerde serde,
                                  RemotePartitionMetadataEventHandler handler,
                                  long pollIntervalMs) {
         this.consumer = createSecondaryConsumer(consumerProperties);
+        this.subscriptionIntervalMs = subscriptionIntervalMs;
         this.time = time;
         this.partitioner = partitioner;
         this.serde = serde;
@@ -75,7 +77,7 @@ public class SecondaryConsumerTask {
         Map<String, Object> props = new HashMap<>(consumerProperties);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG,
                   props.getOrDefault(CommonClientConfigs.CLIENT_ID_CONFIG, "rlmm_consumer_") + " _secondary");
-        return new KafkaConsumer<>(consumerProperties);
+        return new KafkaConsumer<>(props);
     }
 
     public boolean maybeConsumeFromSecondaryConsumer(Map<Integer, Long> metadataPartitionToConsumedOffsets,
@@ -83,7 +85,7 @@ public class SecondaryConsumerTask {
         // If there are no partitions remaining for secondary consumption, then return false. So that the primary
         // consumer can start consuming.
         if (userPartitions.isEmpty() ||
-                (time.milliseconds() - lastProcessedTimestamp) < SECONDARY_CONSUMPTION_CHECK_INTERVAL_MS) {
+                (time.milliseconds() - lastProcessedTimestamp) < subscriptionIntervalMs) {
             // Nothing to consume with the secondary consumer for now, return true indicating to consume from
             // the primary consumer.
             return true;
