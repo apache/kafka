@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializati
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -268,7 +269,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         assertThat(versionHeader.equals(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY), is(true));
         final Header vectorHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         assertThat(vectorHeader, is(notNullValue()));
-        final Position position = Position.deserialize(ByteBuffer.wrap(vectorHeader.value()));
+        final Position position = PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value()));
         assertThat(position.getBound(INPUT_TOPIC_NAME), is(notNullValue()));
         assertThat(position.getBound(INPUT_TOPIC_NAME), hasEntry(0, 100L));
 

@@ -24,11 +24,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-<<<<<<< HEAD
 import org.apache.kafka.streams.query.Position;
-=======
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
->>>>>>> 63ea5e639b... fix test
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;

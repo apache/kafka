@@ -24,12 +24,14 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
@@ -52,6 +54,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final KeySchema keySchema;
 
     private ProcessorContext context;
+    private StateStoreContext stateStoreContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
@@ -94,11 +97,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(key, key, from, to),
-            binaryFrom,
-            binaryTo,
-            forward);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(key, key, from, to),
+                binaryFrom,
+                binaryTo,
+                forward);
     }
 
     @Override
@@ -124,9 +127,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                           final boolean forward) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    "This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
@@ -136,11 +139,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final Bytes binaryTo = keyTo == null ? null : keySchema.upperRange(keyTo, to);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(keyFrom, keyTo, from, to),
-            binaryFrom,
-            binaryTo,
-            forward);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(keyFrom, keyTo, from, to),
+                binaryFrom,
+                binaryTo,
+                forward);
     }
 
     @Override
@@ -148,11 +151,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final List<S> searchSpace = segments.allSegments(true);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
-            null,
-            null,
-            true);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                null,
+                null,
+                true);
     }
 
     @Override
@@ -160,11 +163,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final List<S> searchSpace = segments.allSegments(false);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
-            null,
-            null,
-            false);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                null,
+                null,
+                false);
     }
 
     @Override
@@ -173,11 +176,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(null, null, timeFrom, timeTo),
-            null,
-            null,
-            true);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                null,
+                null,
+                true);
     }
 
     @Override
@@ -186,11 +189,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
 
         return new SegmentIterator<>(
-            searchSpace.iterator(),
-            keySchema.hasNextCondition(null, null, timeFrom, timeTo),
-            null,
-            null,
-            false);
+                searchSpace.iterator(),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                null,
+                null,
+                false);
     }
 
     @Override
@@ -224,9 +227,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, ProcessorContextUtils.currentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
-            if (context instanceof InternalProcessorContext) {
-                StoreUtils.updatePosition(position, (InternalProcessorContext) context);
-            }
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
             segment.put(key, value);
         }
     }
@@ -256,9 +257,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final String taskName = context.taskId().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            threadId,
-            taskName,
-            metrics
+                threadId,
+                taskName,
+                metrics
         );
 
         segments.openExisting(this.context, observedStreamTime);
@@ -272,6 +273,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        init(StoreToProcessorContextAdapter.adapt(context), root);
+        this.stateStoreContext = context;
     }
 
     @Override
@@ -329,7 +336,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
-                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(record, consistencyEnabled, position);
+                position = ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                        record, consistencyEnabled, position);
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);

@@ -21,6 +21,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,18 +40,19 @@ public class ChangelogRecordDeserializationHelper {
     public static final RecordHeader CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY = new RecordHeader(
             CHANGELOG_VERSION_HEADER_KEY, V_0_CHANGELOG_VERSION_HEADER_VALUE);
 
-    public static void applyChecksAndUpdatePosition(
+    public static Position applyChecksAndUpdatePosition(
             final ConsumerRecord<byte[], byte[]> record,
             final boolean consistencyEnabled,
             final Position position
     ) {
+        Position restoredPosition = Position.emptyPosition();
         if (!consistencyEnabled) {
-            return;
+            return Position.emptyPosition();
         }
         final Header versionHeader = record.headers().lastHeader(
                 ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
         if (versionHeader == null) {
-            return;
+            return Position.emptyPosition();
         } else {
             switch (versionHeader.value()[0]) {
                 case 0:
@@ -59,13 +61,14 @@ public class ChangelogRecordDeserializationHelper {
                         throw new StreamsException("This should not happen. Consistency is enabled but the changelog "
                                 + "contains records without consistency information.");
                     }
-                    position.merge(Position.deserialize(ByteBuffer.wrap(vectorHeader.value())));
+                    restoredPosition = position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value())));
                     break;
                 default:
                     log.warn("Changelog records have been encoded using a larger version than this server understands." +
                             "Please upgrade your server.");
             }
         }
+        return restoredPosition;
     }
 
 

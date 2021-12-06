@@ -31,11 +31,11 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.internals.Position;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -90,7 +90,7 @@ public class ConsistencyVectorIntegrationTest {
     @Before
     public void before() throws InterruptedException, IOException {
         cluster.start();
-        cluster.createTopic(INPUT_TOPIC_NAME, 2, 1);
+        cluster.createTopic(INPUT_TOPIC_NAME, 1, 1);
     }
 
     @After
@@ -142,7 +142,7 @@ public class ConsistencyVectorIntegrationTest {
 
         final AtomicInteger count = new AtomicInteger();
         for (final TestingRocksDBStore store : supplier.stores) {
-            if (!store.getPosition().isUnbounded()) {
+            if (store.getDbDir() != null) {
                 assertThat(store.getDbDir().toString().contains("/0_0/"), is(true));
                 assertThat(store.getPosition().getBound(INPUT_TOPIC_NAME), notNullValue());
                 assertThat(store.getPosition().getBound(INPUT_TOPIC_NAME), hasEntry(0, 99L));

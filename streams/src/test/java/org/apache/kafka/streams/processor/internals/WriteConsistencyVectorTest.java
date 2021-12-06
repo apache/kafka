@@ -28,7 +28,8 @@ import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.internals.Position;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -106,11 +107,13 @@ public class WriteConsistencyVectorTest {
     @Test
     public void shouldSendConsistencyVectorToChangelogTopic() {
         final Position position = Position.emptyPosition();
-        position.update(INPUT_TOPIC_NAME, INPUT_PARTITION, INPUT_OFFSET);
+        position.withComponent(INPUT_TOPIC_NAME, INPUT_PARTITION, INPUT_OFFSET);
         context.setRecordContext(new ProcessorRecordContext(-1, INPUT_OFFSET, INPUT_PARTITION, INPUT_TOPIC_NAME, new RecordHeaders()));
         final Headers headers = new RecordHeaders();
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position).array()));
         recordCollector.send(
                 CHANGELOG_PARTITION.topic(),
                 KEY_BYTES,
