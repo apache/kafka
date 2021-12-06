@@ -40,7 +40,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -122,20 +121,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
 
-        final Headers headers = new RecordHeaders();
+        Headers headers = new RecordHeaders();
         if (!consistencyEnabled) {
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_DEFAULT);
+            headers = null;
         } else {
-            if (position.isPresent()) {
-                // Add the vector clock to the header part of every record
-                headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-                headers.add(new RecordHeader(Position.VECTOR_KEY, position.get().serialize().array()));
-            }
+            // Add the vector clock to the header part of every record
+            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+            headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                    position.serialize().array()));
         }
 
         collector.send(

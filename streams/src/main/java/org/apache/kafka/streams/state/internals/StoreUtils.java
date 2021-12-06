@@ -16,25 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
-import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
-import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.timestamp;
+public class StoreUtils {
 
-public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKeyValueBytesStore {
+    public static void updatePosition(
+            final Position position,
+            final StateStoreContext stateStoreContext) {
 
-    ChangeLoggingTimestampedKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
-        super(inner);
-    }
-
-    @Override
-    void log(final Bytes key,
-             final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp != null) {
-            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp), position);
-        } else {
-            context.logChange(name(), key, null, context.timestamp(), position);
+        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+            System.out.println("Update pos");
+            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
+            position.update(meta.topic(), meta.partition(), meta.offset());
         }
     }
 }

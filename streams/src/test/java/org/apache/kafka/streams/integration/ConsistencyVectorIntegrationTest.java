@@ -133,11 +133,11 @@ public class ConsistencyVectorIntegrationTest {
         // Assert that both active and standby have the same position bound
         TestUtils.waitForCondition(() -> {
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, true, queryableStoreType);
-            return store1.get(key) != null;
+            return store1.get(key) == batch1NumMessages - 1;
         }, "store1 cannot find results for key");
         TestUtils.waitForCondition(() -> {
             final ReadOnlyKeyValueStore<Integer, Integer> store2 = getStore(TABLE_NAME, kafkaStreams2, true, queryableStoreType);
-            return store2.get(key) != null;
+            return store2.get(key) == batch1NumMessages - 1;
         }, "store2 cannot find results for key");
 
         final AtomicInteger count = new AtomicInteger();

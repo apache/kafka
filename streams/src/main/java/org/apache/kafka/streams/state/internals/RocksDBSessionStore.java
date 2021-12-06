@@ -147,7 +147,6 @@ public class RocksDBSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
-
         StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 }

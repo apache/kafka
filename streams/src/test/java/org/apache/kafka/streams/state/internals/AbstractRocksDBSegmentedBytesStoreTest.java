@@ -35,7 +35,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -82,12 +81,12 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -669,7 +668,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     @Test
-    public void shouldThrowWhenRestoringOnMissingHeaders() {
+    public void shouldNotThrowWhenRestoringOnMissingHeaders() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
@@ -685,13 +684,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         );
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
-        // 0 segments initially.
-        assertEquals(0, bytesStore.getSegments().size());
-
-        assertThrows(
-                StreamsException.class,
-                () -> bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders())
-        );
+        bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
+        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
@@ -701,19 +695,19 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         Position position1 = Position.emptyPosition();
         position1 = position1.update("", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.update("", 0, 2);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.update("", 0, 3);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
 
@@ -727,19 +721,19 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         position1 = position1.update("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.update("B", 0, 2);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.update("A", 0, 3);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
 
@@ -753,13 +747,13 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         position = position.update("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
         position = position.update("A", 0, 2);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 serializeKey(new Windowed<>("a", windows[2])).get(), null, headers, Optional.empty()));
 

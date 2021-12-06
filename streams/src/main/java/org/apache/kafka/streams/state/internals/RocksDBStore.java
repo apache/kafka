@@ -116,7 +116,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected volatile boolean open = false;
 
-    private StateStoreContext context;
+    protected StateStoreContext context;
 
     // VisibleForTesting
     protected final Position position;
@@ -332,11 +332,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         try (final WriteBatch batch = new WriteBatch()) {
             dbAccessor.prepareBatch(entries, batch);
-            // FIXME Will the recordMetadata be the offset of the last record in the batch?
-            if (context != null && context.recordMetadata().isPresent()) {
-                final RecordMetadata meta = context.recordMetadata().get();
-                position = position.update(meta.topic(), meta.partition(), meta.offset());
-            }
+            StoreUtils.updatePosition(position, context);
             write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + name, e);

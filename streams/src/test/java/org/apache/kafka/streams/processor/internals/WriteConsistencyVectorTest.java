@@ -38,7 +38,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.InternalProcessorContext.BYTEARRAY_VALUE_SERIALIZER;
@@ -111,7 +110,7 @@ public class WriteConsistencyVectorTest {
         context.setRecordContext(new ProcessorRecordContext(-1, INPUT_OFFSET, INPUT_PARTITION, INPUT_TOPIC_NAME, new RecordHeaders()));
         final Headers headers = new RecordHeaders();
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         recordCollector.send(
                 CHANGELOG_PARTITION.topic(),
                 KEY_BYTES,
@@ -128,7 +127,7 @@ public class WriteConsistencyVectorTest {
         replay(recordCollector, task);
         context.transitionToActive(task, recordCollector, null);
 
-        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, Optional.of(position));
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, position);
 
         verify(recordCollector);
     }

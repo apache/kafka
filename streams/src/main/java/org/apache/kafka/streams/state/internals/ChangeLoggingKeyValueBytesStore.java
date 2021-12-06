@@ -19,19 +19,15 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
-import java.util.Optional;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
@@ -40,7 +36,6 @@ public class ChangeLoggingKeyValueBytesStore
 
     InternalProcessorContext context;
     Position position;
-    boolean consistencyEnabled = false;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
@@ -62,10 +57,6 @@ public class ChangeLoggingKeyValueBytesStore
         this.context = asInternalProcessorContext(context);
         super.init(context, root);
         maybeSetEvictionListener();
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
     }
 
     private void maybeSetEvictionListener() {
@@ -87,10 +78,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        if (context != null && context.recordMetadata().isPresent()) {
-            final RecordMetadata meta = context.recordMetadata().get();
-            position = position.update(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreUtils.updatePosition(position, context);
         log(key, value);
     }
 
@@ -153,12 +141,7 @@ public class ChangeLoggingKeyValueBytesStore
         return wrapped().reverseAll();
     }
 
-    @SuppressWarnings("unchecked")
     void log(final Bytes key, final byte[] value) {
-        Optional<Position> optionalPosition = Optional.empty();
-        if (consistencyEnabled) {
-            optionalPosition = Optional.of(position);
-        }
-        context.logChange(name(), key, value, context.timestamp(), optionalPosition);
+        context.logChange(name(), key, value, context.timestamp(), position);
     }
 }

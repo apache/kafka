@@ -266,7 +266,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         final Header versionHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
         assertThat(versionHeader, is(notNullValue()));
         assertThat(versionHeader.equals(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY), is(true));
-        final Header vectorHeader = collector.collected().get(0).headers().lastHeader(Position.VECTOR_KEY);
+        final Header vectorHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         assertThat(vectorHeader, is(notNullValue()));
         final Position position = Position.deserialize(ByteBuffer.wrap(vectorHeader.value()));
         assertThat(position.getBound(INPUT_TOPIC_NAME), is(notNullValue()));

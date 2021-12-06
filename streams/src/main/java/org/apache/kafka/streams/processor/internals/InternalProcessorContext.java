@@ -30,8 +30,6 @@ import org.apache.kafka.streams.state.internals.Position;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-import java.util.Optional;
-
 /**
  * For internal use so we can update the {@link RecordContext} and current
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
@@ -119,7 +117,7 @@ public interface InternalProcessorContext<KOut, VOut>
                    final Bytes key,
                    final byte[] value,
                    final long timestamp,
-                   final Optional<Position> position);
+                   final Position position);
 
     String changelogFor(final String storeName);
 }

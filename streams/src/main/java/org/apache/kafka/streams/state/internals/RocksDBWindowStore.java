@@ -65,7 +65,6 @@ public class RocksDBWindowStore
         if (!(value == null && retainDuplicates)) {
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
-
             StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }

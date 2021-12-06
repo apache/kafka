@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingWindowBytesStoreTest {
@@ -62,14 +64,10 @@ public class ChangeLoggingWindowBytesStoreTest {
         store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
     }
 
-    private void init(final boolean useConsistency) {
-        final Map<String, Object> configValues = new HashMap<>();
-        configValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, useConsistency);
-        EasyMock.expect(context.appConfigs()).andReturn(configValues).anyTimes();
+    private void init() {
         EasyMock.expect(context.taskId()).andReturn(taskId).anyTimes();
         EasyMock.expect(context.recordCollector()).andReturn(collector).anyTimes();
-        final RecordMetadata recordContext = new ProcessorRecordContext(-1, 1L, 0, "", new RecordHeaders());
-        EasyMock.expect(context.recordMetadata()).andReturn(Optional.of(recordContext)).anyTimes();
+        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty()).anyTimes();
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
@@ -105,14 +103,36 @@ public class ChangeLoggingWindowBytesStoreTest {
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
 
-        init(false);
+        init();
 
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
 
         EasyMock.reset(context);
         EasyMock.expect(context.timestamp()).andStubReturn(0L);
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key, value, 0L, Optional.empty());
+        context.logChange(store.name(), key, value, 0L, Position.emptyPosition());
+
+        EasyMock.replay(context);
+        store.put(bytesKey, value, context.timestamp());
+
+        EasyMock.verify(inner, context);
+    }
+
+    @Test
+    public void shouldLogPutsWithPosition() {
+        inner.put(bytesKey, value, 0);
+        EasyMock.expectLastCall();
+
+        init();
+
+        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+
+        EasyMock.reset(context);
+        final RecordMetadata recordContext = new ProcessorRecordContext(0L, 1L, 0, "", new RecordHeaders());
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(recordContext));
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        final Position position = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+        context.logChange(store.name(), key, value, 0L, position);
 
         EasyMock.replay(context);
         store.put(bytesKey, value, context.timestamp());
@@ -126,7 +146,7 @@ public class ChangeLoggingWindowBytesStoreTest {
             .expect(inner.fetch(bytesKey, 0, 10))
             .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
-        init(false);
+        init();
 
         store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
         EasyMock.verify(inner);
@@ -138,7 +158,7 @@ public class ChangeLoggingWindowBytesStoreTest {
             .expect(inner.backwardFetch(bytesKey, 0, 10))
             .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
-        init(false);
+        init();
 
         store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
         EasyMock.verify(inner);
@@ -150,7 +170,7 @@ public class ChangeLoggingWindowBytesStoreTest {
             .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
             .andReturn(KeyValueIterators.emptyIterator());
 
-        init(false);
+        init();
 
         store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
@@ -162,7 +182,7 @@ public class ChangeLoggingWindowBytesStoreTest {
             .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
             .andReturn(KeyValueIterators.emptyIterator());
 
-        init(false);
+        init();
 
         store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
@@ -175,7 +195,7 @@ public class ChangeLoggingWindowBytesStoreTest {
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
 
-        init(false);
+        init();
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
@@ -183,8 +203,8 @@ public class ChangeLoggingWindowBytesStoreTest {
         EasyMock.reset(context);
         EasyMock.expect(context.timestamp()).andStubReturn(0L);
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key1, value, 0L, Optional.empty());
-        context.logChange(store.name(), key2, value, 0L, Optional.empty());
+        context.logChange(store.name(), key1, value, 0L, Position.emptyPosition());
+        context.logChange(store.name(), key2, value, 0L, Position.emptyPosition());
 
         EasyMock.replay(context);
 

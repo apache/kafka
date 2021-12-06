@@ -37,7 +37,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
-import java.util.Optional;
 import java.util.Properties;
 
 public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
@@ -174,7 +173,7 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
     }
 
     @Override

@@ -44,7 +44,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -1073,7 +1072,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowWhenRestoringOnMissingHeaders() {
+    public void shouldNotThrowWhenRestoringOnMissingHeaders() {
         final List<KeyValue<byte[], byte[]>> entries = getChangelogRecordsWithoutHeaders();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
@@ -1086,9 +1085,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 new StreamsConfig(props)
         );
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
-        assertThrows(
-                StreamsException.class,
-                () -> context.restore(rocksDBStore.name(), entries));
+        context.restore(rocksDBStore.name(), entries);
+        assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
@@ -1098,19 +1096,19 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         position1 = position1.withComponent("", 0, 1);
 
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "1".getBytes(UTF_8), "a".getBytes(UTF_8), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 2);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "2".getBytes(UTF_8), "b".getBytes(UTF_8), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 3);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "3".getBytes(UTF_8), "c".getBytes(UTF_8), headers, Optional.empty()));
         return entries;
@@ -1123,19 +1121,19 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         position1 = position1.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "1".getBytes(UTF_8), "a".getBytes(UTF_8), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("B", 0, 2);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "2".getBytes(UTF_8), "b".getBytes(UTF_8), headers, Optional.empty()));
 
-        headers.remove(Position.VECTOR_KEY);
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("A", 0, 3);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position1.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position1.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "3".getBytes(UTF_8), "c".getBytes(UTF_8), headers, Optional.empty()));
         return entries;
@@ -1148,13 +1146,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         position = position.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "1".getBytes(UTF_8), "a".getBytes(UTF_8), headers, Optional.empty()));
 
         position = position.withComponent("A", 0, 2);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-        headers.add(new RecordHeader(Position.VECTOR_KEY, position.serialize().array()));
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         entries.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
                 "1".getBytes(UTF_8), null, headers, Optional.empty()));
 

@@ -152,7 +152,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
     }
 
     @Override

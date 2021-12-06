@@ -59,7 +59,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
@@ -436,15 +435,15 @@ public class InternalMockProcessorContext<KOut, VOut>
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
 
-        final Headers headers = new RecordHeaders();
+        Headers headers = new RecordHeaders();
         if (!consistencyEnabled) {
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_DEFAULT);
+            headers = null;
         } else {
             // Add the vector clock to the header part of every record
             headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-            headers.add(new RecordHeader(Position.VECTOR_KEY, position.get().serialize().array()));
+            headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, position.serialize().array()));
         }
 
         recordCollector().send(

@@ -17,21 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
@@ -49,7 +45,6 @@ class ChangeLoggingWindowBytesStore
     private final boolean retainDuplicates;
     InternalProcessorContext context;
     Position position;
-    boolean consistencyEnabled = false;
     private int seqnum = 0;
     private final ChangeLoggingKeySerializer keySerializer;
 
@@ -75,10 +70,6 @@ class ChangeLoggingWindowBytesStore
                      final StateStore root) {
         this.context = asInternalProcessorContext(context);
         super.init(context, root);
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
     }
 
     @Override
@@ -145,20 +136,12 @@ class ChangeLoggingWindowBytesStore
                     final byte[] value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
-        if (context != null && context.recordMetadata().isPresent()) {
-            final RecordMetadata meta = context.recordMetadata().get();
-            position = position.update(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreUtils.updatePosition(position, context);
         log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
-    @SuppressWarnings("unchecked")
     void log(final Bytes key, final byte[] value) {
-        Optional<Position> optionalPosition = Optional.empty();
-        if (consistencyEnabled) {
-            optionalPosition = Optional.of(position);
-        }
-        context.logChange(name(), key, value, context.timestamp(), optionalPosition);
+        context.logChange(name(), key, value, context.timestamp(), position);
     }
 
     private int maybeUpdateSeqnumForDups() {

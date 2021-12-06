@@ -42,7 +42,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
@@ -245,7 +244,7 @@ public class AbstractProcessorContextTest {
                               final Bytes key,
                               final byte[] value,
                               final long timestamp,
-                              final Optional<Position> position) {
+                              final Position position) {
         }
 
         @Override

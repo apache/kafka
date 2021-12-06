@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 
 public class NoOpProcessorContext extends AbstractProcessorContext<Object, Object> {
@@ -131,7 +130,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
     }
 
     @Override

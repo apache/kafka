@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
@@ -125,7 +124,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Optional<Position> position) {
+                          final Position position) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }
 

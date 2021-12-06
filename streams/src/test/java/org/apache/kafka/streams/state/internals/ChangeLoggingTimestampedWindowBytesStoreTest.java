@@ -66,14 +66,10 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         store = new ChangeLoggingTimestampedWindowBytesStore(inner, false);
     }
 
-    private void init(final boolean useConsistency) {
-        final Map<String, Object> configValues = new HashMap<>();
-        configValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, useConsistency);
-        EasyMock.expect(context.appConfigs()).andReturn(configValues).anyTimes();
+    private void init() {
         EasyMock.expect(context.taskId()).andReturn(taskId).anyTimes();
         EasyMock.expect(context.recordCollector()).andReturn(collector).anyTimes();
-        final RecordMetadata recordContext = new ProcessorRecordContext(-1, 1L, 0, "", new RecordHeaders());
-        EasyMock.expect(context.recordMetadata()).andReturn(Optional.of(recordContext)).anyTimes();
+        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty()).anyTimes();
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
@@ -110,13 +106,13 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall();
 
-        init(false);
+        init();
 
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
 
         EasyMock.reset(context);
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key, value, 42, Optional.empty());
+        context.logChange(store.name(), key, value, 42, Position.emptyPosition());
 
         EasyMock.replay(context);
         store.put(bytesKey, valueAndTimestamp, context.timestamp());
@@ -129,7 +125,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall();
 
-        init(true);
+        init();
 
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
 
@@ -137,7 +133,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         final RecordMetadata recordContext = new ProcessorRecordContext(0L, 1L, 0, "", new RecordHeaders());
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(recordContext));
         final Position position = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
-        context.logChange(store.name(), key, value, 42, Optional.of(position));
+        context.logChange(store.name(), key, value, 42, position);
 
         EasyMock.replay(context);
         store.put(bytesKey, valueAndTimestamp, context.timestamp());
@@ -151,7 +147,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
             .expect(inner.fetch(bytesKey, 0, 10))
             .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
-        init(false);
+        init();
 
         store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
         EasyMock.verify(inner);
@@ -163,7 +159,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
             .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
             .andReturn(KeyValueIterators.emptyIterator());
 
-        init(false);
+        init();
 
         store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
@@ -176,15 +172,15 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall().times(2);
 
-        init(false);
+        init();
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
 
         EasyMock.reset(context);
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key1, value, 42L, Optional.empty());
-        context.logChange(store.name(), key2, value, 42L, Optional.empty());
+        context.logChange(store.name(), key1, value, 42L, Position.emptyPosition());
+        context.logChange(store.name(), key2, value, 42L, Position.emptyPosition());
 
         EasyMock.replay(context);
 
