@@ -20,10 +20,12 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
@@ -300,8 +302,21 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * See {@link KafkaStreams#streamsMetadataForStore(String)}
      */
-    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) {
+    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) { // verify that it returns something
         verifyTopologyStateStore(topologyName, storeName);
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName, topologyName);
+    }
+
+    /**
+     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final Serializer<K> keySerializer,
+                                                    final String topologyName) {
+        verifyTopologyStateStore(topologyName, storeName);
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
     }
 }

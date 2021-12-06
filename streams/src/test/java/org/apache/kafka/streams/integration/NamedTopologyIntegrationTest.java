@@ -323,6 +323,14 @@ public class NamedTopologyIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+
+
+        final ReadOnlyKeyValueStore<String, Long> store =
+            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType("topology-1", "store", QueryableStoreTypes.keyValueStore()));
+        assertThat(store.get("A"), equalTo(2L));
+
+        final Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
+        final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
     }
     
     @Test
@@ -344,15 +352,6 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
-
-        final ReadOnlyKeyValueStore<String, Long> store =
-            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType("topology-1", "store", QueryableStoreTypes.keyValueStore()));
-        assertThat(store.get("A"), equalTo(2L));
-
-//        Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
-        Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
-
-//        System.out.println(test1);
     }
 
     @Test
