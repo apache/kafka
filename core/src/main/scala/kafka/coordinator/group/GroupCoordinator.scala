@@ -163,7 +163,7 @@ class GroupCoordinator(val brokerId: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback,
-                      reason: String,
+                      reason: String = null,
                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
