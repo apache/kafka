@@ -211,6 +211,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                     .getMessage()
                                     .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
                                 ex.printStackTrace();
+                                deleteOffsetsResult = null;
                             } else {
                                 future.completeExceptionally(ex);
                             }
