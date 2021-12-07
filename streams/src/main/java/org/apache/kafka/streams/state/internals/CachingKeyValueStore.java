@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -165,7 +166,7 @@ public class CachingKeyValueStore
                 context.partition(),
                 context.topic()));
 
-        position = position.update(context.topic(), context.partition(), context.offset());
+        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override

@@ -20,7 +20,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -34,7 +37,7 @@ public class RocksDBWindowStore
 
     private int seqnum = 0;
 
-    private Position position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -63,10 +66,7 @@ public class RocksDBWindowStore
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
 
-            if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-                final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-                position = position.update(meta.topic(), meta.partition(), meta.offset());
-            }
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 
@@ -129,11 +129,15 @@ public class RocksDBWindowStore
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }
 
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+        return StoreQueryUtils.handleBasicQueries(query, positionBound, collectExecutionInfo, this);
+    }
+
     private void maybeUpdateSeqnumForDups() {
         if (retainDuplicates) {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
     }
-
-
 }

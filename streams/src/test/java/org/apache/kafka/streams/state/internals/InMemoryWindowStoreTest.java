@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
@@ -179,7 +180,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         long offset = 0;
         for (final KeyValue<Integer, String> k : entries) {
             windowStore.put(k.key, k.value, SEGMENT_INTERVAL);
-            expected.update("input", 0, offset);
+            expected.withComponent("input", 0, offset);
             offset++;
         }
 

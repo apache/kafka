@@ -20,7 +20,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -29,7 +32,7 @@ public class RocksDBSessionStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
     implements SessionStore<Bytes, byte[]> {
 
-    private Position position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
@@ -45,6 +48,12 @@ public class RocksDBSessionStore
 
     Position getPosition() {
         return position;
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+        return StoreQueryUtils.handleBasicQueries(query, positionBound, collectExecutionInfo, this);
     }
 
     @Override
@@ -139,9 +148,6 @@ public class RocksDBSessionStore
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
 
-        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
-            final RecordMetadata meta = stateStoreContext.recordMetadata().get();
-            position = position.update(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 }
