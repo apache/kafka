@@ -575,7 +575,7 @@ public class ErrorHandlingTaskTest {
 
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, converter, converter,
+            ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore);
     }
@@ -604,7 +604,7 @@ public class ErrorHandlingTaskTest {
 
         workerSourceTask = PowerMock.createPartialMock(
             WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
-            taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
+            taskId, sourceTask, statusListener, initialState, converter, converter, errorHandlingMetrics, headerConverter, sourceTransforms,
             producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, offsetStore, workerConfig,
             ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,

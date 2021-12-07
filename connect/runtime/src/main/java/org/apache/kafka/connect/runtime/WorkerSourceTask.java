@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -66,6 +67,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
+                            ErrorHandlingMetrics errorMetrics,
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,

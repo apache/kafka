@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.TaskStatus.Listener;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -57,6 +58,7 @@ public class WorkerTaskTest {
     @Mock private StatusBackingStore statusBackingStore;
     private ConnectMetrics metrics;
     private RetryWithToleranceOperator retryWithToleranceOperator;
+    @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     @Before
     public void setup() {
@@ -75,6 +77,7 @@ public class WorkerTaskTest {
 
         WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore);
+                        ErrorHandlingMetrics.class,
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.run();
@@ -91,6 +94,7 @@ public class WorkerTaskTest {
 
         WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
+                        ErrorHandlingMetrics.class,
 
             @Override
             public void initializeAndStart() {
@@ -118,6 +122,7 @@ public class WorkerTaskTest {
 
         WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
+                        ErrorHandlingMetrics.class,
 
             @Override
             public void execute() {
