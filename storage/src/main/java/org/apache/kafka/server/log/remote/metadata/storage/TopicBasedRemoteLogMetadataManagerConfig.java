@@ -56,7 +56,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS = -1L;
     public static final short DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
     public static final long DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS = 120 * 1000L;
-    public static final long DEFAULT_REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS = 120 * 1000L;
+    public static final long DEFAULT_REMOTE_LOG_METADATA_SECONDARY_CONSUMER_SUBSCRIPTION_INTERVAL_MS = 30 * 1000L;
 
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor of remote log metadata Topic.";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC = "The number of partitions for remote log metadata Topic.";
