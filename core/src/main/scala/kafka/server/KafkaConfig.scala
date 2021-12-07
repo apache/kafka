@@ -751,7 +751,8 @@ object KafkaConfig {
     "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
     "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
     "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). " +
-    "Note that in KRaft an additional default mapping CONTROLLER to PLAINTEXT is added."
+    "Note that in KRaft a default mapping from the listener names defined by controller.listener.names to PLAINTEXT " +
+    "is assumed if no explicit mapping is provided and no other security protocol is in use."
   val controlPlaneListenerNameDoc = "Name of listener used for communication between controller and brokers. " +
     s"Broker will use the $ControlPlaneListenerNameProp to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
     "For example, if a broker's config is :\n" +
@@ -1892,8 +1893,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def listeners: Seq[EndPoint] =
     CoreUtils.listenerListToEndPoints(getString(KafkaConfig.ListenersProp), effectiveListenerSecurityProtocolMap)
 
-  def controllerListenerNames: Seq[String] =
-    Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
+  def controllerListenerNames: Seq[String] = {
+    val value = Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("")
+      if (value.isEmpty) {
+        Seq.empty
+      } else {
+        value.split(",")
+      }
+  }
 
   def controllerListeners: Seq[EndPoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
@@ -1972,12 +1979,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // and we are using KRaft.
       // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
       def isSslOrSasl(name: String) : Boolean = name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) || name.equals(SecurityProtocol.SASL_PLAINTEXT.name)
+      // check controller listener names (they won't appear in listeners when process.roles=broker)
+      // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        parseCsvList(getString(KafkaConfig.ListenersProp)).map(EndPoint.parseListenerName).exists(isSslOrSasl)) {
+        parseCsvList(getString(KafkaConfig.ListenersProp)).exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
-        mapValue ++ controllerListenerNames.filter(cln => cln.nonEmpty && !SecurityProtocol.PLAINTEXT.name.equals(cln)).map(
+        mapValue ++ controllerListenerNames.filter(!SecurityProtocol.PLAINTEXT.name.equals(_)).map(
           new ListenerName(_) -> SecurityProtocol.PLAINTEXT)
       }
     } else {
@@ -2038,14 +2047,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       require(controlPlaneListenerName.isEmpty,
         s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode. KRaft uses ${KafkaConfig.ControllerListenerNamesProp} instead.")
     }
-    val sourceOfAdvertisedListeners: String =
-      if (getString(KafkaConfig.AdvertisedListenersProp) != null)
-        s"${KafkaConfig.AdvertisedListenersProp}"
-      else
-        s"${KafkaConfig.ListenersProp}"
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
       require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
-        s"$sourceOfAdvertisedListeners must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
+        s"The advertised.listeners config must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
     def validateControllerQuorumVotersMustContainNodeIDForKRaftController(): Unit = {
       require(voterAddressSpecsByNodeId.containsKey(nodeId),
@@ -2074,13 +2078,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       require(!voterAddressSpecsByNodeId.containsKey(nodeId),
         s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
       // controller.listener.names must be non-empty...
-      require(controllerListenerNames.exists(_.nonEmpty),
+      require(controllerListenerNames.nonEmpty,
         s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")
       // controller.listener.names are forbidden in listeners...
       require(controllerListeners.isEmpty,
         s"${KafkaConfig.ControllerListenerNamesProp} must not contain a value appearing in the '${KafkaConfig.ListenersProp}' configuration when running KRaft with just the broker role")
       // controller.listener.names must all appear in listener.security.protocol.map
-      controllerListenerNames.filter(_.nonEmpty).foreach { name =>
+      controllerListenerNames.foreach { name =>
         val listenerName = ListenerName.normalised(name)
         if (!effectiveListenerSecurityProtocolMap.contains(listenerName)) {
           throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
@@ -2089,7 +2093,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
       // warn that only the first controller listener is used if there is more than one
       if (controllerListenerNames.size > 1) {
-        warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: ${controllerListenerNames.asJava.toString}")
+        warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: ${controllerListenerNames.asJava}")
       }
       validateAdvertisedListenersNonEmptyForBroker()
     } else if (processRoles == Set(ControllerRole)) {
@@ -2097,8 +2101,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       // advertised listeners must be empty when not also running the broker role
+      val sourceOfAdvertisedListeners: String =
+        if (getString(KafkaConfig.AdvertisedListenersProp) != null)
+          s"${KafkaConfig.AdvertisedListenersProp}"
+        else
+          s"${KafkaConfig.ListenersProp}"
       require(effectiveAdvertisedListeners.isEmpty,
-        s"$sourceOfAdvertisedListeners must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
+        s"The $sourceOfAdvertisedListeners config must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
       validateControllerQuorumVotersMustContainNodeIDForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
@@ -2114,7 +2123,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else {
       // ZK-based
       // controller listener names must be empty when not in KRaft mode
-      require(!controllerListenerNames.exists(_.nonEmpty), s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava.toString}")
+      require(controllerListenerNames.isEmpty, s"${KafkaConfig.ControllerListenerNamesProp} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
       validateAdvertisedListenersNonEmptyForBroker()
     }
 

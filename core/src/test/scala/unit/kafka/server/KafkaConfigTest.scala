@@ -274,7 +274,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.NodeIdProp, "2")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9093")
 
-    assertBadConfigContainingMessage(props, "listeners must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+    assertBadConfigContainingMessage(props, "The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
 
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     KafkaConfig.fromProps(props)
@@ -1140,7 +1140,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def assertDistinctControllerAndAdvertisedListenersAllowedForKRaftBroker(): Unit = {
+  def testDistinctControllerAndAdvertisedListenersAllowedForKRaftBroker(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094")
@@ -1164,7 +1164,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def assertControllerListenersCannotBeAdvertisedForKRaftBroker(): Unit = {
+  def testControllerListenersCannotBeAdvertisedForKRaftBroker(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
@@ -1175,7 +1175,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.NodeIdProp, "2")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
     assertBadConfigContainingMessage(props,
-      "advertised.listeners must not contain KRaft controller listeners from controller.listener.names when process.roles contains the broker role")
+      "The advertised.listeners config must not contain KRaft controller listeners from controller.listener.names when process.roles contains the broker role")
 
     // Valid now
     props.put(KafkaConfig.AdvertisedListenersProp, "SASL_SSL://C:9094")
@@ -1187,7 +1187,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def assertAdvertisedListenersDisallowedForKRaftControllerOnlyRole(): Unit = {
+  def testAdvertisedListenersDisallowedForKRaftControllerOnlyRole(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
@@ -1196,17 +1196,17 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL")
     props.put(KafkaConfig.NodeIdProp, "2")
     props.put(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
-    val expectedExceptionContainsTextSuffix = " must only contain KRaft controller listeners from controller.listener.names when process.roles=controller"
-    assertBadConfigContainingMessage(props, "advertised.listeners" + expectedExceptionContainsTextSuffix)
+    val expectedExceptionContainsTextSuffix = " config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller"
+    assertBadConfigContainingMessage(props, "The advertised.listeners" + expectedExceptionContainsTextSuffix)
 
     // Still invalid due to extra listener if we set advertised listeners explicitly to be correct
     val correctListeners = "PLAINTEXT://A:9092,SSL://B:9093"
     props.put(KafkaConfig.AdvertisedListenersProp, correctListeners)
-    assertBadConfigContainingMessage(props, "listeners" + expectedExceptionContainsTextSuffix)
+    assertBadConfigContainingMessage(props, "The advertised.listeners" + expectedExceptionContainsTextSuffix)
 
     // Still invalid due to extra listener if we allow advertised listeners to derive from listeners/controller.listener.names
     props.remove(KafkaConfig.AdvertisedListenersProp)
-    assertBadConfigContainingMessage(props, "listeners" + expectedExceptionContainsTextSuffix)
+    assertBadConfigContainingMessage(props, "The listeners" + expectedExceptionContainsTextSuffix)
 
     // Valid now
     props.put(KafkaConfig.ListenersProp, correctListeners)
