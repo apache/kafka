@@ -535,7 +535,6 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    @Ignore
     public void shouldAddToEmptyInitialTopologyRemoveResetOffsetsThenAddSameNamedTopologyWithRepartitioning() throws Exception {
         CLUSTER.createTopics(SUM_OUTPUT, COUNT_OUTPUT);
         // Build up named topology with two stateful subtopologies
@@ -553,7 +552,7 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
-                CLUSTER.deleteTopicsAndWait(t);
+                CLUSTER.deleteTopicAndWait(t);
             } catch (final InterruptedException e) {
                 e.printStackTrace();
             }

@@ -910,11 +910,12 @@ public class StreamThread extends Thread {
         if (topologyMetadata.isEmpty() || topologyMetadata.needsUpdate(getName())) {
             taskManager.handleTopologyUpdates();
             log.info("StreamThread has detected an update to the topology, triggering a rebalance to refresh the assignment");
-            topologyMetadata.maybeNotifyTopologyVersionWaiters(getName());
 
             if (topologyMetadata.isEmpty()) {
+                topologyMetadata.allThreadsHaveReachedThisVersion(getName());
                 mainConsumer.unsubscribe();
             }
+            topologyMetadata.maybeNotifyTopologyVersionWaiters(getName());
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
             subscribeConsumer();

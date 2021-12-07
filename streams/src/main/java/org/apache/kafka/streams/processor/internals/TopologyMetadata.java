@@ -48,6 +48,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,6 +160,17 @@ public class TopologyMetadata {
             }
         } finally {
             unlock();
+        }
+    }
+
+    public void allThreadsHaveReachedThisVersion(final String threadName) {
+        threadVersions.put(threadName, topologyVersion());
+        while (new HashSet<>(threadVersions.values()).size() != 1) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 
