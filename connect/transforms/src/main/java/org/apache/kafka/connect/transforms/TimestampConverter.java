@@ -65,6 +65,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String FORMAT_CONFIG = "format";
     private static final String FORMAT_DEFAULT = "";
 
+    public static final String EPOCH_PRECISION_CONFIG = "epoch.precision";
+    private static final String EPOCH_PRECISION_DEFAULT = "millis";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
                     "The field containing the timestamp, or empty if the entire value is a timestamp")
@@ -72,7 +75,11 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
             .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
                     "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
-                            + "or used to parse the input if the input is a string.");
+                            + "or used to parse the input if the input is a string.")
+            .define(EPOCH_PRECISION_CONFIG, ConfigDef.Type.STRING, EPOCH_PRECISION_DEFAULT, ConfigDef.Importance.LOW,
+                    "The desired epoch precision for the timestamp. Used to generate the output when type=unix "
+                            + "or used to parse the input if the input is a Long.");
+
 
     private static final String PURPOSE = "converting timestamp formats";
 
@@ -82,6 +89,11 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     private static final String TYPE_TIME = "Time";
     private static final String TYPE_TIMESTAMP = "Timestamp";
     private static final Set<String> VALID_TYPES = new HashSet<>(Arrays.asList(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP));
+
+    private static final String EPOCH_PRECISION_MILLIS = "millis";
+    private static final String EPOCH_PRECISION_MICROS = "micros";
+    private static final String EPOCH_PRECISION_SECONDS = "seconds";
+    private static final Set<String> VALID_EPOCH_PRECISIONS = new HashSet<>(Arrays.asList(EPOCH_PRECISION_MILLIS, EPOCH_PRECISION_MICROS, EPOCH_PRECISION_SECONDS));
 
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
@@ -139,7 +151,16 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             public Date toRaw(Config config, Object orig) {
                 if (!(orig instanceof Long))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
-                return Timestamp.toLogical(Timestamp.SCHEMA, (Long) orig);
+                Long epoch = (Long) orig;
+                switch (config.epochPrecision) {
+                    case EPOCH_PRECISION_MICROS:
+                        return Timestamp.toLogical(Timestamp.SCHEMA, epoch / 1000L);
+                    case EPOCH_PRECISION_SECONDS:
+                        return Timestamp.toLogical(Timestamp.SCHEMA, epoch * 1000);
+                    case EPOCH_PRECISION_MILLIS:
+                    default:
+                        return Timestamp.toLogical(Timestamp.SCHEMA, epoch);
+                }
             }
 
             @Override
@@ -149,7 +170,16 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Long toType(Config config, Date orig) {
-                return Timestamp.fromLogical(Timestamp.SCHEMA, orig);
+                Long epoch = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
+                switch (config.epochPrecision) {
+                    case EPOCH_PRECISION_MICROS:
+                        return epoch * 1000;
+                    case EPOCH_PRECISION_SECONDS:
+                        return epoch / 1000L;
+                    case EPOCH_PRECISION_MILLIS:
+                    default:
+                        return epoch;
+                }
             }
         });
 
@@ -230,14 +260,16 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     // This is a bit unusual, but allows the transformation config to be passed to static anonymous classes to customize
     // their behavior
     private static class Config {
-        Config(String field, String type, SimpleDateFormat format) {
+        Config(String field, String type, SimpleDateFormat format, String epochPrecision) {
             this.field = field;
             this.type = type;
             this.format = format;
+            this.epochPrecision = epochPrecision;
         }
         String field;
         String type;
         SimpleDateFormat format;
+        String epochPrecision;
     }
     private Config config;
     private Cache<Schema, Schema> schemaUpdateCache;
@@ -249,6 +281,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         final String field = simpleConfig.getString(FIELD_CONFIG);
         final String type = simpleConfig.getString(TARGET_TYPE_CONFIG);
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
+        final String epochPrecision = simpleConfig.getString(EPOCH_PRECISION_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
 
         if (!VALID_TYPES.contains(type)) {
@@ -268,7 +301,11 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                         + formatPattern, e);
             }
         }
-        config = new Config(field, type, format);
+        if (!VALID_EPOCH_PRECISIONS.contains(epochPrecision)) {
+            throw new ConfigException("Unknown epoch precision in TimestampConverter: " + epochPrecision + ". Valid values are "
+                    + Utils.join(VALID_EPOCH_PRECISIONS, ", ") + ".");
+        }
+        config = new Config(field, type, format, epochPrecision);
     }
 
     @Override
