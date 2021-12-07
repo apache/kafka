@@ -729,10 +729,6 @@ public class Fetcher<K, V> implements Closeable {
                             position, nextPosition, completedFetch.partition, partRecords.size());
                     subscriptions.position(completedFetch.partition, nextPosition);
                     positionAdvanced = true;
-                    if (partRecords.isEmpty()) {
-                        log.trace("Returning empty records from `poll()` " 
-                                + "since the consumer's position has advanced for at least one topic partition");
-                    }
                 }
 
                 Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
