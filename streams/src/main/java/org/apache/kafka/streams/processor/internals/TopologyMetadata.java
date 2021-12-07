@@ -48,8 +48,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -168,7 +166,7 @@ public class TopologyMetadata {
         while (new HashSet<>(threadVersions.values()).size() != 1) {
             try {
                 Thread.sleep(100);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 e.printStackTrace();
             }
         }

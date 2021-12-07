@@ -220,7 +220,7 @@ public class NamedTopologyIntegrationTest {
             streams2.close(Duration.ofSeconds(30));
         }
 
-        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog")).forEach(t -> {
+        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
                 CLUSTER.deleteTopicsAndWait(t);
             } catch (final InterruptedException e) {

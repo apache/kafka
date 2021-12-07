@@ -209,8 +209,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             if (ex.getCause() != null &&
                                 ex.getCause() instanceof GroupSubscribedToTopicException ||
                                 ex.getCause() instanceof GroupIdNotFoundException) {
-                                ex.printStackTrace();
                                 deleteOffsetsResult = null;
+                                log.trace("waiting for the group to be unsubscribed from");
                             } else {
                                 future.completeExceptionally(ex);
                             }
