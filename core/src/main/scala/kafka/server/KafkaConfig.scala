@@ -29,6 +29,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionC
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
+import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1967,10 +1968,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
       }
     if (usesSelfManagedQuorum && !originals.containsKey(ListenerSecurityProtocolMapProp)) {
-      // Nothing was specified explicitly, so we are using the default value; therefore, since we are using KRaft,
-      // add the PLAINTEXT mappings for all controller listener names that are not security protocols
-      mapValue ++ controllerListenerNames.filter(cln => cln.nonEmpty && !SecurityProtocol.values().exists(_.name.equals(cln))).map(
-        new ListenerName(_) -> SecurityProtocol.PLAINTEXT)
+      // Nothing was specified explicitly for listener.security.protocol.map, so we are using the default value,
+      // and we are using KRaft.
+      // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
+      def isSslOrSasl(name: String) : Boolean = name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) || name.equals(SecurityProtocol.SASL_PLAINTEXT.name)
+      if (controllerListenerNames.exists(isSslOrSasl) ||
+        parseCsvList(getString(KafkaConfig.ListenersProp)).map(EndPoint.parseListenerName).exists(isSslOrSasl)) {
+        mapValue // don't add default mappings since we found something that is SSL or SASL_*
+      } else {
+        // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
+        mapValue ++ controllerListenerNames.filter(cln => cln.nonEmpty && !SecurityProtocol.PLAINTEXT.name.equals(cln)).map(
+          new ListenerName(_) -> SecurityProtocol.PLAINTEXT)
+      }
     } else {
       mapValue
     }

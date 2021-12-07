@@ -362,15 +362,23 @@ class KafkaConfigTest {
     val controllerListenerName = new ListenerName("CONTROLLER")
     assertEquals(Some(SecurityProtocol.PLAINTEXT),
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
-    // ensure we don't map it to PLAINTEXT when it is explicitly given otherwise
+    // ensure we don't map it to PLAINTEXT when there is a SSL or SASL controller listener
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER,SSL")
+    val controllerNotFoundInMapMessage = "Controller listener with name CONTROLLER defined in controller.listener.names not found in listener.security.protocol.map."
+    assertBadConfigContainingMessage(props, controllerNotFoundInMapMessage)
+    // ensure we don't map it to PLAINTEXT when there is a SSL or SASL listener
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.put(KafkaConfig.ListenersProp, "SSL://localhost:9092")
+    assertBadConfigContainingMessage(props, controllerNotFoundInMapMessage)
+    props.remove(KafkaConfig.ListenersProp)
+    // ensure we don't map it to PLAINTEXT when it is explicitly mapped otherwise
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
     assertEquals(Some(SecurityProtocol.SSL),
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when anything is explicitly given
     // (i.e. it is only part of the default value, even with KRaft)
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT")
-    assertBadConfigContainingMessage(props,
-      "Controller listener with name CONTROLLER defined in controller.listener.names not found in listener.security.protocol.map.")
+    assertBadConfigContainingMessage(props, controllerNotFoundInMapMessage)
     // ensure we can map it to a non-PLAINTEXT security protocol by default (i.e. when nothing is given)
     props.remove(KafkaConfig.ListenerSecurityProtocolMapProp)
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
