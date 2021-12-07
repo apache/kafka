@@ -18,7 +18,7 @@
 package kafka.tools
 
 import kafka.utils.IncludeList
-import org.apache.kafka.common.PartitionInfo
+import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -62,34 +62,34 @@ class TopicPartitionFilterTest {
   def testTopicFilterAndPartitionFilter(): Unit = {
     val partitionRangeFilter = PartitionRangeFilter(1, 3)
     val topicFilter = IncludeList("topic")
-    val topicPartitionFilter = TopicFilterAndPartitionFilter(topicFilter, false, partitionRangeFilter)
+    val topicPartitionFilter = TopicFilterAndPartitionFilter(topicFilter, partitionRangeFilter)
 
-    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("topic", 1)))
-    assertTrue(topicPartitionFilter.isPartitionAllowed(partitionInfo("topic", 2)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(topicPartition("topic", 1)))
+    assertTrue(topicPartitionFilter.isPartitionAllowed(topicPartition("topic", 2)))
 
-    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("topic", 0)))
-    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("topic", 3)))
-    assertFalse(topicPartitionFilter.isPartitionAllowed(partitionInfo("topic1", 2)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(topicPartition("topic", 0)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(topicPartition("topic", 3)))
+    assertFalse(topicPartitionFilter.isPartitionAllowed(topicPartition("topic1", 2)))
   }
 
   @Test
   def testCompositeTopicPartitionFilter(): Unit = {
-    val filter0 = TopicFilterAndPartitionFilter(IncludeList("topic0"), false, PartitionRangeFilter(0, 1))
-    val filter1 = TopicFilterAndPartitionFilter(IncludeList("topic1"), false, PartitionRangeFilter(1, 2))
-    val filter2 = TopicFilterAndPartitionFilter(IncludeList("topic2"), false, PartitionRangeFilter(2, 3))
+    val filter0 = TopicFilterAndPartitionFilter(IncludeList("topic0"), PartitionRangeFilter(0, 1))
+    val filter1 = TopicFilterAndPartitionFilter(IncludeList("topic1"), PartitionRangeFilter(1, 2))
+    val filter2 = TopicFilterAndPartitionFilter(IncludeList("topic2"), PartitionRangeFilter(2, 3))
 
     val compositeTopicPartitionFilter = CompositeTopicPartitionFilter(Array(filter0, filter1, filter2))
 
-    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic0", 0)))
-    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic1", 1)))
-    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic2", 2)))
+    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic0", 0)))
+    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic1", 1)))
+    assertTrue(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic2", 2)))
 
-    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic0", 1)))
-    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic1", 2)))
-    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(partitionInfo("topic2", 3)))
+    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic0", 1)))
+    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic1", 2)))
+    assertFalse(compositeTopicPartitionFilter.isPartitionAllowed(topicPartition("topic2", 3)))
   }
 
-  private def partitionInfo(topic: String, partition: Int): PartitionInfo = {
-    new PartitionInfo(topic, partition, null, null, null)
+  private def topicPartition(topic: String, partition: Int): TopicPartition = {
+    new TopicPartition(topic, partition)
   }
 }

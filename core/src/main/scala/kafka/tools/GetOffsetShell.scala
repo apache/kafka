@@ -21,11 +21,13 @@ package kafka.tools
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ListTopicsOptions, OffsetSpec}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.LeaderNotAvailableException
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -105,13 +107,12 @@ object GetOffsetShell {
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
     val topicPartitionFilter = if (options.has(topicPartitionsOpt)) {
-      createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt), excludeInternalTopics)
+      createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt))
     } else {
       val partitionIdsRequested = createPartitionSet(options.valueOf(partitionsOpt))
 
       TopicFilterAndPartitionFilter(
         if (options.has(topicOpt)) IncludeList(options.valueOf(topicOpt)) else IncludeList(".*"),
-        excludeInternalTopics,
         PartitionsSetFilter(partitionIdsRequested)
       )
     }
@@ -131,14 +132,6 @@ object GetOffsetShell {
         throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
       }
 
-      val topicPartitions = partitionInfos.flatMap { p =>
-        if (p.leader == null) {
-          System.err.println(s"Error: topic-partition ${p.topic}:${p.partition} does not have a leader. Skip getting offsets")
-          None
-        } else
-          Some(new TopicPartition(p.topic, p.partition))
-      }
-
       val offsetSpec = listOffsetsTimestamp match {
         case ListOffsetsRequest.EARLIEST_TIMESTAMP => OffsetSpec.earliest()
         case ListOffsetsRequest.LATEST_TIMESTAMP => OffsetSpec.latest()
@@ -146,14 +139,27 @@ object GetOffsetShell {
         case _ => OffsetSpec.forTimestamp(listOffsetsTimestamp)
       }
 
-      val timestampsToSearch = topicPartitions.map(tp => tp -> offsetSpec).toMap.asJava
+      val timestampsToSearch = partitionInfos.map(tp => tp -> offsetSpec).toMap.asJava
 
-      /* Note that the value of the map can be null */
-      val partitionOffsets = client.listOffsets(timestampsToSearch).all().get().asScala.map { case (k, x) =>
-        if (x == null) (k, null) else (k, x.offset: java.lang.Long)
+      val listOffsetsResult = client.listOffsets(timestampsToSearch)
+      val partitionOffsets = partitionInfos.flatMap { tp =>
+        try {
+          val partitionInfo = listOffsetsResult.partitionResult(tp).get
+          Some((tp, partitionInfo.offset))
+        } catch {
+          case e: ExecutionException =>
+            e.getCause match {
+              case _: LeaderNotAvailableException =>
+                System.err.println(s"Error: topic-partition ${tp.topic}:${tp.partition} does not have a leader. Skip getting offsets")
+              case _ =>
+                System.err.println(s"Error while getting end offsets for topic-partition ${tp.topic}:${tp.partition}")
+                e.printStackTrace()
+            }
+            None
+        }
       }
 
-      partitionOffsets.toSeq.sortWith((tp1, tp2) => compareTopicPartitions(tp1._1, tp2._1)).foreach {
+      partitionOffsets.sortWith((tp1, tp2) => compareTopicPartitions(tp1._1, tp2._1)).foreach {
         case (tp, offset) => println(s"${tp.topic}:${tp.partition}:${Option(offset).getOrElse("")}")
       }
     } finally {
@@ -174,15 +180,14 @@ object GetOffsetShell {
    * PartitionPattern: NUMBER | NUMBER-(NUMBER)? | -NUMBER
    */
   def createTopicPartitionFilterWithPatternList(
-    topicPartitions: String,
-    excludeInternalTopics: Boolean
+    topicPartitions: String
   ): TopicPartitionFilter = {
     val ruleSpecs = topicPartitions.split(",")
-    val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec, excludeInternalTopics))
+    val rules = ruleSpecs.map(ruleSpec => parseRuleSpec(ruleSpec))
     CompositeTopicPartitionFilter(rules)
   }
 
-  def parseRuleSpec(ruleSpec: String, excludeInternalTopics: Boolean): TopicPartitionFilter = {
+  def parseRuleSpec(ruleSpec: String): TopicPartitionFilter = {
     val matcher = TopicPartitionPattern.matcher(ruleSpec)
     if (!matcher.matches())
       throw new IllegalArgumentException(s"Invalid rule specification: $ruleSpec")
@@ -202,7 +207,6 @@ object GetOffsetShell {
     }
     TopicFilterAndPartitionFilter(
       topicFilter,
-      excludeInternalTopics,
       partitionFilter
     )
   }
@@ -228,17 +232,17 @@ object GetOffsetShell {
     client: Admin,
     topicPartitionFilter: TopicPartitionFilter,
     excludeInternalTopics: Boolean
-  ): Seq[PartitionInfo] = {
+  ): Seq[TopicPartition] = {
     val listTopicsOptions = new ListTopicsOptions().listInternal(!excludeInternalTopics)
     val topics = client.listTopics(listTopicsOptions).names.get
-    val filteredTopics = topics.asScala.filter(topic => topicPartitionFilter.isTopicAllowed(topic))
+    val filteredTopics = topics.asScala.filter(topicPartitionFilter.isTopicAllowed)
 
     client.describeTopics(filteredTopics.asJava).allTopicNames.get.asScala.flatMap { case (topic, description) =>
       description
         .partitions
         .asScala
-        .map(tp => new PartitionInfo(topic, tp.partition, tp.leader, tp.replicas.asScala.toArray, tp.isr.asScala.toArray))
-        .filter(tp => topicPartitionFilter.isPartitionAllowed(tp))
+        .map(tp => new TopicPartition(topic, tp.partition))
+        .filter(topicPartitionFilter.isPartitionAllowed)
     }.toBuffer
   }
 }
@@ -272,7 +276,7 @@ trait TopicPartitionFilter {
   /**
    * Used to filter topics and topic-partitions after describing them
    */
-  def isPartitionAllowed(partition: PartitionInfo): Boolean
+  def isPartitionAllowed(partition: TopicPartition): Boolean
 }
 
 /**
@@ -280,26 +284,25 @@ trait TopicPartitionFilter {
  */
 case class TopicFilterAndPartitionFilter(
   topicFilter: IncludeList,
-  excludeInternalTopics: Boolean,
   partitionFilter: PartitionFilter
 ) extends TopicPartitionFilter {
 
-  override def isPartitionAllowed(partition: PartitionInfo): Boolean = {
-    isTopicAllowed(partition.topic()) && partitionFilter.isPartitionAllowed(partition.partition())
+  override def isPartitionAllowed(partition: TopicPartition): Boolean = {
+    isTopicAllowed(partition.topic) && partitionFilter.isPartitionAllowed(partition.partition)
   }
 
   override def isTopicAllowed(topic: String): Boolean = {
-    topicFilter.isTopicAllowed(topic, excludeInternalTopics)
+    topicFilter.isTopicAllowed(topic, false)
   }
 }
 
 case class CompositeTopicPartitionFilter(filters: Array[TopicPartitionFilter]) extends TopicPartitionFilter {
 
   override def isTopicAllowed(topic: String): Boolean = {
-    filters.exists(filter => filter.isTopicAllowed(topic))
+    filters.exists(_.isTopicAllowed(topic))
   }
 
-  override def isPartitionAllowed(tp: PartitionInfo): Boolean = {
-    filters.exists(filter => filter.isPartitionAllowed(tp))
+  override def isPartitionAllowed(tp: TopicPartition): Boolean = {
+    filters.exists(_.isPartitionAllowed(tp))
   }
 }
