@@ -617,9 +617,9 @@ class GroupCoordinator(val brokerId: Int,
                        leavingMembers: List[MemberIdentity],
                        responseCallback: LeaveGroupResult => Unit): Unit = {
 
-    def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String): Unit = {
+    def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String, leaveReason: String): Unit = {
       val member = group.get(memberId)
-      removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup")
+      removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup due to: $leaveReason")
       removeHeartbeatForLeavingMember(group, member.memberId)
       info(s"Member $member has left group $groupId through explicit `LeaveGroup` request")
     }
@@ -647,7 +647,7 @@ class GroupCoordinator(val brokerId: Int,
                   if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
                     groupInstanceId.flatMap(group.currentStaticMemberId) match {
                       case Some(currentMemberId) =>
-                        removeCurrentMemberFromGroup(group, currentMemberId)
+                        removeCurrentMemberFromGroup(group, currentMemberId, leavingMember.reason())
                         memberLeaveError(leavingMember, Errors.NONE)
                       case None =>
                         memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
@@ -665,7 +665,7 @@ class GroupCoordinator(val brokerId: Int,
                       groupInstanceId,
                       operation = "leave-group"
                     ).getOrElse {
-                      removeCurrentMemberFromGroup(group, memberId)
+                      removeCurrentMemberFromGroup(group, memberId, leavingMember.reason())
                       Errors.NONE
                     }
                     memberLeaveError(leavingMember, memberError)

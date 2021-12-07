@@ -3731,6 +3731,11 @@ public class KafkaAdminClient extends AdminClient {
         } else {
             members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
         }
+
+        if (options.reason() != null) {
+            members.forEach(member -> member.setReason(options.reason()));
+        }
+
         SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
         RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
