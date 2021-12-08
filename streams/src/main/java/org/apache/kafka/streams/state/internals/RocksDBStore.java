@@ -326,13 +326,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+
         return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                collectExecutionInfo,
-                this
+            query,
+            positionBound,
+            collectExecutionInfo,
+            this,
+            position,
+            context.taskId().partition()
         );
     }
 

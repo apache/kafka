@@ -121,7 +121,9 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
             query,
             positionBound,
             collectExecutionInfo,
-            this
+            this,
+            position,
+            context.taskId().partition()
         );
     }
 

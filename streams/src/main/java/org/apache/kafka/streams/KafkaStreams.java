@@ -1764,19 +1764,33 @@ public class KafkaStreams implements AutoCloseable {
             );
         }
         final StateQueryResult<R> result = new StateQueryResult<>();
+        final Set<Integer> handledPartitions = new HashSet<>();
 
         final Map<String, StateStore> globalStateStores = topologyMetadata.globalStateStores();
         if (globalStateStores.containsKey(storeName)) {
-            final StateStore store = globalStateStores.get(storeName);
-            final QueryResult<R> r =
-                store.query(
-                    request.getQuery(),
-                    request.getPositionBound(),
-                    request.executionInfoEnabled()
-                );
-            result.setGlobalResult(r);
+            // Global stores pose one significant problem
+            // for IQv2: when they start up, they skip the regular
+            // ingest pipeline and instead use the "restoration" pipeline
+            // to read up until the current end offset. Then, they switch
+            // over to the regular ingest pipeline.
+            //
+            // IQv2 position tracking expects to track the position of each
+            // record from the input topic through the ingest pipeline and then
+            // get the position headers through the restoration pipeline via the
+            // changelog topic. The fact that global stores "restore" the input topic
+            // instead of ingesting it violates our expectations.
+            //
+            // It has also caused other problems, so we may want to consider
+            // switching the global store processing to use the normal paradigm
+            // rather than adding special-case logic to track positions in global
+            // stores.
+            result.setGlobalResult(
+                QueryResult.forFailure(
+                    FailureReason.UNKNOWN_QUERY_TYPE,
+                    "Global stores do not yet support the KafkaStreams#query API. Use KafkaStreams#store instead."
+                )
+            );
         } else {
-            final Set<Integer> handledPartitions = new HashSet<>();
 
             for (final StreamThread thread : threads) {
                 final Map<TaskId, Task> tasks = thread.allTasks();
@@ -1824,6 +1838,17 @@ public class KafkaStreams implements AutoCloseable {
                             return result;
                         }
                     }
+                }
+            }
+        }
+
+        if (!request.isAllPartitions()) {
+            for (final Integer partition : request.getPartitions()) {
+                if (!result.getPartitionResults().containsKey(partition)){
+                    result.addResult(partition, QueryResult.forFailure(
+                        FailureReason.NOT_PRESENT,
+                        "The requested partition was not present at the time of the query."
+                    ));
                 }
             }
         }

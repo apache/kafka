@@ -97,11 +97,15 @@ public class StateQueryResult<R> {
      * prior observations.
      */
     public Position getPosition() {
-        Position position = Position.emptyPosition();
-        for (final QueryResult<R> r : partitionResults.values()) {
-            position = position.merge(r.getPosition());
+        if (globalResult != null) {
+            return globalResult.getPosition();
+        } else {
+            final Position position = Position.emptyPosition();
+            for (final QueryResult<R> r : partitionResults.values()) {
+                position.merge(r.getPosition());
+            }
+            return position;
         }
-        return position;
     }
 
     @Override
