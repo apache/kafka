@@ -81,7 +81,7 @@ tiered-topic-config.properties:
 ```properties
 index.interval.bytes=1
 segment.index.bytes=12
-retention.bytes=1
+local.retention.bytes=1
 remote.storage.enable=true
 ```
 
@@ -104,7 +104,7 @@ client.id=sample-producer
 ### Steps
 ```shell
 # Create a test topic named samsung
-sh kafka-topics.sh --bootstrap-server localhost:9092 --topic samsung --replication-factor 2 --partitions 1 --create --config index.interval.bytes=1 --config segment.index.bytes=12 --config retention.bytes=1 --config remote.storage.enable=true
+sh kafka-topics.sh --bootstrap-server localhost:9092 --topic samsung --replication-factor 2 --partitions 1 --create --config index.interval.bytes=1 --config segment.index.bytes=12 --config local.retention.bytes=1 --config remote.storage.enable=true
 # Produce messages to the topic
 sh kafka-console-producer.sh --bootstrap-server localhost:9092 --producer.config ../config/tiered-producer-config.properties --topic samsung
 # Consume messages from the topic
