@@ -1768,22 +1768,7 @@ public class KafkaStreams implements AutoCloseable {
 
         final Map<String, StateStore> globalStateStores = topologyMetadata.globalStateStores();
         if (globalStateStores.containsKey(storeName)) {
-            // Global stores pose one significant problem
-            // for IQv2: when they start up, they skip the regular
-            // ingest pipeline and instead use the "restoration" pipeline
-            // to read up until the current end offset. Then, they switch
-            // over to the regular ingest pipeline.
-            //
-            // IQv2 position tracking expects to track the position of each
-            // record from the input topic through the ingest pipeline and then
-            // get the position headers through the restoration pipeline via the
-            // changelog topic. The fact that global stores "restore" the input topic
-            // instead of ingesting it violates our expectations.
-            //
-            // It has also caused other problems, so we may want to consider
-            // switching the global store processing to use the normal paradigm
-            // rather than adding special-case logic to track positions in global
-            // stores.
+            // See KAFKA-13523
             result.setGlobalResult(
                 QueryResult.forFailure(
                     FailureReason.UNKNOWN_QUERY_TYPE,

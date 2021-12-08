@@ -419,6 +419,7 @@ public class IQv2StoreIntegrationTest {
     @Test
     public void verifyStore() {
         if (storeToTest.global()) {
+            // See KAFKA-13523
             globalShouldRejectAllQueries();
         } else {
             shouldRejectUnknownQuery();
@@ -429,6 +430,8 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void globalShouldRejectAllQueries() {
+        // See KAFKA-13523
+
         final PingQuery query = new PingQuery();
         final StateQueryRequest<Boolean> request = inStore(STORE_NAME).withQuery(query);
 
