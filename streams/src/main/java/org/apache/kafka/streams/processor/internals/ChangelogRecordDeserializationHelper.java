@@ -45,14 +45,14 @@ public class ChangelogRecordDeserializationHelper {
             final boolean consistencyEnabled,
             final Position position
     ) {
-        Position restoredPosition = Position.emptyPosition();
         if (!consistencyEnabled) {
-            return Position.emptyPosition();
+            return position;
         }
+        Position restoredPosition = Position.emptyPosition();
         final Header versionHeader = record.headers().lastHeader(
                 ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
         if (versionHeader == null) {
-            return Position.emptyPosition();
+            return position;
         } else {
             switch (versionHeader.value()[0]) {
                 case 0:

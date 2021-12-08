@@ -127,11 +127,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
 
-        Headers headers = new RecordHeaders();
+        final Headers headers;
         if (!consistencyEnabled) {
             headers = null;
         } else {
             // Add the vector clock to the header part of every record
+            headers = new RecordHeaders();
             headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
             headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
                     PositionSerde.serialize(position).array()));
