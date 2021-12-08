@@ -26,6 +26,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
@@ -37,13 +38,17 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -318,5 +323,17 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+    }
+
+    /**
+     * See {@link KafkaStreams#allLocalStorePartitionLags()}
+     */
+    public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLagsForTopology(final String topologyName) {
+        final List<Task> allTopologyTasks = new ArrayList<>();
+        processStreamThread(thread -> allTopologyTasks.addAll(
+            thread.allTasks().values().stream()
+                .filter(t -> topologyName.equals(t.id().topologyName()))
+                .collect(Collectors.toList())));
+        return allLocalStorePartitionLags(allTopologyTasks);
     }
 }

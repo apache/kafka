@@ -1691,18 +1691,22 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if the admin client request throws exception
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final List<Task> allTasks = new ArrayList<>();
+        processStreamThread(thread -> allTasks.addAll(thread.allTasks().values()));
+        return allLocalStorePartitionLags(allTasks);
+    }
+
+    protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
         final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
-        processStreamThread(thread -> {
-            for (final Task task : thread.allTasks().values()) {
-                allPartitions.addAll(task.changelogPartitions());
-                // Note that not all changelog partitions, will have positions; since some may not have started
-                allChangelogPositions.putAll(task.changelogOffsets());
-            }
-        });
+        for (final Task task : tasksToCollectLagFor) {
+            allPartitions.addAll(task.changelogPartitions());
+            // Note that not all changelog partitions, will have positions; since some may not have started
+            allChangelogPositions.putAll(task.changelogOffsets());
+        }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
