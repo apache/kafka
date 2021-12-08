@@ -2359,7 +2359,7 @@ public class KafkaAdminClient extends AdminClient {
                                 new DescribeConfigsRequestData.DescribeConfigsResource()
                                     .setResourceName(config.name())
                                     .setResourceType(config.type().id())
-                                    .setConfigurationKeys(null))
+                                    .setConfigurationKeys(config.configurationKeys().isEmpty() ? null : config.configurationKeys()))
                             .collect(Collectors.toList()))
                         .setIncludeSynonyms(options.includeSynonyms())
                         .setIncludeDocumentation(options.includeDocumentation()));

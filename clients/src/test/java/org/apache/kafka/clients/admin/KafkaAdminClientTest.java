@@ -1513,7 +1513,8 @@ public class KafkaAdminClientTest {
     @Test
     public void testDescribeBrokerConfigs() throws Exception {
         ConfigResource broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-        ConfigResource broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        ConfigResource broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1",
+                Collections.singletonList("broker.id"));
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponseFrom(new DescribeConfigsResponse(
@@ -1556,7 +1557,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeConfigsPartialResponse() throws Exception {
+    public void testDescribeConfigsPartialResponse() {
         ConfigResource topic = new ConfigResource(ConfigResource.Type.TOPIC, "topic");
         ConfigResource topic2 = new ConfigResource(ConfigResource.Type.TOPIC, "topic2");
         try (AdminClientUnitTestEnv env = mockClientEnv()) {

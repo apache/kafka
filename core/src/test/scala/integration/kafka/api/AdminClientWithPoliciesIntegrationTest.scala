@@ -65,6 +65,60 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @Test
+  def testDescribeConfigs(): Unit = {
+    client = Admin.create(createConfig)
+    // Create three topics, one with custom settings and two with default settings
+    val maxMessageBytes = "500000"
+    val logRetentionMs = "60000000"
+    val topicPropertyNames = List(LogConfig.MaxMessageBytesProp, LogConfig.RetentionMsProp)
+
+    val topic1 = "describe-configs-topic-1"
+    val topic1Config = new Properties
+    topic1Config.setProperty(LogConfig.MaxMessageBytesProp, maxMessageBytes)
+    topic1Config.setProperty(LogConfig.RetentionMsProp, logRetentionMs)
+    createTopic(topic1, 1, 1, topic1Config)
+
+    val topic2 = "describe-configs-topic-2"
+    createTopic(topic2, 1, 1)
+
+    val topic3 = "describe-configs-topic-3"
+    createTopic(topic3, 1, 1)
+
+    // Wait for topic metadata to sync up on all broker nodes
+    TestUtils.waitForAllPartitionsMetadata(servers, topic1, 1)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic2, 1)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic3, 1)
+
+    // Now fetch topic properties and confirm that we can fetch
+    // all of the properties as well as ones we are interested in
+    val topic1Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1, topicPropertyNames.asJava)
+    val topic2Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic2, topicPropertyNames.asJava)
+    val topic3Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic3)
+
+    val topicConfigs = client.describeConfigs(List(topic1Resource, topic2Resource, topic3Resource).asJava).all().get()
+    // Check for topic1 and topic2 we got only 2 properties, whereas for topic3 all of them
+    // were fetched
+    val topic1ConfigEntries = topicConfigs.get(topic1Resource).entries()
+    assertEquals(2, topic1ConfigEntries.size())
+    assertEquals(topicPropertyNames.toSet, topic1ConfigEntries.asScala.map(_.name).toSet)
+    assertEquals(Set(maxMessageBytes, logRetentionMs), topic1ConfigEntries.asScala.map(_.value()).toSet)
+
+    val topic2ConfigEntries = topicConfigs.get(topic2Resource).entries()
+    assertEquals(2, topic2ConfigEntries.size())
+    assertEquals(topicPropertyNames.toSet, topic2ConfigEntries.asScala.map(_.name).toSet)
+    assertEquals(Set(Defaults.MessageMaxBytes.toString, (Defaults.LogRetentionHours * 60 * 60 * 1000L).toString),
+      topic2ConfigEntries.asScala.map(_.value()).toSet)
+
+    val topic3ConfigEntries = topicConfigs.get(topic3Resource).entries()
+    assertTrue(topic3ConfigEntries.size() > 2, "Only 2 topic configuration fetched.")
+    val configKeys = topic3ConfigEntries.asScala.map(_.name).toSet.asJava
+    assertTrue(configKeys.containsAll(topicPropertyNames.asJava), configKeys.toString)
+    assertEquals(Set(Defaults.MessageMaxBytes.toString, (Defaults.LogRetentionHours * 60 * 60 * 1000L).toString),
+      topic3ConfigEntries.asScala.filter(configEntry => topicPropertyNames.contains(configEntry.name))
+        .map(_.value()).toSet)
+  }
+
+  @Test
   def testValidAlterConfigs(): Unit = {
     client = Admin.create(createConfig)
     // Create topics
