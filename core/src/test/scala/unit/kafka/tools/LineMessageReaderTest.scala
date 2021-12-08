@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test
 
 import java.io.ByteArrayInputStream
 import java.lang
+import java.nio.charset.StandardCharsets
 import java.util.Arrays.asList
 import java.util.Properties
 
@@ -50,6 +51,15 @@ class LineMessageReaderTest {
     props.put("parse.headers", "false")
 
     runTest(props, input, record("key0", "value0"), record("key1", "value1"))
+  }
+
+  @Test
+  def minimalValidInputWithHeaderKeyAndValue(): Unit = {
+    runTest(
+      defaultTestProps,
+      ":\t\t",
+      record("", "", asList(new RecordHeader("", "".getBytes(StandardCharsets.UTF_8))))
+    )
   }
 
   @Test
@@ -98,20 +108,18 @@ class LineMessageReaderTest {
 
     val input =
       "headerKey0.0:headerValue0.0&headerKey0.1:headerValue0.1!key0#value0\n" +
-        "headerKey1.0:headerValue1.0!key1#value1"
+      "headerKey1.0:headerValue1.0!key1#value1"
 
-    val headers: lang.Iterable[Header] = asList(
+    val headers0: lang.Iterable[Header] = asList(
       new RecordHeader("headerKey0.0", "headerValue0.0".getBytes()),
       new RecordHeader("headerKey0.1", "headerValue0.1".getBytes())
     )
 
-    val record0 = new ProducerRecord("topic", null, null, "key0", "value0", headers)
-
+    val record0 = new ProducerRecord("topic", null, null, "key0", "value0", headers0)
     val headers1: lang.Iterable[Header] = asList(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes()))
     val record1 = new ProducerRecord("topic", null, null, "key1", "value1", headers1)
 
     runTest(props, input, record0, record1)
-
   }
 
   @Test
@@ -119,14 +127,14 @@ class LineMessageReaderTest {
     val lineReader = new LineMessageReader()
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
-        "headerKey1.0:headerValue1.0[MISSING-DELIMITER]key1\tvalue1"
+      "headerKey1.0:headerValue1.0[MISSING-DELIMITER]key1\tvalue1"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     lineReader.readMessage()
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
-      "Could not parse line 2, most likely line does not match pattern: headerKey0:headerValue0,...,headerKeyN:headerValueN\tkey\tvalue",
+      "No key separator found on line 2: headerKey1.0:headerValue1.0[MISSING-DELIMITER]key1\tvalue1",
       expectedException.getMessage
     )
   }
@@ -135,37 +143,58 @@ class LineMessageReaderTest {
   def testIgnoreErrorInInput(): Unit = {
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0\n" +
-        "headerKey1.0:headerValue1.0\tkey1\tvalue1"
+      "headerKey1.0:headerValue1.0\tkey1\tvalue1"
 
     val props = defaultTestProps
     props.put("ignore.error", "true")
 
-    val payLoadOnlyDueToError: ProducerRecord[String, String] =
+    val invalidHeaders: lang.Iterable[Header] = asList(
+      new RecordHeader("headerKey0.0", "headerValue0.0".getBytes()),
+      new RecordHeader("headerKey0.1", "headerValue0.1[MISSING-DELIMITER]key0".getBytes())
+    )
+    val invalidRecord: ProducerRecord[String, String] =
       new ProducerRecord(
         "topic",
         null,
-        "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0"
+        null,
+        null,
+        "value0",
+        invalidHeaders
       )
 
     val headers: lang.Iterable[Header] = asList(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes()))
     val validRecord = new ProducerRecord("topic", null, null, "key1", "value1", headers)
 
-    runTest(props, input, payLoadOnlyDueToError, validRecord)
+    runTest(props, input, invalidRecord, validRecord)
   }
 
   @Test
   def testMalformedHeader(): Unit = {
     val lineReader = new LineMessageReader()
     val input =
-      "headerKey0.0:,\tkey0\tvalue0\n"
+      "key-val\tkey0\tvalue0\n"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
-      "Could not parse line 1, most likely line does not match pattern: headerKey0:headerValue0,...,headerKeyN:headerValueN\tkey\tvalue",
+      "No header key separator found on line 1 in pair key-val",
       expectedException.getMessage
     )
+  }
+
+  @Test
+  def testMalformedHeaderIgnoreError(): Unit = {
+    val input =
+      "key-val\tkey0\tvalue0\n"
+
+    val props = defaultTestProps
+    props.put("ignore.error", "true")
+
+    val headers: lang.Iterable[Header] = asList(new RecordHeader("key-val", null))
+    val expected = new ProducerRecord("topic", null, null, "key0", "value0", headers)
+
+    runTest(props, input, expected)
   }
 
   def runTest(props: Properties, input: String, expectedRecords: ProducerRecord[String, String]*): Unit = {

@@ -17,11 +17,6 @@
 
 package kafka.tools
 
-import java.io._
-import java.nio.charset.StandardCharsets
-import java.util.Properties
-import java.lang
-import java.util.Arrays.asList
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
@@ -29,11 +24,16 @@ import kafka.utils.Implicits._
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
+import java.io._
+import java.lang
+import java.nio.charset.StandardCharsets
+import java.util.Arrays.asList
+import java.util.Properties
 import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 
@@ -290,7 +290,6 @@ object ConsoleProducer {
     var lineNumber = 0
     var printPrompt = System.console != null
     var headerSeparatorPattern: Pattern = _
-    var headerKeySeparatorPattern: Pattern = _
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -307,89 +306,62 @@ object ConsoleProducer {
         headerSeparatorPattern = Pattern.compile(headersSeparator)
       if (props.containsKey("headers.key.separator"))
         headerKeySeparator = props.getProperty("headers.key.separator")
-        headerKeySeparatorPattern = Pattern.compile(headerKeySeparator)
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
-    override def readMessage(): ProducerRecord[Array[Byte],Array[Byte]] = {
+    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = {
       lineNumber += 1
       if (printPrompt) print(">")
       val line = reader.readLine()
-      try{
-        (line, parseKey, parseHeader) match {
-          case (null, _, _) => null
-          case (line, true, true) => parseHeaderKeyValue(line)
-          case (line, true, false) => parseKeyValue(line)
-          case (line, false, true) => parseHeaderValue(line)
-          case (line, false, false) => parseValue(line)
-        }
-      } catch {
-        case _: Throwable => onMatchError(line)
-      }
-    }
+      line match {
+        case null => null
+        case line =>
 
-    private def parseHeaderKeyValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
-      val headerIndex = line.indexOf(headersDelimiter)
-      val headers = line.substring(0, headerIndex)
-      val keyValue = line.substring(headerIndex + 1)
-      val keyIndex = keyValue.indexOf(keySeparator)
-      val key = keyValue.substring(0, keyIndex)
-      val value = keyValue.substring(keyIndex + 1)
-      new ProducerRecord(topic, null, null, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
-    }
+          val headers = (parseHeader, line.indexOf(headersDelimiter)) match {
+            case (false, _) => null
+            case (_, -1) =>
+              if (ignoreError) null
+              else throw new KafkaException(s"No header separator found on line $lineNumber: $line")
+            case (_, n) => line.substring(0, n)
+          }
 
-    private def parseKeyValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
-      val keyIndex = line.indexOf(keySeparator)
-      val key = line.substring(0, keyIndex)
-      val value = line.substring(keyIndex + 1)
-      new ProducerRecord(topic, key.getBytes(StandardCharsets.UTF_8), value.getBytes(StandardCharsets.UTF_8))
-    }
+          val headersLength = if (headers == null ) -1 else headers.length
+          val key = (parseKey, line.substring(headersLength + 1).indexOf(keySeparator)) match {
+            case (false, _) => null
+            case (_, -1) =>
+              if (ignoreError) null
+              else throw new KafkaException(s"No key separator found on line $lineNumber: $line")
+            case (_, n) => line.substring(headersLength +  1, headersLength +  1 + n)
+          }
 
-    private def parseHeaderValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
-      val headerIndex = line.indexOf(headersDelimiter)
-      val headers = line.substring(0, headerIndex)
-      val value = line.substring(headerIndex + 1)
-      new ProducerRecord(topic, null, null, null, value.getBytes(StandardCharsets.UTF_8), mapHeaders(headers))
-    }
-
-    private def parseValue(line: String): ProducerRecord[Array[Byte],Array[Byte]] = {
-      new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
-    }
-
-    private def onMatchError(line: String): ProducerRecord[Array[Byte], Array[Byte]] = {
-      if (ignoreError) {
-        new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
-      } else {
-        throw new KafkaException("Could not parse line " + lineNumber + ", most likely line does not match pattern: " + illustratePattern())
+          val keyLength = if (key == null) -1 else key.length
+          val value = line.substring(headersLength + 1 + keyLength + 1)
+          new ProducerRecord[Array[Byte], Array[Byte]](
+            topic,
+            null,
+            null,
+            if (key != null) key.getBytes(StandardCharsets.UTF_8) else null,
+            if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
+            if (headers != null ) mapHeaders(headers) else null
+          )
       }
     }
 
     def mapHeaders(headers: String): lang.Iterable[Header] = {
-      asList(
-        headerSeparatorPattern.split(headers)
-          .map(keyValue => headerKeySeparatorPattern.split(keyValue))
-          .map(keyValue => new RecordHeader(keyValue(0), keyValue(1).getBytes(StandardCharsets.UTF_8)))
-          : _*
-      )
-    }
+      val recordHeaders = headerSeparatorPattern.split(headers)
+        .map(pair =>
+          (pair.indexOf(headerKeySeparator), ignoreError) match {
+            case (-1, false) => throw new KafkaException(s"No header key separator found on line $lineNumber in pair $pair")
+            case (-1, true) => new RecordHeader(pair, null)
+            case (i, _) => new RecordHeader(pair.substring(0, i), pair.substring(i+1).getBytes(StandardCharsets.UTF_8))
+        })
 
-    def illustratePattern(): String = {
-      val valuePattern = "value"
-      val keyPattern: String = "key" + keySeparator
-      val headerPattern: String =
-        "headerKey0" + headerKeySeparator + "headerValue0" + headersSeparator +
-          "..." + headersSeparator +
-          "headerKeyN" + headerKeySeparator + "headerValueN" +
-          headersDelimiter
+      asList(recordHeaders: _*)
 
-      (parseKey, parseHeader) match {
-        case (false, false) => valuePattern
-        case (true, false) => keyPattern + valuePattern
-        case (false, true) => headerPattern + valuePattern
-        case (true, true) => headerPattern + keyPattern + valuePattern
-      }
     }
   }
 }
+
+
