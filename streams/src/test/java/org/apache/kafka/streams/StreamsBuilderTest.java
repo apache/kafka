@@ -1017,6 +1017,23 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldUseDefaultNameForGlobalStoreProcessor() {
+        builder.addGlobalStore(Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("store"),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "topic",
+                Consumed.with(Serdes.String(), Serdes.String()),
+                new MockApiProcessorSupplier<>()
+        );
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildGlobalStateTopology();
+        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "KTABLE-SOURCE-0000000001");
+    }
+
+    @Test
     public void shouldAllowStreamsFromSameTopic() {
         builder.stream("topic");
         builder.stream("topic");
