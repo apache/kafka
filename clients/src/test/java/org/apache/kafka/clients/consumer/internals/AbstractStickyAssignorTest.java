@@ -589,13 +589,13 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assign(partitionsPerTopic, subscriptions);
     }
 
-    @Timeout(60)
+    @Timeout(40)
     @Test
     public void testLargeAssignmentAndGroupWithNonEqualSubscription() {
         // 1 million partitions!
         int topicCount = 500;
         int partitionCount = 2_000;
-        int consumerCount = 2_000;
+        int consumerCount = 1_000;
 
         List<String> topics = new ArrayList<>();
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
