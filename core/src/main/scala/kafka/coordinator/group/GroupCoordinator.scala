@@ -182,7 +182,8 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
         case Some(group) =>
           group.inLock {
-            info(s"memberId=$memberId with groupInstanceId=$groupInstanceId is attempting to join groupId=$groupId due to: $reason")
+            if (reason != null)
+              info(s"memberId=$memberId with groupInstanceId=$groupInstanceId is attempting to join groupId=$groupId due to: $reason")
             if (!acceptJoiningMember(group, memberId)) {
               group.remove(memberId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
