@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
@@ -37,6 +39,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -247,30 +251,26 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "1")),
-            stringSerializer.serialize(null, "a")));
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "2")),
-            stringSerializer.serialize(null, "b")));
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "3")),
-            stringSerializer.serialize(null, "c")));
-
-        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
-        context.setRecordContext(recordContext);
         inMemoryKeyValueStore.init((StateStoreContext) context, inMemoryKeyValueStore);
 
-        final Position expected = Position.emptyPosition();
-        long offset = 0;
-        for (final KeyValue<Bytes, byte[]> k : entries) {
-            inMemoryKeyValueStore.put(k.key, k.value);
-            expected.withComponent("input", 0, offset);
-            offset++;
-        }
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key3"), bytesValue("value3"));
 
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = inMemoryKeyValueStore.getPosition();
-        assertThat(expected, is(actual));
+        assertEquals(expected, actual);
     }
+
+    private byte[] bytesValue(final String value) {
+        return value.getBytes();
+    }
+
+    private Bytes bytesKey(final String key) {
+        return Bytes.wrap(key.getBytes());
+    }
+
 }

@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -33,10 +41,13 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -50,6 +61,7 @@ import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
+import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -72,13 +84,14 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
@@ -90,8 +103,10 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.replay;
@@ -112,7 +127,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
-    Position position;
 
     @Before
     public void setUp() {
@@ -126,7 +140,6 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new StreamsConfig(props)
         );
         rocksDBStore = getRocksDBStore();
-        position = rocksDBStore.getPosition();
     }
 
     @After
@@ -389,29 +402,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "1")),
-            stringSerializer.serialize(null, "a")));
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "2")),
-            stringSerializer.serialize(null, "b")));
-        entries.add(new KeyValue<>(
-            new Bytes(stringSerializer.serialize(null, "3")),
-            stringSerializer.serialize(null, "c")));
-
-        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
-        context.setRecordContext(recordContext);
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
-        final Position expected = Position.emptyPosition();
-        long offset = 0;
-        for (final KeyValue<Bytes, byte[]> k : entries) {
-            rocksDBStore.put(k.key, k.value);
-            expected.withComponent("input", 0, offset);
-            offset++;
-        }
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "one")), stringSerializer.serialize(null, "A"));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "two")), stringSerializer.serialize(null, "B"));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "three")), stringSerializer.serialize(null, "C"));
 
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = rocksDBStore.getPosition();
         assertEquals(expected, actual);
     }
@@ -969,7 +969,169 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
         }
     }
-        
+
+    @Test
+    public void shouldRestoreRecordsAndConsistencyVectorSingleTopic() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecords();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
+        );
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        context.restoreWithHeaders(rocksDBStore.name(), entries);
+
+        assertEquals(
+                "a",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
+        assertEquals(
+                "b",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
+        assertEquals(
+                "c",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
+
+        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound(""), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound(""), hasEntry(0, 3L));
+    }
+
+    @Test
+    public void shouldRestoreRecordsAndConsistencyVectorMultipleTopics() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecordsMultipleTopics();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
+        );
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        context.restoreWithHeaders(rocksDBStore.name(), entries);
+
+        assertEquals(
+                "a",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
+        assertEquals(
+                "b",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
+        assertEquals(
+                "c",
+                stringDeserializer.deserialize(
+                        null,
+                        rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
+
+        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound("A"), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound("A"), hasEntry(0, 3L));
+        assertThat(rocksDBStore.getPosition().getBound("B"), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound("B"), hasEntry(0, 2L));
+    }
+
+    @Test
+    public void shouldHandleTombstoneRecords() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = getChangelogRecordsWithTombstones();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
+        );
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        context.restoreWithHeaders(rocksDBStore.name(), entries);
+
+        assertNull(stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
+
+        assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getBound("A"), hasEntry(0, 2L));
+    }
+
+    @Test
+    public void shouldNotThrowWhenRestoringOnMissingHeaders() {
+        final List<KeyValue<byte[], byte[]>> entries = getChangelogRecordsWithoutHeaders();
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsConfig(props)
+        );
+        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        context.restore(rocksDBStore.name(), entries);
+        assertThat(rocksDBStore.getPosition(), is(Position.emptyPosition()));
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(createChangelogRecord("1".getBytes(UTF_8), "a".getBytes(UTF_8), "", 0, 1));
+        entries.add(createChangelogRecord("2".getBytes(UTF_8), "b".getBytes(UTF_8), "", 0, 2));
+        entries.add(createChangelogRecord("3".getBytes(UTF_8), "c".getBytes(UTF_8), "", 0, 3));
+        return entries;
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecordsMultipleTopics() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(createChangelogRecord("1".getBytes(UTF_8), "a".getBytes(UTF_8), "A", 0, 1));
+        entries.add(createChangelogRecord("2".getBytes(UTF_8), "b".getBytes(UTF_8), "B", 0, 2));
+        entries.add(createChangelogRecord("3".getBytes(UTF_8), "c".getBytes(UTF_8), "A", 0, 3));
+        return entries;
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecordsWithTombstones() {
+        final List<ConsumerRecord<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(createChangelogRecord("1".getBytes(UTF_8), "a".getBytes(UTF_8), "A", 0, 1));
+        entries.add(createChangelogRecord("1".getBytes(UTF_8), null, "A", 0, 2));
+        return entries;
+    }
+
+    private List<KeyValue<byte[], byte[]>> getChangelogRecordsWithoutHeaders() {
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("3".getBytes(UTF_8), "c".getBytes(UTF_8)));
+        return entries;
+    }
+
+    private ConsumerRecord<byte[], byte[]> createChangelogRecord(
+            final byte[] key, final byte[] value, final String topic, final int partition, final long offset) {
+        final Headers headers = new RecordHeaders();
+        Position position = Position.emptyPosition();
+        position = position.withComponent(topic, partition, offset);
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position).array()));
+        return new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                key, value, headers, Optional.empty());
+    }
+
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
         static boolean bloomFiltersSet;
