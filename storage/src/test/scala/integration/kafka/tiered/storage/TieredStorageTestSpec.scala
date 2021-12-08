@@ -172,7 +172,9 @@ final class UpdateTopicConfigAction(val topic: String, val configsToBeAdded: Map
   }
 }
 
-final class DeleteTopicAction(val topic: String, val deleteSegmentSpecs: Seq[RemoteDeleteSegmentSpec]) extends TieredStorageTestAction {
+final class DeleteTopicAction(val topic: String,
+                              val deleteSegmentSpecs: Seq[RemoteDeleteSegmentSpec],
+                              val shouldDelete: Boolean) extends TieredStorageTestAction {
 
   private val deleteWaitTimeoutSec: Int = 10
 
@@ -181,7 +183,9 @@ final class DeleteTopicAction(val topic: String, val deleteSegmentSpecs: Seq[Rem
     val tieredStorageConditions = deleteSegmentSpecs.map { spec =>
       expectEvent(tieredStorages.asJava, DELETE_SEGMENT, spec.sourceBrokerId, spec.topicPartition, false, spec.count)
     }
-    context.deleteTopic(topic)
+    if (shouldDelete) {
+      context.deleteTopic(topic)
+    }
     if (tieredStorageConditions.nonEmpty) {
       try {
         tieredStorageConditions.reduce(_ and _).waitUntilTrue(deleteWaitTimeoutSec, TimeUnit.SECONDS)
@@ -196,7 +200,7 @@ final class DeleteTopicAction(val topic: String, val deleteSegmentSpecs: Seq[Rem
   }
 
   override def describe(output: PrintStream): Unit = {
-    output.println(s"delete-topic: $topic")
+    output.println(s"${ if (shouldDelete) "delete-topic" else "wait-for-segment-deletion" }: $topic")
     deleteSegmentSpecs.foreach(spec => output.println(s"    $spec"))
   }
 }
@@ -511,7 +515,7 @@ final class ExpectBrokerInISR(val topicPartition: TopicPartition, replicaId: Int
 final class ExpectEmptyRemoteStorageAction(val topicPartition: TopicPartition) extends TieredStorageTestAction {
   override def doExecute(context: TieredStorageTestContext): Unit = {
     val snapshot = context.takeTieredStorageSnapshot()
-    // FIXME(todo-tier): When deleting a topic, the remote log segments are deleted but not the parent topic directory.
+    // FIXME(DKAFC-1583): When deleting a topic, the remote log segments are deleted but not the parent topic directory.
     // assertFalse(snapshot.getTopicPartitions.contains(topicPartition))
     assertTrue(snapshot.getFilesets(topicPartition).isEmpty)
   }
@@ -622,7 +626,7 @@ final class TieredStorageTestBuilder {
   private var fetchables: mutable.Map[TopicPartition, (Int, Int)] = mutable.Map()
 
   // topic -> Buffer(brokerId)
-  private var deletables: mutable.Map[TopicPartition, mutable.Buffer[(Int, Int)]] = mutable.Map()
+  private val deletables: mutable.Map[TopicPartition, mutable.Buffer[(Int, Int)]] = mutable.Map()
 
   private val actions = mutable.Buffer[TieredStorageTestAction]()
 
@@ -660,20 +664,7 @@ final class TieredStorageTestBuilder {
   def deleteTopic(topics: Set[String]): this.type = {
     maybeCreateProduceAction()
     maybeCreateConsumeActions()
-
-    topics.foreach(topic => {
-      val deleteSegmentSpecs = deletables.filter(e => e._1.topic().equals(topic))
-        .flatMap {
-          case (partition, buffer) =>
-            buffer.map {
-              case(sourceBroker, atMostDeleteSegmentCallCount) =>
-                RemoteDeleteSegmentSpec(sourceBroker, partition, atMostDeleteSegmentCallCount)
-            }
-        }.toSeq
-      actions += new DeleteTopicAction(topic, deleteSegmentSpecs)
-
-    })
-    deletables = mutable.Map()
+    topics.foreach(actions += buildDeleteTopicAction(_, shouldDelete = true))
     this
   }
 
@@ -771,6 +762,13 @@ final class TieredStorageTestBuilder {
       case Some(buffer) => buffer += attributes
       case None => deletables += topicPartition -> mutable.Buffer(attributes)
     }
+    this
+  }
+
+  def waitForRemoteLogSegmentDeletion(topic: String): this.type = {
+    maybeCreateProduceAction()
+    maybeCreateConsumeActions()
+    actions += buildDeleteTopicAction(topic, shouldDelete = false)
     this
   }
 
@@ -880,5 +878,18 @@ final class TieredStorageTestBuilder {
     }
 
     producables(topicPartition)
+  }
+
+  private def buildDeleteTopicAction(topic: String, shouldDelete: Boolean): DeleteTopicAction = {
+    val deleteSegmentSpecs = deletables.filter(e => e._1.topic().equals(topic))
+      .flatMap {
+        case (partition, buffer) =>
+          buffer.map {
+            case(sourceBroker, atMostDeleteSegmentCallCount) =>
+              RemoteDeleteSegmentSpec(sourceBroker, partition, atMostDeleteSegmentCallCount)
+          }
+      }.toSeq
+    deleteSegmentSpecs.foreach(spec => deletables.remove(spec.topicPartition))
+    new DeleteTopicAction(topic, deleteSegmentSpecs, shouldDelete)
   }
 }

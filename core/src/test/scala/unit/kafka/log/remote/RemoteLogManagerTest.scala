@@ -28,16 +28,19 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage._
-import org.easymock.EasyMock
+import org.easymock.{CaptureType, EasyMock}
 import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{CsvSource}
 
 import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
 import java.util.{Collections, Optional, Properties}
 import java.{lang, util}
-import scala.collection.Seq
+import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 class RemoteLogManagerTest {
 
@@ -399,6 +402,173 @@ class RemoteLogManagerTest {
         override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
       }
     assertEquals(rsmManager, remoteLogManager.storageManager())
+  }
+
+  @ParameterizedTest(name = "testDeleteLogSegmentDueToRetentionTimeBreach segmentCount={0} deletableSegmentCount={1}")
+  @CsvSource(value = Array("50, 0", "50, 1", "50, 23", "50, 50"))
+  def testDeleteLogSegmentDueToRetentionTimeBreach(segmentCount: Int, deletableSegmentCount: Int): Unit = {
+    val leaderEpoch = 0
+    cache.assign(leaderEpoch, 0)
+    val logConfig: LogConfig = createMock(classOf[LogConfig])
+    expect(logConfig.retentionMs).andReturn(1).anyTimes()
+    expect(logConfig.retentionSize).andReturn(-1).anyTimes()
+
+    val log: Log = createMock(classOf[Log])
+    expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
+    expect(log.config).andReturn(logConfig).anyTimes()
+    expect(log.size).andReturn(0).anyTimes()
+
+    var logStartOffset: Option[Long] = None
+    val rsmManager: ClassLoaderAwareRemoteStorageManager = createMock(classOf[ClassLoaderAwareRemoteStorageManager])
+    val rlmmManager: RemoteLogMetadataManager = createMock(classOf[RemoteLogMetadataManager])
+    val remoteLogManager =
+      new RemoteLogManager(_ => Option(log), (_, startOffset) => logStartOffset = Option(startOffset), rlmConfig, time,
+        brokerId, clusterId, logsDir, brokerTopicStats) {
+        override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
+        override private[remote] def createRemoteLogMetadataManager() = rlmmManager
+      }
+    val segmentMetadataList = listRemoteLogSegmentMetadataByTime(segmentCount, deletableSegmentCount)
+    expect(rlmmManager.highestOffsetForEpoch(EasyMock.eq(topicIdPartition), anyInt()))
+      .andReturn(Optional.empty()).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition, leaderEpoch)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.updateRemoteLogSegmentMetadata(anyObject(classOf[RemoteLogSegmentMetadataUpdate]))).anyTimes()
+
+    val args1 = newCapture[RemoteLogSegmentMetadata](CaptureType.ALL)
+    expect(rsmManager.deleteLogSegmentData(capture(args1))).anyTimes()
+    replay(logConfig, log, rlmmManager, rsmManager)
+
+    val rlmTask = new remoteLogManager.RLMTask(topicIdPartition)
+    rlmTask.convertToLeader(leaderEpoch)
+    rlmTask.handleExpiredRemoteLogSegments()
+
+    assertEquals(deletableSegmentCount, args1.getValues.size())
+    if (deletableSegmentCount > 0) {
+      val expectedEndMetadata = segmentMetadataList(deletableSegmentCount-1)
+      assertEquals(segmentMetadataList.head, args1.getValues.asScala.head)
+      assertEquals(expectedEndMetadata, args1.getValues.asScala.reverse.head)
+      assertEquals(expectedEndMetadata.endOffset()+1, logStartOffset.get)
+    }
+    verify(logConfig, log, rlmmManager, rsmManager)
+  }
+
+  @ParameterizedTest(name = "testDeleteLogSegmentDueToRetentionSizeBreach segmentCount={0} deletableSegmentCount={1}")
+  @CsvSource(value = Array("50, 0", "50, 1", "50, 23", "50, 50"))
+  def testDeleteLogSegmentDueToRetentionSizeBreach(segmentCount: Int, deletableSegmentCount: Int): Unit = {
+    val leaderEpoch = 0
+    val localLogSegmentsSize = 500L
+    val retentionSize = (segmentCount - deletableSegmentCount) * 100 + localLogSegmentsSize
+    cache.assign(leaderEpoch, 0)
+    val logConfig: LogConfig = createMock(classOf[LogConfig])
+    expect(logConfig.retentionMs).andReturn(-1).anyTimes()
+    expect(logConfig.retentionSize).andReturn(retentionSize).anyTimes()
+
+    val log: Log = createMock(classOf[Log])
+    expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
+    expect(log.config).andReturn(logConfig).anyTimes()
+    expect(log.size).andReturn(localLogSegmentsSize).anyTimes()
+
+    var logStartOffset: Option[Long] = None
+    val rsmManager: ClassLoaderAwareRemoteStorageManager = createMock(classOf[ClassLoaderAwareRemoteStorageManager])
+    val rlmmManager: RemoteLogMetadataManager = createMock(classOf[RemoteLogMetadataManager])
+    val remoteLogManager =
+      new RemoteLogManager(_ => Option(log), (_, startOffset) => logStartOffset = Option(startOffset), rlmConfig, time,
+        brokerId, clusterId, logsDir, brokerTopicStats) {
+        override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
+        override private[remote] def createRemoteLogMetadataManager() = rlmmManager
+      }
+    val segmentMetadataList = listRemoteLogSegmentMetadata(segmentCount)
+    expect(rlmmManager.highestOffsetForEpoch(EasyMock.eq(topicIdPartition), anyInt()))
+      .andReturn(Optional.empty()).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition, leaderEpoch)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.updateRemoteLogSegmentMetadata(anyObject(classOf[RemoteLogSegmentMetadataUpdate]))).anyTimes()
+
+    val args1 = newCapture[RemoteLogSegmentMetadata](CaptureType.ALL)
+    expect(rsmManager.deleteLogSegmentData(capture(args1))).anyTimes()
+    replay(logConfig, log, rlmmManager, rsmManager)
+
+    val rlmTask = new remoteLogManager.RLMTask(topicIdPartition)
+    rlmTask.convertToLeader(leaderEpoch)
+    rlmTask.handleExpiredRemoteLogSegments()
+
+    assertEquals(deletableSegmentCount, args1.getValues.size())
+    if (deletableSegmentCount > 0) {
+      val expectedEndMetadata = segmentMetadataList(deletableSegmentCount-1)
+      assertEquals(segmentMetadataList.head, args1.getValues.asScala.head)
+      assertEquals(expectedEndMetadata, args1.getValues.asScala.reverse.head)
+      assertEquals(expectedEndMetadata.endOffset()+1, logStartOffset.get)
+    }
+    verify(logConfig, log, rlmmManager, rsmManager)
+  }
+
+  @ParameterizedTest(name = "testDeleteLogSegmentDueToRetentionTimeAndSizeBreach segmentCount={0} deletableSegmentCountByTime={1} deletableSegmentCountBySize={2}")
+  @CsvSource(value = Array("50, 0, 0", "50, 1, 5", "50, 23, 15", "50, 50, 50"))
+  def testDeleteLogSegmentDueToRetentionTimeAndSizeBreach(segmentCount: Int,
+                                                          deletableSegmentCountByTime: Int,
+                                                          deletableSegmentCountBySize: Int): Unit = {
+    val leaderEpoch = 0
+    val localLogSegmentsSize = 500L
+    val retentionSize = (segmentCount - deletableSegmentCountBySize) * 100 + localLogSegmentsSize
+    cache.assign(leaderEpoch, 0)
+    val logConfig: LogConfig = createMock(classOf[LogConfig])
+    expect(logConfig.retentionMs).andReturn(1).anyTimes()
+    expect(logConfig.retentionSize).andReturn(retentionSize).anyTimes()
+
+    val log: Log = createMock(classOf[Log])
+    expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
+    expect(log.config).andReturn(logConfig).anyTimes()
+    expect(log.size).andReturn(localLogSegmentsSize).anyTimes()
+
+    var logStartOffset: Option[Long] = None
+    val rsmManager: ClassLoaderAwareRemoteStorageManager = createMock(classOf[ClassLoaderAwareRemoteStorageManager])
+    val rlmmManager: RemoteLogMetadataManager = createMock(classOf[RemoteLogMetadataManager])
+    val remoteLogManager =
+      new RemoteLogManager(_ => Option(log), (_, startOffset) => logStartOffset = Option(startOffset), rlmConfig, time,
+        brokerId, clusterId, logsDir, brokerTopicStats) {
+        override private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = rsmManager
+        override private[remote] def createRemoteLogMetadataManager() = rlmmManager
+      }
+    val segmentMetadataList = listRemoteLogSegmentMetadataByTime(segmentCount, deletableSegmentCountByTime)
+    expect(rlmmManager.highestOffsetForEpoch(EasyMock.eq(topicIdPartition), anyInt()))
+      .andReturn(Optional.empty()).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.listRemoteLogSegments(topicIdPartition, leaderEpoch)).andReturn(segmentMetadataList.iterator.asJava).anyTimes()
+    expect(rlmmManager.updateRemoteLogSegmentMetadata(anyObject(classOf[RemoteLogSegmentMetadataUpdate]))).anyTimes()
+
+    val args1 = newCapture[RemoteLogSegmentMetadata](CaptureType.ALL)
+    expect(rsmManager.deleteLogSegmentData(capture(args1))).anyTimes()
+    replay(logConfig, log, rlmmManager, rsmManager)
+
+    val rlmTask = new remoteLogManager.RLMTask(topicIdPartition)
+    rlmTask.convertToLeader(leaderEpoch)
+    rlmTask.handleExpiredRemoteLogSegments()
+
+    val deletableSegmentCount = Math.max(deletableSegmentCountBySize, deletableSegmentCountByTime)
+    assertEquals(deletableSegmentCount, args1.getValues.size())
+    if (deletableSegmentCount > 0) {
+      val expectedEndMetadata = segmentMetadataList(deletableSegmentCount-1)
+      assertEquals(segmentMetadataList.head, args1.getValues.asScala.head)
+      assertEquals(expectedEndMetadata, args1.getValues.asScala.reverse.head)
+      assertEquals(expectedEndMetadata.endOffset()+1, logStartOffset.get)
+    }
+    verify(logConfig, log, rlmmManager, rsmManager)
+  }
+
+  private def listRemoteLogSegmentMetadataByTime(segmentCount: Int,
+                                                 deletableSegmentCount: Int): List[RemoteLogSegmentMetadata] = {
+    val result = mutable.Buffer.empty[RemoteLogSegmentMetadata]
+    for (idx <- 0 until segmentCount) {
+      val timestamp = if (idx < deletableSegmentCount) time.milliseconds()-1 else time.milliseconds()
+      val startOffset = idx * 100
+      result += new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
+        startOffset, startOffset + 99, timestamp, brokerId, timestamp, 100, Collections.singletonMap(0, 0L))
+    }
+    result.toList
+  }
+
+  private def listRemoteLogSegmentMetadata(segmentCount: Int): List[RemoteLogSegmentMetadata] = {
+    listRemoteLogSegmentMetadataByTime(segmentCount, 0)
   }
 
   private def nonExistentTempFile(): File = {
