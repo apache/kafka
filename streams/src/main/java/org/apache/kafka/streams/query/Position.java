@@ -172,4 +172,8 @@ public class Position {
         throw new UnsupportedOperationException(
             "This mutable object is not suitable as a hash key");
     }
+
+    public boolean isEmpty() {
+        return position.isEmpty();
+    }
 }
