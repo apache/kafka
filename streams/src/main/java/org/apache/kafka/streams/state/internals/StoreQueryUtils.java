@@ -79,15 +79,15 @@ public final class StoreQueryUtils {
     ) {
         final Position bound = positionBound.position();
         for (final String topic : bound.getTopics()) {
-            final Map<Integer, Long> partitionBounds = bound.getBound(topic);
-            final Map<Integer, Long> seenPartitionBounds = position.getBound(topic);
+            final Map<Integer, Long> partitionBounds = bound.getPartitionPositions(topic);
+            final Map<Integer, Long> seenPartitionPositions = position.getPartitionPositions(topic);
             if (!partitionBounds.containsKey(partition)) {
                 // this topic isn't bounded for our partition, so just skip over it.
             } else {
-                if (!seenPartitionBounds.containsKey(partition)) {
+                if (!seenPartitionPositions.containsKey(partition)) {
                     // we haven't seen a partition that we have a bound for
                     return false;
-                } else if (seenPartitionBounds.get(partition) < partitionBounds.get(partition)) {
+                } else if (seenPartitionPositions.get(partition) < partitionBounds.get(partition)) {
                     // our current position is behind the bound
                     return false;
                 }

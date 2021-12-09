@@ -270,8 +270,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         final Header vectorHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         assertThat(vectorHeader, is(notNullValue()));
         final Position position = PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value()));
-        assertThat(position.getBound(INPUT_TOPIC_NAME), is(notNullValue()));
-        assertThat(position.getBound(INPUT_TOPIC_NAME), hasEntry(0, 100L));
+        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
+        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
 
     }
 

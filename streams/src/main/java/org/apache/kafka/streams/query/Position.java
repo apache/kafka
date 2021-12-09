@@ -129,7 +129,7 @@ public class Position {
     /**
      * Return the partition -> offset mapping for a specific topic.
      */
-    public Map<Integer, Long> getBound(final String topic) {
+    public Map<Integer, Long> getPartitionPositions(final String topic) {
         final ConcurrentHashMap<Integer, Long> bound = position.get(topic);
         return bound == null ? Collections.emptyMap() : Collections.unmodifiableMap(bound);
     }

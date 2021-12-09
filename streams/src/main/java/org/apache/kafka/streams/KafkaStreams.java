@@ -1764,7 +1764,6 @@ public class KafkaStreams implements AutoCloseable {
             );
         }
         final StateQueryResult<R> result = new StateQueryResult<>();
-        final Set<Integer> handledPartitions = new HashSet<>();
 
         final Map<String, StateStore> globalStateStores = topologyMetadata.globalStateStores();
         if (globalStateStores.containsKey(storeName)) {
@@ -1816,9 +1815,8 @@ public class KafkaStreams implements AutoCloseable {
 
                             // optimization: if we have handled all the requested partitions,
                             // we can return right away.
-                            handledPartitions.add(partition);
                             if (!request.isAllPartitions()
-                                && handledPartitions.containsAll(request.getPartitions())) {
+                                && result.getPartitionResults().keySet().containsAll(request.getPartitions())) {
                                 return result;
                             }
                         }
