@@ -25,7 +25,6 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 
 import java.util.Map;
-import java.util.Map.Entry;
 
 public final class StoreQueryUtils {
 
@@ -88,14 +87,10 @@ public final class StoreQueryUtils {
                 if (!partitionBounds.containsKey(partition)) {
                     // this topic isn't bounded for our partition, so just skip over it.
                 } else {
-                    if (seenPartitionBounds == null) {
-                        // we haven't seen a topic that is bounded for our partition
-                        return false;
-                    } else if (!seenPartitionBounds.containsKey(partition)) {
+                    if (!seenPartitionBounds.containsKey(partition)) {
                         // we haven't seen a partition that we have a bound for
                         return false;
-                    } else if (seenPartitionBounds.get(partition) < partitionBounds.get(
-                        partition)) {
+                    } else if (seenPartitionBounds.get(partition) < partitionBounds.get(partition)) {
                         // our current position is behind the bound
                         return false;
                     }
