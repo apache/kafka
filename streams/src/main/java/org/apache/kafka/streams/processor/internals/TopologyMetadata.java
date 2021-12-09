@@ -140,7 +140,7 @@ public class TopologyMetadata {
         threadVersions.remove(threadName);
     }
 
-    public void maybeNotifyTopologyVersionWaiters(final String threadName) {
+    public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
         try {
             lock();
             final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
@@ -153,7 +153,7 @@ public class TopologyMetadata {
                     if (threadVersions.values().stream().allMatch(t -> t >= topologyVersionWaitersVersion)) {
                         topologyVersionWaiters.future.complete(null);
                         iterator.remove();
-                        log.info("Thread {} is now on topology version {}", threadName, topologyVersionWaiters.topologyVersion);
+                        log.info("All threads are now on topology version {}", topologyVersionWaiters.topologyVersion);
                     }
                 }
             }
