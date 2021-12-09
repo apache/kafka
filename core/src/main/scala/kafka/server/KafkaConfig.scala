@@ -751,7 +751,7 @@ object KafkaConfig {
     "prefix (the listener name is lowercased) to the config name. For example, to set a different keystore for the " +
     "INTERNAL listener, a config with name <code>listener.name.internal.ssl.keystore.location</code> would be set. " +
     "If the config for the listener name is not set, the config will fallback to the generic config (i.e. <code>ssl.keystore.location</code>). " +
-    "Note that in KRaft a default mapping from the listener names defined by controller.listener.names to PLAINTEXT " +
+    "Note that in KRaft a default mapping from the listener names defined by <code>controller.listener.names</code> to PLAINTEXT " +
     "is assumed if no explicit mapping is provided and no other security protocol is in use."
   val controlPlaneListenerNameDoc = "Name of listener used for communication between controller and brokers. " +
     s"Broker will use the $ControlPlaneListenerNameProp to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
@@ -1895,11 +1895,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def controllerListenerNames: Seq[String] = {
     val value = Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("")
-      if (value.isEmpty) {
-        Seq.empty
-      } else {
-        value.split(",")
-      }
+    if (value.isEmpty) {
+      Seq.empty
+    } else {
+      value.split(",")
+    }
   }
 
   def controllerListeners: Seq[EndPoint] =
@@ -1978,7 +1978,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // Nothing was specified explicitly for listener.security.protocol.map, so we are using the default value,
       // and we are using KRaft.
       // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
-      def isSslOrSasl(name: String) : Boolean = name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) || name.equals(SecurityProtocol.SASL_PLAINTEXT.name)
+      def isSslOrSasl(name: String): Boolean = name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) || name.equals(SecurityProtocol.SASL_PLAINTEXT.name)
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
@@ -2051,7 +2051,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
         s"The advertised.listeners config must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
-    def validateControllerQuorumVotersMustContainNodeIDForKRaftController(): Unit = {
+    def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
       require(voterAddressSpecsByNodeId.containsKey(nodeId),
         s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
     }
@@ -2088,7 +2088,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         val listenerName = ListenerName.normalised(name)
         if (!effectiveListenerSecurityProtocolMap.contains(listenerName)) {
           throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
-            s"${KafkaConfig.ControllerListenerNamesProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}.")
+            s"${KafkaConfig.ControllerListenerNamesProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}  (an explicit security mapping for each controller listener is required if ${KafkaConfig.ListenerSecurityProtocolMapProp} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
         }
       }
       // warn that only the first controller listener is used if there is more than one
@@ -2108,7 +2108,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KafkaConfig.ListenersProp}"
       require(effectiveAdvertisedListeners.isEmpty,
         s"The $sourceOfAdvertisedListeners config must only contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp}=controller")
-      validateControllerQuorumVotersMustContainNodeIDForKRaftController()
+      validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
     } else if (processRoles == Set(BrokerRole, ControllerRole)) {
@@ -2116,7 +2116,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
-      validateControllerQuorumVotersMustContainNodeIDForKRaftController()
+      validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateControllerListenerExistsForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
       validateAdvertisedListenersNonEmptyForBroker()
