@@ -119,7 +119,7 @@ public class IntegrationTestUtils {
      * Once position bounding is generally supported, we should migrate tests to wait on the
      * expected response position.
      */
-    public static <R> StateQueryResult<R> iqv2WaitForPartitionsOrGlobal(
+    public static <R> StateQueryResult<R> iqv2WaitForPartitions(
         final KafkaStreams kafkaStreams,
         final StateQueryRequest<R> request,
         final Set<Integer> partitions) {
@@ -128,16 +128,14 @@ public class IntegrationTestUtils {
         final long deadline = start + DEFAULT_TIMEOUT;
 
         do {
+            if (Thread.currentThread().isInterrupted()) {
+                fail("Test was interrupted.");
+            }
             final StateQueryResult<R> result = kafkaStreams.query(request);
-            if (result.getPartitionResults().keySet().containsAll(partitions)
-                || result.getGlobalResult() != null) {
+            if (result.getPartitionResults().keySet().containsAll(partitions)) {
                 return result;
             } else {
-                try {
-                    Thread.sleep(100L);
-                } catch (final InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+                sleep(100L);
             }
         } while (System.currentTimeMillis() < deadline);
 

@@ -452,7 +452,7 @@ public class IQv2StoreIntegrationTest {
         final Set<Integer> partitions = mkSet(0, 1);
 
         final StateQueryResult<Void> result =
-            IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(kafkaStreams, request, partitions);
+            IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
         makeAssertions(
             partitions,

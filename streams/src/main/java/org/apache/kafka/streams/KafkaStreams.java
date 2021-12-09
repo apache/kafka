@@ -1776,7 +1776,6 @@ public class KafkaStreams implements AutoCloseable {
                 )
             );
         } else {
-
             for (final StreamThread thread : threads) {
                 final Map<TaskId, Task> tasks = thread.allTasks();
                 for (final Entry<TaskId, Task> entry : tasks.entrySet()) {
@@ -1813,14 +1812,15 @@ public class KafkaStreams implements AutoCloseable {
                                 );
                                 result.addResult(partition, r);
                             }
-                        }
 
-                        // optimization: if we have handled all the requested partitions,
-                        // we can return right away.
-                        handledPartitions.add(partition);
-                        if (!request.isAllPartitions()
-                            && handledPartitions.containsAll(request.getPartitions())) {
-                            return result;
+
+                            // optimization: if we have handled all the requested partitions,
+                            // we can return right away.
+                            handledPartitions.add(partition);
+                            if (!request.isAllPartitions()
+                                && handledPartitions.containsAll(request.getPartitions())) {
+                                return result;
+                            }
                         }
                     }
                 }
