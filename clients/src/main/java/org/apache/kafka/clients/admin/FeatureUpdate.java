@@ -69,9 +69,9 @@ public class FeatureUpdate {
      * @param downgradeType
      */
     public FeatureUpdate(final short maxVersionLevel, final DowngradeType downgradeType) {
-        if (maxVersionLevel < 1 && !downgradeType.equals(DowngradeType.NONE)) {
+        if (maxVersionLevel < 1 && (downgradeType.equals(DowngradeType.NONE) || downgradeType.equals(DowngradeType.UNSET))) {
             throw new IllegalArgumentException(String.format(
-                    "The downgradeType flag should be set to something other than NONE when the provided maxVersionLevel:%d is < 1.",
+                    "The downgradeType flag should be set to SAFE or UNSAFE when the provided maxVersionLevel:%d is < 1.",
                     maxVersionLevel));
         }
         this.maxVersionLevel = maxVersionLevel;

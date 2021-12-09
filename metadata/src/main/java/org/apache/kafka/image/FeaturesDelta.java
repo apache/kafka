@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.MetadataVersion;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.VersionRange;
 
 import java.util.HashMap;
@@ -95,7 +96,8 @@ public final class FeaturesDelta {
                 }
             }
         }
-        return new FeaturesImage(newFinalizedVersions, metadataVersionProvider);
+        MetadataVersion metadataVersion = MetadataVersions.fromValue(newFinalizedVersions.get(MetadataVersion.FEATURE_NAME).max());
+        return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
 
     @Override

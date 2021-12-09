@@ -34,11 +34,17 @@ import java.util.TreeMap;
 public class TestKitNodes {
     public static class Builder {
         private Uuid clusterId = null;
+        private Short initialMetadataVersion = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
         private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setInitialMetadataVersion(short metadataVersion) {
+            this.initialMetadataVersion = metadataVersion;
             return this;
         }
 
@@ -104,18 +110,24 @@ public class TestKitNodes {
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid();
             }
-            return new TestKitNodes(clusterId, controllerNodes, brokerNodes);
+            if (initialMetadataVersion == null) {
+                initialMetadataVersion = MetadataVersions.latest().version();
+            }
+            return new TestKitNodes(clusterId, initialMetadataVersion, controllerNodes, brokerNodes);
         }
     }
 
     private final Uuid clusterId;
+    private final short initialMetadataVersion;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(Uuid clusterId,
+                         short initialMetadataVersion,
                          NavigableMap<Integer, ControllerNode> controllerNodes,
                          NavigableMap<Integer, BrokerNode> brokerNodes) {
         this.clusterId = clusterId;
+        this.initialMetadataVersion = initialMetadataVersion;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
     }
@@ -133,11 +145,11 @@ public class TestKitNodes {
     }
 
     public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id, MetadataVersions.latest());
+        return MetaProperties.apply(clusterId.toString(), id, initialMetadataVersion);
     }
 
     public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id, MetadataVersions.latest());
+        return MetaProperties.apply(clusterId.toString(), id, initialMetadataVersion);
     }
 
     public ListenerName interBrokerListenerName() {
@@ -162,7 +174,7 @@ public class TestKitNodes {
                 node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
                 absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
         }
-        return new TestKitNodes(clusterId, newControllerNodes, newBrokerNodes);
+        return new TestKitNodes(clusterId, initialMetadataVersion, newControllerNodes, newBrokerNodes);
     }
 
     private static List<String> absolutize(String base, Collection<String> directories) {

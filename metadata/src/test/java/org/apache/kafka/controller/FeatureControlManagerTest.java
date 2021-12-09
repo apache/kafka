@@ -84,10 +84,10 @@ public class FeatureControlManagerTest {
                     "The controller does not support the given feature range."))),
             manager.updateFeatures(updateMap("foo", 1, 3),
                 Collections.singleton("foo"),
-                Collections.emptyMap()));
+                Collections.emptyMap(), false));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
                 updateMap("foo", 1, 2, "bar", 1, 1), Collections.emptySet(),
-                Collections.emptyMap());
+                Collections.emptyMap(), false);
         Map<String, ApiError> expectedMap = new HashMap<>();
         expectedMap.put("foo", ApiError.NONE);
         expectedMap.put("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -134,12 +134,12 @@ public class FeatureControlManagerTest {
             manager.updateFeatures(
                 updateMap("foo", 1, 3),
                 Collections.singleton("foo"),
-                Collections.singletonMap(5, rangeMap())
-            )
+                Collections.singletonMap(5, rangeMap()),
+                    false)
         );
 
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
-            updateMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
+            updateMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap(), false);
         assertEquals(Collections.singletonMap("foo", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
         snapshotRegistry.getOrCreateSnapshot(3);
@@ -149,7 +149,7 @@ public class FeatureControlManagerTest {
                     "Can't downgrade the maximum version of this feature without " +
                     "setting downgradable to true."))),
             manager.updateFeatures(updateMap("foo", 1, 2),
-                Collections.emptySet(), Collections.emptyMap()));
+                Collections.emptySet(), Collections.emptyMap(), false));
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -167,8 +167,8 @@ public class FeatureControlManagerTest {
             manager.updateFeatures(
                 updateMap("foo", 1, 2),
                 Collections.singleton("foo"),
-                Collections.emptyMap()
-            )
+                Collections.emptyMap(),
+                    false)
         );
     }
 
@@ -179,7 +179,7 @@ public class FeatureControlManagerTest {
             features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 1, 5, "bar", 1, 1),
-                Collections.emptySet(), Collections.emptyMap());
+                Collections.emptySet(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().

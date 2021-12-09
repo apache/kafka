@@ -18,7 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.metadata.MetadataVersionProvider;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -41,15 +41,15 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
  * This class is thread-safe.
  */
 public final class FeaturesImage {
-    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap(), () -> MetadataVersions.UNINITIALIZED);
+    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap(), MetadataVersions.UNINITIALIZED);
 
     private final Map<String, VersionRange> finalizedVersions;
 
-    private final MetadataVersionProvider metadataVersionProvider;
+    private final MetadataVersion metadataVersion;
 
-    public FeaturesImage(Map<String, VersionRange> finalizedVersions, MetadataVersionProvider metadataVersionProvider) {
+    public FeaturesImage(Map<String, VersionRange> finalizedVersions, MetadataVersion metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
-        this.metadataVersionProvider = metadataVersionProvider;
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {
@@ -75,7 +75,7 @@ public final class FeaturesImage {
                 setName(entry.getKey()).
                 setMinFeatureLevel(entry.getValue().min()).
                 setMaxFeatureLevel(entry.getValue().max()),
-                metadataVersionProvider.activeVersion().recordVersion(FEATURE_LEVEL_RECORD)));
+                metadataVersion.recordVersion(FEATURE_LEVEL_RECORD)));
         }
         out.accept(batch);
     }

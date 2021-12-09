@@ -25,7 +25,7 @@ import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.{MetadataVersion, MetadataVersions}
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
 
@@ -58,7 +58,7 @@ object StorageTool extends Logging {
       formatParser.addArgument("--metadata-version", "-v").
         action(store()).
         `type`(classOf[Short]).
-        setDefault(MetadataVersions.stable().version()).
+        setDefault[Short](MetadataVersions.stable().version()).
         help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
 
       val namespace = parser.parseArgsOrFail(args)
@@ -76,7 +76,7 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = MetadataVersions.fromValue(namespace.getShort("metadata_version"))
-          val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion)
+          val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
@@ -196,7 +196,7 @@ object StorageTool extends Logging {
   def buildMetadataProperties(
     clusterIdStr: String,
     config: KafkaConfig,
-    metadataVersion: MetadataVersion
+    metadataVersion: Short
   ): MetaProperties = {
     val effectiveClusterId = try {
       Uuid.fromString(clusterIdStr)

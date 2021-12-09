@@ -828,17 +828,24 @@ public final class QuorumController implements Controller {
                     // write any records to the log since we need the metadata.version to determine the correct
                     // record version
                     if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
+                        final CompletableFuture<Map<String, ApiError>> future;
                         if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
-                            prependWriteEvent("initializeMetadataVersion", () -> {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
                             });
                         } else {
-                            prependWriteEvent("initializeMetadataVersion", () -> {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
                                 return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
                             });
                         }
+                        future.whenComplete((result, exception) -> {
+                            if (exception != null) {
+                                log.error("Failed to initialize metadata.version", exception);
+                                renounce();
+                            }
+                        });
                     }
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
@@ -1453,7 +1460,8 @@ public final class QuorumController implements Controller {
                 }
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, downgradeables, clusterControl.brokerSupportedVersions());
+            return featureControl.updateFeatures(updates, downgradeables, clusterControl.brokerSupportedVersions(),
+                request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));

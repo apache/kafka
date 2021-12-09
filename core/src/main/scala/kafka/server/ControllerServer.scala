@@ -43,6 +43,7 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.metadata.MetadataVersions
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
@@ -166,6 +167,8 @@ class ControllerServer(
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
+      val initialMetadataVersion = MetadataVersions.fromValue(metaProperties.initialMetadataVersion)
+
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
       val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
       controller = new QuorumController.Builder(config.nodeId).
@@ -182,7 +185,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setInitialMetadataVersion(metaProperties.initialMetadataVersion).
+        setInitialMetadataVersion(initialMetadataVersion).
         build()
 
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,

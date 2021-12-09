@@ -4262,6 +4262,7 @@ public class KafkaAdminClient extends AdminClient {
                 return new UpdateFeaturesRequest.Builder(
                     new UpdateFeaturesRequestData()
                         .setTimeoutMs(timeoutMs)
+                        .setValidateOnly(options.shouldDryRun())
                         .setFeatureUpdates(featureUpdatesRequestData));
             }
 

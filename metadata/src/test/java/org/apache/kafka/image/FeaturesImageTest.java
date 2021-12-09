@@ -48,7 +48,7 @@ public class FeaturesImageTest {
         map1.put("foo", VersionRange.of((short) 1, (short) 2));
         map1.put("bar", VersionRange.of((short) 1, (short) 1));
         map1.put("baz", VersionRange.of((short) 1, (short) 8));
-        IMAGE1 = new FeaturesImage(map1, MetadataVersions::latest);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersions.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -64,7 +64,7 @@ public class FeaturesImageTest {
 
         Map<String, VersionRange> map2 = new HashMap<>();
         map2.put("foo", VersionRange.of((short) 1, (short) 3));
-        IMAGE2 = new FeaturesImage(map2, MetadataVersions::latest);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersions.latest());
     }
 
     @Test

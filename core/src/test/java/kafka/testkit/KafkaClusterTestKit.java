@@ -174,7 +174,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("controller%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     ApiVersions apiVersions = new ApiVersions();
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
@@ -228,7 +228,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),

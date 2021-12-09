@@ -76,7 +76,8 @@ public class FeatureControlManager {
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
             Map<String, Short> updates, Set<String> downgradeables,
-            Map<Integer, Map<String, VersionRange>> brokerFeatures) {
+            Map<Integer, Map<String, VersionRange>> brokerFeatures,
+            boolean validateOnly) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Entry<String, Short> entry : updates.entrySet()) {
@@ -84,7 +85,11 @@ public class FeatureControlManager {
                 downgradeables.contains(entry.getKey()), brokerFeatures, records));
         }
 
-        return ControllerResult.atomicOf(records, results);
+        if (validateOnly) {
+            return ControllerResult.of(Collections.emptyList(), results);
+        } else {
+            return ControllerResult.atomicOf(records, results);
+        }
     }
 
     ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {

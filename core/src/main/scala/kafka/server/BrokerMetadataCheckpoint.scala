@@ -24,7 +24,7 @@ import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.{MetadataVersion, MetadataVersions}
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -103,11 +103,15 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 }
 
 object MetaProperties {
+  def apply(clusterId: String, nodeId: Int): MetaProperties = {
+    MetaProperties(clusterId, nodeId, MetadataVersions.latest().version())
+  }
+
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
-    val metadataVersion = properties.initialMetadataVersion.map(MetadataVersions.fromValue).getOrElse(MetadataVersions.UNINITIALIZED)
+    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersions.UNINITIALIZED.version())
     new MetaProperties(clusterId, nodeId, metadataVersion)
   }
 
@@ -136,14 +140,14 @@ case class ZkMetaProperties(
 case class MetaProperties(
   clusterId: String,
   nodeId: Int,
-  initialMetadataVersion: MetadataVersion = MetadataVersions.UNINITIALIZED // TODO remove this
+  initialMetadataVersion: Short
 ) {
   def toProperties: Properties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
-    properties.initialMetadataVersion = initialMetadataVersion.version
+    properties.initialMetadataVersion = initialMetadataVersion
     properties.props
   }
 
