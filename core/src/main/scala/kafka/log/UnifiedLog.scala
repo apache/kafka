@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -250,6 +251,7 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  *                                  If the inter-broker protocol version on a ZK cluster is below 2.8, partition.metadata
  *                                  will be deleted to avoid ID conflicts upon re-upgrade.
  * @param remoteStorageSystemEnable flag to indicate whether the system level remote log storage is enabled or not.
+ * @param remoteLogManager          Optional RemoteLogManager instance if it exists.
  */
 @threadsafe
 class UnifiedLog(@volatile var logStartOffset: Long,
@@ -302,9 +304,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     initializeTopicId()
   }
 
-  private def remoteLogEnabled(): Boolean = {
-//     Remote logging is enabled only for non-compact and non-internal topics
-    remoteStorageSystemEnable && !(config.compact || Topic.isInternal(topicPartition.topic())) && config.remoteLogConfig.remoteStorageEnable
+  def remoteLogEnabled(): Boolean = {
+    // Remote logging is enabled only for non-compact and non-internal topics
+    remoteStorageSystemEnable &&
+      !(config.compact || Topic.isInternal(topicPartition.topic())
+        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.eq(topicPartition.topic())) &&
+      config.remoteLogConfig.remoteStorageEnable
   }
 
   /**

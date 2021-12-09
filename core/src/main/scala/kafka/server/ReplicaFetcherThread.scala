@@ -443,7 +443,7 @@ class ReplicaFetcherThread(name: String,
             val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, leaderLocalLogStartOffset)
             Files.copy(rlm.storageManager().fetchIndex(rlsMetadata.get(), RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
               snapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-            log.producerStateManager.reloadSegments()
+            log.producerStateManager.reloadSnapshots()
             log.loadProducerState(leaderLocalLogStartOffset, reloadFromCleanShutdown = false)
             info(s"Built the leader epoch cache and producer snapshots from remote tier for $partition. " +
               s"Active producers: ${log.producerStateManager.activeProducers.size}, LeaderLogStartOffset: $leaderLogStartOffset")

@@ -17,9 +17,9 @@
 package kafka.log.remote
 
 import kafka.log._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.utils.{KafkaThread, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 
@@ -38,33 +38,40 @@ object RemoteIndexCache {
 }
 
 class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
-  private val closed = new AtomicBoolean(false)
+  private val markedForCleanup = new AtomicBoolean(false)
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
-    if (closed.get()) throw new IllegalStateException("This entry is already closed")
+    if (markedForCleanup.get()) throw new IllegalStateException("This entry is already closed")
     else offsetIndex.lookup(targetOffset)
   }
 
   def lookupTimestamp(timestamp: Long, startingOffset: Long): OffsetPosition = {
-    if (closed.get()) throw new IllegalStateException("This entry is already closed")
+    if (markedForCleanup.get()) throw new IllegalStateException("This entry is already closed")
 
     val timestampOffset = timeIndex.lookup(timestamp)
     offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset))
   }
 
-  def close(): Unit = {
-    if (!closed.getAndSet(true)) {
+  def markForCleanup(): Unit = {
+    if (!markedForCleanup.getAndSet(true)) {
       Array(offsetIndex, timeIndex, txnIndex).foreach(x =>
         x.renameTo(new File(CoreUtils.replaceSuffix(x.file.getPath, "", UnifiedLog.DeletedFileSuffix))))
     }
   }
 
   def cleanup(): Unit = {
-    close()
+    markForCleanup()
     CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
   }
-}
 
+  def close(): Unit = {
+    Array(offsetIndex, timeIndex, txnIndex).foreach(index => try {
+      index.close()
+    } catch {
+      case _: Exception => // ignore error.
+    })
+  }
+}
 
 /**
  * This is a LRU cache of remote index files stored in `$logdir/remote-log-index-cache`. This is helpful to avoid
@@ -86,10 +93,10 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   val entries: util.Map[RemoteLogSegmentId, Entry] = new java.util.LinkedHashMap[RemoteLogSegmentId, Entry](maxSize / 2,
     0.75f, true) {
     override def removeEldestEntry(eldest: util.Map.Entry[RemoteLogSegmentId, Entry]): Boolean = {
-      if (this.size() >= maxSize) {
+      if (this.size() > maxSize) {
         val entry = eldest.getValue
-        // close the entries, background thread will clean them later.
-        entry.close()
+        // Mark the entries for cleanup, background thread will clean them later.
+        entry.markForCleanup()
         expiredIndexes.add(entry)
         true
       } else {
@@ -102,7 +109,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     if (cacheDir.mkdir())
       info(s"Created $cacheDir successfully")
 
-    // delete any .deleted files remained from the earlier run of the broker.
+    // Delete any .deleted files remained from the earlier run of the broker.
     Files.list(cacheDir.toPath).forEach((path: Path) => {
       if (path.endsWith(UnifiedLog.DeletedFileSuffix)) {
         Files.deleteIfExists(path)
@@ -113,17 +120,19 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
   init()
 
   // Start cleaner thread that will clean the expired entries
-  val cleanerThread: KafkaThread = KafkaThread.daemon("remote-log-index-cleaner", () => {
-    while (!closed) {
+  val cleanerThread: ShutdownableThread = new ShutdownableThread("remote-log-index-cleaner") {
+    setDaemon(true)
+
+    override def doWork(): Unit = {
+      val entry = expiredIndexes.take()
+      info(s"Cleaning up index entry $entry")
       try {
-        val entry = expiredIndexes.take()
-        info(s"Cleaning up index entry $entry")
         entry.cleanup()
       } catch {
         case ex: Exception => error("Error occurred while fetching/cleaning up expired entry", ex)
       }
     }
-  })
+  }
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
@@ -134,10 +143,16 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
       val indexFile = new File(cacheDir, fileName + suffix)
 
       def fetchAndCreateIndex(): T = {
-        val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
         val tmpIndexFile = new File(cacheDir, fileName + suffix + RemoteIndexCache.TmpFileSuffix)
 
-        Files.copy(inputStream, tmpIndexFile.toPath)
+        val inputStream = fetchRemoteIndex(remoteLogSegmentMetadata)
+        try {
+          Files.copy(inputStream, tmpIndexFile.toPath)
+        } finally {
+          if (inputStream != null) {
+            inputStream.close()
+          }
+        }
 
         Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath)
         readIndex(indexFile)
@@ -198,20 +213,13 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position
   }
 
-  def collectAbortedTransaction(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
-                                startOffset: Long,
-                                fetchSize: Int): TxnIndexSearchResult = {
-    val entry = getIndexEntry(remoteLogSegmentMetadata)
-    val maxOffset = entry.offsetIndex.fetchUpperBoundOffset(entry.offsetIndex.lookup(startOffset), fetchSize)
-      .map(_.offset)
-
-    maxOffset.map(x => entry.txnIndex.collectAbortedTxns(startOffset, x))
-      .getOrElse(TxnIndexSearchResult(List.empty, isComplete = false))
-  }
-
   def close(): Unit = {
     closed = true
-    cleanerThread.interrupt()
+    cleanerThread.shutdown()
+    // Close all the opened indexes.
+    lock synchronized {
+      entries.values().stream().forEach(entry => entry.close())
+    }
   }
 
 }

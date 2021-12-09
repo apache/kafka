@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.KafkaException;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -40,19 +42,19 @@ public class ChildFirstClassLoader extends URLClassLoader {
      *                  this classloader will be used to find the class / resource.
      */
     public ChildFirstClassLoader(String classPath, ClassLoader parent) {
-        super(classpath2URLs(classPath), parent);
+        super(classpathToURLs(classPath), parent);
     }
 
-    static private URL[] classpath2URLs(String classPath) {
+    static private URL[] classpathToURLs(String classPath) {
         ArrayList<URL> urls = new ArrayList<>();
         for (String path : classPath.split(File.pathSeparator)) {
             if (path == null || path.trim().isEmpty())
                 continue;
-            File f = new File(path);
+            File file = new File(path);
 
-            if (path.endsWith("/*")) {
-                try {
-                    File parent = new File(new File(f.getCanonicalPath()).getParent());
+            try {
+                if (path.endsWith("/*")) {
+                    File parent = new File(new File(file.getCanonicalPath()).getParent());
                     if (parent.isDirectory()) {
                         File[] files = parent.listFiles((dir, name) -> {
                             String lower = name.toLowerCase(Locale.ROOT);
@@ -64,13 +66,11 @@ public class ChildFirstClassLoader extends URLClassLoader {
                             }
                         }
                     }
-                } catch (IOException e) {
+                } else if (file.exists()) {
+                    urls.add(file.getCanonicalFile().toURI().toURL());
                 }
-            } else if (f.exists()) {
-                try {
-                    urls.add(f.getCanonicalFile().toURI().toURL());
-                } catch (IOException e) {
-                }
+            } catch (IOException e) {
+                throw new KafkaException(e);
             }
         }
         return urls.toArray(new URL[0]);
@@ -85,7 +85,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
                 try {
                     c = findClass(name);
                 } catch (ClassNotFoundException e) {
-                    // try parent
+                    // Try parent
                     c = super.loadClass(name, false);
                 }
             }
