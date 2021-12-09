@@ -254,6 +254,11 @@ public final class QuorumController implements Controller {
         }
     }
 
+    /**
+     * Checks that a configuration resource exists.
+     *
+     * This object must be used only from the controller event thread.
+     */
     class ConfigResourceExistenceChecker implements Consumer<ConfigResource> {
         @Override
         public void accept(ConfigResource configResource) {
@@ -1051,7 +1056,7 @@ public final class QuorumController implements Controller {
     /**
      * A predicate that returns information about whether a ConfigResource exists.
      */
-    private final ConfigResourceExistenceChecker resourceExists;
+    private final Consumer<ConfigResource> resourceExists;
 
     /**
      * An object which stores the controller's dynamic configuration.
