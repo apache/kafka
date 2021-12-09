@@ -268,7 +268,7 @@ public final class QuorumController implements Controller {
                 case BROKER:
                     int brokerId;
                     try {
-                        brokerId = Integer.valueOf(configResource.name());
+                        brokerId = Integer.parseInt(configResource.name());
                     } catch (NumberFormatException e) {
                         brokerId = -1;
                     }
