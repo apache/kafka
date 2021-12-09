@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.state.HostInfo;
