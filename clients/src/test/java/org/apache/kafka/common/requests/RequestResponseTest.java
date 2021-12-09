@@ -415,7 +415,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testPartitionSize() {
+    public void testProduceRequestPartitionSize() {
         TopicPartition tp0 = new TopicPartition("test", 0);
         TopicPartition tp1 = new TopicPartition("test", 1);
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
@@ -732,7 +732,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testJoinGroupRequestVersion0RebalanceTimeout() {
+    public void testJoinGroupRequestV0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
         JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serialize(), version);
