@@ -149,7 +149,7 @@ public class StreamsMetadataState {
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
         for (final StreamsMetadata metadata : allMetadata) {
             if (metadata instanceof NamedTopologyStreamsMetadataImpl
-                && ((NamedTopologyStreamsMetadataImpl) metadata).getNamedTopologyToStoreNames().get(topologyName).contains(storeName)) {
+                && ((NamedTopologyStreamsMetadataImpl) metadata).namedTopologyToStoreNames().get(topologyName).contains(storeName)) {
                 results.add(metadata);
             }
         }
@@ -418,7 +418,7 @@ public class StreamsMetadataState {
         final Set<HostInfo> standbyHosts = new HashSet<>();
         for (final StreamsMetadata streamsMetadata : allMetadata) {
             if (streamsMetadata instanceof NamedTopologyStreamsMetadataImpl
-                && ((NamedTopologyStreamsMetadataImpl) streamsMetadata).getNamedTopologyToStoreNames().get(topologyName).contains(storeName)) {
+                && ((NamedTopologyStreamsMetadataImpl) streamsMetadata).namedTopologyToStoreNames().get(topologyName).contains(storeName)) {
                 final Set<String> activeStateStoreNames = streamsMetadata.stateStoreNames();
                 final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
                 final Set<String> standbyStateStoreNames = streamsMetadata.standbyStateStoreNames();
