@@ -34,8 +34,10 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.hamcrest.Matchers.is;
 
 public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
@@ -103,7 +105,7 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
         final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = inMemorySessionStore.getPosition();
-        assertEquals(expected, actual);
+        assertThat(expected, is(actual));
     }
 
 }

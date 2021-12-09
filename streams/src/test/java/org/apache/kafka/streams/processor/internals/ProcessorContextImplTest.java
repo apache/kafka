@@ -129,7 +129,6 @@ public class ProcessorContextImplTest {
             timestampedIters.add(i, mock(KeyValueIterator.class));
         }
 
-        //final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
         expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
 
         expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
