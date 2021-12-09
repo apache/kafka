@@ -1829,7 +1829,7 @@ public class KafkaStreams implements AutoCloseable {
 
         if (!request.isAllPartitions()) {
             for (final Integer partition : request.getPartitions()) {
-                if (!result.getPartitionResults().containsKey(partition)){
+                if (!result.getPartitionResults().containsKey(partition)) {
                     result.addResult(partition, QueryResult.forFailure(
                         FailureReason.NOT_PRESENT,
                         "The requested partition was not present at the time of the query."
