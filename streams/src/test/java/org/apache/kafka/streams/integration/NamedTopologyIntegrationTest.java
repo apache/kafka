@@ -107,7 +107,6 @@ public class NamedTopologyIntegrationTest {
     private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
     private final static String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
 
-
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
 
@@ -324,9 +323,12 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
 
-
         final ReadOnlyKeyValueStore<String, Long> store =
-            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType("topology-1", "store", QueryableStoreTypes.keyValueStore()));
+            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
+                "topology-1",
+                "store",
+                QueryableStoreTypes.keyValueStore())
+            );
         assertThat(store.get("A"), equalTo(2L));
 
         final Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
@@ -583,7 +585,6 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
     }
-
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
