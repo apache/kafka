@@ -38,6 +38,7 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -222,7 +223,15 @@ class WorkerSourceTask extends WorkerTask {
         // failed task
         started = true;
         task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
-        task.start(taskConfig);
+
+        retryWithToleranceOperator.execute((Operation<Void>) () -> {
+            task.start(taskConfig);
+            return null;
+        }, Stage.TASK_START, task.getClass());
+        if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
+            throw new RetriableException("Tolerance exceeded in error handler",
+                    retryWithToleranceOperator.error());
+        }
         log.info("{} Source task finished initialization and start", this);
     }
 

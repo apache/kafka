@@ -22,6 +22,12 @@ package org.apache.kafka.connect.runtime.errors;
 public enum Stage {
 
     /**
+     * When calling the start() method on a connector
+     */
+    TASK_START,
+
+
+    /**
      * When calling the poll() method on a SourceConnector
      */
     TASK_POLL,

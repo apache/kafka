@@ -41,6 +41,7 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
@@ -309,7 +310,14 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         task.initialize(context);
-        task.start(taskConfig);
+        retryWithToleranceOperator.execute((Operation<Void>) () -> {
+            task.start(taskConfig);
+            return null;
+        }, Stage.TASK_START, task.getClass());
+        if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
+            throw new RetriableException("Tolerance exceeded in error handler",
+                    retryWithToleranceOperator.error());
+        }
         log.info("{} Sink task finished initialization and start", this);
     }
 
