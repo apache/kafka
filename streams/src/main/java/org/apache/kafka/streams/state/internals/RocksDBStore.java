@@ -37,6 +37,8 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
@@ -329,12 +331,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+        final boolean collectExecutionInfo,
+        final StateSerdes<Object, Object> serdes) {
 
+        final StateSerdes<Object, Object> maybeUnwrapped;
+        // unwrap the serde that Streams wraps for us,
+        // since we won't respond with wrapped data in this method.
+        if (serdes.valueSerde() instanceof ValueAndTimestampSerde) {
+            maybeUnwrapped = new StateSerdes<>(
+                serdes.topic(),
+                serdes.keySerde(),
+                ((ValueAndTimestampSerde) serdes.valueSerde()).getValueSerde()
+            );
+        } else {
+            maybeUnwrapped = serdes;
+        }
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
             collectExecutionInfo,
+            maybeUnwrapped,
             this,
             position,
             context.taskId().partition()

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.StateSerdes;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -148,7 +149,8 @@ public interface StateStore {
     default <R> QueryResult<R> query(
         Query<R> query,
         PositionBound positionBound,
-        boolean collectExecutionInfo) {
+        boolean collectExecutionInfo,
+        StateSerdes<Object, Object> querySerdes) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
     }

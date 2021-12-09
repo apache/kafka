@@ -595,17 +595,17 @@ public class IQv2StoreIntegrationTest {
         final Function<V, Integer> valueExtactor,
         final Integer expectedValue) {
 
-        final KeyQuery<Integer, V> query = KeyQuery.withKey(key);
-        final StateQueryRequest<V> request =
+        final KeyQuery<Integer, byte[]> query = KeyQuery.withKey(key);
+        final StateQueryRequest<byte[]> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(mkSet(0, 1))
                 .withPositionBound(PositionBound.at(INPUT_POSITION));
 
-        final StateQueryResult<V> result =
+        final StateQueryResult<byte[]> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        final QueryResult<V> queryResult =
+        final QueryResult<byte[]> queryResult =
             result.getGlobalResult() != null
                 ? result.getGlobalResult()
                 : result.getOnlyPartitionResult();
@@ -619,8 +619,9 @@ public class IQv2StoreIntegrationTest {
         assertThrows(IllegalArgumentException.class,
             queryResult::getFailureMessage);
 
-        final V result1 = queryResult.getResult();
-        final Integer integer = valueExtactor.apply(result1);
+        final byte[] result1 = queryResult.getResult();
+        final V value = (V) queryResult.getSerdes().valueFrom(result1);
+        final Integer integer = valueExtactor.apply(value);
         assertThat(integer, is(expectedValue));
 
         assertThat(queryResult.getExecutionInfo(), is(empty()));

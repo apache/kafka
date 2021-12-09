@@ -30,6 +30,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -190,10 +191,11 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         @Override
         public <R> QueryResult<R> query(final Query<R> query,
             final PositionBound positionBound,
-            final boolean collectExecutionInfo) {
+            final boolean collectExecutionInfo,
+            final StateSerdes<Object, Object> serdes) {
 
             final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-            final QueryResult<R> result = wrapped.query(query, positionBound, collectExecutionInfo);
+            final QueryResult<R> result = wrapped.query(query, positionBound, collectExecutionInfo, serdes);
             if (collectExecutionInfo) {
                 final long end = System.nanoTime();
                 result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");

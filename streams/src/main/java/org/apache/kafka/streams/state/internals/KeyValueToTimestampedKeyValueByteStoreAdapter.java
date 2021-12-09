@@ -28,6 +28,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
@@ -122,11 +123,12 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+        final boolean collectExecutionInfo,
+        final StateSerdes<Object, Object> serdes) {
 
 
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        final QueryResult<R> result = store.query(query, positionBound, collectExecutionInfo);
+        final QueryResult<R> result = store.query(query, positionBound, collectExecutionInfo, serdes);
         if (collectExecutionInfo) {
             final long end = System.nanoTime();
             result.addExecutionInfo(

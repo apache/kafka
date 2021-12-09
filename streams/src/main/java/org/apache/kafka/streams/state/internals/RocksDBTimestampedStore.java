@@ -21,7 +21,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -104,6 +108,20 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         noTimestampsIter.close();
     }
 
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+        final boolean collectExecutionInfo, final StateSerdes<Object, Object> serdes) {
+
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            collectExecutionInfo,
+            serdes,
+            this,
+            position,
+            context.taskId().partition()
+        );
+    }
 
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
         private final ColumnFamilyHandle oldColumnFamily;

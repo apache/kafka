@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RawKeyQuery;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -47,6 +51,7 @@ public final class StoreQueryUtils {
             final Query<?> query,
             final PositionBound positionBound,
             final boolean collectExecutionInfo,
+            final StateSerdes<Object, Object> serdes,
             final StateStore store
         );
     }
@@ -56,17 +61,19 @@ public final class StoreQueryUtils {
         mkMap(
             mkEntry(
                 PingQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> QueryResult.forResult(true)
+                (query, positionBound, collectExecutionInfo, serdes, store) ->
+                    QueryResult.forResult(true, serdes)
             ),
-            mkEntry(RawKeyQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> {
+            mkEntry(KeyQuery.class,
+                (query, positionBound, collectExecutionInfo, serdes, store) -> {
                     if (store instanceof KeyValueStore) {
-                        final RawKeyQuery rawKeyQuery = (RawKeyQuery) query;
+                        final KeyQuery keyQuery = (KeyQuery) query;
                         final KeyValueStore keyValueStore = (KeyValueStore) store;
                         try {
+                            final byte[] rawKey = serdes.rawKey(keyQuery.getKey());
                             @SuppressWarnings("unchecked") final byte[] bytes =
-                                (byte[]) keyValueStore.get(rawKeyQuery.getKey());
-                            return QueryResult.forResult(bytes);
+                                (byte[]) keyValueStore.get(Bytes.wrap(rawKey));
+                            return QueryResult.forResult(bytes, serdes);
                         } catch (final Throwable t) {
                             final StringWriter stringWriter = new StringWriter();
                             final PrintWriter printWriter = new PrintWriter(stringWriter);
@@ -95,6 +102,7 @@ public final class StoreQueryUtils {
         final Query<R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo,
+        final StateSerdes<Object, Object> serdes,
         final StateStore store,
         final Position position,
         final int partition
@@ -113,6 +121,7 @@ public final class StoreQueryUtils {
                 query,
                 positionBound,
                 collectExecutionInfo,
+                serdes,
                 store
             );
         }

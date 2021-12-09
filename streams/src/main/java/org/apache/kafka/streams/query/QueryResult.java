@@ -18,6 +18,7 @@ package org.apache.kafka.streams.query;
 
 
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -32,32 +33,38 @@ public final class QueryResult<R> {
     private final FailureReason failureReason;
     private final String failure;
     private final R result;
+    private final StateSerdes<Object, Object> serdes;
     private List<String> executionInfo = new LinkedList<>();
     private Position position;
 
-    private QueryResult(final R result) {
+    private QueryResult(final R result, final StateSerdes<Object, Object> serdes) {
         this.result = result;
+        this.serdes = serdes;
         this.failureReason = null;
         this.failure = null;
     }
 
     private QueryResult(final FailureReason failureReason, final String failure) {
         this.result = null;
+        this.serdes = null;
         this.failureReason = failureReason;
         this.failure = failure;
     }
 
     /**
      * Static factory method to create a result object for a successful query. Used by StateStores
-     * to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * to respond to a {@link StateStore#query(Query, PositionBound, boolean, StateSerdes)}.
      */
-    public static <R> QueryResult<R> forResult(final R result) {
-        return new QueryResult<>(result);
+    public static <R> QueryResult<R> forResult(
+        final R result,
+        final StateSerdes<Object, Object> serdes) {
+
+        return new QueryResult<>(result, serdes);
     }
 
     /**
      * Static factory method to create a result object for a failed query. Used by StateStores to
-     * respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * respond to a {@link StateStore#query(Query, PositionBound, boolean, StateSerdes)}.
      */
     public static <R> QueryResult<R> forFailure(
         final FailureReason failureReason,
@@ -70,7 +77,7 @@ public final class QueryResult<R> {
      * Static factory method to create a failed query result object to indicate that the store does
      * not know how to handle the query.
      * <p>
-     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean, StateSerdes)}.
      */
     public static <R> QueryResult<R> forUnknownQueryType(
         final Query<R> query,
@@ -87,7 +94,7 @@ public final class QueryResult<R> {
      * Static factory method to create a failed query result object to indicate that the store has
      * not yet caught up to the requested position bound.
      * <p>
-     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
+     * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean, StateSerdes)}.
      */
     public static <R> QueryResult<R> notUpToBound(
         final Position currentPosition,
@@ -202,7 +209,7 @@ public final class QueryResult<R> {
         if (isFailure()) {
             return (QueryResult<V>) this;
         } else {
-            final QueryResult<V> result = new QueryResult<>(value);
+            final QueryResult<V> result = new QueryResult<>(value, serdes);
             result.executionInfo = executionInfo;
             result.position = position;
             return result;
@@ -216,7 +223,12 @@ public final class QueryResult<R> {
             ", failureReason=" + failureReason +
             ", failure='" + failure + '\'' +
             ", result=" + result +
+            ", serdes=" + serdes +
             ", position=" + position +
             '}';
+    }
+
+    public StateSerdes<Object, Object> getSerdes() {
+        return serdes;
     }
 }

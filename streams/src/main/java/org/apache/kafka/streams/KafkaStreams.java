@@ -1809,7 +1809,8 @@ public class KafkaStreams implements AutoCloseable {
                                     request.isRequireActive()
                                         ? PositionBound.unbounded()
                                         : request.getPositionBound(),
-                                    request.executionInfoEnabled()
+                                    request.executionInfoEnabled(),
+                                    null
                                 );
                                 result.addResult(partition, r);
                             }
