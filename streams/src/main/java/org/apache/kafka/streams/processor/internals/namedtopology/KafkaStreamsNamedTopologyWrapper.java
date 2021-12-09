@@ -307,7 +307,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     /**
      * See {@link KafkaStreams#streamsMetadataForStore(String)}
      */
-    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) { // verify that it returns something
+    public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName, topologyName);

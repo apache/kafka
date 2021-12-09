@@ -40,6 +40,10 @@ public class NamedTopologyStoreQueryParameters<T> extends StoreQueryParameters<T
         return new NamedTopologyStoreQueryParameters<>(topologyName, storeName, queryableStoreType, null, false);
     }
 
+    public NamedTopologyStoreQueryParameters<T> enableStaleStores() {
+        return new NamedTopologyStoreQueryParameters<>(topologyName, this.storeName(), this.queryableStoreType(), this.partition(), true);
+    }
+
     public String topologyName() {
         return topologyName;
     }
