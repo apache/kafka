@@ -41,7 +41,31 @@ public class NamedTopologyStreamsMetadataImpl extends StreamsMetadataImpl {
         this.namedTopologyToStoreNames = namedTopologyToStoreNames;
     }
 
-    public Map<String, Collection<String>> getNamedTopologyToStoreNames() {
+    public Map<String, Collection<String>> namedTopologyToStoreNames() {
         return namedTopologyToStoreNames;
+    }
+    
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+
+        final NamedTopologyStreamsMetadataImpl that = (NamedTopologyStreamsMetadataImpl) o;
+
+        return Objects.equals(namedTopologyToStoreNames, that.namedTopologyToStoreNames);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + (namedTopologyToStoreNames() != null ? namedTopologyToStoreNames().hashCode() : 0);
+        return result;
     }
 }
