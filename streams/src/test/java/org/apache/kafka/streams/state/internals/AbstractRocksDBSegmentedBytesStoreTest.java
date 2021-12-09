@@ -16,30 +16,43 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,6 +72,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
@@ -68,7 +82,9 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -479,9 +495,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     @Test
     public void shouldCreateWriteBatches() {
         final String key = "a";
-        final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
-        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
+        final Collection<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
+        records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
         final Map<S, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
         assertEquals(2, writeBatchMap.size());
         for (final WriteBatch batch : writeBatchMap.values()) {
@@ -505,9 +521,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
-        final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
-        records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
+        final Collection<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
+        records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
         bytesStore.restoreAllInternal(records);
 
         // 2 segments are created during restoration.
@@ -520,6 +536,260 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
     }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        bytesStore.init((StateStoreContext) context, bytesStore);
+
+        final String keyA = "a";
+        final String keyB = "b";
+        final String keyC = "c";
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[1])), serializeValue(50));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>(keyB, windows[2])), serializeValue(100));
+        context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position actual = bytesStore.getPosition();
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void shouldRestoreRecordsAndConsistencyVectorSingleTopic() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        final File dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+                new StreamsConfig(props),
+                MockRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                Time.SYSTEM
+        );
+        bytesStore = getBytesStore();
+        bytesStore.init((StateStoreContext) context, bytesStore);
+        // 0 segments initially.
+        assertEquals(0, bytesStore.getSegments().size());
+
+        bytesStore.restoreAllInternal(getChangelogRecords());
+        // 2 segments are created during restoration.
+        assertEquals(2, bytesStore.getSegments().size());
+
+        final String key = "a";
+        final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[2]), 100L));
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        assertEquals(expected, results);
+        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound(""), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound(""), hasEntry(0, 3L));
+    }
+
+    @Test
+    public void shouldRestoreRecordsAndConsistencyVectorMultipleTopics() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        final File dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+                new StreamsConfig(props),
+                MockRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                Time.SYSTEM
+        );
+        bytesStore = getBytesStore();
+        bytesStore.init((StateStoreContext) context, bytesStore);
+        // 0 segments initially.
+        assertEquals(0, bytesStore.getSegments().size());
+
+        bytesStore.restoreAllInternal(getChangelogRecordsMultipleTopics());
+        // 2 segments are created during restoration.
+        assertEquals(2, bytesStore.getSegments().size());
+
+        final String key = "a";
+        final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[2]), 100L));
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 200L));
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        assertEquals(expected, results);
+        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound("A"), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound("A"), hasEntry(0, 3L));
+        assertThat(bytesStore.getPosition().getBound("B"), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound("B"), hasEntry(0, 2L));
+    }
+
+    @Test
+    public void shouldHandleTombstoneRecords() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        final File dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+                new StreamsConfig(props),
+                MockRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                Time.SYSTEM
+        );
+        bytesStore = getBytesStore();
+        bytesStore.init((StateStoreContext) context, bytesStore);
+        // 0 segments initially.
+        assertEquals(0, bytesStore.getSegments().size());
+
+        bytesStore.restoreAllInternal(getChangelogRecordsWithTombstones());
+        // 1 segments are created during restoration.
+        assertEquals(1, bytesStore.getSegments().size());
+        final String key = "a";
+        final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        assertEquals(expected, results);
+        assertThat(bytesStore.getPosition(), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getBound("A"), hasEntry(0, 2L));
+    }
+
+    @Test
+    public void shouldNotThrowWhenRestoringOnMissingHeaders() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        final File dir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+                dir,
+                Serdes.String(),
+                Serdes.String(),
+                new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+                new StreamsConfig(props),
+                MockRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                Time.SYSTEM
+        );
+        bytesStore = getBytesStore();
+        bytesStore.init((StateStoreContext) context, bytesStore);
+        bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
+        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        final Headers headers = new RecordHeaders();
+
+        Position position1 = Position.emptyPosition();
+        position1 = position1.withComponent("", 0, 1);
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
+        position1 = position1.withComponent("", 0, 2);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
+
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
+        position1 = position1.withComponent("", 0, 3);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
+
+        return records;
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecordsMultipleTopics() {
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        final Headers headers = new RecordHeaders();
+        Position position1 = Position.emptyPosition();
+
+        position1 = position1.withComponent("A", 0, 1);
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
+        position1 = position1.withComponent("B", 0, 2);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
+
+        headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
+        position1 = position1.withComponent("A", 0, 3);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position1).array())
+        );
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
+
+        return records;
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecordsWithTombstones() {
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        final Headers headers = new RecordHeaders();
+        Position position = Position.emptyPosition();
+
+        position = position.withComponent("A", 0, 1);
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+
+        position = position.withComponent("A", 0, 2);
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(
+                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+                serializeKey(new Windowed<>("a", windows[2])).get(), null, headers, Optional.empty()));
+
+        return records;
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> getChangelogRecordsWithoutHeaders() {
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(50L)));
+        return records;
+    }
+
+
 
     @Test
     public void shouldLogAndMeasureExpiredRecords() {

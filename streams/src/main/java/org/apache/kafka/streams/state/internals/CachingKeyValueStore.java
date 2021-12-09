@@ -59,6 +59,7 @@ public class CachingKeyValueStore
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
+        position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -88,8 +89,6 @@ public class CachingKeyValueStore
 
     private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
-        this.position = Position.emptyPosition();
-
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
