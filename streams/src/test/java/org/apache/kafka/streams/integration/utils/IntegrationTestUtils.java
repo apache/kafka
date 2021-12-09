@@ -202,8 +202,7 @@ public class IntegrationTestUtils {
         return queryResult.isFailure()
             && (
             FailureReason.NOT_UP_TO_BOUND.equals(queryResult.getFailureReason())
-                || FailureReason.NOT_PRESENT.equals(queryResult.getFailureReason())
-        );
+                || FailureReason.NOT_PRESENT.equals(queryResult.getFailureReason()));
     }
 
     /*
