@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -38,8 +39,11 @@ import org.apache.kafka.streams.processor.internals.namedtopology.AddNamedTopolo
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyStoreQueryParameters;
 import org.apache.kafka.streams.processor.internals.namedtopology.RemoveNamedTopologyResult;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
@@ -102,7 +106,6 @@ public class NamedTopologyIntegrationTest {
     private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
     private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
     private final static String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
-
 
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
@@ -319,6 +322,17 @@ public class NamedTopologyIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+
+        final ReadOnlyKeyValueStore<String, Long> store =
+            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
+                "topology-1",
+                "store",
+                QueryableStoreTypes.keyValueStore())
+            );
+        assertThat(store.get("A"), equalTo(2L));
+
+        final Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
+        final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
     }
     
     @Test
@@ -571,7 +585,6 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
     }
-
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
