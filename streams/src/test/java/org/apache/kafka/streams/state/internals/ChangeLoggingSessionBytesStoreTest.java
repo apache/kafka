@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -38,8 +37,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -88,10 +85,6 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldDelegateInit() {
-        final Map<String, Object> configValues = new HashMap<>();
-        configValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, false);
-        EasyMock.expect(context.appConfigs()).andReturn(configValues).anyTimes();
-        EasyMock.replay(context);
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner);
@@ -142,12 +135,10 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldLogRemoves() {
-        System.out.println("First call");
         inner.remove(key1);
         EasyMock.expectLastCall();
 
         init();
-        System.out.println("Second call");
         store.remove(key1);
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
@@ -157,7 +148,6 @@ public class ChangeLoggingSessionBytesStoreTest {
         context.logChange(store.name(), binaryKey, null, 0L, Position.emptyPosition());
 
         EasyMock.replay(context);
-        System.out.println("Third call");
         store.remove(key1);
 
         EasyMock.verify(inner, context);
