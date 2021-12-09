@@ -21,6 +21,12 @@ import java.nio.file.Path
 
 import org.apache.kafka.common.utils.Utils
 
+/**
+ * This class represents a common abstraction for operations like delete and rename of the index files.
+ *
+ * @param _file index file
+ * @see [[AbstractIndex]], [[OffsetIndex]], [[TimeIndex]], [[TransactionIndex]]
+ */
 abstract class CleanableIndex(@volatile var _file: File) extends Closeable {
 
   /**

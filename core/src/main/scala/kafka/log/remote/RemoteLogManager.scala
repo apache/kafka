@@ -32,7 +32,8 @@ import java.io.{Closeable, InputStream}
 import java.security.{AccessController, PrivilegedAction}
 import java.util
 import java.util.Optional
-import scala.collection.{Set, mutable}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import scala.collection.Set
 import scala.jdk.CollectionConverters._
 
 /**
@@ -50,7 +51,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
                        logDir: String) extends Logging with Closeable with KafkaMetricsGroup {
 
   // topic ids received on leadership changes
-  private val topicIds: mutable.Map[String, Uuid] = mutable.Map.empty
+  private val topicPartitionIds: ConcurrentMap[TopicPartition, Uuid] = new ConcurrentHashMap[TopicPartition, Uuid]()
 
   private val remoteLogStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val remoteLogMetadataManager: RemoteLogMetadataManager = createRemoteLogMetadataManager()
@@ -60,19 +61,22 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
   private var closed = false
 
   private[remote] def createRemoteStorageManager(): RemoteStorageManager = {
-    AccessController.doPrivileged(new PrivilegedAction[ClassLoaderAwareRemoteStorageManager] {
+    def createDelegate(classLoader: ClassLoader): RemoteStorageManager = {
+      classLoader.loadClass(rlmConfig.remoteStorageManagerClassName())
+        .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
+    }
+
+    AccessController.doPrivileged(new PrivilegedAction[RemoteStorageManager] {
       private val classPath = rlmConfig.remoteStorageManagerClassPath()
 
-      override def run(): ClassLoaderAwareRemoteStorageManager = {
-        val classLoader =
+      override def run(): RemoteStorageManager = {
           if (classPath != null && classPath.trim.nonEmpty) {
-            new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
+            val classLoader = new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
+            val delegate = createDelegate(classLoader)
+            new ClassLoaderAwareRemoteStorageManager(delegate, classLoader)
           } else {
-            this.getClass.getClassLoader
+            createDelegate(this.getClass.getClassLoader)
           }
-        val delegate = classLoader.loadClass(rlmConfig.remoteStorageManagerClassName())
-          .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
-        new ClassLoaderAwareRemoteStorageManager(delegate, classLoader)
       }
     })
   }
@@ -85,23 +89,23 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
   }
 
   private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = {
+    def createDelegate(classLoader: ClassLoader) = {
+      classLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
+        .getDeclaredConstructor()
+        .newInstance()
+        .asInstanceOf[RemoteLogMetadataManager]
+    }
+
     AccessController.doPrivileged(new PrivilegedAction[RemoteLogMetadataManager] {
       private val classPath = rlmConfig.remoteLogMetadataManagerClassPath
 
       override def run(): RemoteLogMetadataManager = {
-        var classLoader = this.getClass.getClassLoader
         if (classPath != null && classPath.trim.nonEmpty) {
-          classLoader = new ChildFirstClassLoader(classPath, classLoader)
-          val delegate = classLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
-            .getDeclaredConstructor()
-            .newInstance()
-            .asInstanceOf[RemoteLogMetadataManager]
+          val classLoader = new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
+          val delegate = createDelegate(classLoader)
           new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader)
         } else {
-          classLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
-            .getDeclaredConstructor()
-            .newInstance()
-            .asInstanceOf[RemoteLogMetadataManager]
+          createDelegate(this.getClass.getClassLoader)
         }
       }
     })
@@ -133,38 +137,31 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    *
    * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
    * @param partitionsBecomeFollower partitions that have become followers on this broker.
+   * @param topicIds                 topic name to topic id mappings.
    */
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition],
                          partitionsBecomeFollower: Set[Partition],
                          topicIds: util.Map[String, Uuid]): Unit = {
     debug(s"Received leadership changes for leaders: $partitionsBecomeLeader and followers: $partitionsBecomeFollower")
-    topicIds.forEach((topic, uuid) => this.topicIds.put(topic, uuid))
 
     // Partitions logs are available when this callback is invoked.
     // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
-    def filterPartitions(partitions: Set[Partition]): Set[Partition] = {
+    def filterPartitions(partitions: Set[Partition]): Set[TopicIdPartition] = {
       partitions.filterNot(partition => Topic.isInternal(partition.topic) ||
-        partition.log.exists(log => log.config.compact || !log.config.remoteLogConfig.remoteStorageEnable) ||
-        partition.topicPartition.topic().equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME)
-      )
+        partition.topicPartition.topic().equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME) ||
+         partition.log.exists(log => log.remoteLogEnabled())).map(partition =>
+        new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
     }
 
-    val followerTopicPartitions = filterPartitions(partitionsBecomeFollower).map(partition =>
-      new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
-
-    val filteredLeaderPartitions = filterPartitions(partitionsBecomeLeader)
-    val leaderTopicPartitions = filteredLeaderPartitions.map(partition =>
-      new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
-
+    val followerTopicPartitions = filterPartitions(partitionsBecomeFollower)
+    val leaderTopicPartitions = filterPartitions(partitionsBecomeLeader)
     debug(s"Effective topic partitions after filtering compact and internal topics, leaders: $leaderTopicPartitions " +
       s"and followers: $followerTopicPartitions")
 
     if (leaderTopicPartitions.nonEmpty || followerTopicPartitions.nonEmpty) {
       remoteLogMetadataManager.onPartitionLeadershipChanges(leaderTopicPartitions.asJava, followerTopicPartitions.asJava)
     }
-
   }
-
 
   /**
    * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
@@ -174,31 +171,26 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    * @param delete         flag to indicate whether the given topic partitions to be deleted or not.
    */
   def stopPartitions(topicPartition: TopicPartition, delete: Boolean): Unit = {
-    // Unassign topic partitions from RLM leader/follower
-    val topicIdPartition =
-      topicIds.remove(topicPartition.topic()) match {
-        case Some(uuid) => Some(new TopicIdPartition(uuid, topicPartition))
-        case None => None
-      }
-    debug(s"Removed partition: $topicIdPartition from topic-ids")
+    if (delete) {
+      // Delete from internal datastructures only if it is to be deleted.
+      val topicIdPartition = topicPartitionIds.remove(topicPartition)
+      debug(s"Removed partition: $topicIdPartition from topicPartitionIds")
+    }
   }
 
-  def fetchRemoteLogSegmentMetadata(tp: TopicPartition,
+  def fetchRemoteLogSegmentMetadata(topicPartition: TopicPartition,
                                     epochForOffset: Int,
                                     offset: Long): Optional[RemoteLogSegmentMetadata] = {
-    val topicIdPartition =
-      topicIds.get(tp.topic()) match {
-        case Some(uuid) => Some(new TopicIdPartition(uuid, tp))
-        case None => None
-      }
+    val topicId = topicPartitionIds.get(topicPartition)
 
-    if (topicIdPartition.isEmpty) {
-      throw new KafkaException("No topic id registered for topic partition: " + tp)
+    if (topicId == null) {
+      throw new KafkaException("No topic id registered for topic partition: " + topicPartition)
     }
-    remoteLogMetadataManager.remoteLogSegmentMetadata(topicIdPartition.get, epochForOffset, offset)
+
+    remoteLogMetadataManager.remoteLogSegmentMetadata(new TopicIdPartition(topicId, topicPartition), epochForOffset, offset)
   }
 
-  def lookupTimestamp(rlsMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
+  private def lookupTimestamp(rlsMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
     val startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset)
 
     var remoteSegInputStream: InputStream = null
@@ -256,18 +248,19 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     //todo-tier Here also, we do not need to go through all the remote log segments to find the segments
     // containing the timestamp. We should find the  epoch for the startingOffset and then  traverse  through those
     // offsets and subsequent leader epochs to find the target timestamp/offset.
-    topicIds.get(tp.topic()) match {
-      case Some(uuid) =>
-        val topicIdPartition = new TopicIdPartition(uuid, tp)
-        remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition).asScala.foreach(rlsMetadata =>
+    val topicId = topicPartitionIds.get(tp)
+    if (topicId != null) {
+      remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp)).asScala
+        .foreach(rlsMetadata =>
           if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
             val timestampOffset = lookupTimestamp(rlsMetadata, timestamp, startingOffset)
             if (timestampOffset.isDefined)
               return timestampOffset
           }
         )
-        None
-      case None => None
+      None
+    } else {
+      None
     }
   }
 

@@ -123,6 +123,8 @@ object ApiVersion {
     // Support for leader recovery for unclean leader election (KIP-704)
     // Introduce ListOffsets V8 that supports listing offsets by earliest local time stamp,
     // which is local log start offset. (KIP-405)
+    // Introduced FetchRequest V14 is the same as version 13 but it also receives a new error called
+    // OffsetMovedToTieredStorageException(KIP-405)
     KAFKA_3_2_IV0
   )
 
