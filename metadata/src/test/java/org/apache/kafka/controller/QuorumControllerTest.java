@@ -155,6 +155,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
@@ -171,7 +173,7 @@ public class QuorumControllerTest {
             new ResultOrError<>(Collections.emptyMap())),
             controller.describeConfigs(Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -197,7 +199,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -270,7 +272,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(0).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setListeners(listeners));
                 assertEquals(0L, reply.get().epoch());
@@ -326,7 +328,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -398,7 +400,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -453,7 +455,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -818,7 +820,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData()
                     .setBrokerId(brokerId)
                     .setRack(null)
-                    .setClusterId("06B-K3N1TBCNYFgruEVP0Q")
+                    .setClusterId(controller.clusterId())
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setListeners(
                         new ListenerCollection(

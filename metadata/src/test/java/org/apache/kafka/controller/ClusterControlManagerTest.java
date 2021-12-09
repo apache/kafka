@@ -57,7 +57,7 @@ public class ClusterControlManagerTest {
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
+            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
                 new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
@@ -98,7 +98,8 @@ public class ClusterControlManagerTest {
             setHost("example.com"));
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), new MockTime(0, 0, 0), snapshotRegistry, 1000,
+            new LogContext(), Uuid.randomUuid().toString(), new MockTime(0, 0, 0),
+            snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
         clusterControl.activate();
         clusterControl.replay(brokerRecord);
@@ -121,7 +122,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         MockRandom random = new MockRandom();
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
+            new LogContext(),  Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(random), new MockControllerMetrics());
         clusterControl.activate();
         for (int i = 0; i < numUsableBrokers; i++) {
@@ -158,7 +159,7 @@ public class ClusterControlManagerTest {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
+            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
