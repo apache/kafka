@@ -48,6 +48,7 @@ public class ConsumerManager implements Closeable {
     private final Time time;
     private final PrimaryConsumerTask consumerTask;
     private final Thread consumerTaskThread;
+    private volatile boolean closed = false;
 
     public ConsumerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
@@ -79,7 +80,7 @@ public class ConsumerManager implements Closeable {
      *
      * @param recordMetadata record metadata to be checked for consumption.
      */
-    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) {
+    void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) {
         final int partition = recordMetadata.partition();
 
         // If the current assignment does not have the subscription for this partition then return immediately.
@@ -90,7 +91,7 @@ public class ConsumerManager implements Closeable {
 
         final long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
-        while (true) {
+        while (!closed) {
             long receivedOffset = consumerTask.receivedOffsetForPartition(partition).orElse(-1L);
             if (receivedOffset >= offset) {
                 break;
@@ -112,6 +113,7 @@ public class ConsumerManager implements Closeable {
 
     @Override
     public void close() throws IOException {
+        closed = true;
         // Consumer task will close the task and it internally closes all the resources including the consumer.
         Utils.closeQuietly(consumerTask, "ConsumerTask");
 

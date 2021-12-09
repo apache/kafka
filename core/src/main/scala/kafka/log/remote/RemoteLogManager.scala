@@ -83,13 +83,7 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
     scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit)
   }
 
-  def scheduleOnceWithDelay(runnable: Runnable, delay: Long,
-                            timeUnit: TimeUnit): ScheduledFuture[_] = {
-    info(s"Scheduling runnable $runnable once with delay: $delay")
-    scheduledThreadPool.schedule(runnable, delay, timeUnit)
-  }
-
-  def shutdown(): Unit = {
+  def shutdown(): Boolean = {
     info("Shutting down scheduled thread pool")
     scheduledThreadPool.shutdownNow()
     //waits for 2 mins to terminate the current tasks
@@ -357,6 +351,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
 
     def copyLogSegmentsToRemote(): Unit = {
+      if (isCancelled())
+        return
+
       def maybeUpdateReadOffset(): Unit = {
         if (readOffsetOption.isEmpty) {
           info(s"Find the highest remote offset for partition: $tpId after becoming leader, leaderEpoch: $leaderEpoch")
@@ -373,11 +370,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         maybeUpdateReadOffset()
         val readOffset = readOffsetOption.get
         fetchLog(tpId.topicPartition()).foreach { log =>
-          if (isCancelled()) {
-            info(s"Skipping copying log segments as the current task is cancelled")
-            return
-          }
-
           // LSO indicates the offset below are ready to be consumed(high-watermark or committed)
           val lso = log.lastStableOffset
           if (lso < 0) {
@@ -498,11 +490,15 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       } catch {
         case ex: Exception =>
           brokerTopicStats.topicStats(tpId.topicPartition().topic()).failedRemoteWriteRequestRate.mark()
-          error(s"Error occurred while copying log segments of partition: $tpId", ex)
+          if (!isCancelled()) {
+            error(s"Error occurred while copying log segments of partition: $tpId", ex)
+          }
       }
     }
 
     def handleExpiredRemoteLogSegments(): Unit = {
+      if (isCancelled())
+        return
 
       def handleLogStartOffsetUpdate(topicPartition: TopicPartition, remoteLogStartOffset: Long): Unit = {
         debug(s"Updating $topicPartition with remoteLogStartOffset: $remoteLogStartOffset")
@@ -584,33 +580,42 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           }
         }
       } catch {
-        case ex: Exception => error(s"Error while cleaning up log segments for partition: $tpId", ex)
+        case ex: Exception =>
+          if (!isCancelled()) {
+            error(s"Error while cleaning up log segments for partition: $tpId", ex)
+          }
       }
     }
 
     override def run(): Unit = {
+      if (isCancelled())
+        return
+
       try {
-        if (!isCancelled()) {
-          if (isLeader()) {
-            // a. copy log segments to remote store
-            copyLogSegmentsToRemote()
-            // b. cleanup/delete expired remote segments
-            // Followers will cleanup the local log cleanup based on the local logStartOffset.
-            // We do not need any cleanup on followers from remote segments perspective.
-            handleExpiredRemoteLogSegments()
-          } else {
-            fetchLog(tpId.topicPartition()).foreach { log =>
-              val offset = findHighestRemoteOffset(tpId)
-              log.updateRemoteIndexHighestOffset(offset)
-            }
+        if (isLeader()) {
+          // a. copy log segments to remote store
+          copyLogSegmentsToRemote()
+          // b. cleanup/delete expired remote segments
+          // Followers will cleanup the local log cleanup based on the local logStartOffset.
+          // We do not need any cleanup on followers from remote segments perspective.
+          handleExpiredRemoteLogSegments()
+        } else {
+          fetchLog(tpId.topicPartition()).foreach { log =>
+            val offset = findHighestRemoteOffset(tpId)
+            log.updateRemoteIndexHighestOffset(offset)
           }
         }
       } catch {
         case ex: InterruptedException =>
-          warn(s"Current thread for topic-partition $tpId is interrupted, this should not be rescheduled ", ex)
+          if (!isCancelled()) {
+            warn(s"Current thread for topic-partition-id $tpId is interrupted, this task won't be rescheduled. " +
+              s"Reason: ${ex.getMessage}")
+          }
         case ex: Exception =>
-          warn(
-            s"Current task for topic-partition $tpId received error but it will be scheduled for next iteration: ", ex)
+          if (!isCancelled()) {
+            warn(s"Current task for topic-partition $tpId received error but it will be scheduled. " +
+              s"Reason: ${ex.getMessage}")
+          }
       }
     }
 
@@ -923,12 +928,21 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     if (closed)
       warn("Trying to close an already closed RemoteLogManager")
     else this synchronized {
-      Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager")
-      Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager")
-      leaderOrFollowerTasks.values().forEach(_.cancel())
-      leaderOrFollowerTasks.clear()
-      rlmScheduledThreadPool.shutdown()
-      closed = true
+      // Write lock is not taken when closing this class. As, the read lock is held by other threads which might be
+      // waiting on the producer future (or) trying to consume the metadata record for strong consistency.
+      if (!closed) {
+        // During segment copy, the RLM task publishes an event and tries to consume the same for strong consistency.
+        // The active RLM task might be waiting on the producer future (or) trying to consume the record.
+        // So, tasks should be cancelled first, close the RLMM, RSM, then shutdown the thread pool to close the active
+        // tasks.
+        leaderOrFollowerTasks.values().forEach(_.cancel())
+        Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager")
+        Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager")
+        rlmScheduledThreadPool.shutdown()
+        remoteStorageFetcherThreadPool.shutdown()
+        leaderOrFollowerTasks.clear()
+        closed = true
+      }
     }
   }
 
