@@ -349,11 +349,10 @@ public class StreamsMetadataState {
                     final Map<String, Collection<String>> namedTopologyToStoreName = new HashMap<>();
                     final Set<String> topologyNames = topologyMetadata.namedTopologiesView();
                     topologyNames.forEach(topologyName -> {
-                                              final Collection<String> storesOnHostForTopologyName = getStoresOnHost(storeToSourceTopics, activePartitionHostMap.get(hostInfo), topologyName);
-                                              storesOnHostForTopologyName.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionHostMap.get(hostInfo), topologyName));
-                                              namedTopologyToStoreName.put(topologyName, storesOnHostForTopologyName);
-                                          }
-                    );
+                        final Collection<String> storesOnHostForTopologyName = getStoresOnHost(storeToSourceTopics, activePartitionHostMap.get(hostInfo), topologyName);
+                        storesOnHostForTopologyName.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionHostMap.get(hostInfo), topologyName));
+                        namedTopologyToStoreName.put(topologyName, storesOnHostForTopologyName);
+                    });
 
                     metadata = new NamedTopologyStreamsMetadataImpl(
                         hostInfo,
