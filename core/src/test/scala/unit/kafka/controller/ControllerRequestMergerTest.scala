@@ -22,8 +22,10 @@ import kafka.controller.ControllerRequestMerger
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LiCombinedControlRequestData.StopReplicaPartitionState
+import org.apache.kafka.common.message.LiCombinedControlResponseData
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataPartitionState}
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{AbstractResponse, LeaderAndIsrRequest, LiCombinedControlResponse, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 import org.junit.{Assert, Before, Test}
 
@@ -272,5 +274,97 @@ class ControllerRequestMergerTest {
       Assert.assertEquals("Mismatched controller epoch", controllerEpoch, liCombinedControlRequest.controllerEpoch())
       Assert.assertEquals("Mismatched partition states", expectedPartitions(i).asJava, liCombinedControlRequest.stopReplicaPartitionStates())
     }
+  }
+
+  @Test
+  def testNotTriggerCallbackForUpdateMetadataRequest(): Unit = {
+    var leaderAndISRCallbackInvocationCount = 0
+    var stopReplicaCallbackInvocationCount = 0
+    controllerRequestMerger.leaderAndIsrCallback = (response: AbstractResponse) => {
+      leaderAndISRCallbackInvocationCount += 1
+    }
+
+    controllerRequestMerger.stopReplicaCallback = (response: AbstractResponse) => {
+      stopReplicaCallbackInvocationCount += 1
+    }
+
+    // response that contains metadata only
+    val responseUpdateMetadataData = new LiCombinedControlResponseData().setUpdateMetadataErrorCode(Errors.NONE.code())
+    val responseUpdateMetadata = new LiCombinedControlResponse(responseUpdateMetadataData)
+
+    controllerRequestMerger.triggerCallback(responseUpdateMetadata)
+
+    // metadata only response would not trigger any callback
+    Assert.assertEquals("Mismatched callback count", 0, leaderAndISRCallbackInvocationCount)
+    Assert.assertEquals("Mismatched callback count", 0, stopReplicaCallbackInvocationCount)
+
+    // LeaderAndISR response with some errors
+    val responseLeaderAndISRData1 =
+      new LiCombinedControlResponseData().setLeaderAndIsrErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+    val responseLeaderAndISR1 = new LiCombinedControlResponse(responseLeaderAndISRData1)
+
+    // LeaderAndISR response with non-empty partitions
+    val partitionsError = createLeaderAndISRResponsePartitions("foo",
+      Seq(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED))
+    val responseLeaderAndISRData2 = new LiCombinedControlResponseData().setLeaderAndIsrPartitionErrors(partitionsError)
+    val responseLeaderAndISR2 = new LiCombinedControlResponse(responseLeaderAndISRData2)
+
+    // leaderAndISRCallbackInvocationCount increased with error LeaderAndISR response
+    controllerRequestMerger.triggerCallback(responseLeaderAndISR1)
+    Assert.assertEquals("Mismatched callback count", 1, leaderAndISRCallbackInvocationCount)
+
+    // leaderAndISRCallbackInvocationCount increased with non-empty LeaderAndISR response
+    controllerRequestMerger.triggerCallback(responseLeaderAndISR2)
+    Assert.assertEquals("Mismatched callback count", 2, leaderAndISRCallbackInvocationCount)
+
+    // stopReplicaCallbackInvocationCount has not been increased
+    Assert.assertEquals("Mismatched callback count", 0, stopReplicaCallbackInvocationCount)
+
+    // StopReplica response with some errors
+    val responseStopReplicaData1 =
+      new LiCombinedControlResponseData().setStopReplicaErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+    val responseStopReplica1 = new LiCombinedControlResponse(responseStopReplicaData1)
+
+    // StopReplica response with non-empty partitions
+    val stopReplicaPartitionsError = createStopReplicaResponsePartitions("foo",
+      Seq(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED))
+    val responseStopReplicaData2 =
+      new LiCombinedControlResponseData().setStopReplicaPartitionErrors(stopReplicaPartitionsError)
+    val responseStopReplica2 = new LiCombinedControlResponse(responseStopReplicaData2)
+
+    // stopReplicaCallbackInvocationCount increased with error StopReplica response
+    controllerRequestMerger.triggerCallback(responseStopReplica1)
+    Assert.assertEquals("Mismatched callback count", 1, stopReplicaCallbackInvocationCount)
+
+    // stopReplicaCallbackInvocationCount increased with non-empty StopReplica response
+    controllerRequestMerger.triggerCallback(responseStopReplica2)
+    Assert.assertEquals("Mismatched callback count", 2, stopReplicaCallbackInvocationCount)
+
+    // leaderAndISRCallbackInvocationCount remains unchanged
+    Assert.assertEquals("Mismatched callback count", 2, leaderAndISRCallbackInvocationCount)
+  }
+
+  private def createLeaderAndISRResponsePartitions(topicName: String, errors: Seq[Errors]) = {
+    val partitions = new util.ArrayList[LiCombinedControlResponseData.LeaderAndIsrPartitionError]
+    var partitionIndex = 0
+    for (error <- errors) {
+      partitions.add(new LiCombinedControlResponseData.LeaderAndIsrPartitionError().setTopicName(topicName).setPartitionIndex({
+        partitionIndex += 1
+        partitionIndex - 1
+      }).setErrorCode(error.code))
+    }
+    partitions
+  }
+
+  private def createStopReplicaResponsePartitions(topicName: String, errors: Seq[Errors]) = {
+    val partitions = new util.ArrayList[LiCombinedControlResponseData.StopReplicaPartitionError]
+    var partitionIndex = 0
+    for (error <- errors) {
+      partitions.add(new LiCombinedControlResponseData.StopReplicaPartitionError().setTopicName(topicName).setPartitionIndex({
+        partitionIndex += 1
+        partitionIndex - 1
+      }).setErrorCode(error.code))
+    }
+    partitions
   }
 }
