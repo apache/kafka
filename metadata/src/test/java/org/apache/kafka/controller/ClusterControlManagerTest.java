@@ -25,7 +25,9 @@ import java.util.Optional;
 import java.util.Random;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -35,9 +37,13 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.FeatureMap;
+import org.apache.kafka.metadata.FeatureMapAndEpoch;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -82,6 +88,27 @@ public class ClusterControlManagerTest {
         clusterControl.replay(unfenceBrokerRecord);
         assertFalse(clusterControl.unfenced(0));
         assertTrue(clusterControl.unfenced(1));
+    }
+
+    @Test
+    public void testRegistrationWithIncorrectClusterId() throws Exception {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClusterControlManager clusterControl = new ClusterControlManager(
+            new LogContext(), "fPZv1VBsRFmnlRvmGcOW9w", new MockTime(0, 0, 0),
+            snapshotRegistry, 1000,
+            new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        clusterControl.activate();
+        try {
+            clusterControl.registerBroker(new BrokerRegistrationRequestData().
+                    setClusterId("WIjw3grwRZmR2uOpdpVXbg").
+                    setBrokerId(0).
+                    setRack(null).
+                    setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                123L,
+                new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), 456L));
+            Assertions.fail("Expected exception");
+        } catch (InconsistentClusterIdException e) {
+        }
     }
 
     @Test
