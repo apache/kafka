@@ -24,7 +24,6 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -323,22 +322,20 @@ public class ClientStateTest {
     @Test
     public void shouldThrowWhenSomeOwnedPartitionsAreNotRecognizedWhenInitializingPrevActiveTasks() {
         final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
-        client.addOwnedPartitions(mkSet(TP_0_0, TP_0_1), "c1");
-        client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        assertThrows(IllegalStateException.class,() -> client.initializePrevTasks(taskForPartitionMap, false));
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(taskForPartitionMap, false));
     }
 
     @Test
     public void shouldFilterOutUnrecognizedPartitionsAndInitializePrevActiveTasksWhenUsingNamedTopologies() {
         final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
-        client.addOwnedPartitions(mkSet(TP_0_0, TP_0_1), "c1");
-        client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
         client.initializePrevTasks(taskForPartitionMap, true);
-        assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
-        assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
-        assertTrue(client.prevStandbyTasks().isEmpty());
+        assertThat(client.prevActiveTasks().isEmpty(), is(true));
+        assertThat(client.previousAssignedTasks().isEmpty(), is(true));
+        assertThat(client.prevStandbyTasks().isEmpty(), is(true));
     }
 
     @Test
@@ -440,22 +437,20 @@ public class ClientStateTest {
     @Test
     public void shouldThrowWhenSomeOwnedPartitionsAreNotRecognizedWhenInitializingPrevStandbyTasks() {
         final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 100L);
-        client.addOwnedPartitions(mkSet(TP_0_0, TP_0_1), "c1");
-        client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        assertThrows(IllegalStateException.class,() -> client.initializePrevTasks(taskForPartitionMap, false));
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(taskForPartitionMap, false));
     }
 
     @Test
     public void shouldFilterOutUnrecognizedPartitionsAndInitializePrevStandbyTasksWhenUsingNamedTopologies() {
         final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 100L);
-        client.addOwnedPartitions(mkSet(TP_0_0, TP_0_1), "c1");
-        client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
         client.initializePrevTasks(taskForPartitionMap, true);
-        assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
-        assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
-        assertTrue(client.prevStandbyTasks().isEmpty());
+        assertThat(client.prevActiveTasks().isEmpty(), is(true));
+        assertThat(client.previousAssignedTasks().isEmpty(), is(true));
+        assertThat(client.prevStandbyTasks().isEmpty(), is(true));
     }
 
     @Test
