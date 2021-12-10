@@ -98,17 +98,14 @@ public class ClusterControlManagerTest {
             snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
         clusterControl.activate();
-        try {
+        assertThrows(InconsistentClusterIdException.class, () ->
             clusterControl.registerBroker(new BrokerRegistrationRequestData().
                     setClusterId("WIjw3grwRZmR2uOpdpVXbg").
                     setBrokerId(0).
                     setRack(null).
                     setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
                 123L,
-                new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), 456L));
-            Assertions.fail("Expected exception");
-        } catch (InconsistentClusterIdException e) {
-        }
+                new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), 456L)));
     }
 
     @Test
