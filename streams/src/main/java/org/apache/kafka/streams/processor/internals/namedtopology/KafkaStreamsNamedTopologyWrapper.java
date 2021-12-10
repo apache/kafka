@@ -153,7 +153,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public AddNamedTopologyResult addNamedTopology(final NamedTopology newTopology) {
-        log.debug("Adding topology: {}", newTopology.name());
+        log.info("Adding topology: {}", newTopology.name());
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
@@ -179,7 +179,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove, final boolean resetOffsets) {
-        log.debug("Removing topology: {}", topologyToRemove);
+        log.info("Removing topology: {}", topologyToRemove);
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {

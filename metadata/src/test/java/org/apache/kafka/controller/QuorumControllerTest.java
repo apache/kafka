@@ -124,6 +124,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
         }
     }
