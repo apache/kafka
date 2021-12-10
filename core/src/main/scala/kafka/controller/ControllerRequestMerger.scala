@@ -20,6 +20,7 @@ package kafka.controller
 import kafka.utils.{LiDecomposedControlResponse, LiDecomposedControlResponseUtils, Logging}
 import org.apache.kafka.common.message.LiCombinedControlRequestData
 import org.apache.kafka.common.message.LiCombinedControlRequestData._
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
@@ -272,12 +273,17 @@ class ControllerRequestMerger extends Logging {
 
   def triggerCallback(response: AbstractResponse): Unit = {
     // Currently, there is no callback for the UpdateMetadataResponse
-    val LiDecomposedControlResponse(leaderAndIsrResponse, _, stopReplicaResponse) =
+    val LiDecomposedControlResponse(leaderAndIsrResponse, _, stopReplicaResponse) = {
       LiDecomposedControlResponseUtils.decomposeResponse(response.asInstanceOf[LiCombinedControlResponse])
-    if (leaderAndIsrCallback != null) {
+    }
+    if (leaderAndIsrCallback != null
+      && (!leaderAndIsrResponse.data.partitionErrors.isEmpty || leaderAndIsrResponse.error() != Errors.NONE)) {
+      // fire callback only if leaderAndIsrResponse is non-empty or contains errors
       leaderAndIsrCallback(leaderAndIsrResponse)
     }
-    if (stopReplicaCallback != null) {
+    if (stopReplicaCallback != null
+      && (!stopReplicaResponse.partitionErrors().isEmpty || stopReplicaResponse.error() != Errors.NONE)) {
+      // fire callback only if stopReplicaResponse is non-empty or contains errors
       stopReplicaCallback(stopReplicaResponse)
     }
   }
