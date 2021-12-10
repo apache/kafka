@@ -277,12 +277,27 @@ public class ClientState {
         consumerToPreviousStatefulTaskIds.put(consumerId, taskOffsetSums.keySet());
     }
 
-    public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap) {
+    public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap,
+                                    final boolean hasNamedTopologies) {
         if (!previousActiveTasks.taskIds().isEmpty() || !previousStandbyTasks.taskIds().isEmpty()) {
             throw new IllegalStateException("Already added previous tasks to this client state.");
         }
+
+        maybeFilterUnknownPrevTasksAndPartitions(taskForPartitionMap, hasNamedTopologies);
         initializePrevActiveTasksFromOwnedPartitions(taskForPartitionMap);
         initializeRemainingPrevTasksFromTaskOffsetSums();
+    }
+
+    private void maybeFilterUnknownPrevTasksAndPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap,
+                                                          final boolean hasNamedTopologies) {
+        // If this application uses named topologies, then it's possible for members to report tasks
+        // or partitions in their subscription that belong to a named topology that the group leader
+        // doesn't currently recognize, eg because it was just removed
+        if (hasNamedTopologies) {
+            ownedPartitions.keySet().retainAll(taskForPartitionMap.keySet());
+            previousActiveTasks.taskIds().retainAll(taskForPartitionMap.values());
+            previousStandbyTasks.taskIds().retainAll(taskForPartitionMap.values());
+        }
     }
 
     /**
