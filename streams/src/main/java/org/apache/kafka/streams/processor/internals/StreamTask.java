@@ -228,8 +228,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (state() == State.CREATED) {
             recordCollector.initialize();
 
-            StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
+            mainConsumer.enforceRebalance();
 
+            StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
             // without EOS the checkpoint file would not be deleted after loading, and
             // with EOS we would not checkpoint ever during running state anyways.
             // therefore we can initialize the snapshot as empty so that we would checkpoint right after loading

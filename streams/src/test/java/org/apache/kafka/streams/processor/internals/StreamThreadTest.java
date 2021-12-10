@@ -1683,6 +1683,200 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldEnforceRebalanceWhenActiveTaskStateWipedAndStandbyTaskIsConfigured() {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        final ChangelogReader changelogReader = EasyMock.createNiceMock(ChangelogReader.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        changelogReader.enforceRestoreActive();
+        expectLastCall().andVoid();
+
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        consumer.assign(assignedPartitions);
+        records.put(t1p1, Collections.singletonList(new ConsumerRecord<>(
+                t1p1.topic(),
+                t1p1.partition(),
+                1,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty())));
+        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records)).anyTimes();
+
+        EasyMock.replay(consumer, consumerGroupMetadata, changelogReader);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Task mockActiveTask = EasyMock.niceMock(Task.class);
+
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final Metric testMetric = new KafkaMetric(
+                new Object(),
+                testMetricName,
+                (Measurable) (config, now) -> 0,
+                null,
+                new MockTime());
+        final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
+
+        expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
+        expect(taskManager.activeTaskMap()).andReturn(mkMap(mkEntry(task1, mockActiveTask)));
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+                metrics,
+                APPLICATION_ID,
+                config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+                mockTime
+        );
+        final StreamThread thread = new StreamThread(
+                mockTime,
+                new StreamsConfig(configProps(true)),
+                null,
+                consumer,
+                consumer,
+                changelogReader,
+                null,
+                taskManager,
+                streamsMetrics,
+                new TopologyMetadata(internalTopologyBuilder, config),
+                CLIENT_ID,
+                new LogContext(""),
+                new AtomicInteger(),
+                new AtomicLong(Long.MAX_VALUE),
+                null,
+                HANDLER,
+                null
+        );
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        standbyTasks.put(task2, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
+
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+        thread.runOnce();
+
+        mockActiveTask.initializeIfNeeded();
+        expectLastCall().andThrow(new TaskCorruptedException(Collections.singleton(task1)));
+        EasyMock.replay(mockActiveTask);
+
+        EasyMock.reset(consumer);
+        consumer.enforceRebalance();
+        EasyMock.expectLastCall().times(1);
+    }
+
+    @Test
+    public void shouldNotEnforceRebalanceWhenActiveTaskStateWipedAndNoStandbyTaskIsConfigured() {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        final ChangelogReader changelogReader = EasyMock.createNiceMock(ChangelogReader.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        changelogReader.enforceRestoreActive();
+        expectLastCall().andVoid();
+
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        consumer.assign(assignedPartitions);
+        records.put(t1p1, Collections.singletonList(new ConsumerRecord<>(
+                t1p1.topic(),
+                t1p1.partition(),
+                1,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty())));
+        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(records)).anyTimes();
+
+        EasyMock.replay(consumer, consumerGroupMetadata, changelogReader);
+
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Task mockActiveTask = EasyMock.niceMock(Task.class);
+
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final Metric testMetric = new KafkaMetric(
+                new Object(),
+                testMetricName,
+                (Measurable) (config, now) -> 0,
+                null,
+                new MockTime());
+        final Map<MetricName, Metric> dummyProducerMetrics = singletonMap(testMetricName, testMetric);
+
+        expect(taskManager.producerMetrics()).andReturn(dummyProducerMetrics);
+        expect(taskManager.activeTaskMap()).andReturn(mkMap(mkEntry(task1, mockActiveTask)));
+        EasyMock.replay(taskManager);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+                metrics,
+                APPLICATION_ID,
+                config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+                mockTime
+        );
+        final StreamThread thread = new StreamThread(
+                mockTime,
+                new StreamsConfig(configProps(true)),
+                null,
+                consumer,
+                consumer,
+                changelogReader,
+                null,
+                taskManager,
+                streamsMetrics,
+                new TopologyMetadata(internalTopologyBuilder, config),
+                CLIENT_ID,
+                new LogContext(""),
+                new AtomicInteger(),
+                new AtomicLong(Long.MAX_VALUE),
+                null,
+                HANDLER,
+                null
+        );
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+        thread.runOnce();
+
+        mockActiveTask.initializeIfNeeded();
+        expectLastCall().andThrow(new TaskCorruptedException(Collections.singleton(task1)));
+        EasyMock.replay(mockActiveTask);
+
+        EasyMock.reset(consumer);
+        consumer.enforceRebalance();
+        expectLastCall().andThrow(new AssertionError()).anyTimes();
+    }
+
+    @Test
     public void shouldReturnStandbyTaskMetadataWhileRunningState() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
                               .groupByKey().count(Materialized.as("count-one"));

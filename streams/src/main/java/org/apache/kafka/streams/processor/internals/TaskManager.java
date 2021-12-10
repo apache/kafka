@@ -465,6 +465,13 @@ public class TaskManager {
             } catch (final TimeoutException timeoutException) {
                 task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
                 allRunning = false;
+            } catch (final TaskCorruptedException te) {
+                // A TaskCorruptedException is thrown from initializeIfNeeded only when eos is enabled and if the previous run did not shutdown gracefully.
+                // If there are standby tasks enabled, then it might be better to trigger a rebalance, to get the task
+                // re-assigned to the instance hosting the standby so get the task active again quickly.
+                if (!standbyTaskIds().isEmpty()) {
+                    mainConsumer.enforceRebalance();
+                }
             }
 
             if (task.isActive()) {
