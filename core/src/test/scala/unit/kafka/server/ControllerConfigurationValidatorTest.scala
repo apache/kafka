@@ -22,12 +22,29 @@ import java.util.Collections.emptyMap
 
 import org.junit.jupiter.api.Test
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER_LOGGER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
-import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
 class ControllerConfigurationValidatorTest {
+  @Test
+  def testDefaultTopicResourceIsRejected(): Unit = {
+    val validator = new ControllerConfigurationValidator()
+    assertEquals("Default topic resources are not allowed.",
+        assertThrows(classOf[InvalidRequestException], () => validator.validate(
+        new ConfigResource(TOPIC, ""), emptyMap())). getMessage())
+  }
+
+  @Test
+  def testInvalidTopicNameRejected(): Unit = {
+    val validator = new ControllerConfigurationValidator()
+    assertEquals("Topic name \"(<-invalid->)\" is illegal, it contains a character " +
+      "other than ASCII alphanumerics, '.', '_' and '-'",
+        assertThrows(classOf[InvalidTopicException], () => validator.validate(
+          new ConfigResource(TOPIC, "(<-invalid->)"), emptyMap())). getMessage())
+  }
+
   @Test
   def testUnknownResourceType(): Unit = {
     val validator = new ControllerConfigurationValidator()
@@ -67,5 +84,25 @@ class ControllerConfigurationValidatorTest {
     assertEquals("Unknown topic config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(TOPIC, "foo"), config)). getMessage())
+  }
+
+  @Test
+  def testInvalidBrokerEntity(): Unit = {
+    val validator = new ControllerConfigurationValidator()
+    val config = new TreeMap[String, String]()
+    config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
+    assertEquals("Unable to parse broker name as a base 10 number.",
+      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+        new ConfigResource(BROKER, "blah"), config)). getMessage())
+  }
+
+  @Test
+  def testInvalidNegativeBrokerId(): Unit = {
+    val validator = new ControllerConfigurationValidator()
+    val config = new TreeMap[String, String]()
+    config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
+    assertEquals("Invalid negative broker ID.",
+      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+        new ConfigResource(BROKER, "-1"), config)). getMessage())
   }
 }

@@ -22,8 +22,10 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
@@ -96,6 +98,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -247,6 +250,41 @@ public final class QuorumController implements Controller {
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
+            }
+        }
+    }
+
+    /**
+     * Checks that a configuration resource exists.
+     *
+     * This object must be used only from the controller event thread.
+     */
+    class ConfigResourceExistenceChecker implements Consumer<ConfigResource> {
+        @Override
+        public void accept(ConfigResource configResource) {
+            switch (configResource.type()) {
+                case BROKER_LOGGER:
+                    break;
+                case BROKER:
+                    int brokerId;
+                    try {
+                        brokerId = Integer.parseInt(configResource.name());
+                    } catch (NumberFormatException e) {
+                        brokerId = -1;
+                    }
+                    if (!clusterControl.brokerRegistrations().containsKey(brokerId)) {
+                        throw new BrokerIdNotRegisteredException("No broker with id " +
+                            brokerId + " found.");
+                    }
+                    break;
+                case TOPIC:
+                    if (replicationControl.getTopicId(configResource.name()) == null) {
+                        throw new UnknownTopicOrPartitionException("The topic '" +
+                            configResource.name() + "' does not exist.");
+                    }
+                    break;
+                default:
+                    break;
             }
         }
     }
@@ -1016,6 +1054,11 @@ public final class QuorumController implements Controller {
     private final ControllerPurgatory purgatory;
 
     /**
+     * A predicate that returns information about whether a ConfigResource exists.
+     */
+    private final Consumer<ConfigResource> resourceExists;
+
+    /**
      * An object which stores the controller's dynamic configuration.
      * This must be accessed only by the event queue thread.
      */
@@ -1130,6 +1173,7 @@ public final class QuorumController implements Controller {
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
+        this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager(logContext,
             snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
@@ -1236,7 +1280,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges);
+                configurationControl.incrementalAlterConfigs(configChanges, resourceExists);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1276,7 +1320,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs);
+                configurationControl.legacyAlterConfigs(newConfigs, resourceExists);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
