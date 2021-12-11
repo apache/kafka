@@ -47,14 +47,14 @@ public class PositionTest {
 
         final Position position = Position.fromMap(map);
         assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1")));
-        assertThat(position.getBound("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
 
         // Should be a copy of the constructor map
 
         map.get("topic1").put(99, 99L);
 
         // so the position is still the original one
-        assertThat(position.getBound("topic1"), equalTo(mkMap(
+        assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
             mkEntry(7, 0L)
         )));
@@ -85,13 +85,13 @@ public class PositionTest {
         final Position merged = position.merge(position1);
 
         assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
-        assertThat(merged.getBound("topic"), equalTo(mkMap(mkEntry(0, 7L))));
-        assertThat(merged.getBound("topic1"), equalTo(mkMap(
+        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 7L))));
+        assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
             mkEntry(7, 0L),
             mkEntry(8, 1L)
         )));
-        assertThat(merged.getBound("topic2"), equalTo(mkMap(mkEntry(9, 5L))));
+        assertThat(merged.getPartitionPositions("topic2"), equalTo(mkMap(mkEntry(9, 5L))));
     }
 
     @Test
@@ -99,9 +99,9 @@ public class PositionTest {
         final Position position = Position.emptyPosition();
         position.withComponent("topic", 3, 5L);
         position.withComponent("topic", 3, 4L);
-        assertThat(position.getBound("topic").get(3), equalTo(5L));
+        assertThat(position.getPartitionPositions("topic").get(3), equalTo(5L));
         position.withComponent("topic", 3, 6L);
-        assertThat(position.getBound("topic").get(3), equalTo(6L));
+        assertThat(position.getPartitionPositions("topic").get(3), equalTo(6L));
     }
 
     @Test
@@ -123,21 +123,21 @@ public class PositionTest {
 
         // copy has not changed
         assertThat(copy.getTopics(), equalTo(mkSet("topic", "topic1")));
-        assertThat(copy.getBound("topic"), equalTo(mkMap(mkEntry(0, 5L))));
-        assertThat(copy.getBound("topic1"), equalTo(mkMap(
+        assertThat(copy.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(copy.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
             mkEntry(7, 0L)
         )));
 
         // original has changed
         assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
-        assertThat(position.getBound("topic"), equalTo(mkMap(mkEntry(0, 6L))));
-        assertThat(position.getBound("topic1"), equalTo(mkMap(
+        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 6L))));
+        assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
             mkEntry(7, 0L),
             mkEntry(8, 1L)
         )));
-        assertThat(position.getBound("topic2"), equalTo(mkMap(mkEntry(2, 4L))));
+        assertThat(position.getPartitionPositions("topic2"), equalTo(mkMap(mkEntry(2, 4L))));
     }
 
     @Test
@@ -153,8 +153,8 @@ public class PositionTest {
         final Position merged = position.merge(null);
 
         assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1")));
-        assertThat(merged.getBound("topic"), equalTo(mkMap(mkEntry(0, 5L))));
-        assertThat(merged.getBound("topic1"), equalTo(mkMap(
+        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
             mkEntry(7, 0L)
         )));

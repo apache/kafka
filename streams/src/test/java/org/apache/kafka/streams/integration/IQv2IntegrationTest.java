@@ -57,8 +57,10 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -96,6 +98,9 @@ public class IQv2IntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private KafkaStreams kafkaStreams;
+
+    @Rule
+    public TestName testName = new TestName();
 
     @BeforeClass
     public static void before()
@@ -221,7 +226,7 @@ public class IQv2IntegrationTest {
         final Object lock = stateLock.get(streamThread);
 
         // wait for the desired partitions to be assigned
-        IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(
+        IntegrationTestUtils.iqv2WaitForPartitions(
             kafkaStreams,
             inStore(STORE_NAME).withQuery(query),
             partitions
@@ -234,7 +239,7 @@ public class IQv2IntegrationTest {
             stateField.set(streamThread, State.PARTITIONS_ASSIGNED);
 
             final StateQueryResult<Boolean> result =
-                IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(
+                IntegrationTestUtils.iqv2WaitForPartitions(
                     kafkaStreams,
                     request,
                     partitions
@@ -266,7 +271,7 @@ public class IQv2IntegrationTest {
 
         kafkaStreams.start();
         final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(kafkaStreams, request, partitions);
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
     }
@@ -280,7 +285,7 @@ public class IQv2IntegrationTest {
 
         kafkaStreams.start();
         final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(kafkaStreams, request, partitions);
+            IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
     }
@@ -407,7 +412,7 @@ public class IQv2IntegrationTest {
 
         kafkaStreams.start();
         final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForPartitionsOrGlobal(kafkaStreams, request, partitions);
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
         final QueryResult<Boolean> queryResult = result.getPartitionResults().get(partition);
         assertThat(queryResult.isFailure(), is(true));
@@ -419,8 +424,9 @@ public class IQv2IntegrationTest {
     }
 
 
-    private static Properties streamsConfiguration() {
-        final String safeTestName = IQv2IntegrationTest.class.getName();
+    private Properties streamsConfiguration() {
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

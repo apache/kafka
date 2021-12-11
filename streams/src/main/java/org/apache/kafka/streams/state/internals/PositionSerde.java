@@ -78,7 +78,7 @@ public final class PositionSerde {
             arraySize += Integer.SIZE; // topic name length
             arraySize += topicBytes.length; // topic name itself
 
-            final Map<Integer, Long> partitionOffsets = position.getBound(topic);
+            final Map<Integer, Long> partitionOffsets = position.getPartitionPositions(topic);
             arraySize += Integer.SIZE; // Number of PartitionOffset pairs
             arraySize += (Integer.SIZE + Long.SIZE)
                     * partitionOffsets.size(); // partitionOffsets themselves
@@ -93,7 +93,7 @@ public final class PositionSerde {
             buffer.put(topics[i]);
 
             final String topic = entries.get(i);
-            final Map<Integer, Long> partitionOffsets = position.getBound(topic);
+            final Map<Integer, Long> partitionOffsets = position.getPartitionPositions(topic);
             buffer.putInt(partitionOffsets.size());
             for (final Entry<Integer, Long> partitionOffset : partitionOffsets.entrySet()) {
                 buffer.putInt(partitionOffset.getKey());

@@ -50,9 +50,9 @@ public class PositionBoundTest {
     }
 
     @Test
-    public void unboundedShouldThrowOnPosition() {
+    public void unboundedShouldReturnEmptyPosition() {
         final PositionBound bound = PositionBound.unbounded();
-        assertThrows(IllegalArgumentException.class, bound::position);
+        assertThat(bound.position(), equalTo(Position.emptyPosition()));
     }
 
     @Test
