@@ -30,63 +30,42 @@ import java.util.Objects;
 public class PositionBound {
 
     private final Position position;
-    private final boolean unbounded;
 
-    private PositionBound(final Position position, final boolean unbounded) {
-        if (unbounded && position != null) {
-            throw new IllegalArgumentException();
-        } else if (position != null) {
-            this.position = position.copy();
-            this.unbounded = false;
-        } else {
-            this.position = null;
-            this.unbounded = unbounded;
-        }
+    private PositionBound(final Position position) {
+        this.position = position.copy();
     }
 
     /**
      * Creates a new PositionBound representing "no bound"
      */
     public static PositionBound unbounded() {
-        return new PositionBound(null, true);
+        return new PositionBound(Position.emptyPosition());
     }
 
     /**
      * Creates a new PositionBound representing a specific position.
      */
     public static PositionBound at(final Position position) {
-        return new PositionBound(position, false);
+        return new PositionBound(position);
     }
 
     /**
      * Returns true iff this object specifies that there is no position bound.
      */
     public boolean isUnbounded() {
-        return unbounded;
+        return position.isEmpty();
     }
 
     /**
      * Returns the specific position of this bound.
-     *
-     * @throws IllegalArgumentException if this is an "unbounded" position.
      */
     public Position position() {
-        if (unbounded) {
-            throw new IllegalArgumentException(
-                "Cannot get the position of an unbounded PositionBound."
-            );
-        } else {
-            return position;
-        }
+        return position;
     }
 
     @Override
     public String toString() {
-        if (isUnbounded()) {
-            return "PositionBound{unbounded}";
-        } else {
-            return "PositionBound{position=" + position + '}';
-        }
+        return "PositionBound{position=" + position + '}';
     }
 
     @Override
@@ -98,7 +77,7 @@ public class PositionBound {
             return false;
         }
         final PositionBound that = (PositionBound) o;
-        return unbounded == that.unbounded && Objects.equals(position, that.position);
+        return Objects.equals(position, that.position);
     }
 
     @Override

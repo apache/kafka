@@ -144,8 +144,8 @@ public class ConsistencyVectorIntegrationTest {
         for (final TestingRocksDBStore store : supplier.stores) {
             if (store.getDbDir() != null) {
                 assertThat(store.getDbDir().toString().contains("/0_0/"), is(true));
-                assertThat(store.getPosition().getBound(INPUT_TOPIC_NAME), notNullValue());
-                assertThat(store.getPosition().getBound(INPUT_TOPIC_NAME), hasEntry(0, 99L));
+                assertThat(store.getPosition().getPartitionPositions(INPUT_TOPIC_NAME), notNullValue());
+                assertThat(store.getPosition().getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 99L));
                 count.incrementAndGet();
             }
         }

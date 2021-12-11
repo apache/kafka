@@ -592,8 +592,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
         assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound(""), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound(""), hasEntry(0, 3L));
+        assertThat(bytesStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
     }
 
     @Test
@@ -629,10 +629,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
         assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound("A"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound("A"), hasEntry(0, 3L));
-        assertThat(bytesStore.getPosition().getBound("B"), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound("B"), hasEntry(0, 2L));
+        assertThat(bytesStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
+        assertThat(bytesStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
+        assertThat(bytesStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
     }
 
     @Test
@@ -665,7 +665,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
         assertThat(bytesStore.getPosition(), Matchers.notNullValue());
-        assertThat(bytesStore.getPosition().getBound("A"), hasEntry(0, 2L));
+        assertThat(bytesStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
     }
 
     @Test

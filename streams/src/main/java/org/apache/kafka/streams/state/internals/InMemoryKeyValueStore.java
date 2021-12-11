@@ -45,13 +45,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+    private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
-    private Position position;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
-        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -102,7 +101,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             query,
             positionBound,
             collectExecutionInfo,
-            this
+            this,
+            position,
+            context.taskId().partition()
         );
     }
 

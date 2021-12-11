@@ -1003,8 +1003,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
         assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound(""), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound(""), hasEntry(0, 3L));
+        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getPartitionPositions(""), hasEntry(0, 3L));
     }
 
     @Test
@@ -1040,10 +1040,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                         rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
         assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound("A"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound("A"), hasEntry(0, 3L));
-        assertThat(rocksDBStore.getPosition().getBound("B"), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound("B"), hasEntry(0, 2L));
+        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 3L));
+        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), Matchers.notNullValue());
+        assertThat(rocksDBStore.getPosition().getPartitionPositions("B"), hasEntry(0, 2L));
     }
 
     @Test
@@ -1067,7 +1067,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
 
         assertThat(rocksDBStore.getPosition(), Matchers.notNullValue());
-        assertThat(rocksDBStore.getPosition().getBound("A"), hasEntry(0, 2L));
+        assertThat(rocksDBStore.getPosition().getPartitionPositions("A"), hasEntry(0, 2L));
     }
 
     @Test
