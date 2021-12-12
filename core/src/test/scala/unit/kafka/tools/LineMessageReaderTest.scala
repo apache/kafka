@@ -127,14 +127,14 @@ class LineMessageReaderTest {
     val lineReader = new LineMessageReader()
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
-      "headerKey1.0:headerValue1.0[MISSING-DELIMITER]key1\tvalue1"
+      "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     lineReader.readMessage()
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
-      "No key separator found on line 2: headerKey1.0:headerValue1.0[MISSING-DELIMITER]key1\tvalue1",
+      "No key separator found in 'key1[MISSING-DELIMITER]value1' on line number 2",
       expectedException.getMessage
     )
   }
@@ -178,7 +178,7 @@ class LineMessageReaderTest {
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
-      "No header key separator found on line 1 in pair key-val",
+      "No header key separator found in pair 'key-val' on line number 1",
       expectedException.getMessage
     )
   }
@@ -217,6 +217,4 @@ class LineMessageReaderTest {
   private def record[K, V](key: K, value: V): ProducerRecord[K, V] = {
     new ProducerRecord("topic", key, value)
   }
-
-
 }

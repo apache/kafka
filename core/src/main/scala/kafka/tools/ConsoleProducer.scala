@@ -223,9 +223,9 @@ object ConsoleProducer {
         |Default parsing pattern when:
         | parse.headers=true & parse.key=true:
         |  "h1:v1,h2...\tkey\tvalue"
-        | parse.headers=false & parse.key=true:
+        | parse.key=true:
         |  "key\tvalue"
-        | parse.headers=true & parse.key=false:
+        | parse.headers=true:
         |  "h1:v1,h2...\tvalue"
       """.stripMargin
       )
@@ -319,33 +319,28 @@ object ConsoleProducer {
         case null => null
         case line =>
 
-          val headers = (parseHeader, line.indexOf(headersDelimiter)) match {
-            case (false, _) => null
-            case (_, -1) =>
-              if (ignoreError) null
-              else throw new KafkaException(s"No header separator found on line $lineNumber: $line")
-            case (_, n) => line.substring(0, n)
-          }
+          val headers = parse(parseHeader, line, headersDelimiter, "headers delimiter")
+          val key = parse(parseKey, line.substring(offset(headers)), keySeparator, "key separator")
+          val value = line.substring(offset(headers) + offset(key))
 
-          val headersLength = if (headers == null ) -1 else headers.length
-          val key = (parseKey, line.substring(headersLength + 1).indexOf(keySeparator)) match {
-            case (false, _) => null
-            case (_, -1) =>
-              if (ignoreError) null
-              else throw new KafkaException(s"No key separator found on line $lineNumber: $line")
-            case (_, n) => line.substring(headersLength +  1, headersLength +  1 + n)
-          }
-
-          val keyLength = if (key == null) -1 else key.length
-          val value = line.substring(headersLength + 1 + keyLength + 1)
           new ProducerRecord[Array[Byte], Array[Byte]](
             topic,
             null,
             null,
             if (key != null) key.getBytes(StandardCharsets.UTF_8) else null,
             if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
-            if (headers != null ) mapHeaders(headers) else null
+            if (headers != null) mapHeaders(headers) else null
           )
+      }
+    }
+
+    private def parse(enabled: Boolean, toParse: String, demarcation: String, demarcationName: String): String = {
+      (enabled, toParse.indexOf(demarcation)) match {
+        case (false, _) => null
+        case (_, -1) =>
+          if (ignoreError) null
+          else throw new KafkaException(s"No $demarcationName found in '$toParse' on line number $lineNumber")
+        case (_, index) => toParse.substring(0, index)
       }
     }
 
@@ -353,13 +348,15 @@ object ConsoleProducer {
       val recordHeaders = headerSeparatorPattern.split(headers)
         .map(pair =>
           (pair.indexOf(headerKeySeparator), ignoreError) match {
-            case (-1, false) => throw new KafkaException(s"No header key separator found on line $lineNumber in pair $pair")
+            case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
             case (-1, true) => new RecordHeader(pair, null)
-            case (i, _) => new RecordHeader(pair.substring(0, i), pair.substring(i+1).getBytes(StandardCharsets.UTF_8))
-        })
-
+            case (i, _) => new RecordHeader(pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
+          })
       asList(recordHeaders: _*)
+    }
 
+    private def offset(headers: String) = {
+      if (headers == null) 0 else headers.length + 1
     }
   }
 }
