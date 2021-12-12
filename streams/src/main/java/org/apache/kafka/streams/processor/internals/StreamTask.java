@@ -189,6 +189,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
+            TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -1210,7 +1211,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // if we are in running state, just return the latest offset sentinel indicating
             // we should be at the end of the changelog
             return changelogPartitions().stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+                                        .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }

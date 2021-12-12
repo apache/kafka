@@ -825,7 +825,6 @@ public class StreamThread extends Thread {
                     if (bufferSize <= maxBufferSizeBytes.get()) {
                         mainConsumer.resume(mainConsumer.paused());
                     }
-                    bufferSize -= processedData.totalBytesConsumed;
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -945,6 +944,7 @@ public class StreamThread extends Thread {
         }
     }
 
+    // Visible for testing
     long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
@@ -986,7 +986,6 @@ public class StreamThread extends Thread {
         log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 
         pollSensor.record(pollLatency, now);
-
 
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
