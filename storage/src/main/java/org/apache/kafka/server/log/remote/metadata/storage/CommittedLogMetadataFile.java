@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,16 +41,19 @@ import java.util.Optional;
 
 public class CommittedLogMetadataFile {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommittedLogMetadataFile.class);
     public static final String COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME = "remote_log_snapshot";
 
     // header: <version:short><topicId:2 longs><metadata-partition:int><metadata-partition-offset:long>
     // size: 2 + (8+8) + 4 + 8 = 30
     private static final int HEADER_SIZE = 30;
 
+    private TopicIdPartition topicIdPartition;
     private final File metadataStoreFile;
 
     CommittedLogMetadataFile(TopicIdPartition topicIdPartition,
                              Path metadataStoreDir) {
+        this.topicIdPartition = topicIdPartition;
         this.metadataStoreFile = new File(metadataStoreDir.toFile(), COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME);
 
         // Create an empty file if it does not exist.
@@ -62,6 +67,11 @@ public class CommittedLogMetadataFile {
     }
 
     public synchronized void write(Snapshot snapshot) throws IOException {
+        if (!metadataStoreFile.getParentFile().exists()) {
+            LOGGER.warn("Skip committing the remote log metadata snapshot for {}, as the topic got deleted",
+                    topicIdPartition.topicPartition());
+            return;
+        }
         File newMetadataStoreFile = new File(metadataStoreFile.getAbsolutePath() + ".new");
         try (WritableByteChannel fileChannel = Channels.newChannel(new FileOutputStream(newMetadataStoreFile))) {
 

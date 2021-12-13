@@ -26,8 +26,12 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -59,5 +63,18 @@ public class CommittedLogMetadataFileTest {
 
         Assertions.assertEquals(snapshot, maybeReadSnapshot.get());
         Assertions.assertEquals(new HashSet<>(snapshot.remoteLogMetadatas()), new HashSet<>(maybeReadSnapshot.get().remoteLogMetadatas()));
+    }
+
+    @Test
+    public void testSkipSnapshotOnTopicDeletion() throws IOException {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
+        Path metadataStorePath = TestUtils.tempDirectory().toPath();
+
+        CommittedLogMetadataFile committedLogMetadataFile = new CommittedLogMetadataFile(tpId, metadataStorePath);
+        CommittedLogMetadataFile.Snapshot snapshot =
+                new CommittedLogMetadataFile.Snapshot(tpId.topicId(), 0, 200, Collections.emptyList());
+        Files.walk(metadataStorePath).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+        committedLogMetadataFile.write(snapshot);
     }
 }
