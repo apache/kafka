@@ -27,6 +27,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -92,11 +93,29 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 
+        if (query instanceof RangeQuery) {
+            final RangeQuery<Bytes, byte[]> typedQuery = (RangeQuery<Bytes, byte[]>) query;
+            final KeyValueIterator<Bytes, byte[]> keyValueIterator;
+            if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
+                keyValueIterator = this.range(typedQuery.getLowerBound().get(), typedQuery.getUpperBound().get());
+            } else if (typedQuery.getLowerBound().isPresent()) {
+                keyValueIterator = this.range(typedQuery.getLowerBound().get(), null);
+            } else if (typedQuery.getUpperBound().isPresent()) {
+                keyValueIterator = this.range(null, typedQuery.getUpperBound().get());
+            } else {
+                keyValueIterator = this.range(null, null);
+            }
+
+            final R result = (R) keyValueIterator;
+            final QueryResult<R> queryResult = QueryResult.forResult(result);
+            return queryResult;
+        }
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
@@ -175,6 +194,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         if (from == null && to == null) {
             return getKeyValueIterator(map.keySet(), forward);
         } else if (from == null) {
+            System.out.println("-----------> range upper bound");
             return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
         } else if (to == null) {
             return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);

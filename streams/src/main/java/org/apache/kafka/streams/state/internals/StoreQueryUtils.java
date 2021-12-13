@@ -32,6 +32,21 @@ public final class StoreQueryUtils {
     private StoreQueryUtils() {
     }
 
+    /**
+     * a utility interface to facilitate stores' query dispatch logic,
+     * allowing them to generically store query execution logic as the values
+     * in a map.
+     */
+    @FunctionalInterface
+    public interface QueryHandler {
+        QueryResult<?> apply(
+                final Query<?> query,
+                final PositionBound positionBound,
+                final boolean collectExecutionInfo,
+                final StateStore store
+        );
+    }
+
     @SuppressWarnings("unchecked")
     public static <R> QueryResult<R> handleBasicQueries(
         final Query<R> query,

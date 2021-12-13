@@ -328,6 +328,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
@@ -353,7 +354,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                             "#range via StoreQueryAdapters").append(" in ");
                 }
             }
-            @SuppressWarnings("unchecked") final R result = (R) iterator;
+            final R result = (R) iterator;
             final long end = System.nanoTime();
             final QueryResult<R> queryResult = QueryResult.forResult(result);
             executionInfo.append(end - start).append("ns");
