@@ -34,6 +34,11 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.RawRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -184,6 +189,51 @@ public class MeteredKeyValueStore<K, V>
                 sendOldValues);
         }
         return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final boolean collectExecutionInfo) {
+
+        final long start = System.nanoTime();
+        final QueryResult<R> result;
+
+        if (query instanceof RangeQuery) {
+            final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
+            final RawRangeQuery rawRangeQuery;
+            if (((RangeQuery<?, ?>) query).getLowerBound().isPresent()
+                    && ((RangeQuery<?, ?>) query).getUpperBound().isPresent()) {
+                rawRangeQuery = RawRangeQuery.withRange(keyBytes(typedQuery.getLowerBound().get()),
+                        keyBytes(typedQuery.getUpperBound().get()));
+            } else if (((RangeQuery<?, ?>) query).getLowerBound().isPresent()) {
+                rawRangeQuery = RawRangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
+            } else if (((RangeQuery<?, ?>) query).getUpperBound().isPresent()) {
+                rawRangeQuery = RawRangeQuery.withLowerBound(keyBytes(typedQuery.getUpperBound().get()));
+            } else {
+                rawRangeQuery = RawRangeQuery.withNoBounds();
+            }
+            final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
+                    wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
+            if (rawResult.isSuccess()) {
+                final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
+                final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueIterator(iterator, getSensor);
+                final QueryResult<KeyValueIterator<K, V>> typedQueryResult = QueryResult.forResult(resultIterator);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            result = wrapped().query(query, positionBound, collectExecutionInfo);
+        }
+
+
+        final long end = System.nanoTime();
+        result.addExecutionInfo(
+                "Handled in " + getClass() + " with serdes " + serdes + " in " + (end - start) + "ns");
+        return result;
     }
 
     @Override
