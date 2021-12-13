@@ -38,7 +38,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
         this.upper = upper;
     }
 
-
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
         return new RangeQuery<>(Optional.of(lower), Optional.of(upper));
     }

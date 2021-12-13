@@ -184,21 +184,21 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                    false);
+                        false);
             }
         },
         ROCKS_WINDOW {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                    false);
+                        false);
             }
         },
         TIME_ROCKS_WINDOW {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
-                    WINDOW_SIZE, false);
+                        WINDOW_SIZE, false);
             }
         },
         IN_MEMORY_SESSION {
@@ -235,9 +235,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     public IQv2StoreIntegrationTest(
-        final boolean cache,
-        final boolean log,
-        final String storeToTest) {
+            final boolean cache,
+            final boolean log,
+            final String storeToTest) {
 
         this.cache = cache;
         this.log = log;
@@ -246,7 +246,7 @@ public class IQv2StoreIntegrationTest {
 
     @BeforeClass
     public static void before()
-        throws InterruptedException, IOException, ExecutionException, TimeoutException {
+            throws InterruptedException, IOException, ExecutionException, TimeoutException {
         CLUSTER.start();
         CLUSTER.deleteAllTopicsAndWait(60 * 1000L);
         final int partitions = 2;
@@ -261,14 +261,14 @@ public class IQv2StoreIntegrationTest {
         try (final Producer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
             for (int i = 0; i < 3; i++) {
                 final Future<RecordMetadata> send = producer.send(
-                    new ProducerRecord<>(
-                        INPUT_TOPIC_NAME,
-                        i % partitions,
-                        Time.SYSTEM.milliseconds(),
-                        i,
-                        i,
-                        null
-                    )
+                        new ProducerRecord<>(
+                                INPUT_TOPIC_NAME,
+                                i % partitions,
+                                Time.SYSTEM.milliseconds(),
+                                i,
+                                i,
+                                null
+                        )
                 );
                 futures.add(send);
                 Time.SYSTEM.sleep(1L);
@@ -279,18 +279,18 @@ public class IQv2StoreIntegrationTest {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
                 assertThat(recordMetadata.hasOffset(), is(true));
                 INPUT_POSITION.withComponent(
-                    recordMetadata.topic(),
-                    recordMetadata.partition(),
-                    recordMetadata.offset()
+                        recordMetadata.topic(),
+                        recordMetadata.partition(),
+                        recordMetadata.offset()
                 );
             }
         }
 
         assertThat(INPUT_POSITION, equalTo(
-            Position
-                .emptyPosition()
-                .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 0L)
+                Position
+                        .emptyPosition()
+                        .withComponent(INPUT_TOPIC_NAME, 0, 1L)
+                        .withComponent(INPUT_TOPIC_NAME, 1, 0L)
         ));
     }
 
@@ -298,15 +298,15 @@ public class IQv2StoreIntegrationTest {
     public void beforeTest() {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
-            cache,
-            log,
-            storeToTest.name()
+                cache,
+                log,
+                storeToTest.name()
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
         if (supplier instanceof KeyValueBytesStoreSupplier) {
             final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
-                Materialized.as((KeyValueBytesStoreSupplier) supplier);
+                    Materialized.as((KeyValueBytesStoreSupplier) supplier);
 
             if (cache) {
                 materialized.withCachingEnabled();
@@ -322,20 +322,20 @@ public class IQv2StoreIntegrationTest {
 
             if (storeToTest.global()) {
                 builder
-                    .globalTable(
-                        INPUT_TOPIC_NAME,
-                        Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized);
+                        .globalTable(
+                                INPUT_TOPIC_NAME,
+                                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                                materialized);
             } else {
                 builder
-                    .table(
-                        INPUT_TOPIC_NAME,
-                        Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized);
+                        .table(
+                                INPUT_TOPIC_NAME,
+                                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                                materialized);
             }
         } else if (supplier instanceof WindowBytesStoreSupplier) {
             final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
-                Materialized.as((WindowBytesStoreSupplier) supplier);
+                    Materialized.as((WindowBytesStoreSupplier) supplier);
 
             if (cache) {
                 materialized.withCachingEnabled();
@@ -350,20 +350,20 @@ public class IQv2StoreIntegrationTest {
             }
 
             builder
-                .stream(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer())
-                )
-                .groupByKey()
-                .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    materialized
-                );
+                    .stream(
+                            INPUT_TOPIC_NAME,
+                            Consumed.with(Serdes.Integer(), Serdes.Integer())
+                    )
+                    .groupByKey()
+                    .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
+                    .aggregate(
+                            () -> 0,
+                            (key, value, aggregate) -> aggregate + value,
+                            materialized
+                    );
         } else if (supplier instanceof SessionBytesStoreSupplier) {
             final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
-                Materialized.as((SessionBytesStoreSupplier) supplier);
+                    Materialized.as((SessionBytesStoreSupplier) supplier);
 
             if (cache) {
                 materialized.withCachingEnabled();
@@ -378,18 +378,18 @@ public class IQv2StoreIntegrationTest {
             }
 
             builder
-                .stream(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer())
-                )
-                .groupByKey()
-                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                    materialized
-                );
+                    .stream(
+                            INPUT_TOPIC_NAME,
+                            Consumed.with(Serdes.Integer(), Serdes.Integer())
+                    )
+                    .groupByKey()
+                    .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
+                    .aggregate(
+                            () -> 0,
+                            (key, value, aggregate) -> aggregate + value,
+                            (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                            materialized
+                    );
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -398,11 +398,11 @@ public class IQv2StoreIntegrationTest {
         // get a valid response.
 
         kafkaStreams =
-            IntegrationTestUtils.getStartedStreams(
-                streamsConfig,
-                builder,
-                true
-            );
+                IntegrationTestUtils.getStartedStreams(
+                        streamsConfig,
+                        builder,
+                        true
+                );
     }
 
     @After
@@ -439,10 +439,10 @@ public class IQv2StoreIntegrationTest {
 
         assertThat(result.getGlobalResult().isFailure(), is(true));
         assertThat(result.getGlobalResult().getFailureReason(),
-            is(FailureReason.UNKNOWN_QUERY_TYPE));
+                is(FailureReason.UNKNOWN_QUERY_TYPE));
         assertThat(result.getGlobalResult().getFailureMessage(),
-            is("Global stores do not yet support the KafkaStreams#query API."
-                + " Use KafkaStreams#store instead."));
+                is("Global stores do not yet support the KafkaStreams#query API."
+                        + " Use KafkaStreams#store instead."));
     }
 
     public void shouldRejectUnknownQuery() {
@@ -452,28 +452,28 @@ public class IQv2StoreIntegrationTest {
         final Set<Integer> partitions = mkSet(0, 1);
 
         final StateQueryResult<Void> result =
-            IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
+                IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
         makeAssertions(
-            partitions,
-            result,
-            queryResult -> {
-                assertThat(queryResult.isFailure(), is(true));
-                assertThat(queryResult.isSuccess(), is(false));
-                assertThat(queryResult.getFailureReason(),
-                    is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(queryResult.getFailureMessage(),
-                    matchesPattern(
-                        "This store (.*)"
-                            + " doesn't know how to execute the given query"
-                            + " (.*)."
-                            + " Contact the store maintainer if you need support for a new query type."
-                    )
-                );
-                assertThrows(IllegalArgumentException.class, queryResult::getResult);
+                partitions,
+                result,
+                queryResult -> {
+                    assertThat(queryResult.isFailure(), is(true));
+                    assertThat(queryResult.isSuccess(), is(false));
+                    assertThat(queryResult.getFailureReason(),
+                            is(FailureReason.UNKNOWN_QUERY_TYPE));
+                    assertThat(queryResult.getFailureMessage(),
+                            matchesPattern(
+                                    "This store (.*)"
+                                            + " doesn't know how to execute the given query"
+                                            + " (.*)."
+                                            + " Contact the store maintainer if you need support for a new query type."
+                            )
+                    );
+                    assertThrows(IllegalArgumentException.class, queryResult::getResult);
 
-                assertThat(queryResult.getExecutionInfo(), is(empty()));
-            }
+                    assertThat(queryResult.getExecutionInfo(), is(empty()));
+                }
         );
     }
 
@@ -482,34 +482,34 @@ public class IQv2StoreIntegrationTest {
         final PingQuery query = new PingQuery();
         final Set<Integer> partitions = mkSet(0, 1);
         final StateQueryRequest<Boolean> request =
-            inStore(STORE_NAME)
-                .withQuery(query)
-                .withPartitions(partitions)
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .withPartitions(partitions)
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
 
         final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForResult(
-                kafkaStreams,
-                request
-            );
+                IntegrationTestUtils.iqv2WaitForResult(
+                        kafkaStreams,
+                        request
+                );
 
         makeAssertions(
-            partitions,
-            result,
-            queryResult -> {
-                final boolean failure = queryResult.isFailure();
-                if (failure) {
-                    assertThat(queryResult.toString(), failure, is(false));
-                }
-                assertThat(queryResult.isSuccess(), is(true));
+                partitions,
+                result,
+                queryResult -> {
+                    final boolean failure = queryResult.isFailure();
+                    if (failure) {
+                        assertThat(queryResult.toString(), failure, is(false));
+                    }
+                    assertThat(queryResult.isSuccess(), is(true));
 
-                assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-                assertThrows(IllegalArgumentException.class, queryResult::getFailureMessage);
+                    assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
+                    assertThrows(IllegalArgumentException.class, queryResult::getFailureMessage);
 
-                assertThat(queryResult.getResult(), is(true));
+                    assertThat(queryResult.getResult(), is(true));
 
-                assertThat(queryResult.getExecutionInfo(), is(empty()));
-            });
+                    assertThat(queryResult.getExecutionInfo(), is(empty()));
+                });
         assertThat(result.getPosition(), is(INPUT_POSITION));
     }
 
@@ -518,22 +518,22 @@ public class IQv2StoreIntegrationTest {
         final PingQuery query = new PingQuery();
         final Set<Integer> partitions = mkSet(0, 1);
         final StateQueryRequest<Boolean> request =
-            inStore(STORE_NAME)
-                .withQuery(query)
-                .enableExecutionInfo()
-                .withPartitions(partitions)
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .enableExecutionInfo()
+                        .withPartitions(partitions)
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
 
         final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForResult(
-                kafkaStreams,
-                request
-            );
+                IntegrationTestUtils.iqv2WaitForResult(
+                        kafkaStreams,
+                        request
+                );
 
         makeAssertions(
-            partitions,
-            result,
-            queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
+                partitions,
+                result,
+                queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
         );
     }
 
@@ -542,29 +542,29 @@ public class IQv2StoreIntegrationTest {
         final UnknownQuery query = new UnknownQuery();
         final Set<Integer> partitions = mkSet(0, 1);
         final StateQueryRequest<Void> request =
-            inStore(STORE_NAME)
-                .withQuery(query)
-                .enableExecutionInfo()
-                .withPartitions(partitions)
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .enableExecutionInfo()
+                        .withPartitions(partitions)
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
 
         final StateQueryResult<Void> result =
-            IntegrationTestUtils.iqv2WaitForResult(
-                kafkaStreams,
-                request
-            );
+                IntegrationTestUtils.iqv2WaitForResult(
+                        kafkaStreams,
+                        request
+                );
 
         makeAssertions(
-            partitions,
-            result,
-            queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
+                partitions,
+                result,
+                queryResult -> assertThat(queryResult.getExecutionInfo(), not(empty()))
         );
     }
 
     private <R> void makeAssertions(
-        final Set<Integer> partitions,
-        final StateQueryResult<R> result,
-        final Consumer<QueryResult<R>> assertion) {
+            final Set<Integer> partitions,
+            final StateQueryResult<R> result,
+            final Consumer<QueryResult<R>> assertion) {
 
         if (result.getGlobalResult() != null) {
             assertion.accept(result.getGlobalResult());
@@ -577,9 +577,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-        final String supplier) {
+                                                   final String supplier) {
         final String safeTestName =
-            IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier;
+                IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier;
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

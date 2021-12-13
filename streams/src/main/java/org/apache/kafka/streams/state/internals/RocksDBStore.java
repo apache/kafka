@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -71,6 +72,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
@@ -330,6 +332,34 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final Query<R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
+
+        final long start = System.nanoTime();
+        if (query instanceof RangeQuery) {
+            final RangeQuery rangeQuery = (RangeQuery) query;
+            final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
+            final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
+            final StringBuilder executionInfo = new StringBuilder();
+            KeyValueIterator<Bytes, byte[]> iterator = null;
+            if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+                iterator = all();
+                if (collectExecutionInfo) {
+                    executionInfo.append("Handled on ").append(this.getClass().getName()).append(
+                            "#all via StoreQueryAdapters").append(" in ");
+                }
+            } else {
+                iterator = range(lowerRange.orElse(null), upperRange.orElse(null));
+                if (collectExecutionInfo) {
+                    executionInfo.append("Handled on ").append(this.getClass().getName()).append(
+                            "#range via StoreQueryAdapters").append(" in ");
+                }
+            }
+            @SuppressWarnings("unchecked") final R result = (R) iterator;
+            final long end = System.nanoTime();
+            final QueryResult<R> queryResult = QueryResult.forResult(result);
+            executionInfo.append(end - start).append("ns");
+            queryResult.addExecutionInfo(executionInfo.toString());
+            return queryResult;
+        }
 
         return StoreQueryUtils.handleBasicQueries(
             query,

@@ -42,6 +42,7 @@ import org.apache.kafka.streams.query.RawRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
@@ -202,17 +203,16 @@ public class MeteredKeyValueStore<K, V>
 
         if (query instanceof RangeQuery) {
             final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
-            final RawRangeQuery rawRangeQuery;
-            if (((RangeQuery<?, ?>) query).getLowerBound().isPresent()
-                    && ((RangeQuery<?, ?>) query).getUpperBound().isPresent()) {
-                rawRangeQuery = RawRangeQuery.withRange(keyBytes(typedQuery.getLowerBound().get()),
+            final RangeQuery rawRangeQuery;
+            if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
+                rawRangeQuery = RangeQuery.withRange(keyBytes(typedQuery.getLowerBound().get()),
                         keyBytes(typedQuery.getUpperBound().get()));
-            } else if (((RangeQuery<?, ?>) query).getLowerBound().isPresent()) {
-                rawRangeQuery = RawRangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
-            } else if (((RangeQuery<?, ?>) query).getUpperBound().isPresent()) {
-                rawRangeQuery = RawRangeQuery.withLowerBound(keyBytes(typedQuery.getUpperBound().get()));
+            } else if (typedQuery.getLowerBound().isPresent()) {
+                rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
+            } else if (typedQuery.getUpperBound().isPresent()) {
+                rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getUpperBound().get()));
             } else {
-                rawRangeQuery = RawRangeQuery.withNoBounds();
+                rawRangeQuery = RangeQuery.withNoBounds();
             }
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                     wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
