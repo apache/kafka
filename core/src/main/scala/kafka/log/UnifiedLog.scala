@@ -1330,37 +1330,29 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           latestTimestampAndOffset.offset,
           epochOptional))
       } else {
-        // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-        // constant time access while being safe to use with concurrent collections unlike `toArray`.
-        val segmentsCopy = logSegments.toBuffer
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
-        var isFirstSegment = false
-        val targetSeg: Option[LogSegment] = {
-          // Get all the segments whose largest timestamp is smaller than target timestamp
-          val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
-          // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-          if (earlierSegs.length < segmentsCopy.length) {
-            isFirstSegment = earlierSegs.isEmpty
-            Some(segmentsCopy(earlierSegs.length))
-          } else {
-            None
+        val remoteOffset = if (remoteLogEnabled()) {
+          if (remoteLogManager.isEmpty) {
+            throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.");
           }
-        }
+          if (leaderEpochCache.isEmpty) {
+            throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
+          }
 
-        if (isFirstSegment && remoteLogManager.isDefined) {
-          val localOffset = targetSeg.get.findOffsetByTimestamp(targetTimestamp, localLogStartOffset)
-          val remoteOffset = remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset)
+          remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset, leaderEpochCache.get)
+        } else None
 
-          if (localOffset.isEmpty)
-            remoteOffset
-          else if (remoteOffset.isEmpty)
-            localOffset
-          else if (localOffset.get.offset <= remoteOffset.get.offset)
-            localOffset
-          else
-            remoteOffset
+        if (remoteOffset.nonEmpty) {
+          remoteOffset
         } else {
-          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+          // If it is not found in remote storage, search in the local storage starting with local log start offset.
+
+          // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+          // constant time access while being safe to use with concurrent collections unlike `toArray`.
+          val segmentsCopy = logSegments.toBuffer
+
+          val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
+          targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, localLogStartOffset))
         }
       }
     }

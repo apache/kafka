@@ -19,6 +19,7 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.Logging
 import org.apache.kafka.common._
 import org.apache.kafka.common.internals.Topic
@@ -244,13 +245,18 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
    * @param startingOffset The starting offset to search.
    * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
-  def findOffsetByTimestamp(tp: TopicPartition, timestamp: Long, startingOffset: Long): Option[TimestampAndOffset] = {
-    //todo-tier Here also, we do not need to go through all the remote log segments to find the segments
-    // containing the timestamp. We should find the  epoch for the startingOffset and then  traverse  through those
-    // offsets and subsequent leader epochs to find the target timestamp/offset.
+  def findOffsetByTimestamp(tp: TopicPartition,
+                            timestamp: Long,
+                            startingOffset: Long,
+                            leaderEpochCache: LeaderEpochFileCache): Option[TimestampAndOffset] = {
     val topicId = topicPartitionIds.get(tp)
-    if (topicId != null) {
-      remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp)).asScala
+    if (topicId == null) {
+      throw new KafkaException("Topic id does not exist for topic partition: " + tp)
+    }
+    // Get the respective epoch in which the starting offset exists.
+    var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
+    while (maybeEpoch.nonEmpty) {
+      remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), maybeEpoch.get).asScala
         .foreach(rlsMetadata =>
           if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
             val timestampOffset = lookupTimestamp(rlsMetadata, timestamp, startingOffset)
@@ -258,10 +264,11 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
               return timestampOffset
           }
         )
-      None
-    } else {
-      None
+
+      // Move to the next epoch if not found with the current epoch.
+      maybeEpoch = leaderEpochCache.findNextEpoch(maybeEpoch.get)
     }
+    None
   }
 
   /**
