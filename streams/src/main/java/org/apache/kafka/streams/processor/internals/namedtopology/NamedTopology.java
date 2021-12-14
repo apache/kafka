@@ -38,7 +38,7 @@ public class NamedTopology extends Topology {
      * @return the list of all source topics this topology is subscribed to
      */
     public List<String> sourceTopics() {
-        return super.internalTopologyBuilder.fullSourceTopicNames();
+        return super.internalTopologyBuilder.sourceTopicCollection();
     }
 
     InternalTopologyBuilder internalTopologyBuilder() {

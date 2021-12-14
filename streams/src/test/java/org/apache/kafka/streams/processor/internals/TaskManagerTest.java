@@ -210,7 +210,7 @@ public class TaskManagerTest {
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andStubReturn(emptyList());
 
-        topologyBuilder.addSubscribedTopicsFromAssignment(eq(asList(t1p1, newTopicPartition)), anyString());
+        topologyBuilder.addSubscribedTopicsFromAssignment(eq(mkSet(t1p1.topic(), newTopicPartition.topic())), anyString());
         expectLastCall();
 
         replay(activeTaskCreator, topologyBuilder);

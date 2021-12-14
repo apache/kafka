@@ -89,7 +89,6 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, earliestTopic);
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
-        builder.initializeSubscription();
 
         assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(OffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy(latestTopic), equalTo(OffsetResetStrategy.LATEST));
@@ -102,7 +101,6 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, Pattern.compile(earliestTopicPattern));
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
-        builder.initializeSubscription();
 
         assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(OffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(OffsetResetStrategy.LATEST));
@@ -111,7 +109,6 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddSourceWithoutOffsetReset() {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
-        builder.initializeSubscription();
 
         assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
 
@@ -123,7 +120,6 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("test-.*");
 
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
-        builder.initializeSubscription();
 
         assertThat(expectedPattern.pattern(), builder.sourceTopicsPatternString(), equalTo("test-.*"));
 
@@ -287,7 +283,6 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
         builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
-        builder.initializeSubscription();
 
         assertFalse(builder.usesPatternSubscription());
         assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.sourceTopicCollection());
@@ -304,7 +299,6 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-4", null, null, null, sourcePattern);
 
         builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
-        builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2|topic-4|topic-5");
         final String patternString = builder.sourceTopicsPatternString();
@@ -327,7 +321,6 @@ public class InternalTopologyBuilderTest {
             "global-processor",
             new MockApiProcessorSupplier<>()
         );
-        builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
 
@@ -351,7 +344,6 @@ public class InternalTopologyBuilderTest {
             "global-processor",
             new MockApiProcessorSupplier<>()
         );
-        builder.initializeSubscription();
 
         assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
     }
@@ -360,7 +352,6 @@ public class InternalTopologyBuilderTest {
     public void testPatternSourceTopic() {
         final Pattern expectedPattern = Pattern.compile("topic-\\d");
         builder.addSource(null, "source-1", null, null, null, expectedPattern);
-        builder.initializeSubscription();
         final String patternString = builder.sourceTopicsPatternString();
 
         assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
@@ -371,7 +362,6 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topics[A-Z]"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
-        builder.initializeSubscription();
         final String patternString = builder.sourceTopicsPatternString();
 
         assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
@@ -382,7 +372,6 @@ public class InternalTopologyBuilderTest {
         final Pattern expectedPattern = Pattern.compile("topic-bar|topic-foo|.*-\\d");
         builder.addSource(null, "source-1", null, null, null, "topic-foo", "topic-bar");
         builder.addSource(null, "source-2", null, null, null, Pattern.compile(".*-\\d"));
-        builder.initializeSubscription();
         final String patternString = builder.sourceTopicsPatternString();
 
         assertEquals(expectedPattern.pattern(), Pattern.compile(patternString).pattern());
@@ -1231,7 +1220,6 @@ public class InternalTopologyBuilderTest {
             "global-processor",
             new MockApiProcessorSupplier<>()
         );
-        builder.initializeSubscription();
 
         builder.rewriteTopology(new StreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "asdf"),
