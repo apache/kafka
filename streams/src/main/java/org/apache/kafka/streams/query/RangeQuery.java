@@ -25,6 +25,14 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Optional;
 
+/**
+ * Interactive query for issuing range queries and scans over KeyValue stores.
+ * <p>
+ *  A range query retrieves a set of records, specified using an upper and/or lower bound on the keys.
+ * <p>
+ * A scan query retrieves all records contained in the store.
+ * <p>
+ */
 @Evolving
 public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
@@ -38,31 +46,62 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
         this.upper = upper;
     }
 
+    /**
+     * Interactive range query using a lower and upper bound to filter the keys returned.
+     * @param lower The key that specifies the lower bound of the range
+     * @param upper The key that specifies the upper bound of the range
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An iterator of records
+     */
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
         return new RangeQuery<>(Optional.of(lower), Optional.of(upper));
     }
 
-
+    /**
+     * Interactive range query using an upper bound to filter the keys returned.
+     * @param upper The key that specifies the upper bound of the range
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An iterator of records
+     */
     public static <K, V> RangeQuery<K, V> withUpperBound(final K upper) {
         return new RangeQuery<>(Optional.empty(), Optional.of(upper));
     }
 
-
+    /**
+     * Interactive range query using a lower bound to filter the keys returned.
+     * @param lower The key that specifies the lower bound of the range
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An iterator of records
+     */
     public static <K, V> RangeQuery<K, V> withLowerBound(final K lower) {
         return new RangeQuery<>(Optional.of(lower), Optional.empty());
     }
 
-
+    /**
+     * Interactive scan query that returns all records in the store.
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An iterator of KeyValues
+     */
     public static <K, V> RangeQuery<K, V> withNoBounds() {
         return new RangeQuery<>(Optional.empty(), Optional.empty());
     }
 
-
+    /**
+     * The lower bound of the query, if specified.
+     * @return The lower bound
+     */
     public Optional<K> getLowerBound() {
         return lower;
     }
 
-
+    /**
+     * The upper bound of the query, if specified
+     * @return The upper bound
+     */
     public Optional<K> getUpperBound() {
         return upper;
     }

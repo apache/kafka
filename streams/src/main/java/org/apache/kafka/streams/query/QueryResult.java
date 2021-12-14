@@ -197,18 +197,6 @@ public final class QueryResult<R> {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    public <V> QueryResult<V> swapResult(final V value) {
-        if (isFailure()) {
-            return (QueryResult<V>) this;
-        } else {
-            final QueryResult<V> result = new QueryResult<>(value);
-            result.executionInfo = executionInfo;
-            result.position = position;
-            return result;
-        }
-    }
-
     @Override
     public String toString() {
         return "QueryResult{" +
