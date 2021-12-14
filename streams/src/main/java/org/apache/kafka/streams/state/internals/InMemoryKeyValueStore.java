@@ -101,17 +101,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         if (query instanceof RangeQuery) {
             final RangeQuery<Bytes, byte[]> typedQuery = (RangeQuery<Bytes, byte[]>) query;
-            final KeyValueIterator<Bytes, byte[]> keyValueIterator;
-            if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
-                keyValueIterator = this.range(typedQuery.getLowerBound().get(), typedQuery.getUpperBound().get());
-            } else if (typedQuery.getLowerBound().isPresent()) {
-                keyValueIterator = this.range(typedQuery.getLowerBound().get(), null);
-            } else if (typedQuery.getUpperBound().isPresent()) {
-                keyValueIterator = this.range(null, typedQuery.getUpperBound().get());
-            } else {
-                keyValueIterator = this.range(null, null);
-            }
-
+            final KeyValueIterator<Bytes, byte[]> keyValueIterator =  this.range(
+                    typedQuery.getLowerBound().orElse(null), typedQuery.getUpperBound().orElse(null));
             final R result = (R) keyValueIterator;
             final QueryResult<R> queryResult = QueryResult.forResult(result);
             return queryResult;
@@ -194,7 +185,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         if (from == null && to == null) {
             return getKeyValueIterator(map.keySet(), forward);
         } else if (from == null) {
-            System.out.println("-----------> range upper bound");
             return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
         } else if (to == null) {
             return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);

@@ -241,17 +241,10 @@ public class MeteredKeyValueStore<K, V>
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
-        final RangeQuery rawRangeQuery;
-        if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withRange(keyBytes(typedQuery.getLowerBound().get()),
-                    keyBytes(typedQuery.getUpperBound().get()));
-        } else if (typedQuery.getLowerBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
-        } else if (typedQuery.getUpperBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withUpperBound(keyBytes(typedQuery.getUpperBound().get()));
-        } else {
-            rawRangeQuery = RangeQuery.withNoBounds();
-        }
+        final RangeQuery rawRangeQuery = RangeQuery.withRange(
+                typedQuery.getLowerBound().map(this::keyBytes),
+                typedQuery.getUpperBound().map(this::keyBytes)
+        );
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                 wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
         if (rawResult.isSuccess()) {
