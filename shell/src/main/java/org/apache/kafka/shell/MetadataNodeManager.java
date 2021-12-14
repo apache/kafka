@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -45,6 +46,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -316,6 +318,15 @@ public final class MetadataNodeManager implements AutoCloseable {
                     node.rmrf(record.key());
                 else
                     node.create(record.key()).setContents(record.value() + "");
+                break;
+            }
+            case PRODUCER_IDS_RECORD: {
+                ProducerIdsRecord record = (ProducerIdsRecord) message;
+                DirectoryNode producerIdNode = data.root.mkdirs("producerIds");
+                producerIdNode.create("broker").setContents(record.brokerId() + "");
+                producerIdNode.create("blockStart")
+                    .setContents(record.producerIdsEnd() - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "");
+                producerIdNode.create("blockEnd").setContents(record.producerIdsEnd() - 1 + "");
                 break;
             }
             default:

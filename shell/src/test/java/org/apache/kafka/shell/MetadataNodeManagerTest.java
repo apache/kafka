@@ -25,16 +25,19 @@ import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -276,7 +279,7 @@ public class MetadataNodeManagerTest {
                 "user", "kraft").children().containsKey("producer_byte_rate"));
 
         record = new ClientQuotaRecord()
-            .setEntity(Arrays.asList(
+            .setEntity(Collections.singletonList(
                 new ClientQuotaRecord.EntityData()
                     .setEntityType("user")
                     .setEntityName(null)
@@ -289,5 +292,42 @@ public class MetadataNodeManagerTest {
         assertEquals("2000.0",
             metadataNodeManager.getData().root().directory("client-quotas",
                 "user", "<default>").file("producer_byte_rate").contents());
+    }
+
+    @Test
+    public void testProducerIdsRecord() {
+        // generate brokerId
+        ProducerIdsRecord record1 = new ProducerIdsRecord()
+            .setBrokerId(0)
+            .setBrokerEpoch(1)
+            .setProducerIdsEnd(10000);
+        metadataNodeManager.handleMessage(record1);
+
+        assertEquals(
+            "0",
+            metadataNodeManager.getData().root().directory("producerIds").file("broker").contents());
+        assertEquals(
+            10000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
+            metadataNodeManager.getData().root().directory("producerIds").file("blockStart").contents());
+        assertEquals(
+            "9999",
+            metadataNodeManager.getData().root().directory("producerIds").file("blockEnd").contents());
+
+        // generate brokerId again
+        ProducerIdsRecord record2 = new ProducerIdsRecord()
+            .setBrokerId(1)
+            .setBrokerEpoch(2)
+            .setProducerIdsEnd(11000);
+        metadataNodeManager.handleMessage(record2);
+
+        assertEquals(
+            "1",
+            metadataNodeManager.getData().root().directory("producerIds").file("broker").contents());
+        assertEquals(
+            11000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
+            metadataNodeManager.getData().root().directory("producerIds").file("blockStart").contents());
+        assertEquals(
+            "10999",
+            metadataNodeManager.getData().root().directory("producerIds").file("blockEnd").contents());
     }
 }
