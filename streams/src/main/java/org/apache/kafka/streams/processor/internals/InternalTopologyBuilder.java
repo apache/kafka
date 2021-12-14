@@ -1383,7 +1383,19 @@ public class InternalTopologyBuilder {
         return !nodeToSourcePatterns.isEmpty();
     }
 
+    /**
+     * NOTE: this should not be invoked until the topology has been built via
+     * {@link #buildTopology()}, otherwise the collection will be uninitialized
+     *
+     * @return all user and internal source topics in this topology,
+     *         or {@code null} if uninitialized because {@link #buildTopology()} hs not been called yet
+     */
     synchronized Collection<String> sourceTopicCollection() {
+        if (sourceTopicCollection == null) {
+            if (usesPatternSubscription()) {
+                throw new IllegalStateException("Should not ")
+            }
+        }
         return sourceTopicCollection;
     }
 
@@ -2100,6 +2112,8 @@ public class InternalTopologyBuilder {
     }
 
     /**
+     * NOTE: this
+     *
      * @return a copy of all source topic names, including the application id and named topology prefix if applicable
      */
     public synchronized List<String> fullSourceTopicNames() {

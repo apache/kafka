@@ -48,6 +48,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -350,6 +351,11 @@ public class TopologyMetadata {
         return null;
     }
 
+    /**
+     * NOTE: this should not be invoked until all topologies have been built via
+     * {@link #buildAndVerifyTopology(InternalTopologyBuilder)}, otherwise the
+     * {@link InternalTopologyBuilder#sourceTopicCollection()}
+     */
     public Collection<String> sourceTopicCollection() {
         final List<String> sourceTopics = new ArrayList<>();
         applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
@@ -442,16 +448,36 @@ public class TopologyMetadata {
         return topicGroups;
     }
 
+    public Map<String, Collection<TopicsInfo>> topicGroupsByTopology() {
+        final Map<String, Collection<TopicsInfo>> topicGroups = new HashMap<>();
+        if (hasNamedTopologies()) {
+            applyToEachBuilder(b -> topicGroups.put(b.topologyName(), b.topicGroups().values()));
+        } else {
+            topicGroups.put("Topology", )
+        }
+        return topicGroups;
+    }
+
     public Map<String, List<String>> nodeToSourceTopics(final TaskId task) {
         return lookupBuilderForTask(task).nodeToSourceTopics();
     }
 
     void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
+        updateAndVerifyNewInputTopics(topics);
         applyToEachBuilder(b -> b.addSubscribedTopicsFromMetadata(topics, logPrefix));
     }
 
     void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
+        updateAndVerifyNewInputTopics(partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet()));
         applyToEachBuilder(b -> b.addSubscribedTopicsFromAssignment(partitions, logPrefix));
+    }
+
+    private void updateAndVerifyNewInputTopics(final Set<String> newTopics, final String topology) {
+        if (newTopics.stream().anyMatch(allInputTopics::contains)) {
+            throw new IllegalStateException("To");
+        } else {
+            allInputTopics.addAll(newTopics);
+        }
     }
 
     public Collection<Set<String>> copartitionGroups() {
