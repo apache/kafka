@@ -1345,10 +1345,6 @@ public class InternalTopologyBuilder {
         }
     }
 
-    void initializeSubscription() {
-
-    }
-
     private String buildSourceTopicsPatternString() {
         final List<String> allSourceTopics = maybeDecorateInternalSourceTopics(sourceTopicNames);
         Collections.sort(allSourceTopics);
@@ -1379,11 +1375,7 @@ public class InternalTopologyBuilder {
     }
 
     /**
-     * NOTE: this should not be invoked until the topology has been built via
-     * {@link #buildTopology()}, otherwise the collection will be uninitialized
-     *
-     * @return all user and internal source topics in this topology,
-     *         or {@code null} if uninitialized because {@link #buildTopology()} hs not been called yet
+     * @return full names of all user and internal source topics in this topology, including prefix for internal topics
      */
     public synchronized List<String> sourceTopicCollection() {
         if (sourceTopicCollection == null) {
@@ -2074,7 +2066,7 @@ public class InternalTopologyBuilder {
     }
 
     /**
-     * @return the set of topics that were newly
+     * @return the set of topics that are newly added to the subscription based on the assigned tasks
      */
     synchronized Set<String> addSubscribedTopicsFromAssignment(final Set<String> topics, final String logPrefix) {
         if (usesPatternSubscription()) {

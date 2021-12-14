@@ -485,7 +485,7 @@ public class TopologyMetadata {
             if (!duplicateInputTopics.isEmpty()) {
                 throw new IllegalStateException("The following topics are subscribed to " +
                     "by multiple topologies: " + duplicateInputTopics);
-            } else if (subscriptionTopicsWithUnknownSource.isEmpty()) {
+            } else if (!subscriptionTopicsWithUnknownSource.isEmpty()) {
                 throw new IllegalStateException("The following topics appear in the subscription " +
                     "but can't be located in the topology: " + subscriptionTopicsWithUnknownSource);
             }
@@ -511,9 +511,13 @@ public class TopologyMetadata {
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> task : tasks.entrySet()) {
             final String topologyName = getTopologyNameOrElseUnnamed(task.getKey().topologyName());
-            assignedTopicsByTopology
-                .computeIfAbsent(topologyName, t -> new HashSet<>())
-                .addAll(task.getValue().stream().map(TopicPartition::topic).collect(Collectors.toSet()));
+            // Skip updating subscription with topics if their topology is not yet known to this client,
+            // the subscription will be updated when the topology is added
+            if (builders.containsKey(topologyName)) {
+                assignedTopicsByTopology
+                    .computeIfAbsent(topologyName, t -> new HashSet<>())
+                    .addAll(task.getValue().stream().map(TopicPartition::topic).collect(Collectors.toSet()));
+            }
         }
         for (final Map.Entry<String, Set<String>> assignedTopics : assignedTopicsByTopology.entrySet()) {
             final Set<String> newTopics =
