@@ -21,7 +21,8 @@ import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Optional, Properties, Arrays, Collection}
+import java.util.{Arrays, Collection, Optional, Properties}
+
 import kafka.api.Request
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.BrokerEndPoint
@@ -46,7 +47,7 @@ import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderA
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.easymock.{Capture, EasyMock}
+import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
@@ -90,7 +91,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val capturedIsrChangeNotifications: Capture[collection.Set[TopicPartition]] = EasyMock.newCapture()
     EasyMock.expect(kafkaZkClient.propagateIsrChanges(EasyMock.capture(capturedIsrChangeNotifications)))
-        .andAnswer(() => {
+        .andAnswer(new IAnswer[Unit] {override def answer(): Unit = {
           // Ensure that each serialized ISR change notification is well under the 1MiB limit in ZooKeeper.
           val serializedSize = {
             IsrChangeNotificationSequenceZNode.encode(capturedIsrChangeNotifications.getValue).length
@@ -98,7 +99,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
 
           // Just make sure the size never exceeds around 900KiB.
           assertTrue(serializedSize < (900 * 1024));
-        }).times(2)
+        }}).times(2)
     EasyMock.replay(kafkaZkClient)
 
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)

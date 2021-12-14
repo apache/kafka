@@ -26,9 +26,15 @@ on:
 jobs:
   clients:
     # Name the Job
-    name: clients
+    name: clients_${{ matrix.scalaVersion }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # We still want to see all jobs' build result to the end
+      matrix:
+        scalaVersion:
+          - 2.11
+          - 2.12
     steps:
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
@@ -42,15 +48,20 @@ jobs:
         with:
           java-version: '8'
       - name: Run tests
-        run: ./gradlew cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
+        run: ./gradlew -Pversion=${{ env.RELEASE_VERSION }} cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   core:
     # Name the Job
-    name: core (${{ matrix.prefix }})
+    name: core_${{ matrix.scalaVersion }} (${{ matrix.prefix }})
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.11
+          - 2.12
         prefix:
           - A B C
           - D E F
@@ -73,10 +84,11 @@ jobs:
           java-version: '8'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           PREFIX: ${{ matrix.prefix }}
         # Use set -f to disable shell expansion on *
         run: >
           set -f
-          && ./gradlew -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
+          && ./gradlew -PscalaVersion="$SCALA_VERSION" -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
           && set +f
 

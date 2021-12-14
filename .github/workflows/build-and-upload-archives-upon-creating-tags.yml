@@ -45,12 +45,15 @@ jobs:
         run: ./gradlew rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest --no-daemon -PxmlSpotBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
   unit-test:
     # Name the Job
-    name: ${{ matrix.module }}:unitTest
+    name: ${{ matrix.module }}:unitTest_${{ matrix.scalaVersion }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.11
+          - 2.12
         module:
           - core
           - clients
@@ -68,13 +71,20 @@ jobs:
           java-version: '8'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           MODULE: ${{ matrix.module }}
-        run: ./gradlew -PmaxTestRetries=3 cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew -PscalaVersion="$SCALA_VERSION" -PmaxTestRetries=3 cleanTest "$MODULE:unitTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   int-test-clients:
     # Name the Job
-    name: clients:integrationTest
+    name: clients:integrationTest_${{ matrix.scalaVersion }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # We still want to see all jobs' build result to the end
+      matrix:
+        scalaVersion:
+          - 2.11
+          - 2.12
     steps:
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
@@ -88,15 +98,20 @@ jobs:
         with:
           java-version: '8'
       - name: Run tests
-        run: ./gradlew cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
+        run: ./gradlew -PscalaVersion="$SCALA_VERSION" cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   int-test-core:
     # Name the Job
-    name: core:integrationTest (${{ matrix.prefix }})
+    name: core:integrationTest_${{ matrix.scalaVersion }} (${{ matrix.prefix }})
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # We still want to see all jobs' build result to the end
       matrix:
+        scalaVersion:
+          - 2.11
+          - 2.12
         prefix:
           - A B C
           - D E F
@@ -119,11 +134,12 @@ jobs:
           java-version: '8'
       - name: Run tests
         env:
+          SCALA_VERSION: ${{ matrix.scalaVersion }}
           PREFIX: ${{ matrix.prefix }}
         # Use set -f to disable shell expansion on *
         run: >
           set -f
-          && ./gradlew -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
+          && ./gradlew -PscalaVersion="$SCALA_VERSION" -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
           && set +f
 
 
@@ -161,4 +177,4 @@ jobs:
           JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
           JFROG_API_KEY: ${{ secrets.JFROG_API_KEY }}
         run: |
-          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} clients:uploadArchives core:uploadArchives --no-daemon
+          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} clients:uploadArchivesAll core:uploadArchivesAll --no-daemon

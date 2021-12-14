@@ -255,7 +255,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
       (Some("user-4"), None),
       (Some(null), Some("client-id-2")),
       (None, Some("client-id-1")),
-      (None, Some("client-id-3")),
+      (None, Some("client-id-3"))
     ).map { case (u, c) =>
         new ClientQuotaEntity((u.map((ClientQuotaEntity.USER, _)) ++
           c.map((ClientQuotaEntity.CLIENT_ID, _))).toMap.asJava)
@@ -374,11 +374,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user with spaces")).asJava)
 
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(20000.0)),
+      (ProducerByteRateProp -> Some(20000.0))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
+      (ProducerByteRateProp -> 20000.0)
     ))
   }
 
