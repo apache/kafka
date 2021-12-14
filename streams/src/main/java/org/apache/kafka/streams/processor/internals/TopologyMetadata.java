@@ -461,7 +461,7 @@ public class TopologyMetadata {
                 final Set<String> subscribingTopologies = new HashSet<>();
                 applyToEachBuilder(b -> {
                     if (b.sourceTopicCollection().contains(topic) || b.matchesSubscribedPattern(topic)) {
-                        subscribingTopologies.add(b.topologyName() == null ? "" : b.topologyName());
+                        subscribingTopologies.add(getTopologyNameOrElseUnnamed(b.topologyName()));
                     }
                 });
                 if (subscribingTopologies.size() > 1) {
@@ -510,7 +510,7 @@ public class TopologyMetadata {
         final Map<String, Set<String>> assignedTopicsByTopology = new HashMap<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> task : tasks.entrySet()) {
-            final String topologyName = task.getKey().topologyName();
+            final String topologyName = getTopologyNameOrElseUnnamed(task.getKey().topologyName());
             assignedTopicsByTopology
                 .computeIfAbsent(topologyName, t -> new HashSet<>())
                 .addAll(task.getValue().stream().map(TopicPartition::topic).collect(Collectors.toSet()));
@@ -524,6 +524,9 @@ public class TopologyMetadata {
         updateAndVerifyNewInputTopics(assignedTopicsByTopology);
     }
 
+    private String getTopologyNameOrElseUnnamed(final String topologyName) {
+        return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
+    }
 
     private void updateAndVerifyNewInputTopics(final Map<String, Set<String>> newTopicsByTopology) {
         final Set<String> duplicateInputTopics = new HashSet<>();
@@ -533,8 +536,12 @@ public class TopologyMetadata {
             for (final String newTopic : newTopics.getValue()) {
                 if (allInputTopics.contains(newTopic)) {
                     duplicateInputTopics.add(newTopic);
-                    log.error("Cannot add topic {} from topology {} to the subscription as this application is " +
-                        "already consuming from this topic elsewhere in the topology", newTopic, topologyName);
+                    final String namedTopologyErrorMessagePrefix = UNNAMED_TOPOLOGY.equals(topologyName) ?
+                        "" :
+                        "Topology {}: ";
+                    log.error("{}Cannot add topic {} to the subscription as the application is " +
+                        "already consuming from this topic elsewhere in the topology",
+                        namedTopologyErrorMessagePrefix, newTopic);
                 } else {
                     allInputTopics.add(newTopic);
                 }
@@ -559,7 +566,7 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
+     * @return the InternalTopologyBuilder for a Topology, or null if no such Topology exists
      */
     public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
         return builders.get(name);
