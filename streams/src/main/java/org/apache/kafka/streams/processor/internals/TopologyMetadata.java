@@ -442,6 +442,10 @@ public class TopologyMetadata {
         return sourceTopics;
     }
 
+    private String getTopologyNameOrElseUnnamed(final String topologyName) {
+        return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
+    }
+
     public Map<Subtopology, TopicsInfo> topicGroups() {
         final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
         applyToEachBuilder(b -> topicGroups.putAll(b.topicGroups()));
@@ -526,10 +530,6 @@ public class TopologyMetadata {
             assignedTopics.getValue().retainAll(newTopics);
         }
         updateAndVerifyNewInputTopics(assignedTopicsByTopology);
-    }
-
-    private String getTopologyNameOrElseUnnamed(final String topologyName) {
-        return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
     }
 
     private void updateAndVerifyNewInputTopics(final Map<String, Set<String>> newTopicsByTopology) {
