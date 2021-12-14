@@ -22,6 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
+import java.util.function.{Consumer, Supplier}
 import java.util.{Base64, Properties, UUID}
 
 import com.typesafe.scalalogging.Logger
@@ -331,6 +332,23 @@ object CoreUtils {
       case None =>
         val value = createValue
         map.putIfAbsent(key, value).getOrElse(value)
+    }
+  }
+
+  /**
+   * Converts a Scala Consumer to Java Consumer.
+   * This is for helping with Scala 2.11's bad compatibility with Java functional interface
+   *
+   * @param consumer
+   * @tparam T
+   * @return A converted java.util.function.Consumer[T]
+   */
+  @Deprecated
+  def toJavaConsumer[T](consumer: T => Unit): Consumer[T] = {
+    new Consumer[T] {
+      override def accept(t: T): Unit = {
+        consumer(t)
+      }
     }
   }
 }

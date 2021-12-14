@@ -18,11 +18,13 @@
 package kafka.utils
 
 import java.util
+
 import kafka.api._
 import kafka.server.KafkaConfig
+import kafka.utils.CoreUtils.toJavaConsumer
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.message.LiCombinedControlRequestData
+import org.apache.kafka.common.message.{LiCombinedControlRequestData, UpdateMetadataRequestData}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataPartitionState}
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, LiCombinedControlRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
@@ -40,18 +42,18 @@ object LiDecomposedControlRequestUtils {
     val leadersInRequest = request.liveLeaders()
 
     val effectivePartitionStates = new util.ArrayList[LeaderAndIsrPartitionState]()
-    partitionsInRequest.forEach { partition =>
+    partitionsInRequest.forEach(toJavaConsumer((partition:LiCombinedControlRequestData.LeaderAndIsrPartitionState) =>
       if (partition.brokerEpoch() >= brokerEpoch)
         effectivePartitionStates.add(LiCombinedControlTransformer.restoreLeaderAndIsrPartition(partition))
-    }
+    ))
 
     if (effectivePartitionStates.isEmpty) {
       None
     } else {
       val leaderNodes = new util.ArrayList[Node]()
-      leadersInRequest.forEach { leader =>
+      leadersInRequest.forEach(toJavaConsumer((leader:LiCombinedControlRequestData.LeaderAndIsrLiveLeader) =>
         leaderNodes.add(new Node(leader.brokerId(), leader.hostName(), leader.port()))
-      }
+      ))
 
       val leaderAndIsrRequestVersion: Short =
         if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 5
@@ -67,12 +69,12 @@ object LiDecomposedControlRequestUtils {
     val brokersInRequest = request.liveBrokers()
 
     val effectivePartitionStates = new util.ArrayList[UpdateMetadataPartitionState]()
-    partitionsInRequest.forEach { partition =>
+    partitionsInRequest.forEach(toJavaConsumer((partition:LiCombinedControlRequestData.UpdateMetadataPartitionState) =>
       effectivePartitionStates.add(LiCombinedControlTransformer.restoreUpdateMetadataPartition(partition))
-    }
+    ))
 
     val liveBrokers = new util.ArrayList[UpdateMetadataBroker]()
-    brokersInRequest.forEach(broker => liveBrokers.add(LiCombinedControlTransformer.restoreUpdateMetadataBroker(broker)))
+    brokersInRequest.forEach(toJavaConsumer((broker:LiCombinedControlRequestData.UpdateMetadataBroker) => liveBrokers.add(LiCombinedControlTransformer.restoreUpdateMetadataBroker(broker))))
 
     if (effectivePartitionStates.isEmpty && liveBrokers.isEmpty) {
       None
@@ -92,12 +94,11 @@ object LiDecomposedControlRequestUtils {
     val partitionsInRequest = request.stopReplicaPartitionStates()
 
     val effectivePartitionStates = new util.ArrayList[LiCombinedControlRequestData.StopReplicaPartitionState]()
-    partitionsInRequest.forEach { partition =>
+    partitionsInRequest.forEach(toJavaConsumer((partition:LiCombinedControlRequestData.StopReplicaPartitionState) =>
       if (partition.brokerEpoch() >= brokerEpoch) {
         effectivePartitionStates.add(partition)
       }
-
-    }
+    ))
     if (effectivePartitionStates.isEmpty) {
       List.empty
     } else {
@@ -107,14 +108,14 @@ object LiDecomposedControlRequestUtils {
 
       val partitionsWithDelete = new util.ArrayList[TopicPartition]()
       val partitionsWithoutDelete = new util.ArrayList[TopicPartition]()
-      effectivePartitionStates.forEach { partition =>
+      effectivePartitionStates.forEach(toJavaConsumer((partition:LiCombinedControlRequestData.StopReplicaPartitionState) => {
         val topicPartition = new TopicPartition(partition.topicName(), partition.partitionIndex())
         if (partition.deletePartitions()) {
           partitionsWithDelete.add(topicPartition)
         } else {
           partitionsWithoutDelete.add(topicPartition)
         }
-      }
+      }))
 
       var stopReplicaRequests: List[StopReplicaRequest] = List.empty
 

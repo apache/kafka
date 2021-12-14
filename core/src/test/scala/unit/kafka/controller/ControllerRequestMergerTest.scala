@@ -18,7 +18,9 @@
 package unit.kafka.controller
 
 import java.util
+
 import kafka.controller.ControllerRequestMerger
+import kafka.utils.CoreUtils.toJavaConsumer
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LiCombinedControlRequestData.StopReplicaPartitionState
@@ -259,12 +261,12 @@ class ControllerRequestMergerTest {
     val expectedPartitions: Seq[List[StopReplicaPartitionState]] = requests.map{request => {
       var transformedPartitions = List[StopReplicaPartitionState]()
 
-      request.partitions().forEach{partition =>
+      request.partitions().forEach(toJavaConsumer((partition: TopicPartition)=>
         transformedPartitions = new StopReplicaPartitionState()
         .setTopicName(partition.topic())
         .setPartitionIndex(partition.partition())
         .setDeletePartitions(request.deletePartitions())
-        .setBrokerEpoch(brokerEpoch):: transformedPartitions}
+        .setBrokerEpoch(brokerEpoch):: transformedPartitions))
       transformedPartitions
     }}
 

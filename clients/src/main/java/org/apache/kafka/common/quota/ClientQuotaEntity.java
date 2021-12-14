@@ -60,7 +60,27 @@ public class ClientQuotaEntity {
 
     @Override
     public int hashCode() {
-        return Objects.hash(entries);
+        /*
+         * On Scala 2.11 this original implementation
+         * ```
+         * return Objects.hash(entries);
+         * ```
+         * breaks the contract that if .equals() returns true then .hashCode should be equal
+         * issue: https://github.com/scala/bug/issues/10663
+         *
+         * So we have to manually port the implementation in new Scala back
+         * https://github.com/scala/scala/pull/6233
+         */
+
+        // java.util.Map has the following contract for its hashCode:
+        // The hash code of a map is defined to be the sum of the hash codes of each entry in the map's entrySet() view.
+        int sumHashCode = 0;
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            final String k = entry.getKey();
+            final String v = entry.getValue();
+            sumHashCode += (k == null ? 0 : k.hashCode()) ^ (v == null ? 0 : v.hashCode());
+        }
+        return sumHashCode;
     }
 
     @Override

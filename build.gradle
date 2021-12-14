@@ -486,6 +486,13 @@ subprojects {
       ]
     }
 
+    // This is a temporary hack to build with 2.11
+    if (versions.baseScala in ['2.11']) {
+      scalaCompileOptions.additionalParameters += [
+        "-target:jvm-1.8"
+      ]
+    }
+
   // these options are valid for Scala versions < 2.13 only
   // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala in ['2.11','2.12']) {

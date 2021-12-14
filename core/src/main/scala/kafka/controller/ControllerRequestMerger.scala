@@ -18,14 +18,17 @@
 package kafka.controller
 
 import kafka.utils.{LiDecomposedControlResponse, LiDecomposedControlResponseUtils, Logging}
-import org.apache.kafka.common.message.LiCombinedControlRequestData
+import org.apache.kafka.common.message.{LeaderAndIsrRequestData, LiCombinedControlRequestData, StopReplicaRequestData, UpdateMetadataRequestData}
 import org.apache.kafka.common.message.LiCombinedControlRequestData._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.LiCombinedControlTransformer
 import org.apache.kafka.common.{Node, TopicPartition}
-
 import java.util
+import java.util.function.Consumer
+
+import kafka.utils.CoreUtils.toJavaConsumer
+
 import scala.collection.mutable
 
 case class RequestControllerState(controllerId: Int, controllerEpoch: Int)
@@ -85,7 +88,7 @@ class ControllerRequestMerger extends Logging {
 
   private def addLeaderAndIsrRequest(request: LeaderAndIsrRequest.Builder,
     callback: AbstractResponse => Unit): Unit = {
-    request.partitionStates().forEach{partitionState => {
+    request.partitionStates().forEach(toJavaConsumer((partitionState:LeaderAndIsrRequestData.LeaderAndIsrPartitionState) => {
       val transformedPartitionState = LiCombinedControlTransformer.transformLeaderAndIsrPartition(partitionState, request.maxBrokerEpoch())
 
       val topicPartition = new TopicPartition(partitionState.topicName(), partitionState.partitionIndex())
@@ -96,7 +99,7 @@ class ControllerRequestMerger extends Logging {
 
       // one LeaderAndIsr request renders the previous StopReplica requests non-applicable
       clearStopReplicaPartitionState(topicPartition)
-    }}
+    }))
     leaderAndIsrLiveLeaders = request.liveLeaders()
     leaderAndIsrCallback = callback
   }
@@ -106,18 +109,18 @@ class ControllerRequestMerger extends Logging {
   }
 
   private def addUpdateMetadataRequest(request: UpdateMetadataRequest.Builder): Unit = {
-    request.partitionStates().forEach{partitionState => {
+    request.partitionStates().forEach(toJavaConsumer((partitionState:UpdateMetadataRequestData.UpdateMetadataPartitionState) => {
       val transformedPartitionState = LiCombinedControlTransformer.transformUpdateMetadataPartition(partitionState)
 
       val topicPartition = new TopicPartition(partitionState.topicName(), partitionState.partitionIndex())
 
       updateMetadataPartitionStates.put(topicPartition, transformedPartitionState)
-    }}
+    }))
 
     updateMetadataLiveBrokers.clear()
-    request.liveBrokers().forEach{liveBroker =>
+    request.liveBrokers().forEach(toJavaConsumer((liveBroker:UpdateMetadataRequestData.UpdateMetadataBroker) =>
       updateMetadataLiveBrokers.add(LiCombinedControlTransformer.transformUpdateMetadataBroker(liveBroker))
-    }
+    ))
   }
 
   def isStopReplicaReplaceable(newState: StopReplicaPartitionState, currentState: StopReplicaPartitionState): Boolean = {
@@ -138,7 +141,7 @@ class ControllerRequestMerger extends Logging {
 
   private def addStopReplicaRequest(request: StopReplicaRequest.Builder,
     callback: AbstractResponse => Unit): Unit = {
-    request.partitions().forEach{partition => {
+    request.partitions().forEach(toJavaConsumer((partition:TopicPartition) => {
       val queuedStates = stopReplicaPartitionStates.getOrElseUpdate(partition,
         new util.LinkedList[StopReplicaPartitionState]())
       val deletePartitions = request.deletePartitions()
@@ -152,7 +155,7 @@ class ControllerRequestMerger extends Logging {
 
       // one stop replica request renders all previous LeaderAndIsr requests non-applicable
       clearLeaderAndIsrPartitionState(partition)
-    }}
+    }))
 
     stopReplicaCallback = callback
   }
