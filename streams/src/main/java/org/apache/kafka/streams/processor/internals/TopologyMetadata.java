@@ -356,8 +356,8 @@ public class TopologyMetadata {
      * {@link #buildAndVerifyTopology(InternalTopologyBuilder)}, otherwise the
      * {@link InternalTopologyBuilder#sourceTopicCollection()}
      */
-    public Collection<String> sourceTopicCollection() {
-        final List<String> sourceTopics = new ArrayList<>();
+    public Set<String> sourceTopicCollection() {
+        final Set<String> sourceTopics = new HashSet<>();
         applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
         return sourceTopics;
     }
@@ -498,7 +498,7 @@ public class TopologyMetadata {
         } else {
             if (!topics.equals(sourceTopicCollection())) {
                 log.error("{}Consumer's subscription does not match the known source topics.\n" +
-                        "consumer subscription: {}/n" +
+                        "consumer subscription: {}\n" +
                         "topics in topology metadata: {}",
                     logPrefix, topics, sourceTopicCollection());
                 throw new IllegalStateException("Consumer subscribed topics and topology's known topics do not match.");
