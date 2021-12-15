@@ -50,7 +50,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
         val numRecords = 10
         val topic = "topic"
 
-        // create topic with leader as 0 for the 2 partitions.
+        // Create topic with leader as 0 for the 2 partitions.
         createTopic(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
 
         val reassignment = Map(
@@ -70,7 +70,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
             assertEquals(topic, resp.topic())
         }
 
-        // start topic deletion
+        // Start topic deletion
         adminZkClient.deleteTopic(topic)
 
         // Verify that the topic is deleted when no metadata request comes in
