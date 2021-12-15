@@ -375,22 +375,21 @@ public class MetadataTest {
     @Test
     public void testEpochUpdateAfterTopicDeletion() {
         TopicPartition tp = new TopicPartition("topic-1", 0);
-        Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
 
         MetadataResponse metadataResponse = emptyMetadataResponse();
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
-        // Start with a topic A with a topic ID foo
+        Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
-        // Topic A is now deleted so Response contains an Error. LeaderEpoch should still return maintain Old value
-        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.singletonMap("topic-1", Errors.UNKNOWN_TOPIC_OR_PARTITION), new HashMap<>());
+        // Topic topic-1 is now deleted so Response contains an Error. LeaderEpoch should still maintain Old value
+        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.singletonMap("topic-1", Errors.UNKNOWN_TOPIC_OR_PARTITION), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
-        // Create topic A again but this time with a topic ID bar. LeaderEpoch should be updated to new even if lower.
+        // Create topic-1 again but this time with a topic ID bar. LeaderEpoch should be updated to new even if lower.
         Map<String, Uuid> newTopicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 5, newTopicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
