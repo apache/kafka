@@ -224,6 +224,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             } else {
                                 future.completeExceptionally(ex);
                             }
+                            deleteOffsetsResult = null;
                         }
                         try {
                             Thread.sleep(100);
