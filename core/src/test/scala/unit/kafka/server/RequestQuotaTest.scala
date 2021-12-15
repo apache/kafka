@@ -45,7 +45,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
+import org.apache.kafka.common.utils.{Bytes, Sanitizer, SecurityUtils}
 import org.apache.kafka.common._
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
@@ -643,6 +643,14 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+
+        case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS =>
+          new GetTelemetrySubscriptionRequest.Builder(Uuid.ZERO_UUID)
+
+        case ApiKeys.PUSH_TELEMETRY =>
+          new PushTelemetryRequest.Builder(Uuid.ZERO_UUID,0, false, CompressionType.NONE,
+            new Bytes("testdata".getBytes()))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
