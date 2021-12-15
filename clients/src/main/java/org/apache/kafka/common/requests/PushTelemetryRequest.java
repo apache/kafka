@@ -31,6 +31,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.InputStream;
+import org.apache.kafka.common.utils.Bytes;
+
 import java.nio.ByteBuffer;
 
 public class PushTelemetryRequest extends AbstractRequest {
