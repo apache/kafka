@@ -781,14 +781,13 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
     val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
-    controller.updateFeatures(updateFeaturesRequest.data())
-      .whenComplete((results, exception) => {
+    controller.updateFeatures(updateFeaturesRequest.data)
+      .whenComplete((response, exception) => {
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-            results.setThrottleTimeMs(requestThrottleMs)
-            new UpdateFeaturesResponse(results)
+            new UpdateFeaturesResponse(response.setThrottleTimeMs(requestThrottleMs))
           })
         }
       })
