@@ -1131,5 +1131,4 @@ public class WorkerSourceTaskTest {
             assertTrue(committerMessages.get(0).contains("Skipping offset commit"));
         }
     }
-    }
 }

@@ -20,7 +20,6 @@ package kafka.utils
 import org.apache.log4j.{AppenderSkeleton, Level, Logger}
 import org.apache.log4j.spi.LoggingEvent
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class LogCaptureAppender extends AppenderSkeleton {
@@ -37,11 +36,6 @@ class LogCaptureAppender extends AppenderSkeleton {
       return events.clone()
     }
   }
-
-  def getRenderedMessages: java.util.List[String] = {
-    return getMessages.map(e => e.getRenderedMessage).asJava
-  }
-
 
   override def close(): Unit = {
     events.synchronized {

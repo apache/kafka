@@ -562,7 +562,6 @@
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
       <allow pkg="org.eclipse.jetty.util" />
-      <allow pkg="org.apache.kafka.streams.processor.internals.testutil" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -572,7 +571,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
-        <allow pkg="kafka.utils" />
         <subpackage name="resources">
           <allow pkg="org.apache.log4j" />
         </subpackage>
