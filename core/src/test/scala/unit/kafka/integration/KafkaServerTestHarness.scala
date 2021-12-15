@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Time
  */
 abstract class KafkaServerTestHarness extends QuorumTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
+  var priorInstanceConfigs: Seq[KafkaConfig] = null
 
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
@@ -68,6 +69,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def generateConfigs: Seq[KafkaConfig]
 
   /**
+   * It is sometimes useful to keep the same log.dirs configuration value; override this method if that is desired
+   *
+   * @param priorConfigs the prior configs
+   * @return the new generated configs
+   */
+  def regenerateConfigs(priorConfigs: Seq[KafkaConfig]): Seq[KafkaConfig] = generateConfigs
+
+  /**
    * Override this in case ACLs or security credentials must be set before `servers` are started.
    *
    * This is required in some cases because of the topic creation in the setup of `IntegrationTestHarness`. If the ACLs
@@ -87,8 +96,10 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def configureSecurityAfterServersStart(): Unit = {}
 
   def configs: Seq[KafkaConfig] = {
-    if (instanceConfigs == null)
-      instanceConfigs = generateConfigs
+    if (instanceConfigs == null) {
+      instanceConfigs = if (priorInstanceConfigs == null) generateConfigs else regenerateConfigs(priorInstanceConfigs)
+      priorInstanceConfigs = instanceConfigs
+    }
     instanceConfigs
   }
 
@@ -114,23 +125,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityBeforeServersStart()
 
-    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
-    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs) {
-      if (isKRaftTest()) {
-        _brokers += createAndStartBroker(config, brokerTime(config.brokerId))
-      } else {
-        _brokers += TestUtils.createServer(
-          config,
-          time = brokerTime(config.brokerId),
-          threadNamePrefix = None,
-          enableForwarding
-        )
-      }
-    }
-    brokerList = TestUtils.bootstrapServers(_brokers, listenerName)
-    alive = new Array[Boolean](_brokers.length)
-    Arrays.fill(alive, true)
+    createAndMaybeStartBrokers(startup = true)
+
 
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityAfterServersStart()
@@ -140,6 +136,19 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(_brokers)
     super.tearDown()
+  }
+
+  def recreateBrokers(reconfigure: Boolean = false, startup: Boolean = false): Unit = {
+    if (reconfigure) {
+      instanceConfigs = null
+    }
+    if (configs.isEmpty)
+      throw new KafkaException("Must supply at least one server config.")
+
+    TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
+    _brokers.clear()
+
+    createAndMaybeStartBrokers(startup)
   }
 
   /**
@@ -200,19 +209,16 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     if (reconfigure) {
       instanceConfigs = null
     }
+    if (configs.isEmpty)
+      throw new KafkaException("Must supply at least one server config.")
     for(i <- _brokers.indices if !alive(i)) {
       if (reconfigure) {
-        _brokers(i) = TestUtils.createServer(
-          configs(i),
-          time = brokerTime(configs(i).brokerId),
-          threadNamePrefix = None,
-          enableForwarding
-        )
-      } else {
-        brokers(i).startup()
+        _brokers(i) = createBroker(configs(i))
       }
+      _brokers(i).startup()
       alive(i) = true
     }
+    brokerList = TestUtils.bootstrapServers(_brokers, listenerName)
   }
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
@@ -253,4 +259,32 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     getController().kafkaController.controllerContext.topicNames.toMap
   }
 
+  private def createAndMaybeStartBrokers(startup: Boolean): Unit = {
+    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
+    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
+    for (config <- configs) {
+      val broker = createBroker(config)
+      _brokers += broker
+      if (startup) {
+        broker.startup()
+      }
+    }
+    brokerList = if (startup) TestUtils.bootstrapServers(_brokers, listenerName) else null
+    alive = new Array[Boolean](_brokers.length)
+    Arrays.fill(alive, startup)
+  }
+
+  private def createBroker(config: KafkaConfig) = {
+    if (isKRaftTest()) {
+      createAndMaybeStartBroker(config, brokerTime(config.brokerId), startup = false)
+    } else {
+      TestUtils.createServer(
+        config,
+        time = brokerTime(config.brokerId),
+        threadNamePrefix = None,
+        enableForwarding,
+        startup = false
+      )
+    }
+  }
 }

@@ -44,8 +44,9 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 import scala.collection.{Seq, immutable}
 
 trait QuorumImplementation {
-  def createAndStartBroker(config: KafkaConfig,
-                           time: Time): KafkaBroker
+  def createAndMaybeStartBroker(config: KafkaConfig,
+                                time: Time,
+                                startup: Boolean): KafkaBroker
 
   def shutdown(): Unit
 }
@@ -54,10 +55,11 @@ class ZooKeeperQuorumImplementation(val zookeeper: EmbeddedZookeeper,
                                     val zkClient: KafkaZkClient,
                                     val adminZkClient: AdminZkClient,
                                     val log: Logging) extends QuorumImplementation {
-  override def createAndStartBroker(config: KafkaConfig,
-                                    time: Time): KafkaBroker = {
+  override def createAndMaybeStartBroker(config: KafkaConfig,
+                                         time: Time,
+                                         startup: Boolean): KafkaBroker = {
     val server = new KafkaServer(config, time, None, false)
-    server.startup()
+    if (startup) server.startup()
     server
   }
 
@@ -73,8 +75,9 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
                                 val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                                 val clusterId: String,
                                 val log: Logging) extends QuorumImplementation {
-  override def createAndStartBroker(config: KafkaConfig,
-                                    time: Time): KafkaBroker = {
+  override def createAndMaybeStartBroker(config: KafkaConfig,
+                                         time: Time,
+                                         startup: Boolean): KafkaBroker = {
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
@@ -84,7 +87,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
       initialOfflineDirs = Seq(),
       controllerQuorumVotersFuture = controllerQuorumVotersFuture,
       supportedFeatures = Collections.emptyMap())
-    broker.startup()
+    if (startup) broker.startup()
     broker
   }
 
@@ -196,13 +199,15 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  def createAndStartBroker(config: KafkaConfig,
-                           time: Time = Time.SYSTEM): KafkaBroker = {
-    implementation.createAndStartBroker(config,
-      time)
+  def createAndMaybeStartBroker(config: KafkaConfig,
+                                time: Time = Time.SYSTEM,
+                                startup: Boolean = true): KafkaBroker = {
+    implementation.createAndMaybeStartBroker(config, time, startup)
   }
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()
+
+  def shutdownKRaftController(): Unit = asKRaft().shutdown()
 
   private def formatDirectories(directories: immutable.Seq[String],
                                 metaProperties: MetaProperties): Unit = {
@@ -273,7 +278,6 @@ abstract class QuorumTestHarness extends Logging {
       })
       controllerServer.startup()
       raftManager.startup()
-      controllerServer.startup()
     } catch {
       case e: Throwable =>
         CoreUtils.swallow(raftManager.shutdown(), this)
