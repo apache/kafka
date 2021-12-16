@@ -29,10 +29,10 @@ import java.util.List;
  */
 public final class QueryResult<R> {
 
-    private final List<String> executionInfo = new LinkedList<>();
     private final FailureReason failureReason;
     private final String failure;
     private final R result;
+    private List<String> executionInfo = new LinkedList<>();
     private Position position;
 
     private QueryResult(final R result) {
