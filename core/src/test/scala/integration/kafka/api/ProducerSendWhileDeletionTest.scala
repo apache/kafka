@@ -35,9 +35,9 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     serverConfig.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
     serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
 
-    producerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5 * 1000L)
-    producerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10 * 1000)
-    producerConfig.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 10 * 1000)
+    producerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000L.toString)
+    producerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000.toString)
+    producerConfig.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 10000.toString)
 
     /**
      * Tests that Producer gets self-recovered when a topic is deleted mid-way of produce.
