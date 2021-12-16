@@ -16,17 +16,55 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Map;
+import java.util.Optional;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class StoreQueryUtils {
+
+    /**
+     * a utility interface to facilitate stores' query dispatch logic,
+     * allowing them to generically store query execution logic as the values
+     * in a map.
+     */
+    @FunctionalInterface
+    public interface QueryHandler {
+        QueryResult<?> apply(
+            final Query<?> query,
+            final PositionBound positionBound,
+            final boolean collectExecutionInfo,
+            final StateStore store
+        );
+    }
+
+    private static final Map<Class<?>, QueryHandler> QUERY_HANDLER_MAP =
+        mkMap(
+            mkEntry(
+                PingQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> QueryResult.forResult(true)
+            ),
+            mkEntry(
+                RangeQuery.class,
+                StoreQueryUtils::runRangeQuery
+            )
+        );
 
     // make this class uninstantiable
     private StoreQueryUtils() {
@@ -42,16 +80,21 @@ public final class StoreQueryUtils {
         final int partition
     ) {
 
-        final QueryResult<R> result;
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        if (query instanceof PingQuery) {
-            if (!isPermitted(position, positionBound, partition)) {
-                result = QueryResult.notUpToBound(position, positionBound, partition);
-            } else {
-                result = (QueryResult<R>) QueryResult.forResult(true);
-            }
-        } else {
+        final QueryResult<R> result;
+
+        final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
+        if (handler == null) {
             result = QueryResult.forUnknownQueryType(query, store);
+        } else if (!isPermitted(position, positionBound, partition)) {
+            result = QueryResult.notUpToBound(position, positionBound, partition);
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                query,
+                positionBound,
+                collectExecutionInfo,
+                store
+            );
         }
         if (collectExecutionInfo) {
             result.addExecutionInfo(
@@ -94,5 +137,47 @@ public final class StoreQueryUtils {
             }
         }
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runRangeQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo,
+        final StateStore store
+    ) {
+        if (!(store instanceof KeyValueStore)) {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
+        final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
+        final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
+        KeyValueIterator<Bytes, byte[]> iterator = null;
+        try {
+            if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+                iterator = kvStore.all();
+            } else {
+                iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
+            }
+            final R result = (R) iterator;
+            return QueryResult.forResult(result);
+        } catch (final Throwable t) {
+            final String message = parseStoreException(t, store, query);
+            return QueryResult.forFailure(
+                FailureReason.STORE_EXCEPTION,
+                message
+            );
+        }
+    }
+
+    private static <R> String parseStoreException(final Throwable t, final StateStore store, final Query<R> query) {
+        final StringWriter stringWriter = new StringWriter();
+        final PrintWriter printWriter = new PrintWriter(stringWriter);
+        printWriter.println(
+            store.getClass() + " failed to handle query " + query + ":");
+        t.printStackTrace(printWriter);
+        printWriter.flush();
+        return stringWriter.toString();
     }
 }

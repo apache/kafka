@@ -40,14 +40,17 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.PingQuery;
@@ -68,8 +71,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -77,6 +83,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
@@ -122,6 +129,11 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         GLOBAL_IN_MEMORY_LRU {
             @Override
@@ -133,6 +145,11 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         GLOBAL_ROCKS_KV {
             @Override
@@ -141,7 +158,17 @@ public class IQv2StoreIntegrationTest {
             }
 
             @Override
+            public boolean timestamped() {
+                return false;
+            }
+
+            @Override
             public boolean global() {
+                return true;
+            }
+
+            @Override
+            public boolean keyValue() {
                 return true;
             }
         },
@@ -155,11 +182,21 @@ public class IQv2StoreIntegrationTest {
             public boolean global() {
                 return true;
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         IN_MEMORY_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryKeyValueStore(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
             }
         },
         IN_MEMORY_LRU {
@@ -167,17 +204,37 @@ public class IQv2StoreIntegrationTest {
             public StoreSupplier<?> supplier() {
                 return Stores.lruMap(STORE_NAME, 100);
             }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         ROCKS_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentKeyValueStore(STORE_NAME);
             }
+
+            @Override
+            public boolean timestamped() {
+                return false;
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
         },
         TIME_ROCKS_KV {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedKeyValueStore(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
             }
         },
         IN_MEMORY_WINDOW {
@@ -216,7 +273,15 @@ public class IQv2StoreIntegrationTest {
 
         public abstract StoreSupplier<?> supplier();
 
+        public boolean timestamped() {
+            return true; // most stores are timestamped
+        }
+
         public boolean global() {
+            return false;
+        }
+
+        public boolean keyValue() {
             return false;
         }
     }
@@ -259,7 +324,7 @@ public class IQv2StoreIntegrationTest {
 
         final List<Future<RecordMetadata>> futures = new LinkedList<>();
         try (final Producer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 final Future<RecordMetadata> send = producer.send(
                     new ProducerRecord<>(
                         INPUT_TOPIC_NAME,
@@ -290,7 +355,7 @@ public class IQv2StoreIntegrationTest {
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
-                .withComponent(INPUT_TOPIC_NAME, 1, 0L)
+                .withComponent(INPUT_TOPIC_NAME, 1, 1L)
         ));
     }
 
@@ -349,18 +414,13 @@ public class IQv2StoreIntegrationTest {
                 materialized.withCachingDisabled();
             }
 
-            builder
-                .stream(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer())
-                )
+            builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
                 .groupByKey()
                 .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
                 .aggregate(
                     () -> 0,
                     (key, value, aggregate) -> aggregate + value,
-                    materialized
-                );
+                    materialized);
         } else if (supplier instanceof SessionBytesStoreSupplier) {
             final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
                 Materialized.as((SessionBytesStoreSupplier) supplier);
@@ -377,19 +437,14 @@ public class IQv2StoreIntegrationTest {
                 materialized.withCachingDisabled();
             }
 
-            builder
-                .stream(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer())
-                )
+            builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
                 .groupByKey()
                 .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
                 .aggregate(
                     () -> 0,
                     (key, value, aggregate) -> aggregate + value,
                     (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                    materialized
-                );
+                    materialized);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -426,7 +481,47 @@ public class IQv2StoreIntegrationTest {
             shouldHandlePingQuery();
             shouldCollectExecutionInfo();
             shouldCollectExecutionInfoUnderFailure();
+
+            if (storeToTest.keyValue()) {
+                if (storeToTest.timestamped()) {
+                    shouldHandleRangeQueries((Function<ValueAndTimestamp<Integer>, Integer>) ValueAndTimestamp::value);
+                } else {
+                    shouldHandleRangeQueries(Function.identity());
+                }
+            }
         }
+    }
+
+
+    private <T> void shouldHandleRangeQueries(final Function<T, Integer> extractor) {
+        shouldHandleRangeQuery(
+            Optional.of(1),
+            Optional.of(3),
+            extractor,
+            mkSet(1, 2, 3)
+
+        );
+        shouldHandleRangeQuery(
+            Optional.of(1),
+            Optional.empty(),
+            extractor,
+            mkSet(1, 2, 3)
+
+        );
+        shouldHandleRangeQuery(
+            Optional.empty(),
+            Optional.of(1),
+            extractor,
+            mkSet(0, 1)
+
+        );
+        shouldHandleRangeQuery(
+            Optional.empty(),
+            Optional.empty(),
+            extractor,
+            mkSet(0, 1, 2, 3)
+
+        );
     }
 
     private void globalShouldRejectAllQueries() {
@@ -511,6 +606,75 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.getExecutionInfo(), is(empty()));
             });
         assertThat(result.getPosition(), is(INPUT_POSITION));
+    }
+
+    public <V> void shouldHandleRangeQuery(
+        final Optional<Integer> lower,
+        final Optional<Integer> upper,
+        final Function<V, Integer> valueExtactor,
+        final Set<Integer> expectedValue) {
+
+        final RangeQuery<Integer, V> query;
+        if (lower.isPresent() && upper.isPresent()) {
+            query = RangeQuery.withRange(lower.get(), upper.get());
+        } else if (lower.isPresent()) {
+            query = RangeQuery.withLowerBound(lower.get());
+        } else if (upper.isPresent()) {
+            query = RangeQuery.withUpperBound(upper.get());
+        } else {
+            query = RangeQuery.withNoBounds();
+        }
+
+        final StateQueryRequest<KeyValueIterator<Integer, V>> request =
+            inStore(STORE_NAME)
+                .withQuery(query)
+                .withPartitions(mkSet(0, 1))
+                .withPositionBound(PositionBound.at(INPUT_POSITION));
+
+        final StateQueryResult<KeyValueIterator<Integer, V>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        if (result.getGlobalResult() != null) {
+            final QueryResult<KeyValueIterator<Integer, V>> queryResult = result.getGlobalResult();
+            final boolean failure = queryResult.isFailure();
+            if (failure) {
+                throw new AssertionError(queryResult.toString());
+            }
+            assertThat(queryResult.isSuccess(), is(true));
+
+            assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
+            assertThrows(IllegalArgumentException.class,
+                queryResult::getFailureMessage);
+
+            final KeyValueIterator<Integer, V> iterator = queryResult.getResult();
+            final Set<Integer> actualValue = new HashSet<>();
+            while (iterator.hasNext()) {
+                actualValue.add(valueExtactor.apply(iterator.next().value));
+            }
+            assertThat(actualValue, is(expectedValue));
+            assertThat(queryResult.getExecutionInfo(), is(empty()));
+        } else {
+            final Set<Integer> actualValue = new HashSet<>();
+            final Map<Integer, QueryResult<KeyValueIterator<Integer, V>>> queryResult = result.getPartitionResults();
+            for (final int partition : queryResult.keySet()) {
+                final boolean failure = queryResult.get(partition).isFailure();
+                if (failure) {
+                    throw new AssertionError(queryResult.toString());
+                }
+                assertThat(queryResult.get(partition).isSuccess(), is(true));
+
+                assertThrows(IllegalArgumentException.class, queryResult.get(partition)::getFailureReason);
+                assertThrows(IllegalArgumentException.class,
+                    queryResult.get(partition)::getFailureMessage);
+
+                final KeyValueIterator<Integer, V> iterator = queryResult.get(partition).getResult();
+                while (iterator.hasNext()) {
+                    actualValue.add(valueExtactor.apply(iterator.next().value));
+                }
+                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+            }
+            assertThat(actualValue, is(expectedValue));
+        }
     }
 
     public void shouldCollectExecutionInfo() {

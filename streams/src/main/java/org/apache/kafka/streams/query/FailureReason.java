@@ -52,5 +52,12 @@ public enum FailureReason {
      * The requested store partition does not exist at all. For example, partition 4 was requested,
      * but the store in question only has 4 partitions (0 through 3).
      */
-    DOES_NOT_EXIST;
+    DOES_NOT_EXIST,
+
+    /**
+     * The store that handled the query got an exception during query execution. The message
+     * will contain the exception details. Depending on the nature of the exception, the caller
+     * may be able to retry this instance or may need to try a different instance.
+     */
+    STORE_EXCEPTION;
 }
