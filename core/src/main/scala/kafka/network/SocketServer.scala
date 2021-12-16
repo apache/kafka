@@ -102,13 +102,15 @@ class SocketServer(val config: KafkaConfig,
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
     new RequestChannel(20, ControlPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics))
 
-  private val nextPId: AtomicInteger = new AtomicInteger(0)
+  private[this] val nextProcessorId: AtomicInteger = new AtomicInteger(0)
   val connectionQuotas = new ConnectionQuotas(config, time, metrics)
   private var startedProcessingRequests = false
   private var stoppedProcessingRequests = false
 
+  // Processors are now created by each Acceptor. However to preserve compatibility, we need to number the processors
+  // globally, so we keep the nextProcessorId counter in SocketServer
   def nextProcessorId(): Int = {
-    nextPId.getAndIncrement()
+    nextProcessorId.getAndIncrement()
   }
 
   /**
@@ -207,9 +209,9 @@ class SocketServer(val config: KafkaConfig,
    * Before starting them, we ensure that authorizer has all the metadata to authorize
    * requests on that endpoint by waiting on the provided future.
    */
-  private def startAcceptorAndProcessors(endpoint: EndPoint,
-                                         acceptor: Acceptor,
+  private def startAcceptorAndProcessors(acceptor: Acceptor,
                                          authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = {
+    val endpoint = acceptor.endPoint
     debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
     waitForAuthorizerFuture(acceptor, authorizerFutures)
     debug(s"Start processors on listener ${endpoint.listenerName}")
@@ -240,8 +242,7 @@ class SocketServer(val config: KafkaConfig,
       case None => dataPlaneAcceptors.asScala.values
     }
     orderedAcceptors.foreach { acceptor =>
-      val endpoint = acceptor.endPoint
-      startAcceptorAndProcessors(endpoint, acceptor, authorizerFutures)
+      startAcceptorAndProcessors(acceptor, authorizerFutures)
     }
   }
 
@@ -250,8 +251,7 @@ class SocketServer(val config: KafkaConfig,
    */
   private def startControlPlaneProcessorAndAcceptor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      val endpoint = config.controlPlaneListener.get
-      startAcceptorAndProcessors(endpoint, controlPlaneAcceptor, authorizerFutures)
+      startAcceptorAndProcessors(controlPlaneAcceptor, authorizerFutures)
     }
   }
 
@@ -343,7 +343,7 @@ class SocketServer(val config: KafkaConfig,
     createDataPlaneAcceptorsAndProcessors(listenersAdded)
     listenersAdded.foreach { endpoint =>
       val acceptor = dataPlaneAcceptors.get(endpoint)
-      startAcceptorAndProcessors(endpoint, acceptor)
+      startAcceptorAndProcessors(acceptor)
     }
   }
 
