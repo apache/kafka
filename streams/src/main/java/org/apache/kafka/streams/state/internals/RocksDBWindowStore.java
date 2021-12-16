@@ -65,7 +65,6 @@ public class RocksDBWindowStore
         if (!(value == null && retainDuplicates)) {
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
-
             StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
@@ -132,7 +131,14 @@ public class RocksDBWindowStore
     @Override
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
-        return StoreQueryUtils.handleBasicQueries(query, positionBound, collectExecutionInfo, this);
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            collectExecutionInfo,
+            this,
+            position,
+            stateStoreContext.taskId().partition()
+        );
     }
 
     private void maybeUpdateSeqnumForDups() {

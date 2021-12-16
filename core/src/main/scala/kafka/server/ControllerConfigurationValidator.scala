@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.internals.Topic
 
 import scala.collection.mutable
 
@@ -32,6 +33,10 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
   override def validate(resource: ConfigResource, config: util.Map[String, String]): Unit = {
     resource.`type`() match {
       case TOPIC =>
+        if (resource.name().isEmpty()) {
+          throw new InvalidRequestException("Default topic resources are not allowed.")
+        }
+        Topic.validate(resource.name())
         val properties = new Properties()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
         config.entrySet().forEach(e => {
@@ -47,7 +52,17 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
         }
         LogConfig.validate(properties)
       case BROKER =>
-        // TODO: add broker configuration validation
+        if (resource.name().nonEmpty) {
+          val brokerId = try {
+            Integer.valueOf(resource.name())
+          } catch {
+            case _: NumberFormatException =>
+              throw new InvalidRequestException("Unable to parse broker name as a base 10 number.")
+          }
+          if (brokerId < 0) {
+            throw new InvalidRequestException("Invalid negative broker ID.")
+          }
+        }
       case _ =>
         // Note: we should never handle BROKER_LOGGER resources here, since changes to
         // those resources are not persisted in the metadata.

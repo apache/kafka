@@ -1095,7 +1095,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val listeners = config.listeners
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",") + s",$listenerName://localhost:0"
-    val listenerMap = config.listenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap
       .map { case (name, protocol) => s"${name.value}:${protocol.name}" }
       .mkString(",") + s",$listenerName:${securityProtocol.name}"
 
@@ -1174,7 +1174,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .filter(e => e.listenerName.value != securityProtocol.name)
       .map(e => s"${e.listenerName.value}://${e.host}:${e.port}")
       .mkString(",")
-    val listenerMap = config.listenerSecurityProtocolMap
+    val listenerMap = config.effectiveListenerSecurityProtocolMap
       .filter { case (listenerName, _) => listenerName.value != securityProtocol.name }
       .map { case (listenerName, protocol) => s"${listenerName.value}:${protocol.name}" }
       .mkString(",")
@@ -1364,7 +1364,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-      val newListeners = server.config.advertisedListeners.map { e =>
+      val newListeners = server.config.effectiveAdvertisedListeners.map { e =>
         if (e.listenerName.value == SecureExternal)
           s"${e.listenerName.value}://$newHost:${server.boundPort(e.listenerName)}"
         else
@@ -1376,7 +1376,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     adminClient.alterConfigs(configs).all.get
     servers.foreach { server =>
       TestUtils.retry(10000) {
-        val externalListener = server.config.advertisedListeners.find(_.listenerName.value == SecureExternal)
+        val externalListener = server.config.effectiveAdvertisedListeners.find(_.listenerName.value == SecureExternal)
           .getOrElse(throw new IllegalStateException("External listener not found"))
         assertEquals(newHost, externalListener.host, "Config not updated")
       }

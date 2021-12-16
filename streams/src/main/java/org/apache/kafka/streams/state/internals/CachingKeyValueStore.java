@@ -59,6 +59,7 @@ public class CachingKeyValueStore
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
+        position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -88,8 +89,6 @@ public class CachingKeyValueStore
 
     private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
-        this.position = Position.emptyPosition();
-
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
@@ -108,10 +107,10 @@ public class CachingKeyValueStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(entry.key(), entry.newValue());
-
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
+                wrapped().put(entry.key(), entry.newValue());
+
                 try {
                     flushListener.apply(
                         new Record<>(

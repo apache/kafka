@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.ArrayList;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
@@ -33,9 +34,9 @@ import java.util.LinkedList;
 import java.util.List;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -166,30 +167,22 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(0, "v"));
-        entries.add(new KeyValue<>(1, "v"));
-        entries.add(new KeyValue<>(2, "v"));
-        entries.add(new KeyValue<>(3, "v"));
-        entries.add(new KeyValue<>(4, "v"));
-
-        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0);
-        context.setRecordContext(recordContext);
-
-        final Position expected = Position.emptyPosition();
-        long offset = 0;
-        for (final KeyValue<Integer, String> k : entries) {
-            windowStore.put(k.key, k.value, SEGMENT_INTERVAL);
-            expected.withComponent("input", 0, offset);
-            offset++;
-        }
-
         final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
         final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
         final InMemoryWindowStore inMemoryWindowStore = (InMemoryWindowStore) changeLoggingSessionBytesStore.wrapped();
 
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        windowStore.put(0, "0", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        windowStore.put(1, "1", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        windowStore.put(2, "2", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
+        windowStore.put(3, "3", SEGMENT_INTERVAL);
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
         final Position actual = inMemoryWindowStore.getPosition();
-        assertThat(expected, is(actual));
+        assertEquals(expected, actual);
     }
 
 }

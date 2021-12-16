@@ -53,7 +53,14 @@ public class RocksDBSessionStore
     @Override
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
-        return StoreQueryUtils.handleBasicQueries(query, positionBound, collectExecutionInfo, this);
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            collectExecutionInfo,
+            this,
+            position,
+            stateStoreContext.taskId().partition()
+        );
     }
 
     @Override
@@ -147,7 +154,6 @@ public class RocksDBSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
-
         StoreQueryUtils.updatePosition(position, stateStoreContext);
     }
 }

@@ -164,7 +164,7 @@ public class KafkaStreams implements AutoCloseable {
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;
-    private final StreamsMetadataState streamsMetadataState;
+    protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
     protected final Admin adminClient;
@@ -373,7 +373,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void validateIsRunningOrRebalancing() {
+    protected void validateIsRunningOrRebalancing() {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
                 throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
@@ -1691,18 +1691,22 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if the admin client request throws exception
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final List<Task> allTasks = new ArrayList<>();
+        processStreamThread(thread -> allTasks.addAll(thread.allTasks().values()));
+        return allLocalStorePartitionLags(allTasks);
+    }
+
+    protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
         final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
-        processStreamThread(thread -> {
-            for (final Task task : thread.allTasks().values()) {
-                allPartitions.addAll(task.changelogPartitions());
-                // Note that not all changelog partitions, will have positions; since some may not have started
-                allChangelogPositions.putAll(task.changelogOffsets());
-            }
-        });
+        for (final Task task : tasksToCollectLagFor) {
+            allPartitions.addAll(task.changelogPartitions());
+            // Note that not all changelog partitions, will have positions; since some may not have started
+            allChangelogPositions.putAll(task.changelogOffsets());
+        }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
@@ -1767,17 +1771,14 @@ public class KafkaStreams implements AutoCloseable {
 
         final Map<String, StateStore> globalStateStores = topologyMetadata.globalStateStores();
         if (globalStateStores.containsKey(storeName)) {
-            final StateStore store = globalStateStores.get(storeName);
-            final QueryResult<R> r =
-                store.query(
-                    request.getQuery(),
-                    request.getPositionBound(),
-                    request.executionInfoEnabled()
-                );
-            result.setGlobalResult(r);
+            // See KAFKA-13523
+            result.setGlobalResult(
+                QueryResult.forFailure(
+                    FailureReason.UNKNOWN_QUERY_TYPE,
+                    "Global stores do not yet support the KafkaStreams#query API. Use KafkaStreams#store instead."
+                )
+            );
         } else {
-            final Set<Integer> handledPartitions = new HashSet<>();
-
             for (final StreamThread thread : threads) {
                 final Map<TaskId, Task> tasks = thread.allTasks();
                 for (final Entry<TaskId, Task> entry : tasks.entrySet()) {
@@ -1814,16 +1815,27 @@ public class KafkaStreams implements AutoCloseable {
                                 );
                                 result.addResult(partition, r);
                             }
-                        }
 
-                        // optimization: if we have handled all the requested partitions,
-                        // we can return right away.
-                        handledPartitions.add(partition);
-                        if (!request.isAllPartitions()
-                            && handledPartitions.containsAll(request.getPartitions())) {
-                            return result;
+
+                            // optimization: if we have handled all the requested partitions,
+                            // we can return right away.
+                            if (!request.isAllPartitions()
+                                && result.getPartitionResults().keySet().containsAll(request.getPartitions())) {
+                                return result;
+                            }
                         }
                     }
+                }
+            }
+        }
+
+        if (!request.isAllPartitions()) {
+            for (final Integer partition : request.getPartitions()) {
+                if (!result.getPartitionResults().containsKey(partition)) {
+                    result.addResult(partition, QueryResult.forFailure(
+                        FailureReason.NOT_PRESENT,
+                        "The requested partition was not present at the time of the query."
+                    ));
                 }
             }
         }

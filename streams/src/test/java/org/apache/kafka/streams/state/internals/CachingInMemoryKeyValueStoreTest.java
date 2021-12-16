@@ -46,6 +46,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -220,23 +222,14 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(bytesKey("key1"), bytesValue("value1")));
-        entries.add(new KeyValue<>(bytesKey("key2"), bytesValue("value2")));
-        entries.add(new KeyValue<>(bytesKey("key3"), bytesValue("value3")));
-        entries.add(new KeyValue<>(bytesKey("key4"), bytesValue("value4")));
-        entries.add(new KeyValue<>(bytesKey("key5"), bytesValue("value5")));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        store.put(bytesKey("key1"), bytesValue("value1"));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        store.put(bytesKey("key2"), bytesValue("value2"));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        store.put(bytesKey("key3"), bytesValue("value3"));
 
-        final MonotonicProcessorRecordContext recordContext = new MonotonicProcessorRecordContext("input", 0, false);
-        context.setRecordContext(recordContext);
-
-        final Position expected = Position.emptyPosition();
-        for (final KeyValue<Bytes, byte[]> k : entries) {
-            store.put(k.key, k.value);
-            expected.withComponent(recordContext.topic(), recordContext.partition(), recordContext.offset());
-            recordContext.kick();
-        }
-
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = store.getPosition();
         assertEquals(expected, actual);
     }
