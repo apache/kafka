@@ -332,34 +332,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 
-//        final long start = System.nanoTime();
-//        if (query instanceof RangeQuery) {
-//            final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
-//            final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
-//            final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
-//            final StringBuilder executionInfo = new StringBuilder();
-//            KeyValueIterator<Bytes, byte[]> iterator = null;
-//            if (!lowerRange.isPresent() && !upperRange.isPresent()) {
-//                iterator = all();
-//                if (collectExecutionInfo) {
-//                    executionInfo.append("Handled on ").append(this.getClass().getName()).append(
-//                            "#all via StoreQueryAdapters").append(" in ");
-//                }
-//            } else {
-//                iterator = range(lowerRange.orElse(null), upperRange.orElse(null));
-//                if (collectExecutionInfo) {
-//                    executionInfo.append("Handled on ").append(this.getClass().getName()).append(
-//                            "#range via StoreQueryAdapters").append(" in ");
-//                }
-//            }
-//            final R result = (R) iterator;
-//            final long end = System.nanoTime();
-//            final QueryResult<R> queryResult = QueryResult.forResult(result);
-//            executionInfo.append(end - start).append("ns");
-//            queryResult.addExecutionInfo(executionInfo.toString());
-//            return queryResult;
-//        }
-
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,

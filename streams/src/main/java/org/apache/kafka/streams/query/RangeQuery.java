@@ -84,7 +84,7 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * Interactive scan query that returns all records in the store.
      * @param <K> The key type
      * @param <V> The value type
-     * @return An iterator of KeyValues
+     * @return An iterator of records
      */
     public static <K, V> RangeQuery<K, V> withNoBounds() {
         return new RangeQuery<>(Optional.empty(), Optional.empty());

@@ -741,7 +741,7 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier) {
+        final String supplier) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier;
         final Properties config = new Properties();
