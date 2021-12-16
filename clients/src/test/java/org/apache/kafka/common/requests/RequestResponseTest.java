@@ -1725,6 +1725,10 @@ public class RequestResponseTest {
         if (version >= 5)
             data.setGroupInstanceId("groupInstanceId");
 
+        // v8 and above can set reason
+        if (version >= 8)
+            data.setReason("reason: test");
+
         return new JoinGroupRequest.Builder(data).build(version);
     }
 

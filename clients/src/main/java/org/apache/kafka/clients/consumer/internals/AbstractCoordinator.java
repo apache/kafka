@@ -133,7 +133,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
 
     private Node coordinator = null;
-    private String rejoinReason = "initialized abstract coordinator";
+    private String rejoinReason = "";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private HeartbeatThread heartbeatThread = null;
@@ -468,7 +468,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
 
                 resetJoinGroupFuture();
-                rejoinReason = exception.getMessage();
+                rejoinReason = "rebalance failed due to " + exception.getClass() + " error: " + exception.getMessage();
                 rejoinNeeded = true;
 
                 if (exception instanceof UnknownMemberIdException ||

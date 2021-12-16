@@ -496,7 +496,7 @@ public class AbstractCoordinatorTest {
 
         // test initial reason
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        expectJoinGroup("", "initialized abstract coordinator", generation, memberId);
+        expectJoinGroup("", "", generation, memberId);
 
         // successful sync group response should reset reason
         expectSyncGroup(generation, memberId);
@@ -517,7 +517,10 @@ public class AbstractCoordinatorTest {
             coordinator.joinGroupIfNeeded(mockTime.timer(100L));
         } catch (GroupMaxSizeReachedException e) {
             // next join group request should contain exception message
-            expectJoinGroup(memberId, e.getMessage(), generation, memberId);
+            expectJoinGroup(memberId,
+                "rebalance failed due to " + e.getClass() + " error: " + e.getMessage(),
+                generation,
+                memberId);
             expectSyncGroup(generation, memberId);
             ensureActiveGroup(generation, memberId);
             assertEquals("", coordinator.rejoinReason());
@@ -580,9 +583,9 @@ public class AbstractCoordinatorTest {
     }
 
     private void expectJoinGroup(
-            String expectedMemberId,
-            int responseGeneration,
-            String responseMemberId
+        String expectedMemberId,
+        int responseGeneration,
+        String responseMemberId
     ) {
         expectJoinGroup(expectedMemberId, null, responseGeneration, responseMemberId);
     }
@@ -606,7 +609,9 @@ public class AbstractCoordinatorTest {
                 return false;
             }
             JoinGroupRequestData joinGroupRequest = ((JoinGroupRequest) body).data();
-            boolean isReasonMatching = expectedReason == null || joinGroupRequest.reason().equals(expectedReason);
+            // abstract coordinator never sets reason to null
+            String actualReason = joinGroupRequest.reason();
+            boolean isReasonMatching = expectedReason == null || expectedReason.equals(actualReason);
             return joinGroupRequest.memberId().equals(expectedMemberId)
                 && joinGroupRequest.protocolType().equals(PROTOCOL_TYPE)
                 && isReasonMatching;
