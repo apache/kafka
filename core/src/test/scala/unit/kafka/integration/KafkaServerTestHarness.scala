@@ -125,7 +125,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityBeforeServersStart()
 
-    createAndMaybeStartBrokers(startup = true)
+    createBrokers(startup = true)
 
 
     // default implementation is a no-op, it is overridden by subclasses if required
@@ -148,7 +148,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
     _brokers.clear()
 
-    createAndMaybeStartBrokers(startup)
+    createBrokers(startup)
   }
 
   /**
@@ -259,7 +259,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     getController().kafkaController.controllerContext.topicNames.toMap
   }
 
-  private def createAndMaybeStartBrokers(startup: Boolean): Unit = {
+  private def createBrokers(startup: Boolean): Unit = {
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs) {

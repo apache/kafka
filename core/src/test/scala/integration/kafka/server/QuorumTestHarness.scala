@@ -44,9 +44,9 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 import scala.collection.{Seq, immutable}
 
 trait QuorumImplementation {
-  def createAndMaybeStartBroker(config: KafkaConfig,
-                                time: Time,
-                                startup: Boolean): KafkaBroker
+  def createBroker(config: KafkaConfig,
+                   time: Time,
+                   startup: Boolean): KafkaBroker
 
   def shutdown(): Unit
 }
@@ -55,9 +55,9 @@ class ZooKeeperQuorumImplementation(val zookeeper: EmbeddedZookeeper,
                                     val zkClient: KafkaZkClient,
                                     val adminZkClient: AdminZkClient,
                                     val log: Logging) extends QuorumImplementation {
-  override def createAndMaybeStartBroker(config: KafkaConfig,
-                                         time: Time,
-                                         startup: Boolean): KafkaBroker = {
+  override def createBroker(config: KafkaConfig,
+                            time: Time,
+                            startup: Boolean): KafkaBroker = {
     val server = new KafkaServer(config, time, None, false)
     if (startup) server.startup()
     server
@@ -75,9 +75,9 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
                                 val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                                 val clusterId: String,
                                 val log: Logging) extends QuorumImplementation {
-  override def createAndMaybeStartBroker(config: KafkaConfig,
-                                         time: Time,
-                                         startup: Boolean): KafkaBroker = {
+  override def createBroker(config: KafkaConfig,
+                            time: Time,
+                            startup: Boolean): KafkaBroker = {
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
@@ -202,7 +202,7 @@ abstract class QuorumTestHarness extends Logging {
   def createAndMaybeStartBroker(config: KafkaConfig,
                                 time: Time = Time.SYSTEM,
                                 startup: Boolean = true): KafkaBroker = {
-    implementation.createAndMaybeStartBroker(config, time, startup)
+    implementation.createBroker(config, time, startup)
   }
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()
