@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -214,6 +215,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                         } catch (final InterruptedException ex) {
                             ex.printStackTrace();
                             break;
+                        } catch (final GroupIdNotFoundException e) {
+                          log.debug("The offsets have been reset and it retied again no longer retrying");
+                          break;
                         } catch (final ExecutionException ex) {
                             if (ex.getCause() != null &&
                                 ex.getCause() instanceof GroupSubscribedToTopicException &&
