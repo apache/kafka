@@ -394,8 +394,11 @@ public class Metadata implements Closeable {
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
             Integer currentEpoch = lastSeenLeaderEpochs.get(tp);
-            if (topicId != null && oldTopicId != null && !topicId.equals(oldTopicId)) {
-                // If both topic IDs were valid and the topic ID changed, update the metadata
+            if (topicId != null && !topicId.equals(oldTopicId)) {
+                // If the new topic ID is valid and different from the last seen topic ID, update the metadata.
+                // Between the time that a topic is deleted and re-created, the client may lose track of the
+                // corresponding topicId (i.e. `oldTopicId` will be null). In this case, when we discover the new
+                // topicId, we allow the corresponding leader epoch to override the last seen value.
                 log.info("Resetting the last seen epoch of partition {} to {} since the associated topicId changed from {} to {}",
                          tp, newEpoch, oldTopicId, topicId);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
