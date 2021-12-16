@@ -284,9 +284,11 @@ public class RequestResponseTest {
             checkResponse(createSyncGroupResponse(version), version, true);
         }
 
-        checkRequest(createLeaveGroupRequest(), true);
-        checkErrorResponse(createLeaveGroupRequest(), unknownServerException, true);
-        checkResponse(createLeaveGroupResponse(), 0, true);
+        for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
+            checkRequest(createLeaveGroupRequest(version), true);
+            checkErrorResponse(createLeaveGroupRequest(version), unknownServerException, true);
+            checkResponse(createLeaveGroupResponse(), version, true);
+        }
 
         for (short version : ApiKeys.LIST_GROUPS.allVersions()) {
             checkRequest(createListGroupsRequest(version), false);
@@ -1522,11 +1524,13 @@ public class RequestResponseTest {
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
-    private LeaveGroupRequest createLeaveGroupRequest() {
-        return new LeaveGroupRequest.Builder(
-            "group1", Collections.singletonList(new MemberIdentity()
-                                                    .setMemberId("consumer1"))
-            ).build();
+    private LeaveGroupRequest createLeaveGroupRequest(short version) {
+        MemberIdentity member = new MemberIdentity()
+                .setMemberId("consumer1");
+        if (version >= 5) {
+            member.setMemberId("reason: test");
+        }
+        return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member)).build();
     }
 
     private LeaveGroupResponse createLeaveGroupResponse() {

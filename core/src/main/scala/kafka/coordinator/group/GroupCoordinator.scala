@@ -617,8 +617,9 @@ class GroupCoordinator(val brokerId: Int,
                        leavingMembers: List[MemberIdentity],
                        responseCallback: LeaveGroupResult => Unit): Unit = {
 
-    def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String, leaveReason: String): Unit = {
+    def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String, reason: Option[String]): Unit = {
       val member = group.get(memberId)
+      val leaveReason = reason.getOrElse("unknown reason")
       removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup due to: $leaveReason")
       removeHeartbeatForLeavingMember(group, member.memberId)
       info(s"Member $member has left group $groupId through explicit `LeaveGroup` request")
@@ -641,13 +642,14 @@ class GroupCoordinator(val brokerId: Int,
                 val memberErrors = leavingMembers.map { leavingMember =>
                   val memberId = leavingMember.memberId
                   val groupInstanceId = Option(leavingMember.groupInstanceId)
+                  val reason = Option(leavingMember.reason)
 
                   // The LeaveGroup API allows administrative removal of members by GroupInstanceId
                   // in which case we expect the MemberId to be undefined.
                   if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
                     groupInstanceId.flatMap(group.currentStaticMemberId) match {
                       case Some(currentMemberId) =>
-                        removeCurrentMemberFromGroup(group, currentMemberId, leavingMember.reason())
+                        removeCurrentMemberFromGroup(group, currentMemberId, reason)
                         memberLeaveError(leavingMember, Errors.NONE)
                       case None =>
                         memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
@@ -665,7 +667,7 @@ class GroupCoordinator(val brokerId: Int,
                       groupInstanceId,
                       operation = "leave-group"
                     ).getOrElse {
-                      removeCurrentMemberFromGroup(group, memberId, leavingMember.reason())
+                      removeCurrentMemberFromGroup(group, memberId, reason)
                       Errors.NONE
                     }
                     memberLeaveError(leavingMember, memberError)
