@@ -66,6 +66,7 @@ import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.Closeables;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -171,7 +172,6 @@ public class Worker {
         this.globalOffsetBackingStore.configure(config);
 
         this.workerConfigTransformer = initConfigTransformer();
-
     }
 
     private WorkerConfigTransformer initConfigTransformer() {
@@ -278,8 +278,8 @@ public class Worker {
             TargetState initialState,
             Callback<TargetState> onConnectorStateChange
     ) {
-        final ConnectorStatus.Listener connectorStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName); Closeables closeables = new Closeables()) {
+            final ConnectorStatus.Listener connectorStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
                         new ConnectException("Connector with name " + connName + " already exists"),
@@ -287,18 +287,16 @@ public class Worker {
                 return;
             }
 
+            final String connClass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass);
+            // If something fails, make sure we switch back to the connector's loader before we start
+            // deallocating resources that were instantiated with that loader
+            closeables.useLoader(connectorLoader);
             final WorkerConnector workerConnector;
-            ClassLoader savedLoader = plugins.currentThreadLoader();
-            try {
-                // By the time we arrive here, CONNECTOR_CLASS_CONFIG has been validated already
-                // Getting this value from the unparsed map will allow us to instantiate the
-                // right config (source or sink)
-                final String connClass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass);
-                savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
-
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                 log.info("Creating connector {} of type {}", connName, connClass);
                 final Connector connector = plugins.newConnector(connClass);
+                closeables.register(connector::stop, "connector " + connName);
                 final ConnectorConfig connConfig;
                 final CloseableOffsetStorageReader offsetReader;
                 final ConnectorOffsetBackingStore offsetStore;
@@ -314,19 +312,17 @@ public class Worker {
                     offsetStore = config.exactlyOnceSourceEnabled()
                             ? offsetStoreForExactlyOnceSourceConnector(sourceConfig, connName, connector)
                             : offsetStoreForRegularSourceConnector(sourceConfig, connName, connector);
+                    closeables.register(offsetStore, "offset store for " + connName);
                     offsetStore.configure(config);
                     offsetReader = new OffsetStorageReaderImpl(offsetStore, connName, internalKeyConverter, internalValueConverter);
+                    closeables.register(offsetReader, "offset reader for " + connName);
                 }
                 workerConnector = new WorkerConnector(
                         connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, offsetStore, connectorLoader);
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 workerConnector.transitionTo(initialState, onConnectorStateChange);
-                Plugins.compareAndSwapLoaders(savedLoader);
             } catch (Throwable t) {
                 log.error("Failed to start connector {}", connName, t);
-                // Can't be put in a finally block because it needs to be swapped before the call on
-                // statusListener
-                Plugins.compareAndSwapLoaders(savedLoader);
                 connectorStatusListener.onFailure(connName, t);
                 onConnectorStateChange.onCompletion(t, null);
                 return;
@@ -337,14 +333,13 @@ public class Worker {
                 onConnectorStateChange.onCompletion(
                         new ConnectException("Connector with name " + connName + " already exists"),
                         null);
-                // Don't need to do any cleanup of the WorkerConnector instance (such as calling
-                // shutdown() on it) here because it hasn't actually started running yet
                 return;
             }
 
             executor.submit(workerConnector);
 
             log.info("Finished creating connector {}", connName);
+            closeables.clear();
         }
     }
 
@@ -360,12 +355,8 @@ public class Worker {
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
 
-        ClassLoader savedLoader = plugins.currentThreadLoader();
-        try {
-            savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
             return workerConnector.isSinkConnector();
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 
@@ -387,10 +378,8 @@ public class Worker {
             int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
             Map<String, String> connOriginals = connConfig.originalsStrings();
 
-            Connector connector = workerConnector.connector();
-            ClassLoader savedLoader = plugins.currentThreadLoader();
-            try {
-                savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
+                Connector connector = workerConnector.connector();
                 String taskClassName = connector.taskClass().getName();
                 for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
                     // Ensure we don't modify the connector's copy of the config
@@ -404,8 +393,6 @@ public class Worker {
                     }
                     result.add(taskConfig);
                 }
-            } finally {
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         }
 
@@ -427,12 +414,8 @@ public class Worker {
                 return;
             }
 
-            ClassLoader savedLoader = plugins.currentThreadLoader();
-            try {
-                savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
                 workerConnector.shutdown();
-            } finally {
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         }
     }
@@ -541,8 +524,13 @@ public class Worker {
             TaskStatus.Listener statusListener,
             TargetState initialState
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
-                new SinkTaskBuilder(id, configState, statusListener, initialState));
+        try (Closeables closeables = new Closeables()) {
+            boolean started = startTask(id, connProps, taskProps, statusListener, closeables,
+                    new SinkTaskBuilder(id, configState, statusListener, initialState));
+            if (started)
+                closeables.clear();
+            return started;
+        }
     }
 
     /**
@@ -564,8 +552,13 @@ public class Worker {
             TaskStatus.Listener statusListener,
             TargetState initialState
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
-                new SourceTaskBuilder(id, configState, statusListener, initialState));
+        try (Closeables closeables = new Closeables()) {
+            boolean started = startTask(id, connProps, taskProps, statusListener, closeables,
+                    new SourceTaskBuilder(id, configState, statusListener, initialState));
+            if (started)
+                closeables.clear();
+            return started;
+        }
     }
 
     /**
@@ -592,8 +585,13 @@ public class Worker {
             Runnable preProducerCheck,
             Runnable postProducerCheck
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
-                new ExactlyOnceSourceTaskBuilder(id, configState, statusListener, initialState, preProducerCheck, postProducerCheck));
+        try (Closeables closeables = new Closeables()) {
+            boolean started = startTask(id, connProps, taskProps, statusListener, closeables,
+                    new ExactlyOnceSourceTaskBuilder(id, configState, statusListener, initialState, preProducerCheck, postProducerCheck));
+            if (started)
+                closeables.clear();
+            return started;
+        }
     }
 
     /**
@@ -606,42 +604,44 @@ public class Worker {
      * @param taskBuilder the {@link TaskBuilder} used to create the {@link WorkerTask} that manages the lifecycle of the task.
      * @return true if the task started successfully.
      */
-    private boolean startTask(
+    // Visible for testing
+    boolean startTask(
             ConnectorTaskId id,
             Map<String, String> connProps,
             Map<String, String> taskProps,
             TaskStatus.Listener statusListener,
+            Closeables closeables,
             TaskBuilder taskBuilder
     ) {
-        final WorkerTask workerTask;
-        final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
         try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
+            final WorkerTask workerTask;
+            final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
             log.info("Creating task {}", id);
 
             if (tasks.containsKey(id))
                 throw new ConnectException("Task already exists in this worker: " + id);
 
             connectorStatusMetricsGroup.recordTaskAdded(id);
-            ClassLoader savedLoader = plugins.currentThreadLoader();
-            try {
-                String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
-                savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
+            String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+            // If something fails, make sure we switch back to the connector's loader before we start
+            // deallocating resources that were instantiated with that loader
+            closeables.useLoader(connectorLoader);
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
                 final TaskConfig taskConfig = new TaskConfig(taskProps);
                 final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
                 final Task task = plugins.newTask(taskClass);
+                closeables.register(task::stop, "task " + id);
                 log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
-                // By maintaining connector's specific class loader for this thread here, we first
-                // search for converters within the connector dependencies.
+                // By maintaining the connector's specific class loader here, we first
+                // search for converters within the connector's dependencies.
                 // If any of these aren't found, that means the connector didn't configure specific converters,
                 // so we should instantiate based upon the worker configuration
                 Converter keyConverter = plugins.newConverter(connConfig, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage
                                                                                                                            .CURRENT_CLASSLOADER);
                 Converter valueConverter = plugins.newConverter(connConfig, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
-                HeaderConverter headerConverter = plugins.newHeaderConverter(connConfig, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                                             ClassLoaderUsage.CURRENT_CLASSLOADER);
                 if (keyConverter == null) {
                     keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
                     log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
@@ -654,6 +654,8 @@ public class Worker {
                 } else {
                     log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
                 }
+                HeaderConverter headerConverter = plugins.newHeaderConverter(connConfig, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                                             ClassLoaderUsage.CURRENT_CLASSLOADER);
                 if (headerConverter == null) {
                     headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, ClassLoaderUsage
                                                                                                                              .PLUGINS);
@@ -661,6 +663,7 @@ public class Worker {
                 } else {
                     log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
                 }
+                closeables.register(headerConverter, "header converter for task " + id);
 
                 workerTask = taskBuilder
                         .withTask(task)
@@ -669,15 +672,11 @@ public class Worker {
                         .withValueConverter(valueConverter)
                         .withHeaderConverter(headerConverter)
                         .withClassloader(connectorLoader)
-                        .build();
+                        .build(closeables);
 
                 workerTask.initialize(taskConfig);
-                Plugins.compareAndSwapLoaders(savedLoader);
             } catch (Throwable t) {
                 log.error("Failed to start task {}", id, t);
-                // Can't be put in a finally block because it needs to be swapped before the call on
-                // statusListener
-                Plugins.compareAndSwapLoaders(savedLoader);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
                 taskStatusListener.onFailure(id, t);
                 return false;
@@ -713,7 +712,7 @@ public class Worker {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
-            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader); Closeables closeables = new Closeables()) {
                 final SourceConnectorConfig connConfig = new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
                 final Class<? extends Connector> connClass = plugins.connectorClass(
                         connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
@@ -728,23 +727,21 @@ public class Worker {
                         kafkaClusterId,
                         ConnectorType.SOURCE);
                 final Admin admin = adminFactory.apply(adminConfig);
+                closeables.register(admin, "zombie fencing admin for " + connName);
 
-                try {
-                    Collection<String> transactionalIds = IntStream.range(0, numTasks)
-                            .mapToObj(i -> new ConnectorTaskId(connName, i))
-                            .map(this::taskTransactionalId)
-                            .collect(Collectors.toList());
-                    FenceProducersOptions fencingOptions = new FenceProducersOptions()
-                            .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
-                    return admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
-                        if (error != null)
-                            log.debug("Finished fencing out {} task producers for source connector {}", numTasks, connName);
-                        Utils.closeQuietly(admin, "Zombie fencing admin for connector " + connName);
-                    });
-                } catch (Exception e) {
+                Collection<String> transactionalIds = IntStream.range(0, numTasks)
+                        .mapToObj(i -> new ConnectorTaskId(connName, i))
+                        .map(this::taskTransactionalId)
+                        .collect(Collectors.toList());
+                FenceProducersOptions fencingOptions = new FenceProducersOptions()
+                        .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+                KafkaFuture<Void> result = admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
+                    if (error != null)
+                        log.debug("Finished fencing out {} task producers for source connector {}", numTasks, connName);
                     Utils.closeQuietly(admin, "Zombie fencing admin for connector " + connName);
-                    throw e;
-                }
+                });
+                closeables.clear();
+                return result;
             }
         }
     }
@@ -960,9 +957,11 @@ public class Worker {
 
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
                                                   ErrorHandlingMetrics errorHandlingMetrics,
-                                                  Class<? extends Connector> connectorClass) {
+                                                  Class<? extends Connector> connectorClass,
+                                                  Closeables closeables) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
+        closeables.register(logReporter, "log reporter for task " + id);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
@@ -972,7 +971,7 @@ public class Worker {
                                                                 connectorClientConfigOverridePolicy, kafkaClusterId);
             Map<String, Object> adminProps = adminConfigs(id.connector(), "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
-
+            closeables.register(reporter, "dead letter queue reporter for task " + id);
             reporters.add(reporter);
         }
 
@@ -980,12 +979,11 @@ public class Worker {
     }
 
     private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
-                                                      ErrorHandlingMetrics errorHandlingMetrics) {
-        List<ErrorReporter> reporters = new ArrayList<>();
+                                                      ErrorHandlingMetrics errorHandlingMetrics,
+                                                      Closeables closeables) {
         LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
-        reporters.add(logReporter);
-
-        return reporters;
+        closeables.register(logReporter, "log reporter for task " + id);
+        return Collections.singletonList(logReporter);
     }
 
     private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
@@ -1014,12 +1012,8 @@ public class Worker {
             if (task instanceof WorkerSourceTask)
                 sourceTaskOffsetCommitter.ifPresent(committer -> committer.remove(task.id()));
 
-            ClassLoader savedLoader = plugins.currentThreadLoader();
-            try {
-                savedLoader = Plugins.compareAndSwapLoaders(task.loader());
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(task.loader())) {
                 task.stop();
-            } finally {
-                Plugins.compareAndSwapLoaders(savedLoader);
             }
         }
     }
@@ -1137,28 +1131,19 @@ public class Worker {
 
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector != null) {
-            ClassLoader connectorLoader =
-                    plugins.delegatingLoader().connectorLoader(workerConnector.connector());
-            executeStateTransition(
-                () -> workerConnector.transitionTo(state, stateChangeCallback),
-                connectorLoader);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(workerConnector.connector());
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+                workerConnector.transitionTo(state, stateChangeCallback);
+            }
         }
 
         for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
             if (taskEntry.getKey().connector().equals(connName)) {
                 WorkerTask workerTask = taskEntry.getValue();
-                executeStateTransition(() -> workerTask.transitionTo(state), workerTask.loader);
+                try (LoaderSwap loaderSwap = plugins.withClassLoader(workerTask.loader)) {
+                    workerTask.transitionTo(state);
+                }
             }
-        }
-    }
-
-    private void executeStateTransition(Runnable stateTransition, ClassLoader loader) {
-        ClassLoader savedLoader = plugins.currentThreadLoader();
-        try {
-            savedLoader = Plugins.compareAndSwapLoaders(loader);
-            stateTransition.run();
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 
@@ -1224,7 +1209,7 @@ public class Worker {
             return this;
         }
 
-        public WorkerTask build() {
+        public WorkerTask build(Closeables closeables) {
             Objects.requireNonNull(task, "Task cannot be null");
             Objects.requireNonNull(connectorConfig, "Connector config used by task cannot be null");
             Objects.requireNonNull(keyConverter, "Key converter used by task cannot be null");
@@ -1233,15 +1218,17 @@ public class Worker {
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
+            closeables.register(errorHandlingMetrics, "error handling metrics for task " + id);
             final Class<? extends Connector> connectorClass = plugins.connectorClass(
                     connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
             RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM);
+            closeables.register(retryWithToleranceOperator, "retry-with-tolerance operator for task " + id);
             retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
-                    errorHandlingMetrics, connectorClass, retryWithToleranceOperator);
+                    errorHandlingMetrics, connectorClass, retryWithToleranceOperator, closeables);
         }
 
         abstract WorkerTask doBuild(Task task,
@@ -1256,7 +1243,8 @@ public class Worker {
                                     ClassLoader classLoader,
                                     ErrorHandlingMetrics errorHandlingMetrics,
                                     Class<? extends Connector> connectorClass,
-                                    RetryWithToleranceOperator retryWithToleranceOperator);
+                                    RetryWithToleranceOperator retryWithToleranceOperator,
+                                    Closeables closeables);
 
     }
 
@@ -1281,19 +1269,22 @@ public class Worker {
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
                            Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
+                           RetryWithToleranceOperator retryWithToleranceOperator,
+                           Closeables closeables) {
 
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
+            closeables.register(transformationChain, "transformation chain for task " + id);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
+            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass, closeables));
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverter, valueConverter, headerConverter);
 
             Map<String, Object> consumerProps = baseConsumerConfigs(
-                    id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
+                    id.connector(), "connector-consumer-" + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+            closeables.register(consumer, "consumer for task " + id);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                     valueConverter, headerConverter, transformationChain, consumer, classLoader, time,
@@ -1322,17 +1313,19 @@ public class Worker {
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
                            Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
-
+                           RetryWithToleranceOperator retryWithToleranceOperator,
+                           Closeables closeables) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics, closeables));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
+            closeables.register(transformationChain, "transformation chain for task " + id);
             log.info("Initializing: {}", transformationChain);
 
             Map<String, Object> producerProps = baseProducerConfigs(id.connector(), "connector-producer-" + id, config, sourceConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+            closeables.register(producer, "producer for task " + id);
 
             TopicAdmin topicAdmin = null;
             final boolean topicCreationEnabled = sourceConnectorTopicCreationEnabled(sourceConfig);
@@ -1340,6 +1333,7 @@ public class Worker {
                 Map<String, Object> adminOverrides = adminConfigs(id.connector(), "connector-adminclient-" + id, config,
                         sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
                 topicAdmin = new TopicAdmin(adminOverrides);
+                closeables.register(topicAdmin, "topic admin for task " + id);
             }
 
             Map<String, TopicCreationGroup> topicCreationGroups = topicCreationEnabled
@@ -1349,9 +1343,11 @@ public class Worker {
             // Set up the offset backing store for this task instance
             ConnectorOffsetBackingStore offsetStore = offsetStoreForRegularSourceTask(
                     id, sourceConfig, connectorClass, producer, producerProps, topicAdmin);
+            closeables.register(offsetStore, "offset store for task " + id);
             offsetStore.configure(config);
 
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
+            closeables.register(offsetReader, "offset reader for task " + id);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -1390,23 +1386,26 @@ public class Worker {
                                   ClassLoader classLoader,
                                   ErrorHandlingMetrics errorHandlingMetrics,
                                   Class<? extends Connector> connectorClass,
-                                  RetryWithToleranceOperator retryWithToleranceOperator) {
-
+                                  RetryWithToleranceOperator retryWithToleranceOperator,
+                                  Closeables closeables) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, sourceConfig, errorHandlingMetrics, closeables));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
+            closeables.register(transformationChain, "transformation chain for task " + id);
             log.info("Initializing: {}", transformationChain);
 
             Map<String, Object> producerProps = exactlyOnceSourceTaskProducerConfigs(
                     id, config, sourceConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+            closeables.register(producer, "producer for task " + id);
 
             // Create a topic admin that the task will use for its offsets topic and, potentially, automatic topic creation
             Map<String, Object> adminOverrides = adminConfigs(id.connector(), "connector-adminclient-" + id, config,
                     sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
             TopicAdmin topicAdmin = new TopicAdmin(adminOverrides);
+            closeables.register(topicAdmin, "topic admin for task " + id);
 
             Map<String, TopicCreationGroup> topicCreationGroups = sourceConnectorTopicCreationEnabled(sourceConfig)
                     ? TopicCreationGroup.configuredGroups(sourceConfig)
@@ -1415,16 +1414,20 @@ public class Worker {
             // Set up the offset backing store for this task instance
             ConnectorOffsetBackingStore offsetStore = offsetStoreForExactlyOnceSourceTask(
                     id, sourceConfig, connectorClass, producer, producerProps, topicAdmin);
+            closeables.register(offsetStore, "offset store for task " + id);
             offsetStore.configure(config);
 
             CloseableOffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
+            closeables.register(offsetReader, "offset reader for task " + id);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
-            return new ExactlyOnceWorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
+            ExactlyOnceWorkerSourceTask result = new ExactlyOnceWorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck);
+            closeables.clear();
+            return result;
         }
     }
 
@@ -1446,42 +1449,49 @@ public class Worker {
                 && config.connectorOffsetsTopicsPermitted();
 
         if (usesConnectorSpecificStore) {
-            Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
+            try (Closeables closeables = new Closeables()) {
+                Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
                         connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
                         connectorClientConfigOverridePolicy, kafkaClusterId);
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+                KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+                closeables.register(consumer, "consumer for " + connName);
 
-            Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
-                    sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
+                Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
+                        sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
 
-            TopicAdmin admin = new TopicAdmin(adminOverrides);
-            KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+                TopicAdmin admin = new TopicAdmin(adminOverrides);
+                closeables.register(admin, "topic admin for connector " + connName);
+                KafkaOffsetBackingStore connectorStore =
+                        KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
 
-            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
-            // an offset store that has a primary and a secondary store which both read from that same topic.
-            // So, if the user has explicitly configured the connector with a connector-specific offsets topic
-            // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
-            // offset store and build a store backed exclusively by a connector-specific offsets store.
-            // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
-            // would prevent users from being able to customize the config properties used for the Kafka clients that
-            // access the offsets topic, and we would not be able to establish reasonable defaults like setting
-            // isolation.level=read_committed for the offsets topic consumer for this connector
-            if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
-                return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                        () -> LoggingContext.forConnector(connName),
-                        connectorStore,
-                        connectorSpecificOffsetsTopic,
-                        admin
-                );
-            } else {
-                return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                        () -> LoggingContext.forConnector(connName),
-                        globalOffsetBackingStore,
-                        connectorStore,
-                        connectorSpecificOffsetsTopic,
-                        admin
-                );
+                // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+                // an offset store that has a primary and a secondary store which both read from that same topic.
+                // So, if the user has explicitly configured the connector with a connector-specific offsets topic
+                // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+                // offset store and build a store backed exclusively by a connector-specific offsets store.
+                // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+                // would prevent users from being able to customize the config properties used for the Kafka clients that
+                // access the offsets topic, and we would not be able to establish reasonable defaults like setting
+                // isolation.level=read_committed for the offsets topic consumer for this connector
+                ConnectorOffsetBackingStore result;
+                if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
+                    result = ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                            () -> LoggingContext.forConnector(connName),
+                            connectorStore,
+                            connectorSpecificOffsetsTopic,
+                            admin
+                    );
+                } else {
+                    result = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                            () -> LoggingContext.forConnector(connName),
+                            globalOffsetBackingStore,
+                            connectorStore,
+                            connectorSpecificOffsetsTopic,
+                            admin
+                    );
+                }
+                closeables.clear();
+                return result;
             }
         } else {
             return ConnectorOffsetBackingStore.withOnlyWorkerStore(
@@ -1498,47 +1508,54 @@ public class Worker {
             String connName,
             Connector connector
     ) {
-        String connectorSpecificOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
+        try (Closeables closeables = new Closeables()) {
+            String connectorSpecificOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
 
-        Map<String, Object> producerProps = baseProducerConfigs(connName, "connector-producer-" + connName, config, sourceConfig, connector.getClass(),
-                connectorClientConfigOverridePolicy, kafkaClusterId);
+            Map<String, Object> producerProps = baseProducerConfigs(connName, "connector-producer-" + connName, config, sourceConfig, connector.getClass(),
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
 
-        Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
+            Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
                     connName, "connector-consumer-" + connName, config, sourceConfig, connector.getClass(),
                     connectorClientConfigOverridePolicy, kafkaClusterId);
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+            closeables.register(consumer, "consumer for " + connName);
 
-        Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
-                sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
+            Map<String, Object> adminOverrides = adminConfigs(connName, "connector-adminclient-" + connName, config,
+                    sourceConfig, connector.getClass(), connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
+            TopicAdmin admin = new TopicAdmin(adminOverrides);
+            closeables.register(admin, "topic admin for " + connName);
 
-        TopicAdmin admin = new TopicAdmin(adminOverrides);
-        KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
+            KafkaOffsetBackingStore connectorStore =
+                    KafkaOffsetBackingStore.forConnector(connectorSpecificOffsetsTopic, consumer, admin);
 
-        // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
-        // an offset store that has a primary and a secondary store which both read from that same topic.
-        // So, even if the user has explicitly configured the connector with a connector-specific offsets topic,
-        // if we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
-        // offset store and build a store backed exclusively by a connector-specific offsets store.
-        // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
-        // would prevent users from being able to customize the config properties used for the Kafka clients that
-        // access the offsets topic, and may lead to confusion for them when tasks are created for the connector
-        // since they will all have their own dedicated offsets stores anyways
-        if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
-            return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                    () -> LoggingContext.forConnector(connName),
-                    connectorStore,
-                    connectorSpecificOffsetsTopic,
-                    admin
-            );
-        } else {
-            return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                    () -> LoggingContext.forConnector(connName),
-                    globalOffsetBackingStore,
-                    connectorStore,
-                    connectorSpecificOffsetsTopic,
-                    admin
-            );
+            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+            // an offset store that has a primary and a secondary store which both read from that same topic.
+            // So, even if the user has explicitly configured the connector with a connector-specific offsets topic,
+            // if we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+            // offset store and build a store backed exclusively by a connector-specific offsets store.
+            // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+            // would prevent users from being able to customize the config properties used for the Kafka clients that
+            // access the offsets topic, and may lead to confusion for them when tasks are created for the connector
+            // since they will all have their own dedicated offsets stores anyways
+            ConnectorOffsetBackingStore result;
+            if (sameOffsetTopicAsWorker(connectorSpecificOffsetsTopic, producerProps)) {
+                result = ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                        () -> LoggingContext.forConnector(connName),
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        admin
+                );
+            } else {
+                result = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                        () -> LoggingContext.forConnector(connName),
+                        globalOffsetBackingStore,
+                        connectorStore,
+                        connectorSpecificOffsetsTopic,
+                        admin
+                );
+            }
+            closeables.clear();
+            return result;
         }
     }
 
@@ -1554,40 +1571,46 @@ public class Worker {
         String connectorSpecificOffsetsTopic = sourceConfig.offsetsTopic();
 
         if (regularSourceTaskUsesConnectorSpecificOffsetsStore(sourceConfig)) {
-            Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when configured to use their own offsets topic");
+            try (Closeables closeables = new Closeables()) {
+                Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when configured to use their own offsets topic");
 
-            Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
-                    id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
-                    connectorClientConfigOverridePolicy, kafkaClusterId);
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+                Map<String, Object> consumerProps = regularSourceOffsetsConsumerConfigs(
+                        id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                        connectorClientConfigOverridePolicy, kafkaClusterId);
+                KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+                closeables.register(consumer, "consumer for task " + id);
 
-            KafkaOffsetBackingStore connectorStore =
-                    KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin);
+                KafkaOffsetBackingStore connectorStore =
+                        KafkaOffsetBackingStore.forTask(sourceConfig.offsetsTopic(), producer, consumer, topicAdmin);
 
-            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
-            // an offset store that has a primary and a secondary store which both read from that same topic.
-            // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
-            // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
-            // offset store and build a store backed exclusively by a connector-specific offsets store.
-            // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
-            // would prevent users from being able to customize the config properties used for the Kafka clients that
-            // access the offsets topic, and we would not be able to establish reasonable defaults like setting
-            // isolation.level=read_committed for the offsets topic consumer for this task
-            if (sameOffsetTopicAsWorker(sourceConfig.offsetsTopic(), producerProps)) {
-                return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                        () -> LoggingContext.forTask(id),
-                        connectorStore,
-                        connectorSpecificOffsetsTopic,
-                        topicAdmin
-                );
-            } else {
-                return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                        () -> LoggingContext.forTask(id),
-                        globalOffsetBackingStore,
-                        connectorStore,
-                        connectorSpecificOffsetsTopic,
-                        topicAdmin
-                );
+                // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+                // an offset store that has a primary and a secondary store which both read from that same topic.
+                // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
+                // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+                // offset store and build a store backed exclusively by a connector-specific offsets store.
+                // It may seem reasonable to instead build a store backed exclusively by the worker-global offset store, but that
+                // would prevent users from being able to customize the config properties used for the Kafka clients that
+                // access the offsets topic, and we would not be able to establish reasonable defaults like setting
+                // isolation.level=read_committed for the offsets topic consumer for this task
+                ConnectorOffsetBackingStore result;
+                if (sameOffsetTopicAsWorker(sourceConfig.offsetsTopic(), producerProps)) {
+                    result = ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                            () -> LoggingContext.forTask(id),
+                            connectorStore,
+                            connectorSpecificOffsetsTopic,
+                            topicAdmin
+                    );
+                } else {
+                    result = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                            () -> LoggingContext.forTask(id),
+                            globalOffsetBackingStore,
+                            connectorStore,
+                            connectorSpecificOffsetsTopic,
+                            topicAdmin
+                    );
+                }
+                closeables.clear();
+                return result;
             }
         } else {
             return ConnectorOffsetBackingStore.withOnlyWorkerStore(
@@ -1607,41 +1630,47 @@ public class Worker {
             Map<String, Object> producerProps,
             TopicAdmin topicAdmin
     ) {
-        Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when exactly-once support is enabled");
+        try (Closeables closeables = new Closeables()) {
+            Objects.requireNonNull(topicAdmin, "Source tasks require a non-null topic admin when exactly-once support is enabled");
 
-        Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
-                id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
-                connectorClientConfigOverridePolicy, kafkaClusterId);
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+            Map<String, Object> consumerProps = exactlyOnceSourceOffsetsConsumerConfigs(
+                    id.connector(), "connector-consumer-" + id, config, sourceConfig, connectorClass,
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
+            closeables.register(consumer, "consumer for task " + id);
 
-        String connectorOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
+            String connectorOffsetsTopic = Optional.ofNullable(sourceConfig.offsetsTopic()).orElse(config.offsetsTopic());
 
-        KafkaOffsetBackingStore connectorStore =
-                KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin);
+            KafkaOffsetBackingStore connectorStore =
+                    KafkaOffsetBackingStore.forTask(connectorOffsetsTopic, producer, consumer, topicAdmin);
 
-        // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
-        // an offset store that has a primary and a secondary store which both read from that same topic.
-        // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
-        // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
-        // offset store and build a store backed exclusively by a connector-specific offsets store.
-        // We cannot under any circumstances build an offset store backed exclusively by the worker-global offset store
-        // as that would prevent us from being able to write source records and source offset information for the task
-        // with the same producer, and therefore, in the same transaction.
-        if (sameOffsetTopicAsWorker(connectorOffsetsTopic, producerProps)) {
-            return ConnectorOffsetBackingStore.withOnlyConnectorStore(
-                    () -> LoggingContext.forTask(id),
-                    connectorStore,
-                    connectorOffsetsTopic,
-                    topicAdmin
-            );
-        } else {
-            return ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                    () -> LoggingContext.forTask(id),
-                    globalOffsetBackingStore,
-                    connectorStore,
-                    connectorOffsetsTopic,
-                    topicAdmin
-            );
+            // If the connector's offsets topic is the same as the worker-global offsets topic, there's no need to construct
+            // an offset store that has a primary and a secondary store which both read from that same topic.
+            // So, if the user has (implicitly or explicitly) configured the connector with a connector-specific offsets topic
+            // but we know that that topic is the same as the worker-global offsets topic, we ignore the worker-global
+            // offset store and build a store backed exclusively by a connector-specific offsets store.
+            // We cannot under any circumstances build an offset store backed exclusively by the worker-global offset store
+            // as that would prevent us from being able to write source records and source offset information for the task
+            // with the same producer, and therefore, in the same transaction.
+            ConnectorOffsetBackingStore result;
+            if (sameOffsetTopicAsWorker(connectorOffsetsTopic, producerProps)) {
+                result = ConnectorOffsetBackingStore.withOnlyConnectorStore(
+                        () -> LoggingContext.forTask(id),
+                        connectorStore,
+                        connectorOffsetsTopic,
+                        topicAdmin
+                );
+            } else {
+                result = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+                        () -> LoggingContext.forTask(id),
+                        globalOffsetBackingStore,
+                        connectorStore,
+                        connectorOffsetsTopic,
+                        topicAdmin
+                );
+            }
+            closeables.clear();
+            return result;
         }
     }
 

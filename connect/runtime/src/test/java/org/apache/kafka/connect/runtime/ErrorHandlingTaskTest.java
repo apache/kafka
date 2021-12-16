@@ -248,7 +248,7 @@ public class ErrorHandlingTaskTest {
 
         workerSinkTask.initialize(TASK_CONFIG);
         workerSinkTask.initializeAndStart();
-        workerSinkTask.close();
+        workerSinkTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -271,7 +271,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
-        workerSourceTask.close();
+        workerSourceTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -299,7 +299,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
-        workerSourceTask.close();
+        workerSourceTask.doClose();
 
         PowerMock.verifyAll();
     }

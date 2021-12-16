@@ -21,6 +21,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
@@ -42,6 +44,9 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.LogReporter;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -58,6 +63,7 @@ import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
+import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -130,6 +136,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -304,7 +311,7 @@ public class WorkerTest extends ThreadedTest {
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
 
         // Create
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(connectorClass)).thenReturn(pluginLoader);
         when(plugins.newConnector(connectorClass)).thenReturn(sourceConnector);
@@ -350,8 +357,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).delegatingLoader();
         verify(delegatingLoader).connectorLoader(connectorClass);
         verify(plugins).newConnector(connectorClass);
@@ -386,7 +391,7 @@ public class WorkerTest extends ThreadedTest {
 
         Exception exception = new ConnectException("Failed to find Connector");
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(nonConnectorClass)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(delegatingLoader);
@@ -418,7 +423,6 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 1, 1, 0, 0);
 
-        verify(plugins).currentThreadLoader();
         verify(plugins).delegatingLoader();
         verify(plugins).delegatingLoader();
         verify(delegatingLoader).connectorLoader(nonConnectorClass);
@@ -432,7 +436,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddConnectorByAlias() throws Throwable {
         final String connectorAlias = "SampleSourceConnector";
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(plugins.newConnector(connectorAlias)).thenReturn(sinkConnector);
         when(delegatingLoader.connectorLoader(connectorAlias)).thenReturn(pluginLoader);
@@ -469,7 +473,6 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 1, 0, 0, 0);
 
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).delegatingLoader();
         verify(plugins).newConnector(connectorAlias);
         verify(delegatingLoader).connectorLoader(connectorAlias);
@@ -489,7 +492,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddConnectorByShortAlias() throws Throwable {
         final String shortConnectorAlias = "WorkerTest";
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(plugins.newConnector(shortConnectorAlias)).thenReturn(sinkConnector);
         when(delegatingLoader.connectorLoader(shortConnectorAlias)).thenReturn(pluginLoader);
@@ -520,7 +523,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).delegatingLoader();
         verify(plugins).newConnector(shortConnectorAlias);
         verify(sinkConnector, times(2)).version();
@@ -550,7 +552,7 @@ public class WorkerTest extends ThreadedTest {
     public void testReconfigureConnectorTasks() throws Throwable {
         final String connectorClass = SampleSourceConnector.class.getName();
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(connectorClass)).thenReturn(pluginLoader);
         when(plugins.newConnector(connectorClass)).thenReturn(sinkConnector);
@@ -612,7 +614,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-        verify(plugins, times(3)).currentThreadLoader();
         verify(plugins).delegatingLoader();
         verify(delegatingLoader).connectorLoader(connectorClass);
         verify(plugins).newConnector(connectorClass);
@@ -632,7 +633,7 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testAddRemoveSourceTask() {
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
 
@@ -665,7 +666,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).newTask(TestSourceTask.class);
         verify(task).version();
         verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
@@ -685,7 +685,7 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testAddRemoveSinkTask() {
         // Most of the other cases use source tasks; we make sure to get code coverage for sink tasks here as well
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(SampleSinkConnector.class.getName())).thenReturn(pluginLoader);
 
@@ -723,7 +723,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).newTask(TestSinkTask.class);
         verify(task).version();
         verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
@@ -759,9 +758,9 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
         config = new DistributedConfig(workerProps);
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
+        expectLoaderSwap();
 
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
@@ -795,7 +794,6 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
-        verify(plugins, times(2)).currentThreadLoader();
         verify(plugins).newTask(TestSourceTask.class);
         verify(task).version();
         verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
@@ -818,8 +816,7 @@ public class WorkerTest extends ThreadedTest {
         mockStorage();
         mockFileConfigProvider();
 
-
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
 
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
@@ -908,7 +905,6 @@ public class WorkerTest extends ThreadedTest {
         verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
         verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
         verifyTaskHeaderConverter();
-        verify(plugins, times(2)).currentThreadLoader();
     }
 
     @Test
@@ -948,7 +944,7 @@ public class WorkerTest extends ThreadedTest {
 
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
 
@@ -979,7 +975,7 @@ public class WorkerTest extends ThreadedTest {
         mockStorage();
         mockFileConfigProvider();
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
 
@@ -1023,7 +1019,6 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
         verify(plugins).newTask(TestSourceTask.class);
-        verify(plugins, times(2)).currentThreadLoader();
 
         verify(plugins).delegatingLoader();
         verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
@@ -1044,7 +1039,7 @@ public class WorkerTest extends ThreadedTest {
         mockStorage();
         mockFileConfigProvider();
 
-        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        expectLoaderSwap();
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
         TaskConfig taskConfig = new TaskConfig(origProps);
 
@@ -1071,7 +1066,6 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
-
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
@@ -1096,7 +1090,6 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask instantiatedTask = sourceTaskMockedConstruction.constructed().get(0);
         verify(instantiatedTask).initialize(taskConfig);
         verify(executorService).submit(any(WorkerSourceTask.class));
-        verify(plugins).delegatingLoader();
         verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
@@ -1107,7 +1100,6 @@ public class WorkerTest extends ThreadedTest {
         verify(instantiatedTask).awaitStop(anyLong());
         verify(instantiatedTask).removeMetrics();
 
-        verify(plugins, times(2)).currentThreadLoader();
         verifyStorage();
     }
 
@@ -2016,6 +2008,130 @@ public class WorkerTest extends ThreadedTest {
         public void stop() {
         }
 
+    }
+
+    @Test
+    public void testCloseableResourcesTrackedWhileInstantiatingSourceTask() {
+        ClusterConfigState configState = mock(ClusterConfigState.class);
+        Map<String, String> connProps = anyConnectorConfigMap();
+        WorkerMetricsGroup.TaskStatusListener statusListener = mock(WorkerMetricsGroup.TaskStatusListener.class);
+
+        expectLoaderSwap();
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(anyString())).thenReturn(pluginLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        when(plugins.newTask(any())).thenReturn(task);
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
+        mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
+
+        Map<String, String> taskProps = new HashMap<>(connProps);
+        taskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+
+        worker = new Worker(
+                WORKER_ID,
+                new MockTime(),
+                plugins,
+                config,
+                offsetBackingStore,
+                noneConnectorClientConfigOverridePolicy
+        );
+        worker.herder = herder;
+        worker.start();
+
+        TestCloseables closeables = new TestCloseables();
+        assertTrue("Failed to start task", worker.startTask(
+                TASK_ID, connProps, taskProps, statusListener, closeables,
+                worker.new SourceTaskBuilder(TASK_ID, configState, statusListener, TargetState.STARTED)
+        ));
+
+        Map<Class<? extends AutoCloseable>, Integer> expectedCloseableResources = new HashMap<>();
+        expectedCloseableResources.put(OffsetStorageReaderImpl.class, 1);
+        if (enableTopicCreation) {
+            expectedCloseableResources.put(TopicAdmin.class, 1);
+        }
+        expectedCloseableResources.put(RetryWithToleranceOperator.class, 1);
+        expectedCloseableResources.put(KafkaProducer.class, 1);
+        expectedCloseableResources.put(TransformationChain.class, 1);
+        expectedCloseableResources.put(ErrorHandlingMetrics.class, 1);
+        expectedCloseableResources.put(LogReporter.class, 1);
+        expectedCloseableResources.put(ConnectorOffsetBackingStore.class, 1);
+        expectedCloseableResources.put(taskHeaderConverter.getClass(), 1);
+
+        expectedCloseableResources.forEach((klass, count) ->
+            assertEquals(
+                    "class " + klass + " was not registered the expected number of times",
+                    count,
+                    closeables.registered().remove(klass)
+            )
+        );
+        assertEquals("one anonymous lambda/method reference should also have been registered", 1, closeables.registered().size());
+    }
+
+    @Test
+    public void testCloseableResourcesTrackedWhileInstantiatingSinkTask() {
+        if (enableTopicCreation) {
+            return;
+        }
+
+        ClusterConfigState configState = mock(ClusterConfigState.class);
+        Map<String, String> connProps = anyConnectorConfigMap();
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+        WorkerMetricsGroup.TaskStatusListener statusListener = mock(WorkerMetricsGroup.TaskStatusListener.class);
+
+        expectLoaderSwap();
+        doReturn(SampleSinkConnector.class).when(plugins).connectorClass(SampleSinkConnector.class.getName());
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(anyString())).thenReturn(pluginLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        when(plugins.newTask(any())).thenReturn(new TestSinkTask());
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
+        mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
+
+        Map<String, String> taskProps = new HashMap<>(connProps);
+        taskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
+
+        worker = new Worker(
+                WORKER_ID,
+                new MockTime(),
+                plugins,
+                config,
+                offsetBackingStore,
+                noneConnectorClientConfigOverridePolicy
+        );
+        worker.herder = herder;
+        worker.start();
+
+        TestCloseables closeables = new TestCloseables();
+        assertTrue("Failed to start task", worker.startTask(
+                TASK_ID, connProps, taskProps, statusListener, closeables,
+                worker.new SinkTaskBuilder(TASK_ID, configState, statusListener, TargetState.STARTED)
+        ));
+
+        Map<Class<? extends AutoCloseable>, Integer> expectedCloseableResources = new HashMap<>();
+        expectedCloseableResources.put(TransformationChain.class, 1);
+        expectedCloseableResources.put(RetryWithToleranceOperator.class, 1);
+        expectedCloseableResources.put(KafkaConsumer.class, 1);
+        expectedCloseableResources.put(ErrorHandlingMetrics.class, 1);
+        expectedCloseableResources.put(LogReporter.class, 1);
+        expectedCloseableResources.put(taskHeaderConverter.getClass(), 1);
+
+        expectedCloseableResources.forEach((klass, count) ->
+            assertEquals(
+                    "class " + klass + " was not registered the expected number of times",
+                    count,
+                    closeables.registered().remove(klass)
+            )
+        );
+        assertEquals("one anonymous lambda/method reference should also have been registered", 1, closeables.registered().size());
+    }
+
+    private void expectLoaderSwap() {
+        doCallRealMethod().when(plugins).withClassLoader(any());
     }
 
 }

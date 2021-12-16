@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
  * if the task fails at the same time. To protect from these cases, we synchronize status updates
  * using the WorkerTask's monitor.
  */
-abstract class WorkerTask implements Runnable {
+abstract class WorkerTask implements Runnable, AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
@@ -153,7 +153,7 @@ abstract class WorkerTask implements Runnable {
 
     protected abstract void execute();
 
-    protected abstract void close();
+    protected abstract void doClose();
 
     protected boolean isStopping() {
         return stopping;
@@ -163,9 +163,10 @@ abstract class WorkerTask implements Runnable {
         return cancelled;
     }
 
-    private void doClose() {
+    @Override
+    public void close() {
         try {
-            close();
+            doClose();
         } catch (Throwable t) {
             log.error("{} Task threw an uncaught and unrecoverable exception during shutdown", this, t);
             throw t;
@@ -197,7 +198,7 @@ abstract class WorkerTask implements Runnable {
                 throw t;
             }
         } finally {
-            doClose();
+            close();
         }
     }
 

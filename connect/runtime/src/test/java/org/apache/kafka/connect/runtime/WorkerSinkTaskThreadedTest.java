@@ -175,7 +175,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             workerTask.iteration();
         }
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         // Verify contents match expected values, i.e. that they were translated properly. With max
         // batch size 1 and poll returns 1 message at a time, we should have a matching # of batches
@@ -224,7 +224,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Commit finishes synchronously for testing so we can check this immediately
         assertEquals(0, workerTask.commitFailures());
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         assertEquals(2, capturedRecords.getValues().size());
 
@@ -265,7 +265,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -307,7 +307,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -340,7 +340,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -377,7 +377,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         assertEquals(1, workerTask.commitFailures());
         assertEquals(false, Whitebox.getInternalState(workerTask, "committing"));
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -439,7 +439,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -477,7 +477,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }
@@ -503,7 +503,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask.iteration();
         workerTask.iteration();
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }

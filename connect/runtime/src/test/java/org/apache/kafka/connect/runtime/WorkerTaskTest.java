@@ -94,7 +94,7 @@ public class WorkerTaskTest {
                 .addMockedMethod("initialize")
                 .addMockedMethod("initializeAndStart")
                 .addMockedMethod("execute")
-                .addMockedMethod("close")
+                .addMockedMethod("doClose")
                 .createStrictMock();
 
         workerTask.initialize(TASK_CONFIG);
@@ -109,7 +109,7 @@ public class WorkerTaskTest {
         statusListener.onStartup(taskId);
         expectLastCall();
 
-        workerTask.close();
+        workerTask.doClose();
         expectLastCall();
 
         statusListener.onShutdown(taskId);
@@ -144,13 +144,13 @@ public class WorkerTaskTest {
                         retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
                 .addMockedMethod("initialize")
                 .addMockedMethod("execute")
-                .addMockedMethod("close")
+                .addMockedMethod("doClose")
                 .createStrictMock();
 
         workerTask.initialize(TASK_CONFIG);
         EasyMock.expectLastCall();
 
-        workerTask.close();
+        workerTask.doClose();
         EasyMock.expectLastCall();
 
         replay(workerTask);
@@ -185,7 +185,7 @@ public class WorkerTaskTest {
                 .addMockedMethod("initialize")
                 .addMockedMethod("initializeAndStart")
                 .addMockedMethod("execute")
-                .addMockedMethod("close")
+                .addMockedMethod("doClose")
                 .createStrictMock();
 
         final CountDownLatch stopped = new CountDownLatch(1);
@@ -211,7 +211,7 @@ public class WorkerTaskTest {
         statusListener.onStartup(taskId);
         expectLastCall();
 
-        workerTask.close();
+        workerTask.doClose();
         expectLastCall();
 
         // there should be no call to onShutdown()
