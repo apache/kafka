@@ -49,7 +49,7 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
     /**
      * Sets an optional reason.
      */
-    public void setReason(final String reason) {
+    public void reason(final String reason) {
         this.reason = reason;
     }
 
