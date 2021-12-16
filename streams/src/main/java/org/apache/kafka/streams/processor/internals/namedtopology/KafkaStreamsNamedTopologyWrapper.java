@@ -216,7 +216,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             ex.printStackTrace();
                             break;
                         } catch (final GroupIdNotFoundException e) {
-                          log.debug("The offsets have been reset and it retied again no longer retrying");
+                          log.debug("The offsets have been reset and it retied again, no longer retrying.");
                           break;
                         } catch (final ExecutionException ex) {
                             if (ex.getCause() != null &&
