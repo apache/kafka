@@ -312,7 +312,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
-        state.initializePrevTasks(emptyMap());
+        state.initializePrevTasks(emptyMap(), false);
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
         assertEquivalentAssignment(
@@ -342,7 +342,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
-        state.initializePrevTasks(emptyMap());
+        state.initializePrevTasks(emptyMap(), false);
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
         // We should be able to add a new task without sacrificing stickiness
@@ -378,7 +378,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_1, getTaskOffsetSums(asList(TASK_0_0, TASK_1_1, TASK_1_3), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
-        state.initializePrevTasks(emptyMap());
+        state.initializePrevTasks(emptyMap(), false);
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
         // Consumer 3 leaves the group
@@ -421,7 +421,7 @@ public class StreamsPartitionAssignorTest {
         consumers.add(CONSUMER_4);
         state.addPreviousTasksAndOffsetSums(CONSUMER_4, getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS));
 
-        state.initializePrevTasks(emptyMap());
+        state.initializePrevTasks(emptyMap(), false);
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
         final Map<String, List<TaskId>> assignment = assignTasksToThreads(

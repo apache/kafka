@@ -146,6 +146,7 @@ class ReplicaManagerConcurrencyTest {
     props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.NodeIdProp, localId.toString)
+    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
     props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
 

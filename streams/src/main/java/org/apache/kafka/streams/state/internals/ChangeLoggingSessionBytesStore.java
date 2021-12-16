@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -32,13 +33,15 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * updates to a changelog
  */
 class ChangeLoggingSessionBytesStore
-    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
-    implements SessionStore<Bytes, byte[]> {
+        extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+        implements SessionStore<Bytes, byte[]> {
 
     private InternalProcessorContext context;
+    private Position position;
 
     ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
+        this.position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -80,14 +83,16 @@ class ChangeLoggingSessionBytesStore
 
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
+        StoreQueryUtils.updatePosition(position, context);
         wrapped().remove(sessionKey);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp(), position);
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        StoreQueryUtils.updatePosition(position, context);
         wrapped().put(sessionKey, aggregate);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp(), position);
     }
 
     @Override

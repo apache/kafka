@@ -917,7 +917,7 @@ public class SslTransportLayerTest {
 
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
-            String node = "0";
+            String node = String.valueOf(i);
             TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
             serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
@@ -934,6 +934,14 @@ public class SslTransportLayerTest {
             selector.close();
             serverChannelBuilder.close();
         }
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPeerNotifiedOfHandshakeFailureWithClientSideDelay(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        verifySslConfigsWithHandshakeFailure(args, 1);
     }
 
     @ParameterizedTest
@@ -1299,12 +1307,16 @@ public class SslTransportLayerTest {
     }
 
     private void verifySslConfigsWithHandshakeFailure(Args args) throws Exception {
+        verifySslConfigsWithHandshakeFailure(args, 0);
+    }
+
+    private void verifySslConfigsWithHandshakeFailure(Args args, int pollDelayMs) throws Exception {
         server = createEchoServer(args, SecurityProtocol.SSL);
         createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         String node = "0";
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED, pollDelayMs);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -1418,6 +1430,8 @@ public class SslTransportLayerTest {
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
+                if (!buf.hasRemaining())
+                    return super.flush(buf);
                 if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
                     flushFailureAction.run();
                 else if (numDelayedFlushesRemaining.getAndDecrement() != 0)
