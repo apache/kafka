@@ -213,7 +213,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
       throw new KafkaException("Must supply at least one server config.")
     for(i <- _brokers.indices if !alive(i)) {
       if (reconfigure) {
-        _brokers(i) = createBroker(configs(i))
+        _brokers(i) = createBrokerFromConfig(configs(i))
       }
       _brokers(i).startup()
       alive(i) = true
@@ -263,7 +263,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs) {
-      val broker = createBroker(config)
+      val broker = createBrokerFromConfig(config)
       _brokers += broker
       if (startup) {
         broker.startup()
@@ -274,9 +274,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     Arrays.fill(alive, startup)
   }
 
-  private def createBroker(config: KafkaConfig) = {
+  private def createBrokerFromConfig(config: KafkaConfig) = {
     if (isKRaftTest()) {
-      createAndMaybeStartBroker(config, brokerTime(config.brokerId), startup = false)
+      createBroker(config, brokerTime(config.brokerId), startup = false)
     } else {
       TestUtils.createServer(
         config,

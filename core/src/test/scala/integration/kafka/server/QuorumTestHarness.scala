@@ -199,9 +199,9 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  def createAndMaybeStartBroker(config: KafkaConfig,
-                                time: Time = Time.SYSTEM,
-                                startup: Boolean = true): KafkaBroker = {
+  def createBroker(config: KafkaConfig,
+                   time: Time = Time.SYSTEM,
+                   startup: Boolean = true): KafkaBroker = {
     implementation.createBroker(config, time, startup)
   }
 
