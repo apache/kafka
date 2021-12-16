@@ -3936,7 +3936,7 @@ public class KafkaAdminClientTest {
             Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
 
             RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(membersToRemove);
-            options.reason("testing remove members reason");
+            options.setReason("testing remove members reason");
 
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
                     GROUP_ID, options);
