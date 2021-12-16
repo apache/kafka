@@ -379,6 +379,7 @@ public class MetadataTest {
         MetadataResponse metadataResponse = emptyMetadataResponse();
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
+        // Start with a Topic topic-1 with a random topic ID
         Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
@@ -389,7 +390,7 @@ public class MetadataTest {
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
-        // Create topic-1 again but this time with a topic ID bar. LeaderEpoch should be updated to new even if lower.
+        // Create topic-1 again but this time with a different topic ID. LeaderEpoch should be updated to new even if lower.
         Map<String, Uuid> newTopicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 5, newTopicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
@@ -409,7 +410,7 @@ public class MetadataTest {
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
         assertEquals(Optional.of(100), metadata.lastSeenLeaderEpoch(tp));
 
-        // If the Older topic Id is null, we should go with the new TopicId as the leader Epoch
+        // If the older topic ID is null, we should go with the new topic ID as the leader epoch
         metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 2L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));

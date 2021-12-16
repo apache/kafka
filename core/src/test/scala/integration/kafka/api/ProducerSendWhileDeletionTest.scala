@@ -58,7 +58,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
             new TopicPartition(topic, 1) -> Seq(1, 0)
         )
 
-        // Change leader to 1 for both the partitions to increase leader Epoch from 0 -> 1
+        // Change leader to 1 for both the partitions to increase leader epoch from 0 -> 1
         zkClient.createPartitionReassignment(reassignment)
         TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
             "failed to remove reassign partitions path after completion")
