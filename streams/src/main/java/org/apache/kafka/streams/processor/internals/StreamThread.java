@@ -1141,6 +1141,11 @@ public class StreamThread extends Thread {
         topologyMetadata.unregisterThread(threadMetadata.threadName());
 
         try {
+            topologyMetadata.unregisterThread(threadMetadata.threadName());
+        } catch (final Throwable e) {
+            log.error("Failed to unregister thread due to the following error:", e);
+        }
+        try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);

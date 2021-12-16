@@ -138,6 +138,7 @@ public class TopologyMetadata {
 
     public void unregisterThread(final String threadName) {
         threadVersions.remove(threadName);
+        maybeNotifyTopologyVersionWaiters(threadName);
     }
 
     public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
