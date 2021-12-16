@@ -215,9 +215,6 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                         } catch (final InterruptedException ex) {
                             ex.printStackTrace();
                             break;
-                        } catch (final GroupIdNotFoundException e) {
-                          log.debug("The offsets have been reset and it retied again, no longer retrying.");
-                          break;
                         } catch (final ExecutionException ex) {
                             if (ex.getCause() != null &&
                                 ex.getCause() instanceof GroupSubscribedToTopicException &&
@@ -225,6 +222,10 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                     .getMessage()
                                     .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
                                 ex.printStackTrace();
+                            } else if (ex.getCause() != null &&
+                                ex.getCause() instanceof GroupIdNotFoundException) {
+                                log.debug("The offsets have been reset and it retied again, no longer retrying.");
+                                break;
                             } else {
                                 future.completeExceptionally(ex);
                             }
