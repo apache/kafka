@@ -49,7 +49,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -387,19 +386,17 @@ public class IQv2StoreIntegrationTest {
             }
 
             if (storeToTest.global()) {
-                builder
-                    .globalTable(
-                        INPUT_TOPIC_NAME,
-                        Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized
-                    );
+                builder.globalTable(
+                    INPUT_TOPIC_NAME,
+                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                    materialized
+                );
             } else {
-                builder
-                    .table(
-                        INPUT_TOPIC_NAME,
-                        Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized
-                    );
+                builder.table(
+                    INPUT_TOPIC_NAME,
+                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                    materialized
+                );
             }
         } else if (supplier instanceof WindowBytesStoreSupplier) {
             final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
@@ -417,14 +414,15 @@ public class IQv2StoreIntegrationTest {
                 materialized.withCachingDisabled();
             }
 
-            builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                   .groupByKey()
-                   .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
-                   .aggregate(
-                       () -> 0,
-                       (key, value, aggregate) -> aggregate + value,
-                       materialized
-                   );
+            builder
+                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+                .groupByKey()
+                .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
+                .aggregate(
+                    () -> 0,
+                    (key, value, aggregate) -> aggregate + value,
+                    materialized
+                );
         } else if (supplier instanceof SessionBytesStoreSupplier) {
             final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
                 Materialized.as((SessionBytesStoreSupplier) supplier);
@@ -441,15 +439,16 @@ public class IQv2StoreIntegrationTest {
                 materialized.withCachingDisabled();
             }
 
-            builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                   .groupByKey()
-                   .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
-                   .aggregate(
-                       () -> 0,
-                       (key, value, aggregate) -> aggregate + value,
-                       (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                       materialized
-                   );
+            builder
+                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
+                .aggregate(
+                    () -> 0,
+                    (key, value, aggregate) -> aggregate + value,
+                    (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                    materialized
+                );
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -488,19 +487,14 @@ public class IQv2StoreIntegrationTest {
 
             if (storeToTest.keyValue()) {
                 if (storeToTest.timestamped()) {
-                    shouldHandleKeyQuery(
-                        2,
-                        (Function<ValueAndTimestamp<Integer>, Integer>) ValueAndTimestamp::value,
-                        2
-                    );
-                    shouldHandleRangeQueries((Function<ValueAndTimestamp<Integer>, Integer>) ValueAndTimestamp::value);
+                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                        ValueAndTimestamp::value;
+                    shouldHandleKeyQuery(2, valueExtractor, 2);
+                    shouldHandleRangeQueries(valueExtractor);
                 } else {
-                    shouldHandleKeyQuery(
-                        2,
-                        Function.identity(),
-                        2
-                    );
-                    shouldHandleRangeQueries(Function.identity());
+                    final Function<Integer, Integer> valueExtractor = Function.identity();
+                    shouldHandleKeyQuery(2, valueExtractor, 2);
+                    shouldHandleRangeQueries(valueExtractor);
                 }
             }
         }
