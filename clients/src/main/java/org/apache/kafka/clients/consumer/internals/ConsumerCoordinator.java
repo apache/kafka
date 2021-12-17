@@ -769,7 +769,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
-            if (currentGeneration.equals(Generation.NO_GENERATION) || rebalanceInProgress()) {
+            if ((currentGeneration.generationId == Generation.NO_GENERATION.generationId ||
+                currentGeneration.memberId.equals(Generation.NO_GENERATION.memberId)) ||
+                rebalanceInProgress()) {
                 e = invokePartitionsLost(droppedPartitions);
             } else {
                 e = invokePartitionsRevoked(droppedPartitions);
