@@ -49,12 +49,12 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.PingQuery;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -305,7 +305,6 @@ public class IQv2StoreIntegrationTest {
         final boolean cache,
         final boolean log,
         final String storeToTest) {
-
         this.cache = cache;
         this.log = log;
         this.storeToTest = StoresToTest.valueOf(storeToTest);
@@ -392,13 +391,15 @@ public class IQv2StoreIntegrationTest {
                     .globalTable(
                         INPUT_TOPIC_NAME,
                         Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized);
+                        materialized
+                    );
             } else {
                 builder
                     .table(
                         INPUT_TOPIC_NAME,
                         Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                        materialized);
+                        materialized
+                    );
             }
         } else if (supplier instanceof WindowBytesStoreSupplier) {
             final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
@@ -417,12 +418,13 @@ public class IQv2StoreIntegrationTest {
             }
 
             builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                .groupByKey()
-                .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    materialized);
+                   .groupByKey()
+                   .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
+                   .aggregate(
+                       () -> 0,
+                       (key, value, aggregate) -> aggregate + value,
+                       materialized
+                   );
         } else if (supplier instanceof SessionBytesStoreSupplier) {
             final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
                 Materialized.as((SessionBytesStoreSupplier) supplier);
@@ -440,13 +442,14 @@ public class IQv2StoreIntegrationTest {
             }
 
             builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                .groupByKey()
-                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                    materialized);
+                   .groupByKey()
+                   .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
+                   .aggregate(
+                       () -> 0,
+                       (key, value, aggregate) -> aggregate + value,
+                       (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                       materialized
+                   );
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -480,7 +483,6 @@ public class IQv2StoreIntegrationTest {
             globalShouldRejectAllQueries();
         } else {
             shouldRejectUnknownQuery();
-            shouldHandlePingQuery();
             shouldCollectExecutionInfo();
             shouldCollectExecutionInfoUnderFailure();
 
@@ -539,10 +541,11 @@ public class IQv2StoreIntegrationTest {
     private void globalShouldRejectAllQueries() {
         // See KAFKA-13523
 
-        final PingQuery query = new PingQuery();
-        final StateQueryRequest<Boolean> request = inStore(STORE_NAME).withQuery(query);
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+            inStore(STORE_NAME).withQuery(query);
 
-        final StateQueryResult<Boolean> result = kafkaStreams.query(request);
+        final StateQueryResult<ValueAndTimestamp<Integer>> result = kafkaStreams.query(request);
 
         assertThat(result.getGlobalResult().isFailure(), is(true));
         assertThat(result.getGlobalResult().getFailureReason(),
@@ -582,42 +585,6 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.getExecutionInfo(), is(empty()));
             }
         );
-    }
-
-    public void shouldHandlePingQuery() {
-
-        final PingQuery query = new PingQuery();
-        final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<Boolean> request =
-            inStore(STORE_NAME)
-                .withQuery(query)
-                .withPartitions(partitions)
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
-
-        final StateQueryResult<Boolean> result =
-            IntegrationTestUtils.iqv2WaitForResult(
-                kafkaStreams,
-                request
-            );
-
-        makeAssertions(
-            partitions,
-            result,
-            queryResult -> {
-                final boolean failure = queryResult.isFailure();
-                if (failure) {
-                    assertThat(queryResult.toString(), failure, is(false));
-                }
-                assertThat(queryResult.isSuccess(), is(true));
-
-                assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-                assertThrows(IllegalArgumentException.class, queryResult::getFailureMessage);
-
-                assertThat(queryResult.getResult(), is(true));
-
-                assertThat(queryResult.getExecutionInfo(), is(empty()));
-            });
-        assertThat(result.getPosition(), is(INPUT_POSITION));
     }
 
     public <V> void shouldHandleRangeQuery(
@@ -717,16 +684,16 @@ public class IQv2StoreIntegrationTest {
 
     public void shouldCollectExecutionInfo() {
 
-        final PingQuery query = new PingQuery();
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<Boolean> request =
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .enableExecutionInfo()
                 .withPartitions(partitions)
                 .withPositionBound(PositionBound.at(INPUT_POSITION));
 
-        final StateQueryResult<Boolean> result =
+        final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(
                 kafkaStreams,
                 request

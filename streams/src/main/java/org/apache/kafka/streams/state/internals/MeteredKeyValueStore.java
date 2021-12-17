@@ -215,7 +215,7 @@ public class MeteredKeyValueStore<K, V>
                                     final PositionBound positionBound,
                                     final boolean collectExecutionInfo) {
 
-        final long start = System.nanoTime();
+        final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
@@ -223,7 +223,7 @@ public class MeteredKeyValueStore<K, V>
             result = wrapped().query(query, positionBound, collectExecutionInfo);
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
-                    "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns");
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
             result = (QueryResult<R>) handler.apply(
@@ -235,17 +235,16 @@ public class MeteredKeyValueStore<K, V>
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " with serdes "
-                        + serdes + " in " + (System.nanoTime() - start) + "ns");
+                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(
-        final Query<R> query,
-        final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final boolean collectExecutionInfo) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -288,8 +287,9 @@ public class MeteredKeyValueStore<K, V>
                                            final PositionBound positionBound,
                                            final boolean collectExecutionInfo) {
         final QueryResult<R> result;
-        final KeyQuery<K, V> typedQuery = (KeyQuery<K, V>) query;
-        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(keyBytes(typedQuery.getKey()));
+        final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
+        final KeyQuery<Bytes, byte[]> rawKeyQuery =
+            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
         if (rawResult.isSuccess()) {
@@ -307,15 +307,15 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Deserializer<V> getValueDeserializer() {
-        final Serde<V> vSerde = serdes.valueSerde();
+        final Serde<V> valueSerde = serdes.valueSerde();
         final boolean timestamped = WrappedStateStore.isTimestamped(wrapped());
         final Deserializer<V> deserializer;
-        if (!timestamped && vSerde instanceof ValueAndTimestampSerde) {
+        if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
             final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
-                    (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) vSerde).deserializer();
+                (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) valueSerde).deserializer();
             deserializer = (Deserializer<V>) valueAndTimestampDeserializer.valueDeserializer;
         } else {
-            deserializer = vSerde.deserializer();
+            deserializer = valueSerde.deserializer();
         }
         return deserializer;
     }

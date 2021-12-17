@@ -22,7 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
  * Interactive query for retrieving a single record based on its key.
  */
 @Evolving
-public class KeyQuery<K, V> implements Query<V> {
+public final class KeyQuery<K, V> implements Query<V> {
 
     private final K key;
 

@@ -59,10 +59,6 @@ public final class StoreQueryUtils {
     private static final Map<Class, QueryHandler> QUERY_HANDLER_MAP =
         mkMap(
             mkEntry(
-                PingQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> QueryResult.forResult(true)
-            ),
-            mkEntry(
                 RangeQuery.class,
                 StoreQueryUtils::runRangeQuery
             ),

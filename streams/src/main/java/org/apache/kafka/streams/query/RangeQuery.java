@@ -34,7 +34,7 @@ import java.util.Optional;
  * <p>
  */
 @Evolving
-public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
+public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
 
     private final Optional<K> lower;
