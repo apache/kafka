@@ -37,9 +37,14 @@ public class TelemetryClient implements Closeable {
         return clientInstanceId;
     }
 
+    public ClientInstanceLevelMetrics clientInstanceLevelMetrics() {
+        // TODO:
+        return null;
+    }
+
     @Override
     public void close() {
-        // TOOD: shut down sender, thread, etc...
+        // TODO: shut down sender, thread, etc...
     }
 
 }
