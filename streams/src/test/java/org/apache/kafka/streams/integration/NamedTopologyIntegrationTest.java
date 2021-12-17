@@ -151,6 +151,7 @@ public class NamedTopologyIntegrationTest {
         asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
     private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
         asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
+    private final static String TOPIC_PREFIX = "unique_topic_prefix";
 
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
@@ -182,6 +183,7 @@ public class NamedTopologyIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10 * 1000);
+        streamsConfiguration.put(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, TOPIC_PREFIX);
         return streamsConfiguration;
     }
 
@@ -223,8 +225,9 @@ public class NamedTopologyIntegrationTest {
             streams2.close(Duration.ofSeconds(30));
         }
 
-        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog")).forEach(t -> {
+        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
+                assertThat("topic was not decorated", t.contains(TOPIC_PREFIX));
                 CLUSTER.deleteTopicsAndWait(t);
             } catch (final InterruptedException e) {
                 e.printStackTrace();
