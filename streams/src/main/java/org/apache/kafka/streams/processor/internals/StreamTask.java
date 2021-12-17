@@ -1109,7 +1109,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     return RecordQueue.UNKNOWN;
             }
         } catch (final IllegalArgumentException argumentException) {
-            log.warn("Unsupported offset metadata found {}", encryptedString);
+            log.warn("Unsupported offset metadata found");
             return RecordQueue.UNKNOWN;
         }
     }
