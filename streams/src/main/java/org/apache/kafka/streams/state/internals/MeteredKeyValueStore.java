@@ -271,7 +271,7 @@ public class MeteredKeyValueStore<K, V>
                 getSensor,
                 getValueDeserializer()
             );
-            final QueryResult<KeyValueIterator<K, V>> typedQueryResult = QueryResult.forResult(
+            final QueryResult<KeyValueIterator<K, V>> typedQueryResult = rawResult.swapResult(
                 resultIterator
             );
             result = (QueryResult<R>) typedQueryResult;
