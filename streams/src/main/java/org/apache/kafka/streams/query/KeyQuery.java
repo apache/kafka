@@ -18,6 +18,8 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
+import java.util.Objects;
+
 /**
  * Interactive query for retrieving a single record based on its key.
  */
@@ -27,7 +29,7 @@ public final class KeyQuery<K, V> implements Query<V> {
     private final K key;
 
     private KeyQuery(final K key) {
-        this.key = key;
+        this.key = Objects.requireNonNull(key);
     }
 
     /**

@@ -62,8 +62,9 @@ public final class StoreQueryUtils {
                 RangeQuery.class,
                 StoreQueryUtils::runRangeQuery
             ),
-            mkEntry(KeyQuery.class,
-                    StoreQueryUtils::runKeyQuery
+            mkEntry(
+                KeyQuery.class,
+                StoreQueryUtils::runKeyQuery
             )
         );
 
@@ -196,12 +197,12 @@ public final class StoreQueryUtils {
         }
     }
 
-    private static <R> String parseStoreException(final Throwable t, final StateStore store, final Query<R> query) {
+    private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter printWriter = new PrintWriter(stringWriter);
         printWriter.println(
             store.getClass() + " failed to handle query " + query + ":");
-        t.printStackTrace(printWriter);
+        e.printStackTrace(printWriter);
         printWriter.flush();
         return stringWriter.toString();
     }

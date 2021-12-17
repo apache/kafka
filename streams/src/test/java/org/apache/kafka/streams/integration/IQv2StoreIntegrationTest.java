@@ -653,10 +653,7 @@ public class IQv2StoreIntegrationTest {
         final StateQueryResult<V> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        final QueryResult<V> queryResult =
-            result.getGlobalResult() != null
-                ? result.getGlobalResult()
-                : result.getOnlyPartitionResult();
+        final QueryResult<V> queryResult = result.getOnlyPartitionResult();
         final boolean failure = queryResult.isFailure();
         if (failure) {
             throw new AssertionError(queryResult.toString());

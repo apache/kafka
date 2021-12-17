@@ -197,10 +197,11 @@ public final class QueryResult<R> {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     public <V> QueryResult<V> swapResult(final V value) {
         if (isFailure()) {
-            return (QueryResult<V>) this;
+            throw new IllegalArgumentException(
+                "Callers must avoid calling this method on a failed result."
+            );
         } else {
             final QueryResult<V> result = new QueryResult<>(value);
             result.executionInfo = executionInfo;
