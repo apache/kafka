@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.Time
  */
 abstract class KafkaServerTestHarness extends QuorumTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
-  var priorInstanceConfigs: Seq[KafkaConfig] = null
 
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
@@ -69,14 +68,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def generateConfigs: Seq[KafkaConfig]
 
   /**
-   * It is sometimes useful to keep the same log.dirs configuration value; override this method if that is desired
-   *
-   * @param priorConfigs the prior configs
-   * @return the new generated configs
-   */
-  def regenerateConfigs(priorConfigs: Seq[KafkaConfig]): Seq[KafkaConfig] = generateConfigs
-
-  /**
    * Override this in case ACLs or security credentials must be set before `servers` are started.
    *
    * This is required in some cases because of the topic creation in the setup of `IntegrationTestHarness`. If the ACLs
@@ -96,10 +87,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def configureSecurityAfterServersStart(): Unit = {}
 
   def configs: Seq[KafkaConfig] = {
-    if (instanceConfigs == null) {
-      instanceConfigs = if (priorInstanceConfigs == null) generateConfigs else regenerateConfigs(priorInstanceConfigs)
-      priorInstanceConfigs = instanceConfigs
-    }
+    if (instanceConfigs == null)
+      instanceConfigs = generateConfigs
     instanceConfigs
   }
 

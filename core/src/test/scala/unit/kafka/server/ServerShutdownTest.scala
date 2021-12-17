@@ -56,26 +56,29 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
   val propsToChangeUponRestart = new Properties()
+  var priorConfig: Option[KafkaConfig] = None
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(
-      KafkaConfig.fromProps(_, propsToChangeUponRestart))
-  }
-
-  override def regenerateConfigs(priorConfigs: Seq[KafkaConfig]): Seq[KafkaConfig] = {
-    val originals = priorConfigs.head.originals
-    val logDirsValue = originals.get(KafkaConfig.LogDirsProp)
-    if (logDirsValue != null) {
-      propsToChangeUponRestart.put(KafkaConfig.LogDirsProp, logDirsValue)
-    } else {
-      propsToChangeUponRestart.put(KafkaConfig.LogDirProp, originals.get(KafkaConfig.LogDirProp))
+    priorConfig.foreach { config =>
+      // keep the same log directory
+      val originals = config.originals
+      val logDirsValue = originals.get(KafkaConfig.LogDirsProp)
+      if (logDirsValue != null) {
+        propsToChangeUponRestart.put(KafkaConfig.LogDirsProp, logDirsValue)
+      } else {
+        propsToChangeUponRestart.put(KafkaConfig.LogDirProp, originals.get(KafkaConfig.LogDirProp))
+      }
     }
-    generateConfigs
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
+    Seq(priorConfig.get)
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    propsToChangeUponRestart.clear() // be sure to clear before setting up so they don't appear in the initial config
+    // be sure to clear local variables before setting up so that anything leftover from a prior test
+    // won;t impact the initial config for the current test
+    priorConfig = None
+    propsToChangeUponRestart.clear()
     super.setUp(testInfo)
   }
 
