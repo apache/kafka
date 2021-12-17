@@ -25,7 +25,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -58,6 +60,7 @@ import org.junit.rules.TestName;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -65,6 +68,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
@@ -72,8 +76,10 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
 public class NamedTopologyIntegrationTest {
@@ -172,7 +178,7 @@ public class NamedTopologyIntegrationTest {
     private NamedTopologyBuilder topology2Builder2;
     private NamedTopologyBuilder topology3Builder2;
 
-    private Properties configProps(final String appId) {
+    private Properties configProps(final String appId, final String host) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -180,7 +186,7 @@ public class NamedTopologyIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, host + ":2020");
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10 * 1000);
@@ -194,8 +200,7 @@ public class NamedTopologyIntegrationTest {
         changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
         changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
         changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
-        props = configProps(appId);
-
+        props = configProps(appId, "host1");
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
 
         topology1Builder = streams.newNamedTopologyBuilder(TOPOLOGY_1);
@@ -210,7 +215,7 @@ public class NamedTopologyIntegrationTest {
     }
 
     private void setupSecondKafkaStreams() {
-        props2 = configProps(appId);
+        props2 = configProps(appId, "host2");
         streams2 = new KafkaStreamsNamedTopologyWrapper(props2, clientSupplier);
         topology1Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_1);
         topology2Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_2);
@@ -320,23 +325,60 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddNamedTopologyToUnstartedApplicationWithEmptyInitialTopology() throws Exception {
+    public void shouldAddNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
         streams.addNamedTopology(topology1Builder.build());
+        streams.addNamedTopology(topology2Builder.build());
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
 
         final ReadOnlyKeyValueStore<String, Long> store =
             streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
-                "topology-1",
+                TOPOLOGY_1,
                 "store",
                 QueryableStoreTypes.keyValueStore())
             );
         assertThat(store.get("A"), equalTo(2L));
 
-        final Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
-        final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
+        final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", TOPOLOGY_1);
+        final Collection<StreamsMetadata> streamsMetadata2 = streams.streamsMetadataForStore("store", TOPOLOGY_2);
+        assertThat(streamsMetadata.size(), equalTo(1));
+        assertThat(streamsMetadata2.size(), equalTo(1));
+        assertThat(streamsMetadata.iterator().next(), equalTo(streamsMetadata2.iterator().next()));
+
+        final KeyQueryMetadata keyMetadata = streams.queryMetadataForKey("store", "A", new StringSerializer(), TOPOLOGY_1);
+        final KeyQueryMetadata keyMetadata2 = streams.queryMetadataForKey("store", "A", new StringSerializer(), TOPOLOGY_2);
+
+        assertThat(keyMetadata, not(NOT_AVAILABLE));
+        assertThat(keyMetadata, equalTo(keyMetadata2));
+
+        final Map<String, Map<Integer, LagInfo>> partitionLags1 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_1);
+        final Map<String, Map<Integer, LagInfo>> partitionLags2 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_2);
+
+        assertThat(partitionLags1.keySet(), equalTo(singleton("store")));
+        assertThat(partitionLags1.get("store").keySet(), equalTo(mkSet(0, 1)));
+        assertThat(partitionLags2.keySet(), equalTo(singleton("store")));
+        assertThat(partitionLags2.get("store").keySet(), equalTo(mkSet(0, 1)));
+
+        // Start up a second node with only topology-1
+        setupSecondKafkaStreams();
+
+        topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        streams2.addNamedTopology(topology1Builder2.build());
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams2), Duration.ofSeconds(15));
+        waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(15));
+
+        //final Collection<StreamsMetadata> streamsMetadataTopology1 = streams.streamsMetadataForStore("store", TOPOLOGY_1);
+        final Collection<StreamsMetadata> streamsMetadataTopology2 = streams.streamsMetadataForStore("store", TOPOLOGY_2);
+        //final Collection<StreamsMetadata> streams2Metadata = streams2.streamsMetadataForStore("store", TOPOLOGY_1);
+
+
+       // assertThat(streams2Metadata.size(), equalTo(2));
+       // assertThat(streamsMetadataTopology1.size(), equalTo(2));
+        assertThat(streamsMetadataTopology2.size(), equalTo(1));
     }
     
     @Test

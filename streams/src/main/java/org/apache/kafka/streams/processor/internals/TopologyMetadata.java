@@ -125,7 +125,7 @@ public class TopologyMetadata {
     }
 
     public Collection<String> sourceTopicsForTopology(final String name) {
-        return builders.get(name).sourceTopicCollection();
+        return builders.get(name).fullSourceTopicNames();
     }
 
     public boolean needsUpdate(final String threadName) {
@@ -138,7 +138,7 @@ public class TopologyMetadata {
 
     public void unregisterThread(final String threadName) {
         threadVersions.remove(threadName);
-        maybeNotifyTopologyVersionWaiters(threadName);
+        maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(threadName);
     }
 
     public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
@@ -198,7 +198,6 @@ public class TopologyMetadata {
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.info("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             buildAndVerifyTopology(newTopologyBuilder);
@@ -206,6 +205,7 @@ public class TopologyMetadata {
         } finally {
             unlock();
         }
+        log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
         return future;
     }
 
@@ -225,6 +225,7 @@ public class TopologyMetadata {
         } finally {
             unlock();
         }
+        log.info("Removed NamedTopology {} and updated topology version to {}", topologyName, version.topologyVersion.get());
         return future;
     }
 
@@ -353,7 +354,7 @@ public class TopologyMetadata {
 
     public Collection<String> sourceTopicCollection() {
         final List<String> sourceTopics = new ArrayList<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
+        applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;
     }
 
@@ -414,9 +415,13 @@ public class TopologyMetadata {
         return globalStateStores;
     }
 
+    public Map<String, List<String>> stateStoreNameToSourceTopicsForTopology(final String topologyName) {
+        return lookupBuilderForNamedTopology(topologyName).stateStoreNameToFullSourceTopicNames();
+    }
+
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         final Map<String, List<String>> stateStoreNameToSourceTopics = new HashMap<>();
-        applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToSourceTopics()));
+        applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToFullSourceTopicNames()));
         return stateStoreNameToSourceTopics;
     }
 
@@ -431,10 +436,13 @@ public class TopologyMetadata {
         return "";
     }
 
-    public Collection<String> sourceTopicsForStore(final String storeName) {
-        final List<String> sourceTopics = new ArrayList<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicsForStore(storeName)));
-        return sourceTopics;
+    /**
+     * @param storeName       the name of the state store
+     * @param topologyName    the name of the topology to search for stores within
+     * @return topics subscribed from source processors that are connected to these state stores
+     */
+    public Collection<String> sourceTopicsForStore(final String storeName, final String topologyName) {
+        return lookupBuilderForNamedTopology(topologyName).sourceTopicsForStore(storeName);
     }
 
     private String getTopologyNameOrElseUnnamed(final String topologyName) {
@@ -493,7 +501,11 @@ public class TopologyMetadata {
      * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
      */
     public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
-        return builders.get(name);
+        if (name == null) {
+            return builders.get(UNNAMED_TOPOLOGY);
+        } else {
+            return builders.get(name);
+        }
     }
 
     private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {
