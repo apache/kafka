@@ -40,6 +40,9 @@ import scala.io.StdIn
 
 object AclCommand extends Logging {
 
+  val AuthorizerDeprecationMessage: String = "Warning: support for ACL configuration directly " +
+    "through the authorizer is deprecated and will be removed in a future release. Please use " +
+    "--bootstrap-server instead to set ACLs through the admin client."
   val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
@@ -499,13 +502,17 @@ object AclCommand extends Logging {
       .describedAs("command-config")
       .ofType(classOf[String])
 
-    val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.authorizer.AclAuthorizer.")
+    val authorizerOpt = parser.accepts("authorizer", "DEPRECATED: Fully qualified class name of " +
+      "the authorizer, which defaults to kafka.security.authorizer.AclAuthorizer if --bootstrap-server is not provided. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer")
       .ofType(classOf[String])
 
-    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED: properties required to configure an instance of Authorizer. " +
-      "These are key=val pairs. For the default authorizer the example values are: zookeeper.connect=localhost:2181")
+    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "DEPRECATED: The " +
+      "properties required to configure an instance of the Authorizer specified by --authorizer. " +
+      "These are key=val pairs. For the default authorizer, example values are: zookeeper.connect=localhost:2181. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
@@ -605,10 +612,13 @@ object AclCommand extends Logging {
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
-      "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
+      "DEPRECATED: Identifies the file where ZooKeeper client TLS connectivity properties are defined for" +
+        " the default authorizer kafka.security.authorizer.AclAuthorizer." +
+        " Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
         ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
-        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
+        AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
 
     options = parser.parse(args: _*)
@@ -617,8 +627,10 @@ object AclCommand extends Logging {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
         CommandLineUtils.printUsageAndDie(parser, "Only one of --bootstrap-server or --authorizer must be specified")
 
-      if (!options.has(bootstrapServerOpt))
+      if (!options.has(bootstrapServerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
+        System.err.println(AclCommand.AuthorizerDeprecationMessage)
+      }
 
       if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
         CommandLineUtils.printUsageAndDie(parser, "The --command-config option can only be used with --bootstrap-server option")

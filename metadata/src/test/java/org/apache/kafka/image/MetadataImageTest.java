@@ -40,7 +40,8 @@ public class MetadataImageTest {
             ClusterImageTest.IMAGE1,
             TopicsImageTest.IMAGE1,
             ConfigurationsImageTest.IMAGE1,
-            ClientQuotasImageTest.IMAGE1);
+            ClientQuotasImageTest.IMAGE1,
+            ProducerIdsImageTest.IMAGE1);
 
         DELTA1 = new MetadataDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, 200, 5, FeaturesImageTest.DELTA1_RECORDS);
@@ -48,6 +49,7 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, 200, 5, TopicsImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, ConfigurationsImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, ClientQuotasImageTest.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(DELTA1, 200, 5, ProducerIdsImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
             new OffsetAndEpoch(200, 5),
@@ -55,7 +57,8 @@ public class MetadataImageTest {
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,
             ConfigurationsImageTest.IMAGE2,
-            ClientQuotasImageTest.IMAGE2);
+            ClientQuotasImageTest.IMAGE2,
+            ProducerIdsImageTest.IMAGE2);
     }
 
     @Test

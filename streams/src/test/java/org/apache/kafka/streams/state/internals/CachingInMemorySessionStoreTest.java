@@ -821,27 +821,13 @@ public class CachingInMemorySessionStoreTest {
 
     public static class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], byte[]> {
         final Deserializer<K> keyDeserializer;
-        final Deserializer<V> valueDesializer;
+        final Deserializer<V> valueDeserializer;
         final List<KeyValueTimestamp<K, Change<V>>> forwarded = new LinkedList<>();
 
         CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                               final Deserializer<V> valueDesializer) {
+                               final Deserializer<V> valueDeserializer) {
             this.keyDeserializer = keyDeserializer;
-            this.valueDesializer = valueDesializer;
-        }
-
-        @Override
-        public void apply(final byte[] key,
-                          final byte[] newValue,
-                          final byte[] oldValue,
-                          final long timestamp) {
-            forwarded.add(
-                new KeyValueTimestamp<>(
-                    keyDeserializer.deserialize(null, key),
-                    new Change<>(
-                        valueDesializer.deserialize(null, newValue),
-                        valueDesializer.deserialize(null, oldValue)),
-                    timestamp));
+            this.valueDeserializer = valueDeserializer;
         }
 
         @Override
@@ -850,8 +836,8 @@ public class CachingInMemorySessionStoreTest {
                 new KeyValueTimestamp<>(
                     keyDeserializer.deserialize(null, record.key()),
                     new Change<>(
-                        valueDesializer.deserialize(null, record.value().newValue),
-                        valueDesializer.deserialize(null, record.value().oldValue)),
+                        valueDeserializer.deserialize(null, record.value().newValue),
+                        valueDeserializer.deserialize(null, record.value().oldValue)),
                     record.timestamp()
                 )
             );

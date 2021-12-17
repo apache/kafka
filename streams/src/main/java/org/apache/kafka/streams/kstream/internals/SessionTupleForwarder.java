@@ -46,14 +46,11 @@ class SessionTupleForwarder<K, V> {
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    public void maybeForward(final Windowed<K> key,
-                             final V newValue,
-                             final V oldValue) {
+    public void maybeForward(final Record<Windowed<K>, Change<V>> record) {
         if (!cachingEnabled) {
-            context.forward(new Record<>(
-                key,
-                new Change<>(newValue, sendOldValues ? oldValue : null),
-                key.window().end()));
+            context.forward(
+                record.withValue(new Change<>(record.value().newValue, sendOldValues ? record.value().oldValue : null))
+                    .withTimestamp(record.key() != null ? record.key().window().end() : record.timestamp()));
         }
     }
 }

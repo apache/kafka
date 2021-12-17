@@ -55,7 +55,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    */
   def servers: mutable.Buffer[KafkaServer] = {
     checkIsZKTest()
-    _brokers.map(_.asInstanceOf[KafkaServer])
+    _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
   var brokerList: String = null
@@ -208,8 +208,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
           threadNamePrefix = None,
           enableForwarding
         )
+      } else {
+        brokers(i).startup()
       }
-      _brokers(i).startup()
       alive(i) = true
     }
   }

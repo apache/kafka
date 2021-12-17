@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
@@ -242,7 +243,8 @@ public class AbstractProcessorContextTest {
         public void logChange(final String storeName,
                               final Bytes key,
                               final byte[] value,
-                              final long timestamp) {
+                              final long timestamp,
+                              final Position position) {
         }
 
         @Override

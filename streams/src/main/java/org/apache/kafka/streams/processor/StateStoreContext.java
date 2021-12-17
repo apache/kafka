@@ -19,9 +19,11 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.io.File;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * State store context interface.
@@ -41,6 +43,18 @@ public interface StateStoreContext {
      * @return the task id
      */
     TaskId taskId();
+
+    /**
+     * Return the metadata of the current topic/partition/offset if available.
+     * This is defined as the metadata of the record that is currently being
+     * processed (or was last processed) by the StreamTask that holds the store.
+     * <p>
+     * Note that the metadata is not defined during all store interactions, for
+     * example, while the StreamTask is running a punctuation.
+     *
+     * @return metadata of the current record
+     */
+    Optional<RecordMetadata> recordMetadata();
 
     /**
      * Returns the default key serde.

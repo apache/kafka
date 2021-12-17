@@ -51,8 +51,6 @@ release.py release-email
 
 """
 
-from __future__ import print_function
-
 import datetime
 from getpass import getpass
 import json
@@ -99,25 +97,25 @@ def print_output(output):
         print(">", line)
 
 def cmd(action, cmd_arg, *args, **kwargs):
-    if isinstance(cmd_arg, basestring) and not kwargs.get("shell", False):
+    if isinstance(cmd_arg, str) and not kwargs.get("shell", False):
         cmd_arg = cmd_arg.split()
     allow_failure = kwargs.pop("allow_failure", False)
     num_retries = kwargs.pop("num_retries", 0)
 
     stdin_log = ""
-    if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
+    if "stdin" in kwargs and isinstance(kwargs["stdin"], str):
         stdin_log = "--> " + kwargs["stdin"]
         stdin = tempfile.TemporaryFile()
-        stdin.write(kwargs["stdin"])
+        stdin.write(kwargs["stdin"].encode('utf-8'))
         stdin.seek(0)
         kwargs["stdin"] = stdin
 
     print(action, cmd_arg, stdin_log)
     try:
         output = subprocess.check_output(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
-        print_output(output)
+        print_output(output.decode('utf-8'))
     except subprocess.CalledProcessError as e:
-        print_output(e.output)
+        print_output(e.output.decode('utf-8'))
 
         if num_retries > 0:
             kwargs['num_retries'] = num_retries - 1
@@ -137,9 +135,9 @@ def cmd(action, cmd_arg, *args, **kwargs):
 
 
 def cmd_output(cmd, *args, **kwargs):
-    if isinstance(cmd, basestring):
+    if isinstance(cmd, str):
         cmd = cmd.split()
-    return subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs)
+    return subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs).decode('utf-8')
 
 def replace(path, pattern, replacement):
     updated = []
@@ -162,7 +160,7 @@ def regexReplace(path, pattern, replacement):
             f.write(line)
 
 def user_ok(msg):
-    ok = raw_input(msg)
+    ok = input(msg)
     return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
@@ -211,13 +209,14 @@ def get_jdk(prefs, version):
     """
     Get settings for the specified JDK version.
     """
-    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: raw_input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
+    jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
     jdk_env = dict(os.environ) if jdk_java_home.strip() else None
     if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
     java_version = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
-    if version == 8 and "1.8.0" not in java_version:
-      fail("JDK 8 is required")
-    elif "%d.0" % version not in java_version or '"%d"' % version not in java_version:
+    if version == 8:
+      if "1.8.0" not in java_version:
+        fail("JDK 8 is required")
+    elif "%d.0" % version not in java_version and '"%d"' % version not in java_version:
       fail("JDK %s is required" % version)
     return jdk_env
 
@@ -278,7 +277,7 @@ def command_stage_docs():
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
     if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 0755)
+        os.mkdir(versioned_docs_path, 755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
@@ -316,16 +315,16 @@ def command_release_announcement_email():
     release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
     if not user_ok("""Is the current release %s ? (y/n): """ % release_version_num):
-        release_version_num = raw_input('What is the current release version:')
+        release_version_num = input('What is the current release version:')
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
     if not user_ok("""Is the previous release %s ? (y/n): """ % previous_release_version_num):
-        previous_release_version_num = raw_input('What is the previous release version:')
+        previous_release_version_num = input('What is the previous release version:')
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True))
-    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True)
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --no-merges %s..%s | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --no-merges %s..%s | cut -f2 | sort --ignore-case" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
@@ -488,10 +487,10 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = raw_input("Release version (without any RC info, e.g. 1.0.0): ")
+release_version = input("Release version (without any RC info, e.g. 1.0.0): ")
 release_version_parts = get_release_version_parts(release_version)
 
-rc = raw_input("Release candidate number: ")
+rc = input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
 docs_release_version = docs_version(release_version)
@@ -515,7 +514,7 @@ if not rc:
     sys.exit(0)
 
 # Prereq checks
-apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
+apache_id = get_pref(prefs, 'apache_id', lambda: input("Enter your apache username: "))
 
 jdk8_env = get_jdk(prefs, 8)
 jdk17_env = get_jdk(prefs, 17)
@@ -524,7 +523,7 @@ def select_gpg_key():
     print("Here are the available GPG keys:")
     available_keys = cmd_output("gpg --list-secret-keys")
     print(available_keys)
-    key_name = raw_input("Which user name (enter the user name without email address): ")
+    key_name = input("Which user name (enter the user name without email address): ")
     if key_name not in available_keys:
         fail("Couldn't find the requested key.")
     return key_name
@@ -534,7 +533,7 @@ key_name = get_pref(prefs, 'gpg-key', select_gpg_key)
 gpg_passphrase = get_pref(prefs, 'gpg-pass', lambda: getpass("Passphrase for this GPG key: "))
 # Do a quick validation so we can fail fast if the password is incorrect
 with tempfile.NamedTemporaryFile() as gpg_test_tempfile:
-    gpg_test_tempfile.write("abcdefg")
+    gpg_test_tempfile.write("abcdefg".encode('utf-8'))
     cmd("Testing GPG key & passphrase", ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0", "-u", key_name, "--armor", "--output", gpg_test_tempfile.name + ".asc", "--detach-sig", gpg_test_tempfile.name], stdin=gpg_passphrase)
 
 save_prefs(prefs)
