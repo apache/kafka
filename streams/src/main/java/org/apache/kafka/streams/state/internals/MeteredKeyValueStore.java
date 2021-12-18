@@ -40,6 +40,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.SerdeAwareQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -217,6 +218,10 @@ public class MeteredKeyValueStore<K, V>
 
         final long start = time.nanoseconds();
         final QueryResult<R> result;
+
+        if (query instanceof SerdeAwareQuery) {
+            final SerdeAwareQuery<R> serdeAwareQuery = (SerdeAwareQuery<R>) query;
+        }
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
         if (handler == null) {
