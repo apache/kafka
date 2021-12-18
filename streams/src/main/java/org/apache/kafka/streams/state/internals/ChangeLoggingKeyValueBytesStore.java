@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -31,13 +32,15 @@ import java.util.List;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
-    implements KeyValueStore<Bytes, byte[]> {
+        extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+        implements KeyValueStore<Bytes, byte[]> {
 
     InternalProcessorContext context;
+    Position position;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
+        this.position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -76,6 +79,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
+        StoreQueryUtils.updatePosition(position, context);
         log(key, value);
     }
 
@@ -138,8 +142,7 @@ public class ChangeLoggingKeyValueBytesStore
         return wrapped().reverseAll();
     }
 
-    void log(final Bytes key,
-             final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp());
+    void log(final Bytes key, final byte[] value) {
+        context.logChange(name(), key, value, context.timestamp(), position);
     }
 }

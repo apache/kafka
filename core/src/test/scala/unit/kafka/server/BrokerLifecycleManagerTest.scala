@@ -49,6 +49,7 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
+    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "300000")
     properties
   }
@@ -80,7 +81,7 @@ class BrokerLifecycleManagerTest {
       time, controllerNodeProvider, nodeApiVersions)
     val clusterId = "x4AJGXQSRnephtTZzujw4w"
     val advertisedListeners = new ListenerCollection()
-    config.advertisedListeners.foreach { ep =>
+    config.effectiveAdvertisedListeners.foreach { ep =>
       advertisedListeners.add(new Listener().setHost(ep.host).
         setName(ep.listenerName.value()).
         setPort(ep.port.shortValue()).

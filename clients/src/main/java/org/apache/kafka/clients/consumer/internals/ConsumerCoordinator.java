@@ -709,13 +709,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
         final Set<TopicPartition> revokedPartitions;
-        if (generation == Generation.NO_GENERATION.generationId &&
+        if (generation == Generation.NO_GENERATION.generationId ||
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
-                log.info("Giving away all assigned partitions as lost since generation has been reset," +
-                    "indicating that consumer is no longer part of the group");
+                log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
+                    "indicating that consumer is in old state or no longer part of the group");
                 exception = invokePartitionsLost(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -759,18 +759,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void onLeavePrepare() {
-        // Save the current Generation and use that to get the memberId, as the hb thread can change it at any time
+        // Save the current Generation, as the hb thread can change it at any time
         final Generation currentGeneration = generation();
-        final String memberId = currentGeneration.memberId;
 
-        log.debug("Executing onLeavePrepare with generation {} and memberId {}", currentGeneration, memberId);
+        log.debug("Executing onLeavePrepare with generation {}", currentGeneration);
 
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
-            if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {
+            if ((currentGeneration.generationId == Generation.NO_GENERATION.generationId ||
+                currentGeneration.memberId.equals(Generation.NO_GENERATION.memberId)) ||
+                rebalanceInProgress()) {
                 e = invokePartitionsLost(droppedPartitions);
             } else {
                 e = invokePartitionsRevoked(droppedPartitions);
@@ -1282,7 +1283,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                         "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
                                         "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again");
                                 } else {
-                                    resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                                    // don't reset generation member ID when ILLEGAL_GENERATION, since the member might be still valid
+                                    resetStateOnResponseError(ApiKeys.OFFSET_COMMIT, error, error != Errors.ILLEGAL_GENERATION);
                                     exception = new CommitFailedException();
                                 }
                             }
