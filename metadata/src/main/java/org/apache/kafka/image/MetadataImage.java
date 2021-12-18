@@ -37,7 +37,8 @@ public final class MetadataImage {
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
         ConfigurationsImage.EMPTY,
-        ClientQuotasImage.EMPTY);
+        ClientQuotasImage.EMPTY,
+        ProducerIdsImage.EMPTY);
 
     private final OffsetAndEpoch highestOffsetAndEpoch;
 
@@ -51,13 +52,16 @@ public final class MetadataImage {
 
     private final ClientQuotasImage clientQuotas;
 
+    private final ProducerIdsImage producerIds;
+
     public MetadataImage(
         OffsetAndEpoch highestOffsetAndEpoch,
         FeaturesImage features,
         ClusterImage cluster,
         TopicsImage topics,
         ConfigurationsImage configs,
-        ClientQuotasImage clientQuotas
+        ClientQuotasImage clientQuotas,
+        ProducerIdsImage producerIds
     ) {
         this.highestOffsetAndEpoch = highestOffsetAndEpoch;
         this.features = features;
@@ -65,6 +69,7 @@ public final class MetadataImage {
         this.topics = topics;
         this.configs = configs;
         this.clientQuotas = clientQuotas;
+        this.producerIds = producerIds;
     }
 
     public boolean isEmpty() {
@@ -72,7 +77,8 @@ public final class MetadataImage {
             cluster.isEmpty() &&
             topics.isEmpty() &&
             configs.isEmpty() &&
-            clientQuotas.isEmpty();
+            clientQuotas.isEmpty() &&
+            producerIds.isEmpty();
     }
 
     public OffsetAndEpoch highestOffsetAndEpoch() {
@@ -99,12 +105,17 @@ public final class MetadataImage {
         return clientQuotas;
     }
 
+    public ProducerIdsImage producerIds() {
+        return producerIds;
+    }
+
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
         features.write(out);
         cluster.write(out);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);
+        producerIds.write(out);
     }
 
     @Override
@@ -116,12 +127,19 @@ public final class MetadataImage {
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
             configs.equals(other.configs) &&
-            clientQuotas.equals(other.clientQuotas);
+            clientQuotas.equals(other.clientQuotas) &&
+            producerIds.equals(other.producerIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(highestOffsetAndEpoch, features, cluster, topics, configs, clientQuotas);
+        return Objects.hash(highestOffsetAndEpoch,
+            features,
+            cluster,
+            topics,
+            configs,
+            clientQuotas,
+            producerIds);
     }
 
     @Override
@@ -132,6 +150,7 @@ public final class MetadataImage {
             ", topics=" + topics +
             ", configs=" + configs +
             ", clientQuotas=" + clientQuotas +
+            ", producerIdsImage=" + producerIds +
             ")";
     }
 }

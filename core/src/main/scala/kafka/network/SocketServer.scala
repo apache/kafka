@@ -83,7 +83,7 @@ class SocketServer(val config: KafkaConfig,
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
-  private val nodeId = config.brokerId
+  protected val nodeId = config.brokerId
 
   private val logContext = new LogContext(s"[SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId] ")
 
@@ -282,7 +282,7 @@ class SocketServer(val config: KafkaConfig,
     }
   }
 
-  private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
+  protected def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
     val listenBacklogSize = config.socketListenBacklogSize
@@ -719,11 +719,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     val socketChannel = serverSocketChannel.accept()
     try {
       connectionQuotas.inc(endPoint.listenerName, socketChannel.socket.getInetAddress, blockedPercentMeter)
-      socketChannel.configureBlocking(false)
-      socketChannel.socket().setTcpNoDelay(true)
-      socketChannel.socket().setKeepAlive(true)
-      if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-        socketChannel.socket().setSendBufferSize(sendBufferSize)
+      configureAcceptedSocketChannel(socketChannel)
       Some(socketChannel)
     } catch {
       case e: TooManyConnectionsException =>
@@ -736,7 +732,19 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
         val endThrottleTimeMs = e.startThrottleTimeMs + e.throttleTimeMs
         throttledSockets += DelayedCloseSocket(socketChannel, endThrottleTimeMs)
         None
+      case e: IOException =>
+        error(s"Encountered an error while configuring the connection, closing it.", e)
+        close(endPoint.listenerName, socketChannel)
+        None
     }
+  }
+
+  protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
+    socketChannel.configureBlocking(false)
+    socketChannel.socket().setTcpNoDelay(true)
+    socketChannel.socket().setKeepAlive(true)
+    if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+      socketChannel.socket().setSendBufferSize(sendBufferSize)
   }
 
   /**

@@ -373,6 +373,31 @@ public class MetadataTest {
     }
 
     @Test
+    public void testEpochUpdateAfterTopicDeletion() {
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        MetadataResponse metadataResponse = emptyMetadataResponse();
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
+
+        // Start with a Topic topic-1 with a random topic ID
+        Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        // Topic topic-1 is now deleted so Response contains an Error. LeaderEpoch should still maintain Old value
+        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.singletonMap("topic-1", Errors.UNKNOWN_TOPIC_OR_PARTITION), Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
+        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+
+        // Create topic-1 again but this time with a different topic ID. LeaderEpoch should be updated to new even if lower.
+        Map<String, Uuid> newTopicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 5, newTopicIds);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
+        assertEquals(Optional.of(5), metadata.lastSeenLeaderEpoch(tp));
+    }
+
+    @Test
     public void testEpochUpdateOnChangedTopicIds() {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         Map<String, Uuid> topicIds = Collections.singletonMap("topic-1", Uuid.randomUuid());
@@ -381,13 +406,12 @@ public class MetadataTest {
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         // Start with a topic with no topic ID
-        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10);
+        metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 100);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
-        assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
+        assertEquals(Optional.of(100), metadata.lastSeenLeaderEpoch(tp));
 
-        // We should treat an added topic ID as though it is the same topic. Handle only when epoch increases.
-        // Don't update to an older one
-        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 1, topicIds);
+        // If the older topic ID is null, we should go with the new topic ID as the leader epoch
+        metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 2L);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 

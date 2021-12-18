@@ -497,14 +497,14 @@ class KafkaServer(
   }
 
   def createBrokerInfo: BrokerInfo = {
-    val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
+    val endPoints = config.effectiveAdvertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
       require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
-    val listeners = config.advertisedListeners.map { endpoint =>
+    val listeners = config.effectiveAdvertisedListeners.map { endpoint =>
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
       else
@@ -808,7 +808,7 @@ class KafkaServer(
 
   /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
   def advertisedListeners: Seq[EndPoint] = {
-    config.advertisedListeners.map { endPoint =>
+    config.effectiveAdvertisedListeners.map { endPoint =>
       endPoint.copy(port = boundPort(endPoint.listenerName))
     }
   }
