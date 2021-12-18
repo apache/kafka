@@ -35,13 +35,16 @@ public interface SerdeAwareQuery<K, V, R> extends Query<R> {
 
         private final String topic;
         private final Serializer<K> keySerializer;
+        private Deserializer<K> keyDeserializer;
         private final Deserializer<V> valueDeserializer;
 
         public QuerySerdes(final String topic,
                            final Serializer<K> keySerializer,
+                           final Deserializer<K> keyDeserializer,
                            final Deserializer<V> valueDeserializer) {
             this.topic = topic;
             this.keySerializer = keySerializer;
+            this.keyDeserializer = keyDeserializer;
             this.valueDeserializer = valueDeserializer;
         }
 
@@ -51,6 +54,10 @@ public interface SerdeAwareQuery<K, V, R> extends Query<R> {
 
         public Serializer<K> getKeySerializer() {
             return keySerializer;
+        }
+
+        public Deserializer<K> getKeyDeserializer() {
+            return keyDeserializer;
         }
 
         public Deserializer<V> getValueDeserializer() {

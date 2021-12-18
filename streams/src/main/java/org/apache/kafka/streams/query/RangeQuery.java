@@ -34,11 +34,12 @@ import java.util.Optional;
  * <p>
  */
 @Evolving
-public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
+public final class RangeQuery<K, V> implements SerdeAwareQuery<K, V, KeyValueIterator<K, V>> {
 
 
     private final Optional<K> lower;
     private final Optional<K> upper;
+    private QuerySerdes<K, V> serdes;
 
 
     private RangeQuery(final Optional<K> lower, final Optional<K> upper) {
@@ -98,5 +99,15 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      */
     public Optional<K> getUpperBound() {
         return upper;
+    }
+
+    @Override
+    public void setSerdes(final QuerySerdes<K, V> serdes) {
+        this.serdes = serdes;
+    }
+
+    @Override
+    public QuerySerdes<K, V> getSerdes() {
+        return serdes;
     }
 }

@@ -119,14 +119,6 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 
-        if (query instanceof RangeQuery) {
-            final RangeQuery<Bytes, byte[]> typedQuery = (RangeQuery<Bytes, byte[]>) query;
-            final KeyValueIterator<Bytes, byte[]> keyValueIterator = this.range(
-                    typedQuery.getLowerBound().orElse(null), typedQuery.getUpperBound().orElse(null));
-            final R result = (R) keyValueIterator;
-            final QueryResult<R> queryResult = QueryResult.forResult(result);
-            return queryResult;
-        }
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,

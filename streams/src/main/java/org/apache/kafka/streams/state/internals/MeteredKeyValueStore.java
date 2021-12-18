@@ -35,7 +35,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
@@ -222,6 +221,7 @@ public class MeteredKeyValueStore<K, V>
                 new QuerySerdes<>(
                     serdes.topic(),
                     serdes.keySerializer(),
+                    serdes.keyDeserializer(),
                     serdes.valueDeserializer()
                 )
             );
@@ -368,7 +368,14 @@ public class MeteredKeyValueStore<K, V>
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
+        return new MeteredKeyValueIterator(
+            wrapped().prefixScan(prefix, prefixKeySerializer),
+            prefixScanSensor,
+            time,
+            serdes.topic(),
+            serdes.keyDeserializer(),
+            serdes.valueDeserializer()
+        );
     }
 
     @Override
@@ -378,7 +385,11 @@ public class MeteredKeyValueStore<K, V>
         final byte[] serTo = to == null ? null : serdes.rawKey(to);
         return new MeteredKeyValueIterator(
             wrapped().range(Bytes.wrap(serFrom), Bytes.wrap(serTo)),
-            rangeSensor
+            rangeSensor,
+            time,
+            serdes.topic(),
+            serdes.keyDeserializer(),
+            serdes.valueDeserializer()
         );
     }
 
@@ -389,18 +400,36 @@ public class MeteredKeyValueStore<K, V>
         final byte[] serTo = to == null ? null : serdes.rawKey(to);
         return new MeteredKeyValueIterator(
             wrapped().reverseRange(Bytes.wrap(serFrom), Bytes.wrap(serTo)),
-            rangeSensor
+            rangeSensor,
+            time,
+            serdes.topic(),
+            serdes.keyDeserializer(),
+            serdes.valueDeserializer()
         );
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(wrapped().all(), allSensor);
+        return new MeteredKeyValueIterator(
+            wrapped().all(),
+            allSensor,
+            time,
+            serdes.topic(),
+            serdes.keyDeserializer(),
+            serdes.valueDeserializer()
+        );
     }
 
     @Override
     public KeyValueIterator<K, V> reverseAll() {
-        return new MeteredKeyValueIterator(wrapped().reverseAll(), allSensor);
+        return new MeteredKeyValueIterator(
+            wrapped().reverseAll(),
+            allSensor,
+            time,
+            serdes.topic(),
+            serdes.keyDeserializer(),
+            serdes.valueDeserializer()
+        );
     }
 
     @Override
@@ -448,17 +477,29 @@ public class MeteredKeyValueStore<K, V>
         }
     }
 
-    private class MeteredKeyValueIterator implements KeyValueIterator<K, V> {
+    public static class MeteredKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
 
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
+        private final String topic;
+        private final Deserializer<K> keyDeserializer;
+        private final Deserializer<V> valueDeserializer;
+        private final Time time;
 
-        private MeteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                        final Sensor sensor) {
+        public MeteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter,
+                                        final Sensor sensor,
+                                        final Time time,
+                                        final String topic,
+                                        final Deserializer<K> keyDeserializer,
+                                        final Deserializer<V> valueDeserializer) {
             this.iter = iter;
             this.sensor = sensor;
+            this.time = time;
             this.startNs = time.nanoseconds();
+            this.topic = topic;
+            this.keyDeserializer = keyDeserializer;
+            this.valueDeserializer = valueDeserializer;
         }
 
         @Override
@@ -470,8 +511,9 @@ public class MeteredKeyValueStore<K, V>
         public KeyValue<K, V> next() {
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             return KeyValue.pair(
-                serdes.keyFrom(keyValue.key.get()),
-                outerValue(keyValue.value));
+                keyDeserializer.deserialize(topic, keyValue.key.get()),
+                keyValue.value == null ? null : valueDeserializer.deserialize(topic, keyValue.value)
+            );
         }
 
         @Override
@@ -485,7 +527,7 @@ public class MeteredKeyValueStore<K, V>
 
         @Override
         public K peekNextKey() {
-            return serdes.keyFrom(iter.peekNextKey().get());
+            return keyDeserializer.deserialize(topic, iter.peekNextKey().get());
         }
     }
 

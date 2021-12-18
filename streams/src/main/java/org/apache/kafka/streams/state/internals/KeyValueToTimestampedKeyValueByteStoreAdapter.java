@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -126,17 +127,13 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         final Query<R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
-
-
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
         final QueryResult<R> result;
         if (query instanceof SerdeAwareQuery) {
             final SerdeAwareQuery<?, ?, R> serdeAwareQuery = (SerdeAwareQuery<?, ?, R>) query;
-            final QuerySerdes<?, ?> serdes = serdeAwareQuery.getSerdes();
-            final QuerySerdes<?, ?> correctedSerdes = new QuerySerdes<>(
-                serdes.getTopic(),
-                serdes.getKeySerializer(),
-                ((ValueAndTimestampDeserializer<?>) serdes.getValueDeserializer()).valueDeserializer
+            final QuerySerdes correctedSerdes = getCorrectedSerdes(
+                serdeAwareQuery.getSerdes(),
+                ((ValueAndTimestampDeserializer<?>) serdeAwareQuery.getSerdes().getValueDeserializer()).valueDeserializer
             );
             ((SerdeAwareQuery) query).setSerdes(correctedSerdes);
             result = store.query(query, positionBound, collectExecutionInfo);
@@ -150,6 +147,17 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
             );
         }
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V> QuerySerdes<K, V> getCorrectedSerdes(final QuerySerdes<?, ?> serdes,
+                                                        final Deserializer<?> valueDeserializer) {
+        return new QuerySerdes<>(
+            serdes.getTopic(),
+            (Serializer<K>) serdes.getKeySerializer(),
+            (Deserializer<K>) serdes.getKeyDeserializer(),
+            (Deserializer<V>) valueDeserializer
+        );
     }
 
     @Override
