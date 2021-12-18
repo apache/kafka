@@ -17,11 +17,15 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.MockRecordCollector;
 import org.easymock.EasyMock;
@@ -32,7 +36,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.Optional;
+
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingWindowBytesStoreTest {
@@ -55,8 +63,9 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     private void init() {
-        EasyMock.expect(context.taskId()).andReturn(taskId);
-        EasyMock.expect(context.recordCollector()).andReturn(collector);
+        EasyMock.expect(context.taskId()).andReturn(taskId).anyTimes();
+        EasyMock.expect(context.recordCollector()).andReturn(collector).anyTimes();
+        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty()).anyTimes();
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
@@ -94,7 +103,30 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         EasyMock.reset(context);
         EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        context.logChange(store.name(), key, value, 0L);
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
+        context.logChange(store.name(), key, value, 0L, Position.emptyPosition());
+
+        EasyMock.replay(context);
+        store.put(bytesKey, value, context.timestamp());
+
+        EasyMock.verify(inner, context);
+    }
+
+    @Test
+    public void shouldLogPutsWithPosition() {
+        inner.put(bytesKey, value, 0);
+        EasyMock.expectLastCall();
+
+        init();
+
+        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+
+        EasyMock.reset(context);
+        final RecordMetadata recordContext = new ProcessorRecordContext(0L, 1L, 0, "", new RecordHeaders());
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(recordContext));
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        final Position position = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+        context.logChange(store.name(), key, value, 0L, position);
 
         EasyMock.replay(context);
         store.put(bytesKey, value, context.timestamp());
@@ -164,8 +196,9 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         EasyMock.reset(context);
         EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        context.logChange(store.name(), key1, value, 0L);
-        context.logChange(store.name(), key2, value, 0L);
+        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
+        context.logChange(store.name(), key1, value, 0L, Position.emptyPosition());
+        context.logChange(store.name(), key2, value, 0L, Position.emptyPosition());
 
         EasyMock.replay(context);
 

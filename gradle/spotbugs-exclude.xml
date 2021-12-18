@@ -145,8 +145,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
-        <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+        <Or>
+            <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
+            <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+            <!-- Java's own Map#compute forces this pattern on us -->
+            <Class name="org.apache.kafka.streams.query.Position"/>
+        </Or>
         <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
     </Match>
 

@@ -96,10 +96,16 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
+        return waitForChannelClose(selector, node, channelState, 0);
+    }
+
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState, int delayBetweenPollMs)
             throws IOException {
         boolean closed = false;
         for (int i = 0; i < 300; i++) {
+            if (delayBetweenPollMs > 0)
+                Utils.sleep(delayBetweenPollMs);
             selector.poll(100L);
             if (selector.channel(node) == null && selector.closingChannel(node) == null) {
                 closed = true;

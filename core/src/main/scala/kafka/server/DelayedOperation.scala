@@ -262,7 +262,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       0
     else
       watchers.tryCompleteWatched()
-    debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    if (numCompleted > 0) {
+      debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    }
     numCompleted
   }
 

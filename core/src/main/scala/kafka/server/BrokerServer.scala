@@ -324,7 +324,7 @@ class BrokerServer(
                                                     metadataSnapshotter)
 
       val networkListeners = new ListenerCollection()
-      config.advertisedListeners.foreach { ep =>
+      config.effectiveAdvertisedListeners.foreach { ep =>
         networkListeners.add(new Listener().
           setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
           setName(ep.listenerName.value()).
@@ -404,10 +404,6 @@ class BrokerServer(
         config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent",
         SocketServer.DataPlaneThreadPrefix)
 
-      if (socketServer.controlPlaneRequestChannelOpt.isDefined) {
-        throw new RuntimeException(KafkaConfig.ControlPlaneListenerNameProp + " is not " +
-          "supported when in KRaft mode.")
-      }
       // Block until we've caught up with the latest metadata from the controller quorum.
       lifecycleManager.initialCatchUpFuture.get()
 

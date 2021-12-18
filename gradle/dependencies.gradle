@@ -63,7 +63,7 @@ versions += [
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
   gradle: "7.2",
-  grgit: "4.1.0",
+  grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",
   jackson: "2.12.3",

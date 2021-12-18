@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -312,10 +313,29 @@ public class ClientStateTest {
     public void shouldAddTasksWithLatestOffsetToPrevActiveTasks() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
         assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertTrue(client.prevStandbyTasks().isEmpty());
+    }
+
+    @Test
+    public void shouldThrowWhenSomeOwnedPartitionsAreNotRecognizedWhenInitializingPrevTasks() {
+        final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(taskForPartitionMap, false));
+    }
+
+    @Test
+    public void shouldFilterOutUnrecognizedPartitionsAndInitializePrevTasksWhenUsingNamedTopologies() {
+        final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        client.initializePrevTasks(taskForPartitionMap, true);
+        assertThat(client.prevActiveTasks().isEmpty(), is(true));
+        assertThat(client.previousAssignedTasks().isEmpty(), is(true));
+        assertThat(client.prevStandbyTasks().isEmpty(), is(true));
     }
 
     @Test
@@ -327,7 +347,7 @@ public class ClientStateTest {
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
         client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
 
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
@@ -338,13 +358,15 @@ public class ClientStateTest {
     public void shouldReturnPreviousActiveStandbyTasksForConsumer() {
         client.addOwnedPartitions(mkSet(TP_0_1, TP_1_1), "c1");
         client.addOwnedPartitions(mkSet(TP_0_2, TP_1_2), "c2");
-        client.initializePrevTasks(mkMap(
+        client.initializePrevTasks(
+            mkMap(
                 mkEntry(TP_0_0, TASK_0_0),
                 mkEntry(TP_0_1, TASK_0_1),
                 mkEntry(TP_0_2, TASK_0_2),
                 mkEntry(TP_1_0, TASK_0_0),
                 mkEntry(TP_1_1, TASK_0_1),
-                mkEntry(TP_1_2, TASK_0_2))
+                mkEntry(TP_1_2, TASK_0_2)),
+            false
         );
 
         client.addPreviousTasksAndOffsetSums("c1", mkMap(
@@ -406,7 +428,7 @@ public class ClientStateTest {
             mkEntry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
         assertThat(client.prevStandbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertThat(client.previousAssignedTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertTrue(client.prevActiveTasks().isEmpty());
@@ -501,7 +523,7 @@ public class ClientStateTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfAttemptingToInitializeNonEmptyPrevTaskSets() {
         client.addPreviousActiveTasks(Collections.singleton(TASK_0_1));
-        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap(), false));
     }
 
     @Test
