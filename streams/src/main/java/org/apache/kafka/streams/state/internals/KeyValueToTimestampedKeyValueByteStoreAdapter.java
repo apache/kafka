@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.SerdeAwareQuery;
+import org.apache.kafka.streams.query.SerdeAwareQuery.QuerySerdes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -118,6 +120,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         return store.isOpen();
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public <R> QueryResult<R> query(
         final Query<R> query,
@@ -126,7 +129,20 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
 
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        final QueryResult<R> result = store.query(query, positionBound, collectExecutionInfo);
+        final QueryResult<R> result;
+        if (query instanceof SerdeAwareQuery) {
+            final SerdeAwareQuery<?, ?, R> serdeAwareQuery = (SerdeAwareQuery<?, ?, R>) query;
+            final QuerySerdes<?, ?> serdes = serdeAwareQuery.getSerdes();
+            final QuerySerdes<?, ?> correctedSerdes = new QuerySerdes<>(
+                serdes.getTopic(),
+                serdes.getKeySerializer(),
+                ((ValueAndTimestampDeserializer<?>) serdes.getValueDeserializer()).valueDeserializer
+            );
+            ((SerdeAwareQuery) query).setSerdes(correctedSerdes);
+            result = store.query(query, positionBound, collectExecutionInfo);
+        } else {
+            result = store.query(query, positionBound, collectExecutionInfo);
+        }
         if (collectExecutionInfo) {
             final long end = System.nanoTime();
             result.addExecutionInfo(

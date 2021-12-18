@@ -24,9 +24,10 @@ import java.util.Objects;
  * Interactive query for retrieving a single record based on its key.
  */
 @Evolving
-public final class KeyQuery<K, V> implements Query<V> {
+public final class KeyQuery<K, V> implements SerdeAwareQuery<K, V, V> {
 
     private final K key;
+    private QuerySerdes<K, V> serdes;
 
     private KeyQuery(final K key) {
         this.key = Objects.requireNonNull(key);
@@ -48,5 +49,14 @@ public final class KeyQuery<K, V> implements Query<V> {
      */
     public K getKey() {
         return key;
+    }
+
+    @Override
+    public void setSerdes(final QuerySerdes<K, V> serdes) {
+        this.serdes = serdes;
+    }
+
+    public QuerySerdes<K, V> getSerdes() {
+        return serdes;
     }
 }

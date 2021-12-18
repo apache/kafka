@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.state.StateSerdes;
+
 /**
  * Marker interface that interactive queries (see {@link
  *  * org.apache.kafka.streams.KafkaStreams#query(StateQueryRequest)})
@@ -26,6 +30,34 @@ package org.apache.kafka.streams.query;
  *
  * @param <R> The type of the result returned by this query.
  */
-public interface SerdeAwareQuery<R> extends Query<R> {
+public interface SerdeAwareQuery<K, V, R> extends Query<R> {
+    public static final class QuerySerdes<K, V> {
 
+        private final String topic;
+        private final Serializer<K> keySerializer;
+        private final Deserializer<V> valueDeserializer;
+
+        public QuerySerdes(final String topic,
+                           final Serializer<K> keySerializer,
+                           final Deserializer<V> valueDeserializer) {
+            this.topic = topic;
+            this.keySerializer = keySerializer;
+            this.valueDeserializer = valueDeserializer;
+        }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public Serializer<K> getKeySerializer() {
+            return keySerializer;
+        }
+
+        public Deserializer<V> getValueDeserializer() {
+            return valueDeserializer;
+        }
+    }
+
+    void setSerdes(QuerySerdes<K, V> serdes);
+    QuerySerdes<K, V> getSerdes();
 }

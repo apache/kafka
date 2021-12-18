@@ -41,6 +41,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.SerdeAwareQuery;
+import org.apache.kafka.streams.query.SerdeAwareQuery.QuerySerdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -96,10 +97,6 @@ public class MeteredKeyValueStore<K, V>
             mkEntry(
                 RangeQuery.class,
                 (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
-            ),
-            mkEntry(
-                KeyQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(query, positionBound, collectExecutionInfo)
             )
         );
 
@@ -220,27 +217,39 @@ public class MeteredKeyValueStore<K, V>
         final QueryResult<R> result;
 
         if (query instanceof SerdeAwareQuery) {
-            final SerdeAwareQuery<R> serdeAwareQuery = (SerdeAwareQuery<R>) query;
-        }
-
-        final QueryHandler handler = queryHandlers.get(query.getClass());
-        if (handler == null) {
+            final SerdeAwareQuery<K, V, R> serdeAwareQuery = (SerdeAwareQuery<K, V, R>) query;
+            serdeAwareQuery.setSerdes(
+                new QuerySerdes<>(
+                    serdes.topic(),
+                    serdes.keySerializer(),
+                    serdes.valueDeserializer()
+                )
+            );
             result = wrapped().query(query, positionBound, collectExecutionInfo);
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
-            result = (QueryResult<R>) handler.apply(
-                query,
-                positionBound,
-                collectExecutionInfo,
-                this
-            );
-            if (collectExecutionInfo) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " with serdes "
-                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
+            final QueryHandler handler = queryHandlers.get(query.getClass());
+            if (handler == null) {
+                result = wrapped().query(query, positionBound, collectExecutionInfo);
+                if (collectExecutionInfo) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                }
+            } else {
+                result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    collectExecutionInfo,
+                    this
+                );
+                if (collectExecutionInfo) {
+                    result.addExecutionInfo(
+                        "Handled in " + getClass() + " with serdes "
+                            + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                }
             }
         }
         return result;
@@ -278,30 +287,6 @@ public class MeteredKeyValueStore<K, V>
             final QueryResult<KeyValueIterator<K, V>> typedQueryResult = rawResult.swapResult(
                 resultIterator
             );
-            result = (QueryResult<R>) typedQueryResult;
-        } else {
-            // the generic type doesn't matter, since failed queries have no result set.
-            result = (QueryResult<R>) rawResult;
-        }
-        return result;
-    }
-
-
-    @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final PositionBound positionBound,
-                                           final boolean collectExecutionInfo) {
-        final QueryResult<R> result;
-        final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
-        final KeyQuery<Bytes, byte[]> rawKeyQuery =
-            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
-        final QueryResult<byte[]> rawResult =
-            wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
-        if (rawResult.isSuccess()) {
-            final Deserializer<V> deserializer = getValueDeserializer();
-            final V value = deserializer.deserialize(serdes.topic(), rawResult.getResult());
-            final QueryResult<V> typedQueryResult =
-                rawResult.swapResult(value);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.

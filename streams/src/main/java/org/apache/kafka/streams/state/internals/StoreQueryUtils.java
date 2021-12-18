@@ -27,6 +27,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.SerdeAwareQuery.QuerySerdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -179,12 +180,20 @@ public final class StoreQueryUtils {
                                                   final boolean collectExecutionInfo,
                                                   final StateStore store) {
         if (store instanceof KeyValueStore) {
-            final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
+            final KeyQuery<Object, Object> keyQuery = (KeyQuery<Object, Object>) query;
+            final QuerySerdes<Object, Object> serdes = keyQuery.getSerdes();
+            final byte[] rawKey = serdes.getKeySerializer().serialize(
+                serdes.getTopic(),
+                keyQuery.getKey()
+            );
             final KeyValueStore<Bytes, byte[]> keyValueStore =
                 (KeyValueStore<Bytes, byte[]>) store;
             try {
-                final byte[] bytes = keyValueStore.get(rawKeyQuery.getKey());
-                return (QueryResult<R>) QueryResult.forResult(bytes);
+                final byte[] bytes = keyValueStore.get(Bytes.wrap(rawKey));
+
+                final Object deserialized =
+                    serdes.getValueDeserializer().deserialize(serdes.getTopic(), bytes);
+                return (QueryResult<R>) QueryResult.forResult(deserialized);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
                 return QueryResult.forFailure(
