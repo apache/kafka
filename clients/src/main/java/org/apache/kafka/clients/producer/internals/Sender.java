@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
@@ -145,7 +146,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
+        this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time, logContext);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
@@ -753,7 +754,7 @@ public class Sender implements Runnable {
             transactionManager.handleFailedBatch(batch, topLevelException, adjustSequenceNumbers);
         }
 
-        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+        this.sensors.recordErrors(batch.topicPartition.topic(), batch.topicPartition.partition(), batch.recordCount);
 
         if (batch.completeExceptionally(topLevelException, recordExceptions)) {
             maybeRemoveAndDeallocateBatch(batch);
@@ -869,10 +870,14 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
+        public final Sensor recordSuccessSensor;
+        public final Sensor recordFailureSensor;
+
         private final SenderMetricsRegistry metrics;
         private final Time time;
+        private final Logger log;
 
-        public SenderMetrics(SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time) {
+        public SenderMetrics(SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time, LogContext logContext) {
             this.metrics = metrics;
             this.time = time;
 
@@ -911,6 +916,11 @@ public class Sender implements Runnable {
 
             this.batchSplitSensor = metrics.sensor("batch-split-rate");
             this.batchSplitSensor.add(new Meter(metrics.batchSplitRate, metrics.batchSplitTotal));
+
+            this.recordSuccessSensor = metrics.sensor("kirk-test-record-success");
+            this.recordFailureSensor = metrics.sensor("kirk-test-record-failure");
+
+            this.log = logContext.logger(SenderMetrics.class);
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
@@ -951,6 +961,18 @@ public class Sender implements Runnable {
             }
         }
 
+        private void maybeRegisterKip714Metrics(String topic, int partition) {
+            Map<String, String> metricTags = new HashMap<>();
+            metricTags.put("topic", topic);
+            metricTags.put("partition", Integer.toString(partition));
+
+            MetricName metricName = metrics.kip714RecordSuccessTotal(metricTags);
+            recordSuccessSensor.add(metricName, new CumulativeSum());
+
+            metricName = metrics.kip714RecordFailureTotal(metricTags);
+            recordFailureSensor.add(metricName, new CumulativeSum());
+        }
+
         public void updateProduceRequestMetrics(Map<Integer, List<ProducerBatch>> batches) {
             long now = time.milliseconds();
             for (List<ProducerBatch> nodeBatch : batches.values()) {
@@ -959,6 +981,7 @@ public class Sender implements Runnable {
                     // register all per-topic metrics at once
                     String topic = batch.topicPartition.topic();
                     maybeRegisterTopicMetrics(topic);
+                    maybeRegisterKip714Metrics(topic, batch.topicPartition.partition());
 
                     // per-topic record send rate
                     String topicRecordsCountName = "topic." + topic + ".records-per-batch";
@@ -975,11 +998,14 @@ public class Sender implements Runnable {
                     Sensor topicCompressionRate = Objects.requireNonNull(this.metrics.getSensor(topicCompressionRateName));
                     topicCompressionRate.record(batch.compressionRatio());
 
+                    recordSuccessSensor.record(batch.recordCount);
+
                     // global metrics
                     this.batchSizeSensor.record(batch.estimatedSizeInBytes(), now);
                     this.queueTimeSensor.record(batch.queueTimeMs(), now);
                     this.compressionRateSensor.record(batch.compressionRatio());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
+
                     records += batch.recordCount;
                 }
                 this.recordsPerRequestSensor.record(records, now);
@@ -995,9 +1021,11 @@ public class Sender implements Runnable {
                 topicRetrySensor.record(count, now);
         }
 
-        public void recordErrors(String topic, int count) {
+        public void recordErrors(String topic, int partition, int count) {
+            maybeRegisterKip714Metrics(topic, partition);
             long now = time.milliseconds();
             this.errorSensor.record(count, now);
+            recordFailureSensor.record(count);
             String topicErrorName = "topic." + topic + ".record-errors";
             Sensor topicErrorSensor = this.metrics.getSensor(topicErrorName);
             if (topicErrorSensor != null)

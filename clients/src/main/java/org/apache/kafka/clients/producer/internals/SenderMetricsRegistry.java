@@ -30,6 +30,8 @@ import org.apache.kafka.common.metrics.Sensor;
 
 public class SenderMetricsRegistry {
 
+    final static String KIP_714_METRIC_GROUP_NAME = "producer-kip-714-metrics";
+
     final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
 
     private final List<MetricNameTemplate> allTemplates;
@@ -57,6 +59,9 @@ public class SenderMetricsRegistry {
     public final MetricName batchSplitRate;
     public final MetricName batchSplitTotal;
 
+    public final MetricNameTemplate recordSuccessTotal;
+    public final MetricNameTemplate recordFailureTotal;
+
     private final MetricNameTemplate topicRecordSendRate;
     private final MetricNameTemplate topicRecordSendTotal;
     private final MetricNameTemplate topicByteRate;
@@ -69,6 +74,7 @@ public class SenderMetricsRegistry {
     
     private final Metrics metrics;
     private final Set<String> tags;
+    private final LinkedHashSet<String> kip714Tags;
     private final LinkedHashSet<String> topicTags;
 
     public SenderMetricsRegistry(Metrics metrics) {
@@ -120,6 +126,15 @@ public class SenderMetricsRegistry {
         this.batchSplitTotal = createMetricName("batch-split-total", 
                 "The total number of batch splits");
 
+        this.kip714Tags = new LinkedHashSet<>(tags);
+        this.kip714Tags.add("topic");
+        this.kip714Tags.add("partition");
+
+        this.recordSuccessTotal = createKip714Template("org.apache.kafka.client.producer.partition.record.success",
+            "Number of records that permanently failed delivery.");
+        this.recordFailureTotal = createKip714Template("org.apache.kafka.client.producer.partition.record.failures",
+            "Number of records that have been successfully produced.");
+
         this.produceThrottleTimeAvg = createMetricName("produce-throttle-time-avg",
                 "The average time in ms a request was throttled by a broker");
         this.produceThrottleTimeMax = createMetricName("produce-throttle-time-max",
@@ -156,8 +171,21 @@ public class SenderMetricsRegistry {
         return this.metrics.metricInstance(createTemplate(name, KafkaProducerMetrics.GROUP, description, this.tags));
     }
 
+    private MetricNameTemplate createKip714Template(String name, String description) {
+        return createTemplate(name, KIP_714_METRIC_GROUP_NAME, description, this.kip714Tags);
+    }
+
     private MetricNameTemplate createTopicTemplate(String name, String description) {
         return createTemplate(name, TOPIC_METRIC_GROUP_NAME, description, this.topicTags);
+    }
+
+    /** KIP-714 metrics **/
+    public MetricName kip714RecordSuccessTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.recordSuccessTotal, tags);
+    }
+
+    public MetricName kip714RecordFailureTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.recordFailureTotal, tags);
     }
 
     /** topic level metrics **/
