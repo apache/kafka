@@ -1747,7 +1747,7 @@ public class KafkaStreams implements AutoCloseable {
      *                                    topology.
      */
     @Evolving
-    public <R> StateQueryResult<R> query(final StateQueryRequest<R> request) {
+    public <K, V, R> StateQueryResult<R> query(final StateQueryRequest<K, V, R> request) {
         final String storeName = request.getStoreName();
         if (!topologyMetadata.hasStore(storeName)) {
             throw new UnknownStateStoreException(

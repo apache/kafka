@@ -34,7 +34,7 @@ import java.util.Optional;
  * <p>
  */
 @Evolving
-public final class RangeQuery<K, V> implements SerdeAwareQuery<K, V, KeyValueIterator<K, V>> {
+public final class RangeQuery<K, V> implements Query<K, V, KeyValueIterator<K, V>> {
 
 
     private final Optional<K> lower;

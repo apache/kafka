@@ -72,8 +72,8 @@ public final class QueryResult<R> {
      * <p>
      * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
      */
-    public static <R> QueryResult<R> forUnknownQueryType(
-        final Query<R> query,
+    public static <K, V, R> QueryResult<R> forUnknownQueryType(
+        final Query<K, V, R> query,
         final StateStore store) {
 
         return new QueryResult<>(

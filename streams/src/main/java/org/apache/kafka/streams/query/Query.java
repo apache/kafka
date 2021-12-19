@@ -30,6 +30,12 @@ package org.apache.kafka.streams.query;
  *
  * @param <R> The type of the result returned by this query.
  */
-public interface Query<R> {
+public interface Query<K, V, R> {
 
+    default void setSerdes(final QuerySerdes<K, V> serdes) {
+    }
+
+    default QuerySerdes<K, V> getSerdes() {
+        return null;
+    }
 }

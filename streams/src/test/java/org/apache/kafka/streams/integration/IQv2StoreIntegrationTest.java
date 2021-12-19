@@ -110,7 +110,7 @@ public class IQv2StoreIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final StoresToTest storeToTest;
 
-    public static class UnknownQuery implements Query<Void> {
+    public static class UnknownQuery implements Query<Void, Void, Void> {
 
     }
 
@@ -536,7 +536,7 @@ public class IQv2StoreIntegrationTest {
         // See KAFKA-13523
 
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
 
         final StateQueryResult<ValueAndTimestamp<Integer>> result = kafkaStreams.query(request);
@@ -552,7 +552,7 @@ public class IQv2StoreIntegrationTest {
     public void shouldRejectUnknownQuery() {
 
         final UnknownQuery query = new UnknownQuery();
-        final StateQueryRequest<Void> request = inStore(STORE_NAME).withQuery(query);
+        final StateQueryRequest<Void, Void, Void> request = inStore(STORE_NAME).withQuery(query);
         final Set<Integer> partitions = mkSet(0, 1);
 
         final StateQueryResult<Void> result =
@@ -598,7 +598,7 @@ public class IQv2StoreIntegrationTest {
             query = RangeQuery.withNoBounds();
         }
 
-        final StateQueryRequest<KeyValueIterator<Integer, V>> request =
+        final StateQueryRequest<Integer, V, KeyValueIterator<Integer, V>> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(mkSet(0, 1))
@@ -627,10 +627,12 @@ public class IQv2StoreIntegrationTest {
                     queryResult.get(partition)::getFailureMessage
                 );
 
-                final KeyValueIterator<Integer, V> iterator = queryResult.get(partition)
-                                                                         .getResult();
-                while (iterator.hasNext()) {
-                    actualValue.add(valueExtactor.apply(iterator.next().value));
+                try (
+                    final KeyValueIterator<Integer, V> iterator =
+                        queryResult.get(partition).getResult()) {
+                    while (iterator.hasNext()) {
+                        actualValue.add(valueExtactor.apply(iterator.next().value));
+                    }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
@@ -644,7 +646,7 @@ public class IQv2StoreIntegrationTest {
         final Integer expectedValue) {
 
         final KeyQuery<Integer, V> query = KeyQuery.withKey(key);
-        final StateQueryRequest<V> request =
+        final StateQueryRequest<Integer, V, V> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(mkSet(0, 1))
@@ -677,7 +679,7 @@ public class IQv2StoreIntegrationTest {
 
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .enableExecutionInfo()
@@ -701,7 +703,7 @@ public class IQv2StoreIntegrationTest {
 
         final UnknownQuery query = new UnknownQuery();
         final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<Void> request =
+        final StateQueryRequest<Void, Void, Void> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .enableExecutionInfo()

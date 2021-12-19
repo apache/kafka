@@ -22,7 +22,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,8 +113,8 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <R> QueryResult<R> query(
-        final Query<R> query,
+    public <K, V, R> QueryResult<R> query(
+        final Query<K, V, R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 

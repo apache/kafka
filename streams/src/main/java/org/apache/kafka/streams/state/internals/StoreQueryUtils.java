@@ -27,8 +27,8 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.QuerySerdes;
 import org.apache.kafka.streams.query.RangeQuery;
-import org.apache.kafka.streams.query.SerdeAwareQuery.QuerySerdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore.MeteredKeyValueIterator;
@@ -51,7 +51,7 @@ public final class StoreQueryUtils {
     @FunctionalInterface
     public interface QueryHandler {
         QueryResult<?> apply(
-            final Query<?> query,
+            final Query<?, ?, ?> query,
             final PositionBound positionBound,
             final boolean collectExecutionInfo,
             final StateStore store
@@ -76,8 +76,8 @@ public final class StoreQueryUtils {
     private StoreQueryUtils() {
     }
     @SuppressWarnings("unchecked")
-    public static <R> QueryResult<R> handleBasicQueries(
-        final Query<R> query,
+    public static <K, V, R> QueryResult<R> handleBasicQueries(
+        final Query<K, V, R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo,
         final StateStore store,
@@ -145,8 +145,8 @@ public final class StoreQueryUtils {
     }
 
     @SuppressWarnings("unchecked")
-    private static <R> QueryResult<R> runRangeQuery(
-        final Query<R> query,
+    private static <K, V, R> QueryResult<R> runRangeQuery(
+        final Query<K, V, R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo,
         final StateStore store
@@ -155,12 +155,11 @@ public final class StoreQueryUtils {
             return QueryResult.forUnknownQueryType(query, store);
         }
         final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
-        final RangeQuery<Object, Object> rangeQuery = (RangeQuery<Object, Object>) query;
+        final QuerySerdes<K, V> serdes = query.getSerdes();
 
-        final QuerySerdes<Object, Object> serdes = rangeQuery.getSerdes();
-
-        final Optional<Bytes> lowerRange = rangeQuery.getLowerBound().map(k -> Bytes.wrap(serdes.getKeySerializer().serialize(serdes.getTopic(), k)));
-        final Optional<Bytes> upperRange = rangeQuery.getUpperBound().map(k -> Bytes.wrap(serdes.getKeySerializer().serialize(serdes.getTopic(), k)));
+        final RangeQuery<K, V> rangeQuery = (RangeQuery<K, V>) query;
+        final Optional<Bytes> lowerRange = rangeQuery.getLowerBound().map(serdes::serializeKey);
+        final Optional<Bytes> upperRange = rangeQuery.getUpperBound().map(serdes::serializeKey);
         final KeyValueIterator<Bytes, byte[]> iterator;
         try {
             if (!lowerRange.isPresent() && !upperRange.isPresent()) {
@@ -168,7 +167,7 @@ public final class StoreQueryUtils {
             } else {
                 iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
             }
-            final MeteredKeyValueIterator<Object, Object> keyValueIterator =
+            final MeteredKeyValueIterator<K, V> keyValueIterator =
                 new MeteredKeyValueIterator<>(
                 iterator,
                 null,
@@ -188,24 +187,19 @@ public final class StoreQueryUtils {
     }
 
     @SuppressWarnings("unchecked")
-    private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
+    private static <K, V, R> QueryResult<R> runKeyQuery(final Query<K, V, R> query,
                                                   final PositionBound positionBound,
                                                   final boolean collectExecutionInfo,
                                                   final StateStore store) {
         if (store instanceof KeyValueStore) {
             final KeyValueStore<Bytes, byte[]> keyValueStore =
                 (KeyValueStore<Bytes, byte[]>) store;
-
-            final KeyQuery<Object, Object> keyQuery = (KeyQuery<Object, Object>) query;
-            final QuerySerdes<Object, Object> serdes = keyQuery.getSerdes();
-            final byte[] rawKey = serdes.getKeySerializer().serialize(
-                serdes.getTopic(),
-                keyQuery.getKey()
-            );
+            final QuerySerdes<K, V> serdes = query.getSerdes();
+            final KeyQuery<K, V> keyQuery = (KeyQuery<K, V>) query;
             try {
-                final byte[] bytes = keyValueStore.get(Bytes.wrap(rawKey));
-                final Object deserialized =
-                    serdes.getValueDeserializer().deserialize(serdes.getTopic(), bytes);
+                final byte[] bytes = keyValueStore.get(serdes.serializeKey(keyQuery.getKey()));
+                final V deserialized =
+                    serdes.deserializeValue(bytes);
                 return (QueryResult<R>) QueryResult.forResult(deserialized);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
@@ -219,7 +213,7 @@ public final class StoreQueryUtils {
         }
     }
 
-    private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
+    private static <K, V, R> String parseStoreException(final Exception e, final StateStore store, final Query<K, V, R> query) {
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter printWriter = new PrintWriter(stringWriter);
         printWriter.println(

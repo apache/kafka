@@ -327,8 +327,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     @SuppressWarnings("unchecked")
-    public <R> QueryResult<R> query(
-        final Query<R> query,
+    public <K, V, R> QueryResult<R> query(
+        final Query<K, V, R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 

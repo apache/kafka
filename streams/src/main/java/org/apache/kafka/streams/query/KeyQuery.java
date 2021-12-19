@@ -24,7 +24,7 @@ import java.util.Objects;
  * Interactive query for retrieving a single record based on its key.
  */
 @Evolving
-public final class KeyQuery<K, V> implements SerdeAwareQuery<K, V, V> {
+public final class KeyQuery<K, V> implements Query<K, V, V> {
 
     private final K key;
     private QuerySerdes<K, V> serdes;

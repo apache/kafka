@@ -145,8 +145,8 @@ public interface StateStore {
      * @param <R> The result type
      */
     @Evolving
-    default <R> QueryResult<R> query(
-        Query<R> query,
+    default <K, V, R> QueryResult<R> query(
+        Query<K, V, R> query,
         PositionBound positionBound,
         boolean collectExecutionInfo) {
         // If a store doesn't implement a query handler, then all queries are unknown.

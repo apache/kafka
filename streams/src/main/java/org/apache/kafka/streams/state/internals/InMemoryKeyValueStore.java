@@ -27,7 +27,6 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -94,8 +93,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <R> QueryResult<R> query(
-        final Query<R> query,
+    public <K, V, R> QueryResult<R> query(
+        final Query<K, V, R> query,
         final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 

@@ -180,7 +180,7 @@ public class IQv2IntegrationTest {
     @Test
     public void shouldFailUnknownStore() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore("unknown-store").withQuery(query);
 
         assertThrows(UnknownStateStoreException.class, () -> kafkaStreams.query(request));
@@ -189,7 +189,7 @@ public class IQv2IntegrationTest {
     @Test
     public void shouldFailNotStarted() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
 
         assertThrows(StreamsNotStartedException.class, () -> kafkaStreams.query(request));
@@ -198,7 +198,7 @@ public class IQv2IntegrationTest {
     @Test
     public void shouldFailStopped() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
 
         kafkaStreams.start();
@@ -210,7 +210,7 @@ public class IQv2IntegrationTest {
     public void shouldRejectNonRunningActive()
         throws NoSuchFieldException, IllegalAccessException {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).requireActive();
         final Set<Integer> partitions = mkSet(0, 1);
 
@@ -267,7 +267,7 @@ public class IQv2IntegrationTest {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withPartitions(partitions);
 
         kafkaStreams.start();
@@ -281,7 +281,7 @@ public class IQv2IntegrationTest {
     public void shouldFetchExplicitlyFromAllPartitions() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withAllPartitions();
 
         kafkaStreams.start();
@@ -296,7 +296,7 @@ public class IQv2IntegrationTest {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
-        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+        final StateQueryRequest<Integer, ValueAndTimestamp<Integer>, ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withPartitions(partitions);
 
         final StreamsBuilder builder = new StreamsBuilder();

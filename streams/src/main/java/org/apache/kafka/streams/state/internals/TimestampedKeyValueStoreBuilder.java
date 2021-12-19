@@ -188,7 +188,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         }
 
         @Override
-        public <R> QueryResult<R> query(final Query<R> query,
+        public <K, V, R> QueryResult<R> query(final Query<K, V, R> query,
             final PositionBound positionBound,
             final boolean collectExecutionInfo) {
 

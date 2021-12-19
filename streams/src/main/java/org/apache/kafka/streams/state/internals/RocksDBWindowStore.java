@@ -129,7 +129,7 @@ public class RocksDBWindowStore
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+    public <K, V, R> QueryResult<R> query(final Query<K, V, R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
         return StoreQueryUtils.handleBasicQueries(
             query,

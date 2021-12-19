@@ -31,12 +31,12 @@ import java.util.Set;
  * @param <R> The type of the query result.
  */
 @Evolving
-public class StateQueryRequest<R> {
+public class StateQueryRequest<K, V, R> {
 
     private final String storeName;
     private final PositionBound position;
     private final Optional<Set<Integer>> partitions;
-    private final Query<R> query;
+    private final Query<K, V, R> query;
     private final boolean executionInfoEnabled;
     private final boolean requireActive;
 
@@ -44,7 +44,7 @@ public class StateQueryRequest<R> {
         final String storeName,
         final PositionBound position,
         final Optional<Set<Integer>> partitions,
-        final Query<R> query,
+        final Query<K, V, R> query,
         final boolean executionInfoEnabled,
         final boolean requireActive) {
 
@@ -66,7 +66,7 @@ public class StateQueryRequest<R> {
     /**
      * Bounds the position of the state store against its input topics.
      */
-    public StateQueryRequest<R> withPositionBound(final PositionBound positionBound) {
+    public StateQueryRequest<K, V, R> withPositionBound(final PositionBound positionBound) {
         return new StateQueryRequest<>(
             storeName,
             positionBound,
@@ -81,7 +81,7 @@ public class StateQueryRequest<R> {
     /**
      * Specifies that the query will run against all locally available partitions.
      */
-    public StateQueryRequest<R> withAllPartitions() {
+    public StateQueryRequest<K, V, R> withAllPartitions() {
         return new StateQueryRequest<>(
             storeName,
             position,
@@ -98,7 +98,7 @@ public class StateQueryRequest<R> {
      * partitions in this set are not valid partitions for the store, the response will contain a
      * {@link FailureReason#DOES_NOT_EXIST} for those partitions.
      */
-    public StateQueryRequest<R> withPartitions(final Set<Integer> partitions) {
+    public StateQueryRequest<K, V, R> withPartitions(final Set<Integer> partitions) {
         return new StateQueryRequest<>(
             storeName,
             position,
@@ -113,7 +113,7 @@ public class StateQueryRequest<R> {
      * Requests for stores and the Streams runtime to record any useful details about how the query
      * was executed.
      */
-    public StateQueryRequest<R> enableExecutionInfo() {
+    public StateQueryRequest<K, V, R> enableExecutionInfo() {
         return new StateQueryRequest<>(
             storeName,
             position,
@@ -129,7 +129,7 @@ public class StateQueryRequest<R> {
      * (aka "active"). Partitions for which this instance is not the active replica will return
      * {@link FailureReason#NOT_ACTIVE}.
      */
-    public StateQueryRequest<R> requireActive() {
+    public StateQueryRequest<K, V, R> requireActive() {
         return new StateQueryRequest<>(
             storeName,
             position,
@@ -158,7 +158,7 @@ public class StateQueryRequest<R> {
     /**
      * The query this request is meant to run.
      */
-    public Query<R> getQuery() {
+    public Query<K, V, R> getQuery() {
         return query;
     }
 
@@ -211,7 +211,7 @@ public class StateQueryRequest<R> {
         /**
          * Specifies the query to run on the specified store.
          */
-        public <R> StateQueryRequest<R> withQuery(final Query<R> query) {
+        public <K, V, R> StateQueryRequest<K, V, R> withQuery(final Query<K, V, R> query) {
             return new StateQueryRequest<>(
                 name, // name is already specified
                 PositionBound.unbounded(), // default: unbounded

@@ -26,8 +26,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.SerdeAwareQuery;
-import org.apache.kafka.streams.query.SerdeAwareQuery.QuerySerdes;
+import org.apache.kafka.streams.query.QuerySerdes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -123,23 +122,14 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
-    public <R> QueryResult<R> query(
-        final Query<R> query,
-        final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+    public <K, V, R> QueryResult<R> query(final Query<K, V, R> query,
+                                    final PositionBound positionBound,
+                                    final boolean collectExecutionInfo) {
+
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
         final QueryResult<R> result;
-        if (query instanceof SerdeAwareQuery) {
-            final SerdeAwareQuery<?, ?, R> serdeAwareQuery = (SerdeAwareQuery<?, ?, R>) query;
-            final QuerySerdes correctedSerdes = getCorrectedSerdes(
-                serdeAwareQuery.getSerdes(),
-                ((ValueAndTimestampDeserializer<?>) serdeAwareQuery.getSerdes().getValueDeserializer()).valueDeserializer
-            );
-            ((SerdeAwareQuery) query).setSerdes(correctedSerdes);
-            result = store.query(query, positionBound, collectExecutionInfo);
-        } else {
-            result = store.query(query, positionBound, collectExecutionInfo);
-        }
+        query.setSerdes(adaptValueSerde(query.getSerdes()));
+        result = store.query(query, positionBound, collectExecutionInfo);
         if (collectExecutionInfo) {
             final long end = System.nanoTime();
             result.addExecutionInfo(
@@ -149,14 +139,25 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         return result;
     }
 
+    /**
+     * When serving {@link StateStore#query(Query, PositionBound, boolean)} queries,
+     * we perform the inverse operation from the rest of the methods in this class.
+     * <p>
+     * Instead of adapting the value byte array by padding a fake timestamp onto the value
+     * (See {@link org.apache.kafka.streams.state.TimestampedBytesStore#convertToTimestampedFormat(byte[])}),
+     * we adapt the serde to strip off the ValueAndTimestampDeserializer, which would be doomed
+     * to return the dummy timestamp anyway.
+     * <p>
+     * This approach is more performant because we avoid allocating a new array for the padded
+     * value and we also avoid deserializing the dummy timestamp later when we read the value.
+     */
     @SuppressWarnings("unchecked")
-    private <K, V> QuerySerdes<K, V> getCorrectedSerdes(final QuerySerdes<?, ?> serdes,
-                                                        final Deserializer<?> valueDeserializer) {
-        return new QuerySerdes<>(
+    private <K, V> QuerySerdes<K, V> adaptValueSerde(final QuerySerdes<?, ?> serdes) {
+        return serdes == null ? null : new QuerySerdes<>(
             serdes.getTopic(),
             (Serializer<K>) serdes.getKeySerializer(),
             (Deserializer<K>) serdes.getKeyDeserializer(),
-            (Deserializer<V>) valueDeserializer
+            ((ValueAndTimestampDeserializer<V>) serdes.getValueDeserializer()).valueDeserializer
         );
     }
 

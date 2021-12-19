@@ -119,9 +119,9 @@ public class IntegrationTestUtils {
      * Once position bounding is generally supported, we should migrate tests to wait on the
      * expected response position.
      */
-    public static <R> StateQueryResult<R> iqv2WaitForPartitions(
+    public static <K, V, R> StateQueryResult<R> iqv2WaitForPartitions(
         final KafkaStreams kafkaStreams,
-        final StateQueryRequest<R> request,
+        final StateQueryRequest<K, V, R> request,
         final Set<Integer> partitions) {
 
         final long start = System.currentTimeMillis();
@@ -150,9 +150,9 @@ public class IntegrationTestUtils {
      * Once position bounding is generally supported, we should migrate tests to wait on the
      * expected response position.
      */
-    public static <R> StateQueryResult<R> iqv2WaitForResult(
+    public static <K, V, R> StateQueryResult<R> iqv2WaitForResult(
         final KafkaStreams kafkaStreams,
-        final StateQueryRequest<R> request) {
+        final StateQueryRequest<K, V, R> request) {
 
         final long start = System.currentTimeMillis();
         final long deadline = start + DEFAULT_TIMEOUT;
