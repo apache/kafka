@@ -17,15 +17,11 @@
 package org.apache.kafka.streams.query.internals;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.QueryResult;
 
-import java.util.List;
-
 /**
- * This utility class is an internal API, but it must be located in the same package as
- * {@link QueryResult} so that it can access the package-private constructor
- * {@link SucceededQueryResult (Object, List, Position )}
+ * Internal utility class to support operations the Kafka Streams framework needs to
+ * perform on {@link QueryResult}s.
  */
 @Unstable
 public final class InternalQueryResultUtil {
