@@ -760,7 +760,7 @@ class LogLoaderTest {
     val lastOffset = log.logEndOffset
     // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
     val lastTimeIndexOffset = log.logEndOffset - 1
-    val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
+    val lastTimeIndexTimestamp = log.activeSegment.largestTimestamp
     // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
     val numTimeIndexEntries = log.activeSegment.timeIndex.entries + {
       if (log.activeSegment.timeIndex.lastEntry.offset == log.logEndOffset - 1) 0 else 1
@@ -1699,7 +1699,8 @@ class LogLoaderTest {
     val lastOffset = log.logEndOffset
     // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
     val lastTimeIndexOffset = log.logEndOffset
-    val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
+    val largestTimestamp = log.activeSegment.largestTimestamp
+    val lastTimeIndexTimestamp = log.activeSegment.timeIndex.lastEntry.timestamp
     // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
     log.close()
 
@@ -1708,7 +1709,8 @@ class LogLoaderTest {
     assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
     assertEquals(lastIndexOffset, log.activeSegment.offsetIndex.lastOffset, "Should have same last index offset as before.")
     assertEquals(numIndexEntries, log.activeSegment.offsetIndex.entries, "Should have same number of index entries as before.")
-    assertEquals(lastTimeIndexTimestamp, log.activeSegment.largestTimestamp, "Should have same last time index timestamp")
+    assertEquals(largestTimestamp, log.activeSegment.largestTimestamp, "Should have same largest timestamp")
+    assertEquals(lastTimeIndexTimestamp, log.activeSegment.timeIndex.lastEntry.timestamp, "Should have same last time index timestamp")
     assertEquals(lastTimeIndexOffset, log.activeSegment.timeIndex.lastEntry.offset, "Should have same last time index offset")
     assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
     log.close()
