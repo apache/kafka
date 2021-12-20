@@ -1677,4 +1677,40 @@ class LogLoaderTest {
       s"Found offsets with missing producer state snapshot files: $offsetsWithMissingSnapshotFiles")
     assertFalse(logDir.list().exists(_.endsWith(UnifiedLog.DeletedFileSuffix)), "Expected no files to be present with the deleted file suffix")
   }
+
+  @Test
+  def testRecoverWithEmptyActiveSegment(): Unit = {
+    val numMessages = 100
+    val messageSize = 100
+    val segmentSize = 7 * messageSize
+    val indexInterval = 3 * messageSize
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = indexInterval, segmentIndexBytes = 4096)
+    var log = createLog(logDir, logConfig)
+    for(i <- 0 until numMessages)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
+        timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+    assertEquals(numMessages, log.logEndOffset,
+      "After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages))
+    log.roll()
+    log.flush(true)
+    val lastIndexOffset = log.activeSegment.offsetIndex.lastOffset
+    val numIndexEntries = log.activeSegment.offsetIndex.entries
+    assertEquals(0, numIndexEntries)
+    val lastOffset = log.logEndOffset
+    // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
+    val lastTimeIndexOffset = log.logEndOffset
+    val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
+    // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
+    log.close()
+
+    log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
+    assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
+    assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
+    assertEquals(lastIndexOffset, log.activeSegment.offsetIndex.lastOffset, "Should have same last index offset as before.")
+    assertEquals(numIndexEntries, log.activeSegment.offsetIndex.entries, "Should have same number of index entries as before.")
+    assertEquals(lastTimeIndexTimestamp, log.activeSegment.largestTimestamp, "Should have same last time index timestamp")
+    assertEquals(lastTimeIndexOffset, log.activeSegment.timeIndex.lastEntry.offset, "Should have same last time index offset")
+    assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
+    log.close()
+  }
 }
