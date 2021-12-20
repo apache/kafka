@@ -75,6 +75,23 @@ class CheckpointReadBuffer[T](location: String,
   }
 }
 
+class CheckpointWriteBuffer[T](writer: BufferedWriter,
+                               version: Int,
+                               formatter: CheckpointFileFormatter[T]) {
+  def write(entries: Iterable[T]): Unit = {
+      writer.write(version.toString)
+      writer.newLine()
+
+      writer.write(entries.size.toString)
+      writer.newLine()
+
+      entries.foreach { entry =>
+        writer.write(formatter.toLine(entry))
+        writer.newLine()
+      }
+  }
+}
+
 class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],
@@ -93,18 +110,9 @@ class CheckpointFile[T](val file: File,
         // write to temp file and then swap with the existing file
         val fileOutputStream = new FileOutputStream(tempPath.toFile)
         val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
+        val checkpointWriteBuffer = new CheckpointWriteBuffer[T](writer, version, formatter)
         try {
-          writer.write(version.toString)
-          writer.newLine()
-
-          writer.write(entries.size.toString)
-          writer.newLine()
-
-          entries.foreach { entry =>
-            writer.write(formatter.toLine(entry))
-            writer.newLine()
-          }
-
+          checkpointWriteBuffer.write(entries)
           writer.flush()
           fileOutputStream.getFD().sync()
         } finally {
