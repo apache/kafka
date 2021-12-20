@@ -14,22 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.query;
+package org.apache.kafka.streams.query.internals;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.QueryResult;
 
 import java.util.List;
 
 /**
  * This utility class is an internal API, but it must be located in the same package as
  * {@link QueryResult} so that it can access the package-private constructor
- * {@link QueryResult#QueryResult(Object, List, Position)}
+ * {@link SucceededQueryResult (Object, List, Position )}
  */
 @Unstable
 public final class InternalQueryResultUtil {
     // uninstantiable utility class
     public InternalQueryResultUtil() {}
 
+    /**
+     * Creates a new `QueryResult` preserving the execution info
+     * and position of the provided result.
+     */
     public static <R> QueryResult<R> copyAndSubstituteDeserializedResult(
         final QueryResult<?> rawResult,
         final R deserializedResult) {
@@ -39,7 +45,7 @@ public final class InternalQueryResultUtil {
                 "Callers must avoid calling this method on a failed result."
             );
         } else {
-            return new QueryResult<>(
+            return new SucceededQueryResult<>(
                 deserializedResult,
                 rawResult.getExecutionInfo(),
                 rawResult.getPosition()
