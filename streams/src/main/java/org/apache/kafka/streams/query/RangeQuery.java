@@ -34,7 +34,7 @@ import java.util.Optional;
  * <p>
  */
 @Evolving
-public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
+public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
 
     private final Optional<K> lower;
@@ -52,7 +52,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param upper The key that specifies the upper bound of the range
      * @param <K> The key type
      * @param <V> The value type
-     * @return An iterator of records
      */
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
         return new RangeQuery<>(Optional.of(lower), Optional.of(upper));
@@ -63,7 +62,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param upper The key that specifies the upper bound of the range
      * @param <K> The key type
      * @param <V> The value type
-     * @return An iterator of records
      */
     public static <K, V> RangeQuery<K, V> withUpperBound(final K upper) {
         return new RangeQuery<>(Optional.empty(), Optional.of(upper));
@@ -74,7 +72,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param lower The key that specifies the lower bound of the range
      * @param <K> The key type
      * @param <V> The value type
-     * @return An iterator of records
      */
     public static <K, V> RangeQuery<K, V> withLowerBound(final K lower) {
         return new RangeQuery<>(Optional.of(lower), Optional.empty());
@@ -84,7 +81,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * Interactive scan query that returns all records in the store.
      * @param <K> The key type
      * @param <V> The value type
-     * @return An iterator of records
      */
     public static <K, V> RangeQuery<K, V> withNoBounds() {
         return new RangeQuery<>(Optional.empty(), Optional.empty());
@@ -92,7 +88,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
     /**
      * The lower bound of the query, if specified.
-     * @return The lower bound
      */
     public Optional<K> getLowerBound() {
         return lower;
@@ -100,7 +95,6 @@ public class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
     /**
      * The upper bound of the query, if specified
-     * @return The upper bound
      */
     public Optional<K> getUpperBound() {
         return upper;

@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
@@ -50,7 +51,7 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.PingQuery;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -178,8 +179,8 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldFailUnknownStore() {
-        final PingQuery query = new PingQuery();
-        final StateQueryRequest<Boolean> request =
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore("unknown-store").withQuery(query);
 
         assertThrows(UnknownStateStoreException.class, () -> kafkaStreams.query(request));
@@ -187,8 +188,8 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldFailNotStarted() {
-        final PingQuery query = new PingQuery();
-        final StateQueryRequest<Boolean> request =
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
 
         assertThrows(StreamsNotStartedException.class, () -> kafkaStreams.query(request));
@@ -196,8 +197,8 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldFailStopped() {
-        final PingQuery query = new PingQuery();
-        final StateQueryRequest<Boolean> request =
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
 
         kafkaStreams.start();
@@ -208,8 +209,8 @@ public class IQv2IntegrationTest {
     @Test
     public void shouldRejectNonRunningActive()
         throws NoSuchFieldException, IllegalAccessException {
-        final PingQuery query = new PingQuery();
-        final StateQueryRequest<Boolean> request =
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).requireActive();
         final Set<Integer> partitions = mkSet(0, 1);
 
@@ -238,7 +239,7 @@ public class IQv2IntegrationTest {
             stateField.setAccessible(true);
             stateField.set(streamThread, State.PARTITIONS_ASSIGNED);
 
-            final StateQueryResult<Boolean> result =
+            final StateQueryResult<ValueAndTimestamp<Integer>> result =
                 IntegrationTestUtils.iqv2WaitForPartitions(
                     kafkaStreams,
                     request,
@@ -263,14 +264,14 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldFetchFromPartition() {
-        final PingQuery query = new PingQuery();
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
-        final StateQueryRequest<Boolean> request =
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withPartitions(partitions);
 
         kafkaStreams.start();
-        final StateQueryResult<Boolean> result =
+        final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
@@ -278,13 +279,13 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldFetchExplicitlyFromAllPartitions() {
-        final PingQuery query = new PingQuery();
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = mkSet(0, 1);
-        final StateQueryRequest<Boolean> request =
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withAllPartitions();
 
         kafkaStreams.start();
-        final StateQueryResult<Boolean> result =
+        final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForPartitions(kafkaStreams, request, partitions);
 
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
@@ -292,10 +293,10 @@ public class IQv2IntegrationTest {
 
     @Test
     public void shouldNotRequireQueryHandler() {
-        final PingQuery query = new PingQuery();
+        final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
-        final StateQueryRequest<Boolean> request =
+        final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).withPartitions(partitions);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -411,10 +412,11 @@ public class IQv2IntegrationTest {
         kafkaStreams.cleanUp();
 
         kafkaStreams.start();
-        final StateQueryResult<Boolean> result =
+        final StateQueryResult<ValueAndTimestamp<Integer>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        final QueryResult<Boolean> queryResult = result.getPartitionResults().get(partition);
+        final QueryResult<ValueAndTimestamp<Integer>> queryResult =
+            result.getPartitionResults().get(partition);
         assertThat(queryResult.isFailure(), is(true));
         assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
         assertThat(queryResult.getFailureMessage(), matchesPattern(

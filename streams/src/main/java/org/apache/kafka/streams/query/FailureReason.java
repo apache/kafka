@@ -19,6 +19,13 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
+/**
+ * This enumeration type captures the various top-level reasons that a particular
+ * partition of a store would fail to execute a query. Stores should generally
+ * respond with a failure message instead of throwing an exception.
+ * <p>
+ * Intended to be used in {@link QueryResult#forFailure(FailureReason, String)}.
+ */
 @Evolving
 public enum FailureReason {
     /**
