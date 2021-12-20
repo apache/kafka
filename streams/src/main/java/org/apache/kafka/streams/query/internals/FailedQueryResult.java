@@ -18,44 +18,24 @@ package org.apache.kafka.streams.query.internals;
 
 
 import org.apache.kafka.streams.query.FailureReason;
-import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
-
-import java.util.LinkedList;
-import java.util.List;
 
 /**
  * Container for a single partition's result when executing a {@link StateQueryRequest}.
  *
  * @param <R> The result type of the query.
  */
-public final class FailedQueryResult<R> implements QueryResult<R> {
+public final class FailedQueryResult<R>
+    extends AbstractQueryResult<R>
+    implements QueryResult<R> {
 
     private final FailureReason failureReason;
     private final String failure;
-    private final List<String> executionInfo = new LinkedList<>();
-    private Position position;
 
     public FailedQueryResult(final FailureReason failureReason, final String failure) {
         this.failureReason = failureReason;
         this.failure = failure;
-    }
-
-    /**
-     * Used by stores to add detailed execution information (if requested) during query execution.
-     */
-    public void addExecutionInfo(final String message) {
-        executionInfo.add(message);
-    }
-
-    /**
-     * Used by stores to report what exact position in the store's history it was at when it
-     * executed the query.
-     */
-    public void setPosition(final Position position) {
-        this.position = position;
     }
 
     /**
@@ -73,24 +53,6 @@ public final class FailedQueryResult<R> implements QueryResult<R> {
      */
     public boolean isFailure() {
         return true;
-    }
-
-    /**
-     * If detailed execution information was requested in {@link StateQueryRequest#enableExecutionInfo()},
-     * this method returned the execution details for this partition's result.
-     */
-    public List<String> getExecutionInfo() {
-        return executionInfo;
-    }
-
-    /**
-     * This state partition's exact position in its history when this query was executed. Can be
-     * used in conjunction with subsequent queries via {@link StateQueryRequest#withPositionBound(PositionBound)}.
-     * <p>
-     * Note: stores are encouraged, but not required to set this property.
-     */
-    public Position getPosition() {
-        return position;
     }
 
     /**
@@ -123,15 +85,5 @@ public final class FailedQueryResult<R> implements QueryResult<R> {
         throw new IllegalArgumentException(
             "Cannot get result for failed query. Failure is " + failureReason.name() + ": "
                 + failure);
-    }
-
-    @Override
-    public String toString() {
-        return "FailedQueryResult{" +
-            "executionInfo=" + executionInfo +
-            ", failureReason=" + failureReason +
-            ", failure='" + failure + '\'' +
-            ", position=" + position +
-            '}';
     }
 }

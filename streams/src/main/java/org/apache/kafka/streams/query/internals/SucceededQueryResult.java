@@ -19,11 +19,9 @@ package org.apache.kafka.streams.query.internals;
 
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -31,11 +29,11 @@ import java.util.List;
  *
  * @param <R> The result type of the query.
  */
-public final class SucceededQueryResult<R> implements QueryResult<R> {
+public final class SucceededQueryResult<R>
+    extends AbstractQueryResult<R>
+    implements QueryResult<R> {
 
     private final R result;
-    private List<String> executionInfo = new LinkedList<>();
-    private Position position;
 
     public SucceededQueryResult(final R result) {
         this.result = result;
@@ -47,24 +45,8 @@ public final class SucceededQueryResult<R> implements QueryResult<R> {
     SucceededQueryResult(final R result,
                          final List<String> executionInfo,
                          final Position position) {
+        super(executionInfo, position);
         this.result = result;
-        this.executionInfo = executionInfo;
-        this.position = position;
-    }
-
-    /**
-     * Used by stores to add detailed execution information (if requested) during query execution.
-     */
-    public void addExecutionInfo(final String message) {
-        executionInfo.add(message);
-    }
-
-    /**
-     * Used by stores to report what exact position in the store's history it was at when it
-     * executed the query.
-     */
-    public void setPosition(final Position position) {
-        this.position = position;
     }
 
     /**
@@ -82,24 +64,6 @@ public final class SucceededQueryResult<R> implements QueryResult<R> {
      */
     public boolean isFailure() {
         return false;
-    }
-
-    /**
-     * If detailed execution information was requested in {@link StateQueryRequest#enableExecutionInfo()},
-     * this method returned the execution details for this partition's result.
-     */
-    public List<String> getExecutionInfo() {
-        return executionInfo;
-    }
-
-    /**
-     * This state partition's exact position in its history when this query was executed. Can be
-     * used in conjunction with subsequent queries via {@link StateQueryRequest#withPositionBound(PositionBound)}.
-     * <p>
-     * Note: stores are encouraged, but not required to set this property.
-     */
-    public Position getPosition() {
-        return position;
     }
 
     /**
@@ -134,14 +98,5 @@ public final class SucceededQueryResult<R> implements QueryResult<R> {
      */
     public R getResult() {
         return result;
-    }
-
-    @Override
-    public String toString() {
-        return "QueryResult{" +
-            "executionInfo=" + executionInfo +
-            ", result=" + result +
-            ", position=" + position +
-            '}';
     }
 }
