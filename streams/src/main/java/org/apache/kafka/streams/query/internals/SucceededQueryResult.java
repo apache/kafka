@@ -22,7 +22,6 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
-import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 
 import java.util.LinkedList;
 import java.util.List;
