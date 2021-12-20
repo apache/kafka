@@ -19,7 +19,7 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.log._
 import kafka.server._
-import kafka.server.checkpoints.LeaderEpochCheckpoint
+import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.AbstractConfig
@@ -33,7 +33,7 @@ import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.io.{File, FileInputStream}
 import java.nio.file.{Files, Paths}
@@ -553,6 +553,58 @@ class RemoteLogManagerTest {
       assertEquals(expectedEndMetadata.endOffset()+1, logStartOffset.get)
     }
     verify(logConfig, log, rlmmManager, rsmManager)
+  }
+
+  @Test
+  def testGetLeaderEpochCheckpoint(): Unit = {
+    val epochs = Seq(EpochEntry(0, 33), EpochEntry(1, 43), EpochEntry(2, 99), EpochEntry(3, 105))
+    epochs.foreach(epochEntry => cache.assign(epochEntry.epoch, epochEntry.startOffset))
+
+    val log: Log = createMock(classOf[Log])
+    expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
+    replay(log)
+    val remoteLogManager = new RemoteLogManager(_ => Option(log), (_, _) => {}, rlmConfig, time, brokerId = 1,
+      clusterId, logsDir, brokerTopicStats)
+
+    var actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = -1, endOffset = 200).read()
+    assertEquals(epochs.take(4), actual)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = -1, endOffset = 105).read()
+    assertEquals(epochs.take(3), actual)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = -1, endOffset = 100).read()
+    assertEquals(epochs.take(3), actual)
+
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 34, endOffset = 200).read()
+    assertEquals(Seq(EpochEntry(0, 34)) ++ epochs.slice(1, 4), actual)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 43, endOffset = 200).read()
+    assertEquals(epochs.slice(1, 4), actual)
+
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 34, endOffset = 100).read()
+    assertEquals(Seq(EpochEntry(0, 34)) ++ epochs.slice(1, 3), actual)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 34, endOffset = 30).read()
+    assertTrue(actual.isEmpty)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 101, endOffset = 101).read()
+    assertTrue(actual.isEmpty)
+    actual = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = 101, endOffset = 102).read()
+    assertEquals(Seq(EpochEntry(2, 101)), actual)
+  }
+
+  @Test
+  def testGetLeaderEpochCheckpointEncoding(): Unit = {
+    val epochs = Seq(EpochEntry(0, 33), EpochEntry(1, 43), EpochEntry(2, 99), EpochEntry(3, 105))
+    epochs.foreach(epochEntry => cache.assign(epochEntry.epoch, epochEntry.startOffset))
+
+    val log: Log = createMock(classOf[Log])
+    expect(log.leaderEpochCache).andReturn(Option(cache)).anyTimes()
+    replay(log)
+    val remoteLogManager = new RemoteLogManager(_ => Option(log), (_, _) => {}, rlmConfig, time, brokerId = 1,
+      clusterId, logsDir, brokerTopicStats)
+
+    val tmpFile = TestUtils.tempFile()
+    val checkpoint = remoteLogManager.getLeaderEpochCheckpoint(log, startOffset = -1, endOffset = 200)
+    assertEquals(epochs, checkpoint.read())
+
+    Files.write(tmpFile.toPath, checkpoint.readAsByteBuffer().array())
+    assertEquals(epochs, new LeaderEpochCheckpointFile(tmpFile).read())
   }
 
   private def listRemoteLogSegmentMetadataByTime(segmentCount: Int,

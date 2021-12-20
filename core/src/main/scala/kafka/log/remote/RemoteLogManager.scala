@@ -20,7 +20,7 @@ import kafka.cluster.Partition
 import kafka.log.{AbortedTxn, Log, OffsetPosition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
+import kafka.server.checkpoints.{CheckpointWriteBuffer, LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
@@ -36,9 +36,9 @@ import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, 
 import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
 import org.apache.kafka.server.log.remote.storage._
 
-import java.io.{Closeable, File, InputStream}
+import java.io.{BufferedWriter, ByteArrayOutputStream, Closeable, InputStream, OutputStreamWriter}
 import java.nio.ByteBuffer
-import java.nio.file.Files
+import java.nio.charset.StandardCharsets
 import java.security.{AccessController, PrivilegedAction}
 import java.util.Optional
 import java.util.concurrent._
@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.{lang, util}
 import scala.collection.Searching._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Set, mutable}
+import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
@@ -322,6 +322,28 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     } else false
   }
 
+  /**
+   * Returns the leader epoch checkpoint by truncating with the given start[exclusive] and end[inclusive] offset
+   * @param log         The actual log from where to take the leader-epoch checkpoint
+   * @param startOffset The start offset of the checkpoint file (exclusive in the truncation).
+   *                    If start offset is 6, then it will retain an entry at offset 6.
+   * @param endOffset   The end offset of the checkpoint file (inclusive in the truncation)
+   *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
+   * @return the truncated leader epoch checkpoint
+   */
+  private[remote] def getLeaderEpochCheckpoint(log: Log, startOffset: Long, endOffset: Long): InMemoryLeaderEpochCheckpoint = {
+    val checkpoint = new InMemoryLeaderEpochCheckpoint()
+    log.leaderEpochCache
+      .map(cache => cache.writeTo(checkpoint))
+      .foreach { x =>
+        if (startOffset >= 0) {
+          x.truncateFromStart(startOffset)
+        }
+        x.truncateFromEnd(endOffset)
+      }
+    checkpoint
+  }
+
   class RLMTask(tpId: TopicIdPartition) extends CancellableRunnable with Logging {
     this.logIdent = s"[RemoteLogManager=$brokerId partition=$tpId] "
     @volatile private var leaderEpoch: Int = -1
@@ -407,58 +429,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val endOffset = nextOffset - 1
                 val producerIdSnapshotFile = log.producerStateManager.fetchSnapshot(nextOffset).orNull
 
-                def createLeaderEpochs(): ByteBuffer = {
-                  val leaderEpochStateFile = new File(logFile.getParentFile, "leader-epoch-checkpoint-" + nextOffset)
-                  try {
-                    log.leaderEpochCache
-                      .map(cache => cache.writeTo(new LeaderEpochCheckpointFile(leaderEpochStateFile)))
-                      .foreach(x => {
-                        x.truncateFromEnd(nextOffset)
-                      })
-
-                    ByteBuffer.wrap(Files.readAllBytes(leaderEpochStateFile.toPath))
-                  } finally {
-                    try {
-                      Files.delete(leaderEpochStateFile.toPath)
-                    } catch {
-                      case ex: Exception => warn(s"Error occurred while deleting leader epoch file: $leaderEpochStateFile", ex)
-                    }
-                  }
-                }
-
-                def createLeaderEpochEntries(startOffset: Long): Option[collection.Seq[EpochEntry]] = {
-                  val leaderEpochStateFile = new File(logFile.getParentFile,
-                    "leader-epoch-checkpoint-entries-" + startOffset + "-" + nextOffset)
-                  try {
-                    val checkpointFile = {
-                      val file = new LeaderEpochCheckpointFile(leaderEpochStateFile)
-                      log.leaderEpochCache
-                        .map(cache => cache.writeTo(file))
-                        .map(x => {
-                          x.truncateFromStart(startOffset)
-                          x.truncateFromEnd(nextOffset)
-                          file
-                        })
-                    }
-                    checkpointFile.map(x => x.read())
-                  } finally {
-                    try {
-                      Files.delete(leaderEpochStateFile.toPath)
-                    } catch {
-                      case ex: Exception => warn(s"Error occurred while deleting leader epoch file: $leaderEpochStateFile", ex)
-                    }
-                  }
-                }
-
-                val leaderEpochs = createLeaderEpochs()
-                val segmentLeaderEpochEntries = createLeaderEpochEntries(segment.baseOffset)
-                val segmentLeaderEpochs: util.HashMap[Integer, java.lang.Long] = new util.HashMap()
-                if (segmentLeaderEpochEntries.isDefined) {
-                  segmentLeaderEpochEntries.get.foreach(entry => segmentLeaderEpochs.put(entry.epoch, entry.startOffset))
-                } else {
-                  val epoch = log.leaderEpochCache.flatMap(x => x.latestEntry.map(y => y.epoch)).getOrElse(0)
-                  segmentLeaderEpochs.put(epoch, segment.baseOffset)
-                }
+                val segmentLeaderEpochs = getLeaderEpochCheckpoint(log, segment.baseOffset, nextOffset).read().map {
+                  case EpochEntry(epoch, startOffset) => Integer.valueOf(epoch) -> lang.Long.valueOf(startOffset)
+                }.toMap.asJava
 
                 val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
                   segment.largestTimestamp, brokerId, time.milliseconds(), segment.log.sizeInBytes(),
@@ -466,9 +439,10 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
                 remoteLogMetadataManager.addRemoteLogSegmentMetadata(remoteLogSegmentMetadata)
 
+                val leaderEpochsIndex = getLeaderEpochCheckpoint(log, startOffset = -1, nextOffset).readAsByteBuffer()
                 val segmentData = new LogSegmentData(logFile.toPath, segment.lazyOffsetIndex.get.path,
                   segment.lazyTimeIndex.get.path, Optional.ofNullable(segment.txnIndex.path),
-                  producerIdSnapshotFile.toPath, leaderEpochs)
+                  producerIdSnapshotFile.toPath, leaderEpochsIndex)
                 remoteLogStorageManager.copyLogSegmentData(remoteLogSegmentMetadata, segmentData)
 
                 val rlsmAfterCreate = new RemoteLogSegmentMetadataUpdate(id, time.milliseconds(),
@@ -957,4 +931,22 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
   }
 
+  class InMemoryLeaderEpochCheckpoint extends LeaderEpochCheckpoint {
+    private var epochs: Seq[EpochEntry] = Seq()
+    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
+    override def read(): Seq[EpochEntry] = this.epochs
+
+    def readAsByteBuffer(): ByteBuffer = {
+      val stream = new ByteArrayOutputStream()
+      val writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))
+      val writeBuffer = new CheckpointWriteBuffer[EpochEntry](writer, version = 0, LeaderEpochCheckpointFile.Formatter)
+      try {
+        writeBuffer.write(epochs)
+        writer.flush()
+        ByteBuffer.wrap(stream.toByteArray)
+      } finally {
+        writer.close()
+      }
+    }
+  }
 }
