@@ -41,6 +41,17 @@ public final class QueryResult<R> {
         this.failure = null;
     }
 
+    /**
+     * package-private constructor used in {@link InternalQueryResultUtil}.
+     */
+    QueryResult(final R result, final List<String> executionInfo, final Position position) {
+        this.result = result;
+        this.failureReason = null;
+        this.failure = null;
+        this.executionInfo = executionInfo;
+        this.position = position;
+    }
+
     private QueryResult(final FailureReason failureReason, final String failure) {
         this.result = null;
         this.failureReason = failureReason;
@@ -195,19 +206,6 @@ public final class QueryResult<R> {
                     + failure);
         }
         return result;
-    }
-
-    public <V> QueryResult<V> swapResult(final V value) {
-        if (isFailure()) {
-            throw new IllegalArgumentException(
-                "Callers must avoid calling this method on a failed result."
-            );
-        } else {
-            final QueryResult<V> result = new QueryResult<>(value);
-            result.executionInfo = executionInfo;
-            result.position = position;
-            return result;
-        }
     }
 
     @Override
