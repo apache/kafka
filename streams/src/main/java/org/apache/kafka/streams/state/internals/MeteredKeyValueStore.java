@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
@@ -88,13 +89,18 @@ public class MeteredKeyValueStore<K, V>
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
-    private Map<Class, QueryHandler> queryHandlers =
-            mkMap(
-                    mkEntry(
-                            RangeQuery.class,
-                            (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
-                    )
-            );
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, QueryHandler> queryHandlers =
+        mkMap(
+            mkEntry(
+                RangeQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
+            ),
+            mkEntry(
+                KeyQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(query, positionBound, collectExecutionInfo)
+            )
+        );
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
@@ -209,7 +215,7 @@ public class MeteredKeyValueStore<K, V>
                                     final PositionBound positionBound,
                                     final boolean collectExecutionInfo) {
 
-        final long start = System.nanoTime();
+        final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
@@ -217,34 +223,37 @@ public class MeteredKeyValueStore<K, V>
             result = wrapped().query(query, positionBound, collectExecutionInfo);
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
-                        "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns");
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
             result = (QueryResult<R>) handler.apply(
-                    query,
-                    positionBound,
-                    collectExecutionInfo,
-                    this
+                query,
+                positionBound,
+                collectExecutionInfo,
+                this
             );
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
-                        "Handled in " + getClass() + " with serdes "
-                                + serdes + " in " + (System.nanoTime() - start) + "ns");
+                    "Handled in " + getClass() + " with serdes "
+                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runRangeQuery(
-            final Query<R> query, final PositionBound positionBound, final boolean collectExecutionInfo) {
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final boolean collectExecutionInfo) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
         final RangeQuery<Bytes, byte[]> rawRangeQuery;
         if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withRange(keyBytes(typedQuery.getLowerBound().get()),
-                keyBytes(typedQuery.getUpperBound().get()));
+            rawRangeQuery = RangeQuery.withRange(
+                keyBytes(typedQuery.getLowerBound().get()),
+                keyBytes(typedQuery.getUpperBound().get())
+            );
         } else if (typedQuery.getLowerBound().isPresent()) {
             rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
         } else if (typedQuery.getUpperBound().isPresent()) {
@@ -253,12 +262,17 @@ public class MeteredKeyValueStore<K, V>
             rawRangeQuery = RangeQuery.withNoBounds();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
+            wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
             final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
-                    iterator, getSensor, getValueDeserializer());
-            final QueryResult<KeyValueIterator<K, V>> typedQueryResult = QueryResult.forResult(resultIterator);
+                iterator,
+                getSensor,
+                getValueDeserializer()
+            );
+            final QueryResult<KeyValueIterator<K, V>> typedQueryResult = rawResult.swapResult(
+                resultIterator
+            );
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -267,17 +281,41 @@ public class MeteredKeyValueStore<K, V>
         return result;
     }
 
+
     @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                           final PositionBound positionBound,
+                                           final boolean collectExecutionInfo) {
+        final QueryResult<R> result;
+        final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
+        final KeyQuery<Bytes, byte[]> rawKeyQuery =
+            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+        final QueryResult<byte[]> rawResult =
+            wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+        if (rawResult.isSuccess()) {
+            final Deserializer<V> deserializer = getValueDeserializer();
+            final V value = deserializer.deserialize(serdes.topic(), rawResult.getResult());
+            final QueryResult<V> typedQueryResult =
+                rawResult.swapResult(value);
+            result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private Deserializer<V> getValueDeserializer() {
-        final Serde<V> vSerde = serdes.valueSerde();
+        final Serde<V> valueSerde = serdes.valueSerde();
         final boolean timestamped = WrappedStateStore.isTimestamped(wrapped());
         final Deserializer<V> deserializer;
-        if (!timestamped && vSerde instanceof ValueAndTimestampSerde) {
+        if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
             final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
-                    (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) vSerde).deserializer();
+                (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) valueSerde).deserializer();
             deserializer = (Deserializer<V>) valueAndTimestampDeserializer.valueDeserializer;
         } else {
-            deserializer = vSerde.deserializer();
+            deserializer = valueSerde.deserializer();
         }
         return deserializer;
     }

@@ -197,6 +197,19 @@ public final class QueryResult<R> {
         return result;
     }
 
+    public <V> QueryResult<V> swapResult(final V value) {
+        if (isFailure()) {
+            throw new IllegalArgumentException(
+                "Callers must avoid calling this method on a failed result."
+            );
+        } else {
+            final QueryResult<V> result = new QueryResult<>(value);
+            result.executionInfo = executionInfo;
+            result.position = position;
+            return result;
+        }
+    }
+
     @Override
     public String toString() {
         return "QueryResult{" +
