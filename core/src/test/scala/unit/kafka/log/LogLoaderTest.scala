@@ -1697,11 +1697,9 @@ class LogLoaderTest {
     val numIndexEntries = log.activeSegment.offsetIndex.entries
     assertEquals(0, numIndexEntries)
     val lastOffset = log.logEndOffset
-    // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
     val lastTimeIndexOffset = log.logEndOffset
     val largestTimestamp = log.activeSegment.largestTimestamp
     val lastTimeIndexTimestamp = log.activeSegment.timeIndex.lastEntry.timestamp
-    // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
     log.close()
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
