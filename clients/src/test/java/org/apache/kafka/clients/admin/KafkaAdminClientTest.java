@@ -3928,8 +3928,8 @@ public class KafkaAdminClientTest {
                 return leaveGroupRequest.members().stream().allMatch(member -> member.reason().equals("testing remove members reason"));
             }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
                     Arrays.asList(
-                            new MemberResponse().setGroupInstanceId("instance-1"),
-                            new MemberResponse().setGroupInstanceId("instance-2")
+                        new MemberResponse().setGroupInstanceId("instance-1"),
+                        new MemberResponse().setGroupInstanceId("instance-2")
                     ))
             ));
 

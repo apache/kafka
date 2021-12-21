@@ -25,7 +25,7 @@
   //
   // Version 4 is the first flexible version.
   //
-  // Version 5 adds the Reason field (KIP-800).
+  // Version 5 is the same as version 4.
   "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [

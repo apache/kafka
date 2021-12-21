@@ -1837,10 +1837,9 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupRequest createLeaveGroupRequest(short version) {
-        MemberIdentity member = new MemberIdentity()
-                .setMemberId("consumer1");
+        MemberIdentity member = new MemberIdentity().setMemberId("consumer1");
         if (version >= 5) {
-            member.setMemberId("reason: test");
+            member.setReason("reason: test");
         }
         return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member))
                 .build(version);
