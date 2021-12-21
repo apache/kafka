@@ -289,13 +289,14 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   def epochForOffset(offset: Long): Option[Int] = {
     inReadLock(lock) {
       var previousEpoch = earliestEntry.map(_.epoch)
-      epochs.values().iterator().forEachRemaining(entry => {
-        if (entry.startOffset == offset)
-          return Some(entry.epoch)
-        if (entry.startOffset > offset)
-          return previousEpoch
-        previousEpoch = Some(entry.epoch)
-      })
+      epochs.values().asScala.foreach {
+        case EpochEntry(epoch, startOffset) =>
+          if (startOffset == offset)
+            return Some(epoch)
+          if (startOffset > offset)
+            return previousEpoch
+          previousEpoch = Some(epoch)
+      }
       previousEpoch
     }
   }

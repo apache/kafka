@@ -22,6 +22,25 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
 
 import scala.collection.{Map, Set}
+import kafka.api.Request
+import kafka.cluster.BrokerEndPoint
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.server.QuotaFactory.UnboundedQuota
+import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
+import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
+
+import java.util
+import java.util.Optional
+import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 class ReplicaAlterLogDirsThread(name: String,
                                 leader: LeaderEndPoint,
@@ -124,6 +143,7 @@ class ReplicaAlterLogDirsThread(name: String,
   override protected def buildRemoteLogAuxState(partition: TopicPartition,
                                                 currentLeaderEpoch: Int,
                                                 fetchOffset: Long,
+                                                epochForFetchOffset: Int,
                                                 leaderLogStartOffset: Long): Unit = {
     // JBOD is not supported with tiered storage.
     truncateFullyAndStartAt(partition, fetchOffset)

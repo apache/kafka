@@ -113,7 +113,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     partitionData.toMap
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long) = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset
   }

@@ -700,7 +700,7 @@ class AbstractFetcherThreadTest {
     val partition = new TopicPartition("topic", 0)
     var fetchedEarliestOffset = false
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint {
-      override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+      override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
         fetchedEarliestOffset = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
@@ -1184,10 +1184,10 @@ class AbstractFetcherThreadTest {
       }.toMap
     }
 
-    override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+    override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
       val leaderState = leaderPartitionState(topicPartition)
       checkLeaderEpochAndThrow(leaderEpoch, leaderState)
-      leaderState.logStartOffset
+      (leaderState.leaderEpoch, leaderState.logStartOffset)
     }
 
     override def fetchLatestOffset(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
@@ -1475,6 +1475,7 @@ class AbstractFetcherThreadTest {
     override protected def buildRemoteLogAuxState(topicPartition: TopicPartition,
                                                   currentLeaderEpoch: Int,
                                                   fetchOffset: Long,
+                                                  epochForFetchOffset: Int,
                                                   leaderLogStartOffset: Long): Unit = {
       truncateFullyAndStartAt(topicPartition, fetchOffset)
       replicaPartitionState(topicPartition).logStartOffset = leaderLogStartOffset

@@ -73,7 +73,7 @@ trait LeaderEndPoint {
    *
    * @return A long representing the earliest offset in the leader's topic partition.
    */
-  def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
+  def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
   /**
    * Fetches the log end offset of the given topic partition from the leader.
