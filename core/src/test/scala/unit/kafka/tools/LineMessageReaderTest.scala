@@ -140,6 +140,30 @@ class LineMessageReaderTest {
   }
 
   @Test
+  def testHeaderDemarcationCollision(): Unit ={
+    val props = defaultTestProps
+    props.put("headers.delimiter", "\t")
+    props.put("headers.separator", "\t")
+    props.put("headers.key.separator", "\t")
+
+    assertThrowsOnInvalidPatternConfig(props, "headers.delimiter and headers.separator may not be equal")
+
+    props.put("headers.separator", ",")
+    assertThrowsOnInvalidPatternConfig(props, "headers.delimiter and headers.key.separator may not be equal")
+
+    props.put("headers.key.separator", ",")
+    assertThrowsOnInvalidPatternConfig(props, "headers.separator and headers.key.separator may not be equal")
+  }
+
+  private def assertThrowsOnInvalidPatternConfig(props: Properties, expectedMessage: String): Unit = {
+    val exception = assertThrows(classOf[KafkaException], () => new LineMessageReader().init(null, props))
+    assertEquals(
+      expectedMessage,
+      exception.getMessage
+    )
+  }
+
+  @Test
   def testIgnoreErrorInInput(): Unit = {
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0\n" +

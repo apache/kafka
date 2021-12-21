@@ -308,6 +308,12 @@ object ConsoleProducer {
         headerKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
+      if (headersDelimiter.equals(headersSeparator))
+        throw new KafkaException("headers.delimiter and headers.separator may not be equal")
+      if (headersDelimiter.equals(headerKeySeparator))
+        throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
+      if (headersSeparator.equals(headerKeySeparator))
+        throw new KafkaException("headers.separator and headers.key.separator may not be equal")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
