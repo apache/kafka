@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.internals.QuotaConfigs
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.easymock.EasyMock
@@ -315,6 +315,38 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     } finally {
       admin.close()
     }
+  }
+
+  @Test
+  def testInvalidConfigChangeOnTopicWithAdminClient(): Unit = {
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic),
+      "Should contain a ConfigHandler for topics")
+    val tp = new TopicPartition("test", 0)
+    val logProps = new Properties()
+    logProps.put(RetentionMsProp, "5000")
+    logProps.put(RetentionBytesProp, "5000")
+    createTopic(tp.topic, 1, 1, logProps)
+    TestUtils.retry(10000) {
+      val logOpt = this.servers.head.logManager.getLog(tp)
+      assertTrue(logOpt.isDefined)
+    }
+
+    def alterTopicConfig(op: AlterConfigOp): Unit = {
+      val admin = createAdminClient()
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
+      try {
+        admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+        fail("Should fail with Invalid request exception")
+      } catch {
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[InvalidRequestException])
+      } finally {
+        admin.close()
+      }
+    }
+
+    alterTopicConfig(new AlterConfigOp(new ConfigEntry(LocalLogRetentionMsProp, "10000"), AlterConfigOp.OpType.SET))
+    alterTopicConfig(new AlterConfigOp(new ConfigEntry(LocalLogRetentionBytesProp, "10000"), AlterConfigOp.OpType.SET))
   }
 
   @Test

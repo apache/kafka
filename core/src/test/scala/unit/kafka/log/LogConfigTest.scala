@@ -279,6 +279,6 @@ class LogConfigTest {
 
     props.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs.toString)
     props.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes.toString)
-    assertThrows(classOf[ConfigException], () => new LogConfig(props));
+    assertThrows(classOf[ConfigException], () => LogConfig.validate(props))
   }
 }
