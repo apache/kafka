@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -270,9 +271,11 @@ public class MeteredKeyValueStore<K, V>
                 getSensor,
                 getValueDeserializer()
             );
-            final QueryResult<KeyValueIterator<K, V>> typedQueryResult = rawResult.swapResult(
-                resultIterator
-            );
+            final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
+                    rawResult,
+                    resultIterator
+                );
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
@@ -296,7 +299,7 @@ public class MeteredKeyValueStore<K, V>
             final Deserializer<V> deserializer = getValueDeserializer();
             final V value = deserializer.deserialize(serdes.topic(), rawResult.getResult());
             final QueryResult<V> typedQueryResult =
-                rawResult.swapResult(value);
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, value);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
