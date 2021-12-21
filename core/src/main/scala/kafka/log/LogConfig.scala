@@ -106,42 +106,14 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
   val remoteStorageEnable = getBoolean(LogConfig.RemoteLogStorageEnableProp)
 
-  val localRetentionMs: Long = {
+  def localRetentionMs: Long = {
     val localLogRetentionMs = getLong(LogConfig.LocalLogRetentionMsProp)
-    if (localLogRetentionMs == -2) {  // -2 indicates to derive value from retentionMs property.
-      retentionMs
-    } else {
-      if (retentionMs != -1) {
-        if (localLogRetentionMs == -1) {
-          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
-            s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
-        }
-        if (localLogRetentionMs > retentionMs) {
-          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
-            s"Value must not be more than ${LogConfig.RetentionMsProp} property: $retentionMs")
-        }
-      }
-      localLogRetentionMs
-    }
+    if (localLogRetentionMs == -2) retentionMs else localLogRetentionMs
   }
 
-  val localRetentionBytes: Long = {
-    val localLogRetentionSize = getLong(LogConfig.LocalLogRetentionBytesProp)
-    if (localLogRetentionSize == -2) { // -2 indicates to derive value from retentionSize property.
-      retentionSize
-    } else {
-      if (retentionSize != -1) {
-        if (localLogRetentionSize == -1) {
-          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
-            s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
-        }
-        if (localLogRetentionSize > retentionSize) {
-          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
-            s"Value must not be more than ${LogConfig.RetentionBytesProp} property value: $retentionSize");
-        }
-      }
-      localLogRetentionSize
-    }
+  def localRetentionBytes: Long = {
+    val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
+    if (localLogRetentionBytes == -2) retentionSize else localLogRetentionBytes
   }
 
   def randomSegmentJitter: Long =
@@ -401,6 +373,36 @@ object LogConfig {
     if (minCompactionLag > maxCompactionLag) {
       throw new InvalidConfigurationException(s"conflict topic config setting $MinCompactionLagMsProp " +
         s"($minCompactionLag) > $MaxCompactionLagMsProp ($maxCompactionLag)")
+    }
+
+    if (props.containsKey(LocalLogRetentionBytesProp)) {
+      val retentionSize = props.get(RetentionBytesProp).asInstanceOf[Long]
+      val localLogRetentionSize = props.get(LocalLogRetentionBytesProp).asInstanceOf[Long]
+      if (retentionSize > -1 && localLogRetentionSize != -2) {
+        if (localLogRetentionSize == -1) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
+            s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
+        }
+        if (localLogRetentionSize > retentionSize) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
+            s"Value must not be more than ${LogConfig.RetentionBytesProp} property value: $retentionSize");
+        }
+      }
+    }
+
+    if (props.containsKey(LocalLogRetentionMsProp)) {
+      val retentionMs = props.get(RetentionMsProp).asInstanceOf[Long]
+      val localLogRetentionMs = props.get(LocalLogRetentionMsProp).asInstanceOf[Long]
+      if (retentionMs != -1 && localLogRetentionMs != -2) {
+        if (localLogRetentionMs == -1) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
+            s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+        }
+        if (localLogRetentionMs > retentionMs) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
+            s"Value must not be more than ${LogConfig.RetentionMsProp} property: $retentionMs")
+        }
+      }
     }
   }
 
