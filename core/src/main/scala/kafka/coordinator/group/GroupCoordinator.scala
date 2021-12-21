@@ -619,7 +619,7 @@ class GroupCoordinator(val brokerId: Int,
 
     def removeCurrentMemberFromGroup(group: GroupMetadata, memberId: String, reason: Option[String]): Unit = {
       val member = group.get(memberId)
-      val leaveReason = reason.getOrElse("unknown reason")
+      val leaveReason = reason.getOrElse("not provided")
       removeMemberAndUpdateGroup(group, member, s"Removing member $memberId on LeaveGroup; client reason: $leaveReason")
       removeHeartbeatForLeavingMember(group, member.memberId)
       info(s"Member $member has left group $groupId through explicit `LeaveGroup`; client reason: $leaveReason")
