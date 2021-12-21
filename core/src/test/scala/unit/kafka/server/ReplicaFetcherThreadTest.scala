@@ -236,7 +236,7 @@ class ReplicaFetcherThreadTest {
       quota = null,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
 
-    val result = thread.fetchEpochEndOffsets(Map(
+    val result = thread.fetchEpochEndOffsetsFromLeader(Map(
       t1p0 -> new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(0),

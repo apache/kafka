@@ -19,16 +19,18 @@ package kafka.server
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
+import kafka.log.{LeaderOffsetIncremented, LogAppendInfo, UnifiedLog}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
+import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition, Uuid}
+
 import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
@@ -159,22 +161,35 @@ class ReplicaAlterLogDirsThread(name: String,
     }
   }
 
-  override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+  override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
-    partition.localLogOrException.logStartOffset
+    val log = partition.localLogOrException
+    val offset = log.logStartOffset
+    doFetchEpochAndOffset(log, offset)
   }
 
-  override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
+  override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
-    partition.localLogOrException.logEndOffset
+    val log = partition.localLogOrException
+    val offset = log.logEndOffset
+    doFetchEpochAndOffset(log, offset)
+  }
+
+  private def doFetchEpochAndOffset(log: UnifiedLog, offset: Long) = {
+    val leaderEpochFileCache = log.leaderEpochCache.getOrElse(throw new KafkaException("No leader epoch cache exists for partition: " + log.topicPartition))
+    leaderEpochFileCache.epochForOffset(offset) match {
+      case Some(epoch) => (epoch, offset)
+      case None => (RecordBatch.NO_PARTITION_LEADER_EPOCH, offset)
+    }
   }
 
   /**
    * Fetches offset for leader epoch from local replica for each given topic partitions
+   *
    * @param partitions map of topic partition -> leader epoch of the future replica
    * @return map of topic partition -> end offset for a requested leader epoch
    */
-  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochEndOffsetsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epochData) =>
       try {
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
@@ -311,16 +326,11 @@ class ReplicaAlterLogDirsThread(name: String,
     }
   }
 
-  override protected def buildRemoteLogAuxState(partition: TopicPartition,
-                                                currentLeaderEpoch: Int,
-                                                fetchOffset: Long,
-                                                leaderLogStartOffset: Long): Unit = {
+  override protected def buildRemoteLogAuxState(partition: TopicPartition, currentLeaderEpoch: Int, fetchOffset: Long, epochForFetchOffset: Int, leaderLogStartOffset: Long): Unit = {
     // JBOD is not supported with tiered storage.
     truncateFullyAndStartAt(partition, fetchOffset)
     replicaMgr.futureLocalLogOrException(partition)
       .maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
-
-    // todo-tier: Confirm whether to rebuild the leader epoch and producer snapshots for future log.
   }
 
 }

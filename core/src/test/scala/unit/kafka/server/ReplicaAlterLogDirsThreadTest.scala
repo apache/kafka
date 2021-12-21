@@ -341,7 +341,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochEndOffsets(Map(
+    val result = thread.fetchEpochEndOffsetsFromLeader(Map(
       t1p0 -> new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpochT1p0),
@@ -405,7 +405,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochEndOffsets(Map(
+    val result = thread.fetchEpochEndOffsetsFromLeader(Map(
       t1p0 -> new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpoch),

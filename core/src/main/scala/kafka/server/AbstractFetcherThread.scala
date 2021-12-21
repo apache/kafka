@@ -90,19 +90,22 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch]
 
-  protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
+  protected def fetchEpochEndOffsetsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
   protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
-  protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
+  protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
-  protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
+  protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
   protected val isOffsetForLeaderEpochSupported: Boolean
 
   protected val isTruncationOnFetchSupported: Boolean
 
-  protected def buildRemoteLogAuxState(partition: TopicPartition, currentLeaderEpoch: Int, fetchOffset: Long,
+  protected def buildRemoteLogAuxState(partition: TopicPartition,
+                                       currentLeaderEpoch: Int,
+                                       fetchOffset: Long,
+                                       epochForFetchOffset: Int,
                                        leaderLogStartOffset: Long): Unit
 
   override def shutdown(): Unit = {
@@ -212,7 +215,7 @@ abstract class AbstractFetcherThread(name: String,
     *   occur during truncation.
     */
   private def truncateToEpochEndOffsets(latestEpochsForPartitions: Map[TopicPartition, EpochData]): Unit = {
-    val endOffsets = fetchEpochEndOffsets(latestEpochsForPartitions)
+    val endOffsets = fetchEpochEndOffsetsFromLeader(latestEpochsForPartitions)
     //Ensure we hold a lock during truncation.
     inLock(partitionMapLock) {
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
@@ -400,8 +403,6 @@ abstract class AbstractFetcherThread(name: String,
                   if (handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch))
                     partitionsWithError += topicPartition
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
-                  // No need to retry this as it indicates that the requested offset is moved to tiered storage.
-                  // Check whether topicId is available here.
                   if (handleOffsetMovedToTieredStorage(topicPartition, currentFetchState,
                     fetchPartitionData.currentLeaderEpoch, partitionData.logStartOffset()))
                     partitionsWithError += topicPartition
@@ -667,7 +668,7 @@ abstract class AbstractFetcherThread(name: String,
   private def fetchOffsetAndApplyFun(topicPartition: TopicPartition,
                                      topicId: Option[Uuid],
                                      currentLeaderEpoch: Int,
-                                     truncateAndBuild: => Long => Unit) : PartitionFetchState = {
+                                     truncateAndBuild: => (Int, Long) => Unit) : PartitionFetchState = {
     val replicaEndOffset = logEndOffset(topicPartition)
 
     /**
@@ -680,7 +681,7 @@ abstract class AbstractFetcherThread(name: String,
      *
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
-    val leaderEndOffset = fetchLatestOffsetFromLeader(topicPartition, currentLeaderEpoch)
+    val (_, leaderEndOffset) = fetchLatestOffsetFromLeader(topicPartition, currentLeaderEpoch)
     if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
@@ -711,13 +712,13 @@ abstract class AbstractFetcherThread(name: String,
        * Putting the two cases together, the follower should fetch from the higher one of its replica log end offset
        * and the current leader's log start offset.
        */
-      val leaderStartOffset = fetchEarliestOffsetFromLeader(topicPartition, currentLeaderEpoch)
+      val (epoch, leaderStartOffset) = fetchEarliestOffsetFromLeader(topicPartition, currentLeaderEpoch)
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's start offset $leaderStartOffset")
       val offsetToFetch = Math.max(leaderStartOffset, replicaEndOffset)
       // Only truncate log when current leader's log start offset is greater than follower's log end offset.
       if (leaderStartOffset > replicaEndOffset)
-        truncateAndBuild(leaderStartOffset)
+        truncateAndBuild(epoch, leaderStartOffset)
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
@@ -731,18 +732,19 @@ abstract class AbstractFetcherThread(name: String,
    */
   protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
     fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
-      leaderLogStartOffset => truncateFullyAndStartAt(topicPartition, leaderLogStartOffset))
+      (epoch, leaderLogStartOffset) => truncateFullyAndStartAt(topicPartition, leaderLogStartOffset))
   }
 
   /**
    * Handle a partition whose offset is moved to tiered storage and return a new fetch offset.
    */
-  protected def fetchOffsetAndBuildRemoteLogAuxState(topicPartition: TopicPartition, topicId: Option[Uuid],
+  protected def fetchOffsetAndBuildRemoteLogAuxState(topicPartition: TopicPartition,
+                                                     topicId: Option[Uuid],
                                                      currentLeaderEpoch: Int,
                                                      leaderLogStartOffset: Long): PartitionFetchState = {
     fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
-      leaderLocalLogStartOffset =>
-        buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset))
+      (offsetEpoch, leaderLocalLogStartOffset) =>
+        buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, offsetEpoch, leaderLogStartOffset))
   }
 
   /**

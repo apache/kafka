@@ -96,6 +96,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import scala.Option;
+import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
@@ -348,12 +349,12 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public long fetchEarliestOffsetFromLeader(TopicPartition topicPartition, int currentLeaderEpoch) {
-            return 0;
+        public Tuple2<Object, Object> fetchEarliestOffsetFromLeader(TopicPartition topicPartition, int currentLeaderEpoch) {
+            return Tuple2.apply(0, 0L);
         }
 
         @Override
-        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
+        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsetsFromLeader(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
             scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
             Iterator<TopicPartition> iterator = partitions.keys().iterator();
             while (iterator.hasNext()) {
