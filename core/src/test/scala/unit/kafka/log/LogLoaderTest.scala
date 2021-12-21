@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -1692,25 +1692,31 @@ class LogLoaderTest {
     assertEquals(numMessages, log.logEndOffset,
       "After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages))
     log.roll()
-    log.flush(true)
-    val lastIndexOffset = log.activeSegment.offsetIndex.lastOffset
-    val numIndexEntries = log.activeSegment.offsetIndex.entries
-    assertEquals(0, numIndexEntries)
-    val lastOffset = log.logEndOffset
-    val lastTimeIndexOffset = log.logEndOffset
-    val largestTimestamp = log.activeSegment.largestTimestamp
-    val lastTimeIndexTimestamp = log.activeSegment.timeIndex.lastEntry.timestamp
-    log.close()
+    log.flush(false)
+    assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
+    var lastOffset = log.logEndOffset
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
     assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
     assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
-    assertEquals(lastIndexOffset, log.activeSegment.offsetIndex.lastOffset, "Should have same last index offset as before.")
-    assertEquals(numIndexEntries, log.activeSegment.offsetIndex.entries, "Should have same number of index entries as before.")
-    assertEquals(largestTimestamp, log.activeSegment.largestTimestamp, "Should have same largest timestamp")
-    assertEquals(lastTimeIndexTimestamp, log.activeSegment.timeIndex.lastEntry.timestamp, "Should have same last time index timestamp")
-    assertEquals(lastTimeIndexOffset, log.activeSegment.timeIndex.lastEntry.offset, "Should have same last time index offset")
     assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
+    log.activeSegment.sanityCheck(true) // this should not throw
+
+    for(i <- 0 until numMessages)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
+        timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+    log.roll()
+    assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
+    log.flush(true)
+    log.activeSegment.sanityCheck(true) // this should not throw
+    lastOffset = log.logEndOffset
+
+    log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
+    assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
+    assertEquals(2 * numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
+    assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
+    log.activeSegment.sanityCheck(true) // this should not throw
+
     log.close()
   }
 }
