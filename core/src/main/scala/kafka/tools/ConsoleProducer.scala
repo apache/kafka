@@ -148,19 +148,19 @@ object ConsoleProducer {
       .defaultsTo(200)
     val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, " +
       "and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message. " +
-      "This is the option to control the `retries` in producer configs.")
+      "This is the option to control `retries` in producer configs.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(Integer.MAX_VALUE)
     val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. " +
       "Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata. " +
-      "This is the option to control the `retry.backoff.ms` in producer configs.")
+      "This is the option to control `retry.backoff.ms` in producer configs.")
       .withRequiredArg
       .ofType(classOf[java.lang.Long])
       .defaultsTo(100)
     val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
       " a message will queue awaiting sufficient batch size. The value is given in ms. " +
-      "This is the option to control the `linger.ms` in producer configs.")
+      "This is the option to control `linger.ms` in producer configs.")
       .withRequiredArg
       .describedAs("timeout_ms")
       .ofType(classOf[java.lang.Long])
