@@ -32,7 +32,7 @@
   //
   // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-559).
   //
-  // Version 8 adds the Reason field (KIP-800).
+  // Version 8 is the same as version 7.
   "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [

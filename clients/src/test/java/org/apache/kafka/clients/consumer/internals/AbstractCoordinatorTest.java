@@ -513,18 +513,14 @@ public class AbstractCoordinatorTest {
         // max group size reached
         mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
         coordinator.requestRejoin("Manual test trigger 2");
-        try {
-            coordinator.joinGroupIfNeeded(mockTime.timer(100L));
-        } catch (GroupMaxSizeReachedException e) {
-            // next join group request should contain exception message
-            expectJoinGroup(memberId,
-                "rebalance failed due to " + e.getClass() + " error: " + e.getMessage(),
-                generation,
-                memberId);
-            expectSyncGroup(generation, memberId);
-            ensureActiveGroup(generation, memberId);
-            assertEquals("", coordinator.rejoinReason());
-        }
+        Throwable e = assertThrows(GroupMaxSizeReachedException.class,
+                () -> coordinator.joinGroupIfNeeded(mockTime.timer(100L)));
+
+        // next join group request should contain exception message
+        expectJoinGroup(memberId, "rebalance failed due to '" + e.getMessage() + "' (" + e.getClass().getSimpleName() + ")", generation, memberId);
+        expectSyncGroup(generation, memberId);
+        ensureActiveGroup(generation, memberId);
+        assertEquals("", coordinator.rejoinReason());
     }
 
     private void ensureActiveGroup(
