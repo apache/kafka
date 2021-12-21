@@ -465,7 +465,8 @@ public class KafkaAdminClient extends AdminClient {
                 true,
                 apiVersions,
                 logContext,
-                leastLoadedNodeAlgorithm);
+                leastLoadedNodeAlgorithm,
+                Collections.emptyList());
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {

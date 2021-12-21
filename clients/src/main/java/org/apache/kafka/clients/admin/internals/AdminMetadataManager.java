@@ -91,6 +91,11 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return false;
+        }
+
+        @Override
         public boolean isUpdateDue(long now) {
             return false;
         }

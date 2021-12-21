@@ -76,6 +76,10 @@ public class Metadata implements Closeable {
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
 
+    private final long maxClusterMetadataExpireTimeMs;
+    private int nodesTriedSinceLastSuccessfulRefresh;
+    private boolean forceClusterMetadataUpdateFromBootstrap;
+
     /**
      * Create a new Metadata instance
      *
@@ -89,6 +93,14 @@ public class Metadata implements Closeable {
                     long metadataExpireMs,
                     LogContext logContext,
                     ClusterResourceListeners clusterResourceListeners) {
+        this(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, Long.MAX_VALUE);
+    }
+
+    public Metadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        long metadataClusterMetadataExpireTimeMs) {
         this.log = logContext.logger(Metadata.class);
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
@@ -102,6 +114,9 @@ public class Metadata implements Closeable {
         this.lastSeenLeaderEpochs = new HashMap<>();
         this.invalidTopics = Collections.emptySet();
         this.unauthorizedTopics = Collections.emptySet();
+        this.maxClusterMetadataExpireTimeMs = metadataClusterMetadataExpireTimeMs;
+        this.nodesTriedSinceLastSuccessfulRefresh = 0;
+        this.forceClusterMetadataUpdateFromBootstrap = false;
     }
 
     /**
@@ -109,6 +124,26 @@ public class Metadata implements Closeable {
      */
     public synchronized Cluster fetch() {
         return cache.cluster();
+    }
+
+    /**
+     * Increment the nodesTriedSinceLastSuccessfulRefresh
+     */
+    public synchronized void incrementNodesTriedSinceLastSuccessfulRefresh() {
+        this.nodesTriedSinceLastSuccessfulRefresh++;
+    }
+
+    /**
+     * Whether the client should update the cluster metadata by resolving the bootstrap server again
+     * @param nowMs
+     * @return true if client hasn't refreshed cluster metadata for maxClusterMetadataExpireTimeMs and
+     * has tried connecting to at least one node in current node set; or forceClusterMetadataUpdateFromBootstrap
+     * has been set by receiving stale metadata from a different cluster
+     */
+    public synchronized boolean shouldUpdateClusterMetadataFromBootstrap(long nowMs) {
+        return (this.nodesTriedSinceLastSuccessfulRefresh >= 1 &&
+            this.lastSuccessfulRefreshMs + this.maxClusterMetadataExpireTimeMs <= nowMs) ||
+            this.forceClusterMetadataUpdateFromBootstrap;
     }
 
     /**
@@ -144,6 +179,15 @@ public class Metadata implements Closeable {
     public synchronized int requestUpdate() {
         this.needUpdate = true;
         return this.updateVersion;
+    }
+
+    /**
+     * Request an update of the current cluster metadata info by resolving the bootstrap server and randomly pick
+     * a node from the resolved node set. This happens when client receives stale metadata response from brokers in
+     * a different cluster and need to refresh the cluster metadata without waiting for maxClusterMetadataExpireTimeMs
+     */
+    public synchronized void requestClusterMetadataUpdateFromBootstrap() {
+        this.forceClusterMetadataUpdateFromBootstrap = true;
     }
 
     /**
@@ -236,7 +280,18 @@ public class Metadata implements Closeable {
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
-        validateCluster(response.clusterId());
+        if (!validateCluster(response.clusterId())) {
+            //if validateCluster fails, do not update metadataCache with the wrong cluster information,
+            //just return and wait for next update
+            //
+            //here we don't blacklist this node from the cluster's
+            //node set since we don't have enough information from the response to map to the actual node,
+            //and since there are usually hours to days interval before we put a removed broker to a different
+            //cluster, clients should either find another node in cached node set or resolved bootstrap server
+            //again and find a new node to send update metadata request, it should be ok to not blacklist this node
+            requestClusterMetadataUpdateFromBootstrap();
+            return;
+        }
 
         if (requestVersion == this.requestVersion)
             this.needUpdate = false;
@@ -246,6 +301,8 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
+        this.nodesTriedSinceLastSuccessfulRefresh = 0;
+        this.forceClusterMetadataUpdateFromBootstrap = false;
 
         String previousClusterId = cache.cluster().clusterResource().clusterId();
 
@@ -265,8 +322,9 @@ public class Metadata implements Closeable {
         log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
     }
 
-    private void validateCluster(String newClusterId) {
+    private boolean validateCluster(String newClusterId) {
         String previousClusterId = this.cache.cluster().clusterResource().clusterId();
+        boolean validateResult = true;
 
         if (previousClusterId != null && newClusterId != null && !previousClusterId.equals(newClusterId)) {
             // kafka cluster id is unique.
@@ -288,10 +346,10 @@ public class Metadata implements Closeable {
             log.error("Received metadata from a different cluster {}, current cluster {} has no valid brokers anymore,"
                 + "please reboot the producer/consumer", newClusterId, previousClusterId);
 
-            throw new StaleClusterMetadataException(
-                "Trying to access a different cluster " + newClusterId + ", previous connected cluster " + previousClusterId);
-
+            validateResult = false;
         }
+
+        return validateResult;
     }
 
     private void maybeSetMetadataError(Cluster cluster) {

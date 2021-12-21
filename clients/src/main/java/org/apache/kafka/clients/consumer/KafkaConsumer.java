@@ -735,7 +735,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                     config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
-                    subscriptions, logContext, clusterResourceListeners, metrics);
+                    subscriptions, logContext, clusterResourceListeners, metrics,
+                    config.getLong(ConsumerConfig.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG));
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.bootstrap(addresses);
@@ -776,7 +777,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throttleTimeSensor,
                     logContext,
                     config.getString(ConsumerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG),
-                    leastLoadedNodeAlgorithm);
+                    leastLoadedNodeAlgorithm,
+                    config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
             netClient.setEnableClientResponseWithFinalize(config.getBoolean(ConsumerConfig.ENABLE_CLIENT_RESPONSE_LEAK_CHECK));
 
             this.client = new ConsumerNetworkClient(

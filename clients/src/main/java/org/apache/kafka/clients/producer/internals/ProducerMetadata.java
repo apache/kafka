@@ -68,7 +68,20 @@ public class ProducerMetadata extends Metadata {
                             long topicExpiryMs,
                             boolean allowAutoTopicCreation,
                             Metrics metrics) {
-        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
+        this(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, time,
+            topicExpiryMs, allowAutoTopicCreation, metrics, Long.MAX_VALUE);
+    }
+
+    public ProducerMetadata(long refreshBackoffMs,
+        long metadataExpireMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time,
+        long topicExpiryMs,
+        boolean allowAutoTopicCreation,
+        Metrics metrics,
+        long clusterMetadataExpireMs) {
+        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, clusterMetadataExpireMs);
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
         this.topicExpiryMs = topicExpiryMs;

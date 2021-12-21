@@ -77,10 +77,12 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
+    private final TestClusterMetadataUpdater clusterMetadataUpdater = new TestClusterMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
+    private final NetworkClient clusterClient = createClusterNetworkClient();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
@@ -105,6 +107,13 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createClusterNetworkClient() {
+        return new NetworkClient(selector, clusterMetadataUpdater, "mock-cluster-md", Integer.MAX_VALUE,
+            0, 0, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext(),
+            LeastLoadedNodeAlgorithm.VANILLA, Collections.singletonList("example.com:10000"));
     }
 
     @Before
@@ -651,6 +660,13 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testResolveBootstrapInLeastLoadedNode() {
+        clusterClient.ready(node, time.milliseconds());
+        assertFalse(clusterClient.isReady(node, time.milliseconds()));
+        assertNotEquals(node, clusterClient.leastLoadedNode(time.milliseconds()));
+    }
+
+    @Test
     public void testLeastLoadedNode() {
         client.ready(node, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
@@ -1026,6 +1042,40 @@ public class NetworkClientTest {
 
         public TestMetadataUpdater(List<Node> nodes) {
             super(nodes);
+        }
+
+        @Override
+        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeAuthException) {
+            maybeAuthException.ifPresent(exception -> {
+                failure = exception;
+            });
+            super.handleServerDisconnect(now, destinationId, maybeAuthException);
+        }
+
+        @Override
+        public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
+            maybeFatalException.ifPresent(exception -> {
+                failure = exception;
+            });
+        }
+
+        public KafkaException getAndClearFailure() {
+            KafkaException failure = this.failure;
+            this.failure = null;
+            return failure;
+        }
+    }
+
+    private static class TestClusterMetadataUpdater extends ManualMetadataUpdater {
+        KafkaException failure;
+
+        public TestClusterMetadataUpdater(List<Node> nodes) {
+            super(nodes);
+        }
+
+        @Override
+        public boolean isUpdateClusterMetadataDue(long now) {
+            return true;
         }
 
         @Override
