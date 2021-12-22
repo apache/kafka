@@ -742,6 +742,11 @@ public class StreamThread extends Thread {
         }
     }
 
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeBytes.set(maxBufferSize);
+    }
+
     public void resizeCacheOrBufferMemory(final long size, final boolean cacheResize) {
         if (cacheResize)
             cacheResizeSize.set(size);
