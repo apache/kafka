@@ -772,7 +772,7 @@ public class IQv2StoreIntegrationTest {
             final Function<V, Integer> valueExtactor,
             final Set<Integer> expectedValue) {
 
-        final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowBounds(key, timeFrom, timeTo);
+        final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(key, timeFrom, timeTo);
 
         final StateQueryRequest<WindowStoreIterator<V>> request =
                 inStore(STORE_NAME)

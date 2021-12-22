@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;

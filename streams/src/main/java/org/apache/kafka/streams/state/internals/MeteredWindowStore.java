@@ -381,7 +381,7 @@ public class MeteredWindowStore<K, V>
                 result = (QueryResult<R>) rawResult;
             }
         } else {
-            result = null;
+            result = QueryResult.forUnknownQueryType(query, this);
         }
         return result;
     }
@@ -394,7 +394,7 @@ public class MeteredWindowStore<K, V>
         final QueryResult<R> queryResult;
         final WindowKeyQuery<K, V> typedQuery = (WindowKeyQuery<K, V>) query;
         if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
-            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery = WindowKeyQuery.withKeyAndWindowBounds(keyBytes(typedQuery.getKey()), typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
+            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery = WindowKeyQuery.withKeyAndWindowStartRange(keyBytes(typedQuery.getKey()), typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
             final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
             if (rawResult.isSuccess()) {
                 final MeteredWindowStoreIterator typedResult = new MeteredWindowStoreIterator<V>(rawResult.getResult(),
