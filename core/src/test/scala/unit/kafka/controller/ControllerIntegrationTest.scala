@@ -667,26 +667,39 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
+    def waitUntilIsrSizeConditionHolds(topic: String, partition: Int, servers: Seq[KafkaServer],
+                                       isrSizePredicate: Int => Boolean, msg: String): Unit = {
+      TestUtils.waitUntilTrue(
+        () => servers.forall(
+          _.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
+            case Some(partitionInfo) => isrSizePredicate(partitionInfo.isr.size)
+            case None => false  // If partitionInfo/ISR is not ready yet, the condition cannot be evaluated
+          }
+        ),
+        msg
+      )
+    }
+
     // Attempt to shut down and then restart broker1
     val broker1 = servers.filter(s => s.config.brokerId == 1).head
     broker1.shutdown()
     var activeServers = servers.filter(s => s.config.brokerId != 1)
-    TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size != 2),
-      "Topic test not created after timeout")
+    waitUntilIsrSizeConditionHolds(topic, partition, activeServers,
+                                   isrSizePredicate = _ != 2,
+                                   "Topic test not created or metadata not propagated after timeout")
 
     broker1.startup()
-    TestUtils.waitUntilTrue(() =>
-      servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition).get.isr.size == 2),
-      "The ISR does not include the full set after the offline broker is restarted")
+    waitUntilIsrSizeConditionHolds(topic, partition, servers,
+                                   isrSizePredicate = _ == 2,
+                                   "The ISR does not include the full set after the offline broker is restarted")
 
     // now try to shutdown broker 0
     val broker0 = servers.filter(s => s.config.brokerId == 0).head
     broker0.shutdown()
     activeServers = Seq(broker1)
-    TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size != 2),
-      "Topic test not created after timeout")
+    waitUntilIsrSizeConditionHolds(topic, partition, activeServers,
+                                   isrSizePredicate = _ != 2,
+                                   "ISR set did not shrink after shutdown")
 
 
     // The test has completed. In order for both brokers to be shutdown, one option is to delete the topic
