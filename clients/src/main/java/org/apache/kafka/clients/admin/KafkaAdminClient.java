@@ -526,6 +526,7 @@ public class KafkaAdminClient extends AdminClient {
                 true,
                 apiVersions,
                 null,
+                null,
                 logContext,
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,

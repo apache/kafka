@@ -131,6 +131,7 @@ public class Sender implements Runnable {
                   short acks,
                   int retries,
                   SenderMetricsRegistry metricsRegistry,
+                  ProducerTopicMetricsRegistry producerTopicMetricsRegistry,
                   Time time,
                   int requestTimeoutMs,
                   long retryBackoffMs,
@@ -146,7 +147,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time, logContext);
+        this.sensors = new SenderMetrics(metricsRegistry, producerTopicMetricsRegistry, metadata, client, time);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
@@ -874,11 +875,12 @@ public class Sender implements Runnable {
         public final Sensor recordFailureSensor;
 
         private final SenderMetricsRegistry metrics;
+        private final ProducerTopicMetricsRegistry producerTopicMetricsRegistry;
         private final Time time;
-        private final Logger log;
 
-        public SenderMetrics(SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time, LogContext logContext) {
+        public SenderMetrics(SenderMetricsRegistry metrics, ProducerTopicMetricsRegistry producerTopicMetricsRegistry, Metadata metadata, KafkaClient client, Time time) {
             this.metrics = metrics;
+            this.producerTopicMetricsRegistry = producerTopicMetricsRegistry;
             this.time = time;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
@@ -917,10 +919,8 @@ public class Sender implements Runnable {
             this.batchSplitSensor = metrics.sensor("batch-split-rate");
             this.batchSplitSensor.add(new Meter(metrics.batchSplitRate, metrics.batchSplitTotal));
 
-            this.recordSuccessSensor = metrics.sensor("kirk-test-record-success");
-            this.recordFailureSensor = metrics.sensor("kirk-test-record-failure");
-
-            this.log = logContext.logger(SenderMetrics.class);
+            this.recordSuccessSensor = producerTopicMetricsRegistry.sensor("client-producer-partition-record-success");
+            this.recordFailureSensor = producerTopicMetricsRegistry.sensor("client-producer-partition-record-failure");
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
@@ -961,15 +961,15 @@ public class Sender implements Runnable {
             }
         }
 
-        private void maybeRegisterKip714Metrics(String topic, int partition) {
+        private void maybeRegisterProducerTopicMetrics(String topic, int partition) {
             Map<String, String> metricTags = new HashMap<>();
             metricTags.put("topic", topic);
             metricTags.put("partition", Integer.toString(partition));
 
-            MetricName metricName = metrics.kip714RecordSuccessTotal(metricTags);
+            MetricName metricName = producerTopicMetricsRegistry.recordSuccessTotal(metricTags);
             recordSuccessSensor.add(metricName, new CumulativeSum());
 
-            metricName = metrics.kip714RecordFailureTotal(metricTags);
+            metricName = producerTopicMetricsRegistry.recordFailureTotal(metricTags);
             recordFailureSensor.add(metricName, new CumulativeSum());
         }
 
@@ -981,7 +981,7 @@ public class Sender implements Runnable {
                     // register all per-topic metrics at once
                     String topic = batch.topicPartition.topic();
                     maybeRegisterTopicMetrics(topic);
-                    maybeRegisterKip714Metrics(topic, batch.topicPartition.partition());
+                    maybeRegisterProducerTopicMetrics(topic, batch.topicPartition.partition());
 
                     // per-topic record send rate
                     String topicRecordsCountName = "topic." + topic + ".records-per-batch";
@@ -1022,7 +1022,7 @@ public class Sender implements Runnable {
         }
 
         public void recordErrors(String topic, int partition, int count) {
-            maybeRegisterKip714Metrics(topic, partition);
+            maybeRegisterProducerTopicMetrics(topic, partition);
             long now = time.milliseconds();
             this.errorSensor.record(count, now);
             recordFailureSensor.record(count);

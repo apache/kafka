@@ -175,7 +175,7 @@ public class TransactionManagerTest {
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), new ProducerTopicMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
                 50, transactionManager, apiVersions);
     }
 
@@ -3046,8 +3046,9 @@ public class TransactionManagerTest {
     public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty());
+        Metrics metrics = new Metrics(time);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), new ProducerTopicMetricsRegistry(metrics), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         initializeIdempotentProducerId(producerId, epoch);
 
@@ -3170,8 +3171,9 @@ public class TransactionManagerTest {
     public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
         initializeTransactionManager(Optional.empty());
+        Metrics metrics = new Metrics(time);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
-                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
+                MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), new ProducerTopicMetricsRegistry(metrics), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         initializeIdempotentProducerId(producerId, epoch);
 

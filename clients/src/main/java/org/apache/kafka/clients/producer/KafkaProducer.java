@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NetworkClientMetricsRegistry;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -469,6 +470,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 true,
                 apiVersions,
                 throttleTimeSensor,
+                new NetworkClientMetricsRegistry(this.metrics),
                 logContext);
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
@@ -480,6 +482,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 acks,
                 producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
                 metricsRegistry.senderMetrics,
+                metricsRegistry.producerTopicMetricsRegistry,
                 time,
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),

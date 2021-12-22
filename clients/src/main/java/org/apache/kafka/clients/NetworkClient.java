@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.Collections;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -25,6 +27,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -126,6 +129,12 @@ public class NetworkClient implements KafkaClient {
 
     private final Sensor throttleTimeSensor;
 
+    private final NetworkClientMetricsRegistry networkClientMetricsRegistry;
+
+    private final Sensor clientConnectionCreationsSensor;
+
+    private final Sensor clientConnectionCountSensor;
+
     private final AtomicReference<State> state;
 
     public NetworkClient(Selectable selector,
@@ -158,6 +167,7 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              null,
+             null,
              logContext);
     }
 
@@ -176,6 +186,7 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
+                         NetworkClientMetricsRegistry networkClientMetricsRegistry,
                          LogContext logContext) {
         this(null,
              metadata,
@@ -193,6 +204,7 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              throttleTimeSensor,
+             networkClientMetricsRegistry,
              logContext,
              new DefaultHostResolver());
     }
@@ -228,6 +240,7 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              null,
+             null,
              logContext,
              new DefaultHostResolver());
     }
@@ -248,6 +261,7 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
+                         NetworkClientMetricsRegistry networkClientMetricsRegistry,
                          LogContext logContext,
                          HostResolver hostResolver) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
@@ -277,6 +291,17 @@ public class NetworkClient implements KafkaClient {
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
+        this.networkClientMetricsRegistry = networkClientMetricsRegistry;
+
+        if (this.networkClientMetricsRegistry != null) {
+            this.clientConnectionCreationsSensor = networkClientMetricsRegistry.sensor("client-connection-creations");
+            this.clientConnectionCountSensor = networkClientMetricsRegistry.sensor("client-connection-count");
+            this.clientConnectionCountSensor.add(networkClientMetricsRegistry.clientConnectionCount, new CumulativeSum());
+        } else {
+            this.clientConnectionCreationsSensor = null;
+            this.clientConnectionCountSensor = null;
+        }
+
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
     }
@@ -987,6 +1012,16 @@ public class NetworkClient implements KafkaClient {
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
+
+            if (networkClientMetricsRegistry != null) {
+                Map<String, String> metricTags = Collections.singletonMap("broker_id", nodeConnectionId);
+                MetricName metricName = networkClientMetricsRegistry.clientConnectionCreations(metricTags);
+                clientConnectionCreationsSensor.add(metricName, new CumulativeSum());
+                clientConnectionCreationsSensor.record();
+            }
+
+            if (clientConnectionCountSensor != null)
+                clientConnectionCountSensor.record(1);
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff
@@ -1068,6 +1103,9 @@ public class NetworkClient implements KafkaClient {
 
             // The disconnect may be the result of stale metadata, so request an update
             metadata.requestUpdate();
+
+            if (clientConnectionCountSensor != null)
+                clientConnectionCountSensor.record(-1);
         }
 
         @Override
