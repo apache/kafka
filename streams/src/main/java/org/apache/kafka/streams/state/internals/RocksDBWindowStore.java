@@ -137,30 +137,6 @@ public class RocksDBWindowStore
     public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
         final boolean collectExecutionInfo) {
 
-        if (query instanceof WindowKeyQuery) {
-            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
-            if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
-                final Bytes key = windowKeyQuery.getKey();
-                final Instant lower = windowKeyQuery.getTimeFrom().get();
-                final Instant upper = windowKeyQuery.getTimeTo().get();
-                final WindowStoreIterator<byte[]> iterator = this.fetch(key, lower, upper);
-                final R result = (R) iterator;
-                final QueryResult<R> queryResult = QueryResult.forResult(result);
-                return queryResult;
-            }
-        } else if (query instanceof WindowRangeQuery) {
-            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
-            if (windowRangeQuery.getTimeFrom().isPresent() &&
-                windowRangeQuery.getTimeTo().isPresent()) {
-                final Instant windowLower = windowRangeQuery.getTimeFrom().get();
-                final Instant windowUpper = windowRangeQuery.getTimeTo().get();
-                final KeyValueIterator<Windowed<Bytes>, byte[]> kvIterator = this.fetchAll(windowLower, windowUpper);
-                final R result = (R) kvIterator;
-                final QueryResult<R> queryResult = QueryResult.forResult(result);
-                return queryResult;
-            }
-        }
-
         return StoreQueryUtils.handleBasicQueries(
                 query,
                 positionBound,

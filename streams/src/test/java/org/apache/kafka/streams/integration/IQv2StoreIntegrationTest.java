@@ -263,7 +263,7 @@ public class IQv2StoreIntegrationTest {
             }
 
             @Override
-            public boolean isWindowed(){
+            public boolean isWindowed() {
                 return true;
             }
         },
@@ -273,6 +273,11 @@ public class IQv2StoreIntegrationTest {
                 return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
                     WINDOW_SIZE, false);
             }
+
+            @Override
+            public boolean isWindowed() {
+                return true;
+            }
         },
         IN_MEMORY_SESSION {
             @Override
@@ -281,7 +286,7 @@ public class IQv2StoreIntegrationTest {
             }
 
             @Override
-            public boolean isSession(){
+            public boolean isSession() {
                 return true;
             }
         },
@@ -292,7 +297,7 @@ public class IQv2StoreIntegrationTest {
             }
 
             @Override
-            public boolean isSession(){
+            public boolean isSession() {
                 return true;
             }
         };
@@ -311,11 +316,11 @@ public class IQv2StoreIntegrationTest {
             return false;
         }
 
-        public boolean isWindowed(){
+        public boolean isWindowed() {
             return false;
         }
 
-        public boolean isSession(){
+        public boolean isSession() {
             return false;
         }
     }
@@ -531,20 +536,35 @@ public class IQv2StoreIntegrationTest {
                 }
             }
 
-            if (storeToTest.isWindowed()){
+            if (storeToTest.isWindowed()) {
                 if (storeToTest.timestamped()) {
                     final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
                     final Instant timeTo = Instant.now();
                     final Instant timeFrom = timeTo.minusSeconds(60);
                     shouldHandleWindowKeyQueries(2, timeFrom, timeTo, valueExtractor);
-                    //shouldHandleWindowRangeQueries(valueExtractor);
+                    shouldHandleWindowRangeQueries(timeFrom, timeTo, valueExtractor);
                 } else {
                     final Function<Integer, Integer> valueExtractor = Function.identity();
                     final Instant timeTo = Instant.now();
                     final Instant timeFrom = timeTo.minusSeconds(60);
                     shouldHandleWindowKeyQueries(2, timeFrom, timeTo, valueExtractor);
-                    //shouldHandleWindowRangeQueries(valueExtractor);
+                    shouldHandleWindowRangeQueries(timeFrom, timeTo, valueExtractor);
+                }
+            }
+
+            if (storeToTest.isSession()) {
+                if (storeToTest.timestamped()) {
+                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                            ValueAndTimestamp::value;
+                    final Instant timeTo = Instant.now();
+                    final Instant timeFrom = timeTo.minusSeconds(60);
+                    shouldHandleSessionKeyQueries(2, valueExtractor);
+                } else {
+                    final Function<Integer, Integer> valueExtractor = Function.identity();
+                    final Instant timeTo = Instant.now();
+                    final Instant timeFrom = timeTo.minusSeconds(60);
+                    shouldHandleSessionKeyQueries(2, valueExtractor);
                 }
             }
         }
@@ -593,33 +613,21 @@ public class IQv2StoreIntegrationTest {
         );
     }
 
-    private <T> void shouldHandleWindowRangeQueries(final Function<T, Integer> extractor) {
-        shouldHandleRangeQuery(
-                Optional.of(1),
-                Optional.of(3),
+    private <T> void shouldHandleWindowRangeQueries(final Instant timeFrom, final Instant timeTo, final Function<T, Integer> extractor) {
+        shouldHandleWindowRangeQuery(
+                timeFrom,
+                timeTo,
                 extractor,
                 mkSet(1, 2, 3)
 
         );
-        shouldHandleRangeQuery(
-                Optional.of(1),
-                Optional.empty(),
+    }
+
+    private <T> void shouldHandleSessionKeyQueries(final Integer key, final Function<T, Integer> extractor) {
+        shouldHandleSessionKeyQuery(
+                key,
                 extractor,
                 mkSet(1, 2, 3)
-
-        );
-        shouldHandleRangeQuery(
-                Optional.empty(),
-                Optional.of(1),
-                extractor,
-                mkSet(0, 1)
-
-        );
-        shouldHandleRangeQuery(
-                Optional.empty(),
-                Optional.empty(),
-                extractor,
-                mkSet(0, 1, 2, 3)
 
         );
     }
@@ -821,6 +829,53 @@ public class IQv2StoreIntegrationTest {
             final Set<Integer> expectedValue) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
+
+        final StateQueryRequest<KeyValueIterator<Windowed<Integer>, V>> request =
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .withPartitions(mkSet(0, 1))
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
+        final StateQueryResult<KeyValueIterator<Windowed<Integer>, V>> result =
+                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        if (result.getGlobalResult() != null) {
+            fail("global tables aren't implemented");
+        } else {
+            final Set<Integer> actualValue = new HashSet<>();
+            final Map<Integer, QueryResult<KeyValueIterator<Windowed<Integer>, V>>> queryResult = result.getPartitionResults();
+            for (final int partition : queryResult.keySet()) {
+                final boolean failure = queryResult.get(partition).isFailure();
+                if (failure) {
+                    throw new AssertionError(queryResult.toString());
+                }
+                assertThat(queryResult.get(partition).isSuccess(), is(true));
+
+                assertThrows(
+                        IllegalArgumentException.class,
+                        queryResult.get(partition)::getFailureReason
+                );
+                assertThrows(
+                        IllegalArgumentException.class,
+                        queryResult.get(partition)::getFailureMessage
+                );
+
+                final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition)
+                        .getResult();
+                while (iterator.hasNext()) {
+                    actualValue.add(valueExtactor.apply(iterator.next().value));
+                }
+                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+            }
+            assertThat(actualValue, is(expectedValue));
+        }
+    }
+
+    public <V> void shouldHandleSessionKeyQuery(
+            final Integer key,
+            final Function<V, Integer> valueExtactor,
+            final Set<Integer> expectedValue) {
+
+        final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withKey(key);
 
         final StateQueryRequest<KeyValueIterator<Windowed<Integer>, V>> request =
                 inStore(STORE_NAME)

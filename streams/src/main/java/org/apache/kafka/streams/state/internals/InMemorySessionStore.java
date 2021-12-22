@@ -330,9 +330,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             }
         }
 
-        return null;
-
-        /*
         return StoreQueryUtils.handleBasicQueries(
                 query,
                 positionBound,
@@ -341,8 +338,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 position,
                 context.taskId().partition()
         );
-
-         */
     }
 
     @Override

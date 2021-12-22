@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
@@ -27,11 +28,17 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
@@ -65,6 +72,14 @@ public final class StoreQueryUtils {
             mkEntry(
                 KeyQuery.class,
                 StoreQueryUtils::runKeyQuery
+            ),
+            mkEntry(
+                WindowKeyQuery.class,
+                StoreQueryUtils::runWindowKeyQuery
+            ),
+            mkEntry(
+                WindowRangeQuery.class,
+                StoreQueryUtils::runWindowRangeQuery
             )
         );
 
@@ -194,6 +209,77 @@ public final class StoreQueryUtils {
             }
         } else {
             return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
+                                                  final PositionBound positionBound,
+                                                  final boolean collectExecutionInfo,
+                                                  final StateStore store) {
+        if (store instanceof WindowStore) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
+            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            try {
+                if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
+                    final WindowStoreIterator<byte[]> iterator = windowStore.fetch(windowKeyQuery.getKey(), windowKeyQuery.getTimeFrom().get(), windowKeyQuery.getTimeTo().get());
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "WindowKeyQuery requires key and window bounds to be present");
+                }
+            } catch(final Exception e){
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                        FailureReason.STORE_EXCEPTION,
+                        message
+                );
+            }
+        } else {
+            return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "Support for WindowKeyQuery's is currently restricted to stores of type WindowStore");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
+                                                        final PositionBound positionBound,
+                                                        final boolean collectExecutionInfo,
+                                                        final StateStore store) {
+        if (store instanceof WindowStore) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            try {
+                if (windowRangeQuery.getTimeFrom().isPresent() && windowRangeQuery.getTimeTo().isPresent()) {
+                    final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = windowStore.fetchAll(windowRangeQuery.getTimeFrom().get(), windowRangeQuery.getTimeTo().get());
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "WindowRangeQuery requires window bounds to be present when run against a WindowStore");
+                }
+            } catch(final Exception e){
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                        FailureReason.STORE_EXCEPTION,
+                        message
+                );
+            }
+        } else if (store instanceof SessionStore) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
+            final SessionStore<Bytes, byte[]> sessionStore = (SessionStore<Bytes, byte[]>) store;
+            try {
+                if (windowRangeQuery.getKey().isPresent()) {
+                    final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = sessionStore.fetch(windowRangeQuery.getKey().get());
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "WindowRangeQuery requires key to be present when run against a SessionStore");
+                }
+            } catch(final Exception e){
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                        FailureReason.STORE_EXCEPTION,
+                        message
+                );
+            }
+        } else {
+            return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "Support for WindowRangeQuery's is currently restricted to Window and Session stores");
         }
     }
 
