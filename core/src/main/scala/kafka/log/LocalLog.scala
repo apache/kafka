@@ -171,7 +171,8 @@ class LocalLog(@volatile private var _dir: File,
     val segmentsToFlush = segments.values(recoveryPoint, offset)
     segmentsToFlush.foreach(_.flush())
     // If there are any new segments, we need to flush the parent directory for crash consistency.
-    segmentsToFlush.lastOption.filter(_.baseOffset >= this.recoveryPoint).foreach(_ => Utils.flushDir(dir.toPath))
+    if (segmentsToFlush.exists(_.baseOffset >= this.recoveryPoint))
+      Utils.flushDir(dir.toPath)
   }
 
   /**

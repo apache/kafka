@@ -22,8 +22,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -42,13 +46,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+    private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
-    private Position position;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
-        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -90,6 +93,31 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+
+        if (query instanceof RangeQuery) {
+            final RangeQuery<Bytes, byte[]> typedQuery = (RangeQuery<Bytes, byte[]>) query;
+            final KeyValueIterator<Bytes, byte[]> keyValueIterator =  this.range(
+                    typedQuery.getLowerBound().orElse(null), typedQuery.getUpperBound().orElse(null));
+            final R result = (R) keyValueIterator;
+            final QueryResult<R> queryResult = QueryResult.forResult(result);
+            return queryResult;
+        }
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            collectExecutionInfo,
+            this,
+            position,
+            context.taskId().partition()
+        );
+    }
+
+    @Override
     public synchronized byte[] get(final Bytes key) {
         return map.get(key);
     }
@@ -116,10 +144,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             map.put(key, value);
         }
 
-        if (context != null && context.recordMetadata().isPresent()) {
-            final RecordMetadata meta = context.recordMetadata().get();
-            position = position.update(meta.topic(), meta.partition(), meta.offset());
-        }
+        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override

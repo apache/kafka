@@ -28,6 +28,7 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
     @Override
     public void put(final Bytes key, final byte[] value) {
         wrapped().put(key, value);
+        StoreQueryUtils.updatePosition(position, context);
         // the provided new value will be added to the list in the inner put()
         // we need to log the full new list and thus call get() on the inner store below
         // if the value is a tombstone, we delete the whole list and thus can save the get call

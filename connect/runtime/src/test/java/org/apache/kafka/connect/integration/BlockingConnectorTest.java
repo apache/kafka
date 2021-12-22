@@ -54,6 +54,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -351,7 +352,7 @@ public class BlockingConnectorTest {
                 );
         }
 
-        public static void waitForBlock() throws InterruptedException {
+        public static void waitForBlock() throws InterruptedException, TimeoutException {
             synchronized (Block.class) {
                 if (blockLatch == null) {
                     throw new IllegalArgumentException("No connector has been created yet");
@@ -359,7 +360,9 @@ public class BlockingConnectorTest {
             }
 
             log.debug("Waiting for connector to block");
-            blockLatch.await();
+            if (!blockLatch.await(60, TimeUnit.SECONDS)) {
+                throw new TimeoutException("Timed out waiting for connector to block.");
+            }
             log.debug("Connector should now be blocked");
         }
 

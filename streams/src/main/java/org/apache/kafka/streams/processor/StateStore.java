@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -119,4 +124,32 @@ public interface StateStore {
      * @return {@code true} if the store is open
      */
     boolean isOpen();
+
+    /**
+     * Execute a query. Returns a QueryResult containing either result data or
+     * a failure.
+     * <p>
+     * If the store doesn't know how to handle the given query, the result
+     * shall be a {@link FailureReason#UNKNOWN_QUERY_TYPE}.
+     * If the store couldn't satisfy the given position bound, the result
+     * shall be a {@link FailureReason#NOT_UP_TO_BOUND}.
+     * <p>
+     * Note to store implementers: if your store does not support position tracking,
+     * you can correctly respond {@link FailureReason#NOT_UP_TO_BOUND} if the argument is
+     * anything but {@link PositionBound#unbounded()}. Be sure to explain in the failure message
+     * that bounded positions are not supported.
+     * <p>
+     * @param query The query to execute
+     * @param positionBound The position the store must be at or past
+     * @param collectExecutionInfo Whether the store should collect detailed execution info for the query
+     * @param <R> The result type
+     */
+    @Evolving
+    default <R> QueryResult<R> query(
+        Query<R> query,
+        PositionBound positionBound,
+        boolean collectExecutionInfo) {
+        // If a store doesn't implement a query handler, then all queries are unknown.
+        return QueryResult.forUnknownQueryType(query, this);
+    }
 }

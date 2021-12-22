@@ -601,7 +601,7 @@ public class Selector implements Selectable, AutoCloseable {
                     close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
-                String desc = channel.socketDescription();
+                String desc = String.format("%s (channelId=%s)", channel.socketDescription(), channel.id());
                 if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
                 } else if (e instanceof AuthenticationException) {

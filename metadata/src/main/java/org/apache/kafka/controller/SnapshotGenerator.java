@@ -22,7 +22,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalLong;
 
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -51,7 +50,6 @@ final class SnapshotGenerator {
     private final Logger log;
     private final SnapshotWriter<ApiMessageAndVersion> writer;
     private final int maxBatchesPerGenerateCall;
-    private final ExponentialBackoff exponentialBackoff;
     private final List<Section> sections;
     private final Iterator<Section> sectionIterator;
     private Iterator<List<ApiMessageAndVersion>> batchIterator;
@@ -62,12 +60,10 @@ final class SnapshotGenerator {
     SnapshotGenerator(LogContext logContext,
                       SnapshotWriter<ApiMessageAndVersion> writer,
                       int maxBatchesPerGenerateCall,
-                      ExponentialBackoff exponentialBackoff,
                       List<Section> sections) {
         this.log = logContext.logger(SnapshotGenerator.class);
         this.writer = writer;
         this.maxBatchesPerGenerateCall = maxBatchesPerGenerateCall;
-        this.exponentialBackoff = exponentialBackoff;
         this.sections = sections;
         this.sectionIterator = this.sections.iterator();
         this.batchIterator = Collections.emptyIterator();
