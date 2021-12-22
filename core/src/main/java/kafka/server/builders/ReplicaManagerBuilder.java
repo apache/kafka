@@ -87,7 +87,7 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
-    public ReplicaManagerBuilder setRemoteLogLogManager(RemoteLogManager remoteLogManager) {
+    public ReplicaManagerBuilder setRemoteLogManager(RemoteLogManager remoteLogManager) {
         this.remoteLogManager = Optional.ofNullable(remoteLogManager);
         return this;
     }
