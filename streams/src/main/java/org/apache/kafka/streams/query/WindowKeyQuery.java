@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.time.Instant;
 import java.util.Optional;
 
+@Evolving
 public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
     private final K key;
     private final Optional<Instant> timeFrom;
