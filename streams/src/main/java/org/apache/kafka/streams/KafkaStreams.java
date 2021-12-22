@@ -476,7 +476,7 @@ public class KafkaStreams implements AutoCloseable {
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
-                        "Current state is: " + state);
+                    "Current state is: " + state);
             }
         }
     }
@@ -590,7 +590,7 @@ public class KafkaStreams implements AutoCloseable {
                 this.globalStateRestoreListener = globalStateRestoreListener;
             } else {
                 throw new IllegalStateException("Can only set GlobalStateRestoreListener before calling start(). " +
-                        "Current state is: " + state);
+                    "Current state is: " + state);
             }
         }
     }
@@ -1100,22 +1100,10 @@ public class KafkaStreams implements AutoCloseable {
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
      * <p>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 0bf168a34a (Adding test cases and fixing check style issues)
      * Since the number of stream threads decreases, the sizes of the caches and buffer bytes in the remaining stream
      * threads are adapted so that the sum of the cache sizes and buffer bytes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG} and
      * {@link StreamsConfig#INPUT_BUFFER_MAX_BYTES_CONFIG} respectively.
-<<<<<<< HEAD
-=======
-     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
-     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
-     * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
->>>>>>> 34f50e2e5c (Adding more tests)
-=======
->>>>>>> 0bf168a34a (Adding test cases and fixing check style issues)
      *
      * @param timeout The length of time to wait for the thread to shutdown
      * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
@@ -1273,6 +1261,23 @@ public class KafkaStreams implements AutoCloseable {
             return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
         else
             return inputBufferMaxBytes / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
+    }
+
+    private void resizeThreadCacheAndBufferMemory(final int numStreamThreads) {
+        final long cacheSizePerThread;
+        final long inputBufferMaxBytesPerThread;
+        if (numStreamThreads == 0) {
+            cacheSizePerThread = totalCacheSize;
+            inputBufferMaxBytesPerThread = inputBufferMaxBytes;
+        }
+        else {
+            cacheSizePerThread = totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
+            inputBufferMaxBytesPerThread = inputBufferMaxBytes / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
+        }
+        processStreamThread(thread -> thread.resizeCacheAndBufferMemory(cacheSizePerThread, inputBufferMaxBytesPerThread));
+        if (globalStreamThread != null) {
+            globalStreamThread.resize(cacheSizePerThread);
+        }
     }
 
     private void resizeThreadCacheOrBufferMemory(final long sizePerThread, final boolean cacheResize) {
