@@ -2681,7 +2681,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCompleteRestorationIfTaskCannotCompleteRestoration() {
+    public void shouldNotCompleteRestorationAndCommitTaskIfTaskCannotCompleteRestoration() {
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions)
         );
@@ -2715,6 +2715,16 @@ public class TaskManagerTest {
             taskManager.activeTaskMap(),
             Matchers.equalTo(mkMap(mkEntry(taskId00, task00)))
         );
+
+        final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
+
+        final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
+        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(singletonList(task00));
+        replay(tasks);
+        threadProducer.commitTransaction(anyObject(), anyObject());
+        EasyMock.expectLastCall().times(1);
+
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator);
     }
