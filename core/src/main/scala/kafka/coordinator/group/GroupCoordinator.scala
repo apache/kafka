@@ -163,7 +163,7 @@ class GroupCoordinator(val brokerId: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback,
-                      reason: String = "not provided",
+                      reason: Option[String] = None,
                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
@@ -182,6 +182,7 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
         case Some(group) =>
           group.inLock {
+            val joinReason = reason.getOrElse("not provided")
             if (!acceptJoiningMember(group, memberId)) {
               group.remove(memberId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
@@ -198,7 +199,7 @@ class GroupCoordinator(val brokerId: Int,
                 protocols,
                 responseCallback,
                 requestLocal,
-                reason
+                joinReason
               )
             } else {
               doCurrentMemberJoinGroup(
@@ -212,7 +213,7 @@ class GroupCoordinator(val brokerId: Int,
                 protocolType,
                 protocols,
                 responseCallback,
-                reason
+                joinReason
               )
             }
 
