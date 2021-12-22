@@ -22,8 +22,8 @@ import org.apache.kafka.server.common.CheckpointFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -72,7 +72,7 @@ public class CommittedOffsetsFile {
     }
 
     public synchronized Map<Integer, Long> readEntries() throws IOException {
-        List<Map.Entry<Integer, Long>> entries = checkpointFile.read();
+        Collection<Map.Entry<Integer, Long>> entries = checkpointFile.read();
         Map<Integer, Long> partitionToOffsets = new HashMap<>(entries.size());
         for (Map.Entry<Integer, Long> entry : entries) {
             Long existingValue = partitionToOffsets.put(entry.getKey(), entry.getValue());

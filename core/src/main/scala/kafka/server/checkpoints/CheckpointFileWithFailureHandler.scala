@@ -45,7 +45,7 @@ class CheckpointFileWithFailureHandler[T](val file: File,
 
   def read(): Seq[T] = {
       try {
-        checkpointFile.read().asScala
+        checkpointFile.read().asScala.toSeq
       } catch {
         case e: IOException =>
           val msg = s"Error while reading checkpoint file ${file.getAbsolutePath}"

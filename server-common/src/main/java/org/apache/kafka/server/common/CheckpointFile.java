@@ -77,29 +77,21 @@ public class CheckpointFile<T> {
             // write to temp file and then swap with the existing file
             try (FileOutputStream fileOutputStream = new FileOutputStream(tempPath.toFile());
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                // Write the version
-                writer.write(Integer.toString(version));
-                writer.newLine();
-
-                // Write the entries count
-                writer.write(Integer.toString(entries.size()));
-                writer.newLine();
-
-                // Write each entry on a new line.
-                for (T entry : entries) {
-                    writer.write(formatter.toString(entry));
-                    writer.newLine();
+                CheckpointWriteBuffer<T> checkpointWriteBuffer = new CheckpointWriteBuffer<T>(writer, version, formatter);
+                try {
+                    checkpointWriteBuffer.write(entries);
+                    writer.flush();
+                    // Call `sync` before the stream is closed.
+                    fileOutputStream.getFD().sync();
+                } finally {
+                    writer.close();
                 }
-
-                writer.flush();
-                fileOutputStream.getFD().sync();
+                Utils.atomicMoveWithFallback(tempPath, absolutePath);
             }
-
-            Utils.atomicMoveWithFallback(tempPath, absolutePath);
         }
     }
 
-    public List<T> read() throws IOException {
+    public Collection<T> read() throws IOException {
         synchronized (lock) {
             try (BufferedReader reader = Files.newBufferedReader(absolutePath)) {
                 CheckpointReadBuffer<T> checkpointBuffer = new CheckpointReadBuffer<>(absolutePath.toString(), reader, version, formatter);
@@ -116,9 +108,9 @@ public class CheckpointFile<T> {
         private final EntryFormatter<T> formatter;
 
         public CheckpointReadBuffer(String location,
-                             BufferedReader reader,
-                             int version,
-                             EntryFormatter<T> formatter) {
+                                    BufferedReader reader,
+                                    int version,
+                                    EntryFormatter<T> formatter) {
             this.location = location;
             this.reader = reader;
             this.version = version;
@@ -170,6 +162,36 @@ public class CheckpointFile<T> {
 
         private IOException buildMalformedLineException(String line) {
             return new IOException(String.format("Malformed line in checkpoint file [%s]: %s", location, line));
+        }
+    }
+
+    public static class CheckpointWriteBuffer<T> {
+        private final BufferedWriter writer;
+        private final int version;
+        private final EntryFormatter<T> formatter;
+
+        public CheckpointWriteBuffer(BufferedWriter writer,
+                                     int version,
+                                     EntryFormatter<T> formatter) {
+            this.writer = writer;
+            this.version = version;
+            this.formatter = formatter;
+        }
+
+        public void write(Collection<T> entries) throws IOException {
+            // Write the version
+            writer.write(Integer.toString(version));
+            writer.newLine();
+
+            // Write the entries count
+            writer.write(Integer.toString(entries.size()));
+            writer.newLine();
+
+            // Write each entry on a new line.
+            for (T entry : entries) {
+                writer.write(formatter.toString(entry));
+                writer.newLine();
+            }
         }
     }
 

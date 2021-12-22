@@ -19,17 +19,21 @@ package kafka.log.remote
 import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
-import kafka.server.epoch.LeaderEpochFileCache
+import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
+import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.utils.Logging
 import org.apache.kafka.common._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
+import org.apache.kafka.server.common.CheckpointFile.CheckpointWriteBuffer
 import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentMetadata, RemoteStorageManager}
 
-import java.io.{Closeable, InputStream}
+import java.io.{BufferedWriter, ByteArrayOutputStream, Closeable, InputStream, OutputStreamWriter}
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.security.{AccessController, PrivilegedAction}
 import java.util
 import java.util.Optional
@@ -269,6 +273,47 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
       maybeEpoch = leaderEpochCache.findNextEpoch(maybeEpoch.get)
     }
     None
+  }
+
+  /**
+   * Returns the leader epoch checkpoint by truncating with the given start(exclusive) and end(inclusive) offset
+   * @param leaderEpochCache leader-epoch checkpoint cache.
+   * @param startOffset The start offset of the checkpoint file (exclusive in the truncation).
+   *                    If start offset is 6, then it will retain an entry at offset 6.
+   * @param endOffset   The end offset of the checkpoint file (inclusive in the truncation)
+   *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
+   * @return the truncated leader epoch checkpoint
+   */
+  private[remote] def getLeaderEpochCheckpoint(leaderEpochCache: Option[LeaderEpochFileCache], startOffset: Long, endOffset: Long): InMemoryLeaderEpochCheckpoint = {
+    val checkpoint = new InMemoryLeaderEpochCheckpoint()
+    leaderEpochCache
+      .map(cache => cache.writeTo(checkpoint))
+      .foreach { x =>
+        if (startOffset >= 0) {
+          x.truncateFromStart(startOffset)
+        }
+        x.truncateFromEnd(endOffset)
+      }
+    checkpoint
+  }
+
+  class InMemoryLeaderEpochCheckpoint extends LeaderEpochCheckpoint {
+    private var epochs: Seq[EpochEntry] = Seq()
+    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
+    override def read(): Seq[EpochEntry] = this.epochs
+
+    def readAsByteBuffer(): ByteBuffer = {
+      val stream = new ByteArrayOutputStream()
+      val writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))
+      val writeBuffer = new CheckpointWriteBuffer[EpochEntry](writer, 0, LeaderEpochCheckpointFile.Formatter)
+      try {
+        writeBuffer.write(epochs.asJava)
+        writer.flush()
+        ByteBuffer.wrap(stream.toByteArray)
+      } finally {
+        writer.close()
+      }
+    }
   }
 
   /**
