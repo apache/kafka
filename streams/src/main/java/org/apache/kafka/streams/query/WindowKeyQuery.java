@@ -34,7 +34,7 @@ public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
         this.timeTo = timeTo;
     }
 
-    public static <K, V> WindowKeyQuery<K, V> withKeyAndWindowBounds(final K key, final Instant timeFrom, final Instant timeTo) {
+    public static <K, V> WindowKeyQuery<K, V> withKeyAndWindowStartRange(final K key, final Instant timeFrom, final Instant timeTo) {
         return new WindowKeyQuery<>(key, Optional.of(timeFrom), Optional.of(timeTo));
     }
 
