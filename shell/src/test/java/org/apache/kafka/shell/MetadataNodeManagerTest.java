@@ -296,7 +296,7 @@ public class MetadataNodeManagerTest {
 
     @Test
     public void testProducerIdsRecord() {
-        // generate brokerId
+        // generate a producerId record
         ProducerIdsRecord record1 = new ProducerIdsRecord()
             .setBrokerId(0)
             .setBrokerEpoch(1)
@@ -313,7 +313,7 @@ public class MetadataNodeManagerTest {
             "9999",
             metadataNodeManager.getData().root().directory("producerIds").file("blockEnd").contents());
 
-        // generate brokerId again
+        // generate another brokerId
         ProducerIdsRecord record2 = new ProducerIdsRecord()
             .setBrokerId(1)
             .setBrokerEpoch(2)
