@@ -701,8 +701,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // 1. future is null, which means no commit request sent, so it is still considered completed
         // 2. offset commit completed
         // 3. offset commit failed with non-retriable error
-        if (future == null || future.succeeded() || (future.failed() && !future.isRetriable()))
+        if (future == null)
             onJoinPrepareAsyncCommitCompleted = true;
+        else if (future.succeeded())
+            onJoinPrepareAsyncCommitCompleted = true;
+        else if (future.failed() && !future.isRetriable()) {
+            log.error("Asynchronous auto-commit of offsets failed: {}", future.exception().getMessage());
+            onJoinPrepareAsyncCommitCompleted = true;
+        }
+
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -1085,12 +1092,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
-        if (autoCommitEnabled) {
-            RequestFuture<Void> future = autoCommitOffsetsAsync();
-            client.pollNoWakeup();
-            invokeCompletedOffsetCommitCallbacks();
-            return future;
-        }
+        if (autoCommitEnabled)
+            return autoCommitOffsetsAsync();
         return null;    
     }
 
