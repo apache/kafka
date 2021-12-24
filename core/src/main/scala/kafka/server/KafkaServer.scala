@@ -139,6 +139,8 @@ class KafkaServer(
 
   var alterIsrManager: AlterIsrManager = null
 
+  var logDirEventManager: LogDirEventManager = null
+
   var kafkaScheduler: KafkaScheduler = null
 
   @volatile var metadataCache: ZkMetadataCache = null
@@ -317,6 +319,21 @@ class KafkaServer(
         }
         alterIsrManager.start()
 
+        val alterReplicaStateChannelManager = BrokerToControllerChannelManager(
+          controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+          time = time,
+          metrics = metrics,
+          config = config,
+          channelName = "alterReplicaState",
+          threadNamePrefix = threadNamePrefix,
+          retryTimeoutMs = Long.MaxValue)
+        if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported) {
+          alterReplicaStateChannelManager.start()
+        }
+
+        logDirEventManager = new LogDirEventManagerImpl(alterReplicaStateChannelManager, kafkaScheduler, time,
+          config.brokerId, () => kafkaController.brokerEpoch)
+
         _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
@@ -473,7 +490,8 @@ class KafkaServer(
       brokerTopicStats = brokerTopicStats,
       isShuttingDown = isShuttingDown,
       zkClient = Some(zkClient),
-      threadNamePrefix = threadNamePrefix)
+      threadNamePrefix = threadNamePrefix,
+      logDirEventManager = logDirEventManager)
   }
 
   private def initZkClient(time: Time): Unit = {
@@ -751,6 +769,10 @@ class KafkaServer(
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
+
+        if (logDirEventManager != null) {
+          CoreUtils.swallow(logDirEventManager.shutdown(), this)
+        }
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

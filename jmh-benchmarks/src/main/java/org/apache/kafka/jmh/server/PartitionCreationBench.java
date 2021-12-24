@@ -25,6 +25,7 @@ import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
+import kafka.server.LogDirEventManager;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -95,6 +96,7 @@ public class PartitionCreationBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
+    private LogDirEventManager logDirEventManager;
     private List<TopicPartition> topicPartitions;
 
     @SuppressWarnings("deprecation")
@@ -150,6 +152,7 @@ public class PartitionCreationBench {
             }
         };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
+        this.logDirEventManager = TestUtils.createMockLogDirEventManager();
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
@@ -162,6 +165,7 @@ public class PartitionCreationBench {
             setMetadataCache(new ZkMetadataCache(this.brokerProperties.brokerId())).
             setLogDirFailureChannel(failureChannel).
             setAlterIsrManager(alterIsrManager).
+            setLogDirEventManager(logDirEventManager).
             build();
         replicaManager.startup();
         replicaManager.checkpointHighWatermarks();

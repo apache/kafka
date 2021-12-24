@@ -48,6 +48,11 @@ public class ApiKeysTest {
         assertTrue(ApiKeys.ALTER_ISR.clusterAction);
     }
 
+    @Test
+    public void testAlterReplicaStateIsClusterAction() {
+        assertTrue(ApiKeys.ALTER_REPLICA_STATE.clusterAction);
+    }
+
     /**
      * All valid client responses which may be throttled should have a field named
      * 'throttle_time_ms' to return the throttle time to the client. Exclusions are
@@ -62,7 +67,7 @@ public class ApiKeysTest {
     public void testResponseThrottleTime() {
         Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         // Newer protocol apis include throttle time ms even for cluster actions
-        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR, ApiKeys.ALLOCATE_PRODUCER_IDS);
+        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR, ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.ALTER_REPLICA_STATE);
         for (ApiKeys apiKey: ApiKeys.zkBrokerApis()) {
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");

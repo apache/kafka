@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.cluster.Partition
 import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.TestUtils.MockAlterIsrManager
+import kafka.utils.TestUtils.{MockAlterIsrManager, MockLogDirEventManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -55,6 +55,7 @@ class IsrExpirationTest {
   var replicaManager: ReplicaManager = null
 
   var alterIsrManager: MockAlterIsrManager = _
+  var logDirEventManagerManager: MockLogDirEventManager = _
 
   @BeforeEach
   def setUp(): Unit = {
@@ -73,7 +74,8 @@ class IsrExpirationTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterIsrManager = alterIsrManager,
+      logDirEventManager = logDirEventManagerManager)
   }
 
   @AfterEach

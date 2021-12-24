@@ -119,7 +119,9 @@ object ApiVersion {
     // Assume message format version is 3.0 (KIP-724)
     KAFKA_3_0_IV1,
     // Adds topic IDs to Fetch requests/responses (KIP-516)
-    KAFKA_3_1_IV0
+    KAFKA_3_1_IV0,
+    // Introduced AlterReplicaState (KIP-589)
+    KAFKA_3_1_IV1
   )
 
   // Map keys are the union of the short and full versions
@@ -205,6 +207,11 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   def isAlterIsrSupported: Boolean = this >= KAFKA_2_7_IV2
 
   def isAllocateProducerIdsSupported: Boolean = this >= KAFKA_3_0_IV0
+
+  def isAlterReplicaStateSupported: Boolean = this >= KAFKA_3_1_IV1
+
+  // to be enabled after KAFKA-13005
+  def isKRaftAlterReplicaStateSupported: Boolean = false
 
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
@@ -475,6 +482,13 @@ case object KAFKA_3_1_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 35
+}
+
+case object KAFKA_3_1_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "3.1"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 36
 }
 
 object ApiVersionValidator extends Validator {

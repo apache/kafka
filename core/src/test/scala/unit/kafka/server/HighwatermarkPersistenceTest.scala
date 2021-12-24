@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Assertions._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 
 import kafka.cluster.Partition
-import kafka.server.metadata.MockConfigRepository
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
 
@@ -34,7 +33,6 @@ class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
-  val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
@@ -46,6 +44,7 @@ class HighwatermarkPersistenceTest {
   }
 
   val alterIsrManager = TestUtils.createAlterIsrManager()
+  val logDirEventManagerManager: LogDirEventManager = TestUtils.createMockLogDirEventManager()
 
   @AfterEach
   def teardown(): Unit = {
@@ -71,7 +70,8 @@ class HighwatermarkPersistenceTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterIsrManager = alterIsrManager,
+      logDirEventManager = logDirEventManagerManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -127,7 +127,8 @@ class HighwatermarkPersistenceTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
       logDirFailureChannel = logDirFailureChannels.head,
-      alterIsrManager = alterIsrManager)
+      alterIsrManager = alterIsrManager,
+      logDirEventManager = logDirEventManagerManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
