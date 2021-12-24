@@ -288,7 +288,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     servers.foreach(server => killBroker(server.config.brokerId))
     val closeTimeout = 2000
     val future1 = submitCloseAndValidate(consumer1, closeTimeout, None, Some(closeTimeout))
-    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, Some(requestTimeout), Some(requestTimeout))
+    val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(requestTimeout))
     future1.get
     future2.get
   }
