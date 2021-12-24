@@ -85,7 +85,7 @@ public class TaskMetrics {
         "from consumer and not yet processed for this active task";
 
     private static final String TOTAL_BYTES = "total-bytes";
-    private static final String TOTAL_BYTES_DESCRIPTION = "The total number of bytes accumulated by this task";
+    private static final String TOTAL_BYTES_DESCRIPTION = "The total number of bytes accumulated in this task's input buffer";
 
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
