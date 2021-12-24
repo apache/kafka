@@ -4109,12 +4109,6 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldNeverHandleAlterIsrRequest(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
-  }
-
-  @Test
   def testRaftShouldNeverHandleEnvelope(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleEnvelope(_, RequestLocal.withThreadConfinedCaching))
@@ -4214,5 +4208,11 @@ class KafkaApisTest {
   def testRaftShouldAlwaysForwardListPartitionReassignments(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleListPartitionReassignmentsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardAlterIsrRequest(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
   }
 }
