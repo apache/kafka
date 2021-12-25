@@ -28,8 +28,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
+            MS_EXPOSE_REP: Public static method may expose internal representation by returning array
             MS_PKGPROTECT: Field should be package protected -->
-        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_EXPOSE_REP,MS_PKGPROTECT"/>
+    </Match>
+    <Match>
+        <!-- Disable warnings about Random object.
+            DMI_RANDOM_USED_ONLY_ONCE: Random object created and used only once -->
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
     <Match>
