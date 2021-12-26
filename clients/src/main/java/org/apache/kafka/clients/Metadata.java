@@ -28,6 +28,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -60,7 +61,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  */
 public class Metadata implements Closeable {
     private final Logger log;
-    private final long refreshBackoffMs;
+    private long refreshBackoffMs;
     private final long metadataExpireMs;
     private int updateVersion;  // bumped on every metadata response
     private int requestVersion; // bumped on every new topic addition
@@ -75,22 +76,27 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    private final ExponentialBackoff refreshBackoff;
 
     /**
      * Create a new Metadata instance
      *
      * @param refreshBackoffMs         The minimum amount of time that must expire between metadata refreshes to avoid busy
      *                                 polling
+     * @param refreshBackoffMaxMs      The upper bound of the metadata refresh backoff
      * @param metadataExpireMs         The maximum amount of time that metadata can be retained without refresh
      * @param logContext               Log context corresponding to the containing client
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
     public Metadata(long refreshBackoffMs,
+                    long refreshBackoffMaxMs,
                     long metadataExpireMs,
                     LogContext logContext,
                     ClusterResourceListeners clusterResourceListeners) {
         this.log = logContext.logger(Metadata.class);
         this.refreshBackoffMs = refreshBackoffMs;
+        this.refreshBackoff = new ExponentialBackoff(
+            refreshBackoffMs, CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, refreshBackoffMaxMs, CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.metadataExpireMs = metadataExpireMs;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
@@ -266,7 +272,7 @@ public class Metadata implements Closeable {
             throw new IllegalStateException("Update requested after metadata close");
 
         this.needPartialUpdate = requestVersion < this.requestVersion;
-        this.lastRefreshMs = nowMs;
+        this.resetRefreshBackoff(nowMs);
         this.updateVersion += 1;
         if (!isPartialUpdate) {
             this.needFullUpdate = false;
@@ -488,6 +494,13 @@ public class Metadata implements Closeable {
      * to avoid retrying immediately.
      */
     public synchronized void failedUpdate(long now) {
+        this.refreshBackoffMs = this.refreshBackoff.backoff();
+        this.lastRefreshMs = now;
+    }
+
+    private void resetRefreshBackoff(long now) {
+        this.refreshBackoff.resetAttemptedCount();
+        this.refreshBackoffMs = this.refreshBackoff.backoff();
         this.lastRefreshMs = now;
     }
 

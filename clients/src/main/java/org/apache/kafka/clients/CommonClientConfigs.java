@@ -80,7 +80,21 @@ public class CommonClientConfigs {
         " It is recommended to set the value to either zero or `MAX_VALUE` and use corresponding timeout parameters to control how long a client should retry a request.";
 
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
-    public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
+    public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. " +
+        "This avoids repeatedly sending requests in a tight loop under some failure scenarios. This value is the initial backoff value and will increase exponentially for each failed request, " +
+        "up to the <code>retry.backoff.max.ms</code> value.";
+
+    public static final Long DEFAULT_RETRY_BACKOFF_MS = 100L;
+
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = "retry.backoff.max.ms";
+    public static final String RETRY_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly failed. " +
+        "If provided, the backoff per client will increase exponentially for each failed request, up to this maximum. To prevent all clients from being synchronized upon retry, " +
+        "a randomized jitter with a factor of 0.2 will be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the computed value. " +
+        "If <code>retry.backoff.ms</code> is set to be higher than <code>retry.backoff.max.ms</code>, then <code>retry.backoff.max.ms</code> will be used as a constant backoff from the beginning without any exponential increase";
+    public static final Long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000L;
+
+    public static final Double RETRY_BACKOFF_JITTER = 0.2;
+    public static final int RETRY_BACKOFF_EXP_BASE = 2;
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
@@ -102,7 +116,9 @@ public class CommonClientConfigs {
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
-    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. If the connection is not built before the timeout elapses, clients will close the socket channel.";
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. If the connection is not built before the timeout elapses, clients will close the socket channel. " +
+        "This value is the initial backoff value and will increase exponentially for each consecutive connection failure, " +
+        "up to the <code>socket.connection.setup.timeout.max.ms</code> value.";
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS = 10 * 1000L;
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = "socket.connection.setup.timeout.max.ms";
@@ -201,5 +217,25 @@ public class CommonClientConfigs {
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;
+    }
+
+    public static void warnInconsistentConfigs(AbstractConfig config) {
+        long retryBackoffMs = config.getLong(RETRY_BACKOFF_MS_CONFIG);
+        long retryBackoffMaxMs = config.getLong(RETRY_BACKOFF_MAX_MS_CONFIG);
+        if (retryBackoffMs > retryBackoffMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than Configuration '{}' with" +
+                    " value '{}'. A static backoff with value '{}' will be applied.",
+                RETRY_BACKOFF_MS_CONFIG, retryBackoffMs,
+                RETRY_BACKOFF_MAX_MS_CONFIG, retryBackoffMaxMs, retryBackoffMs);
+        }
+
+        long connectionSetupTimeoutMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
+        long connectionSetupTimeoutMaxMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+        if (connectionSetupTimeoutMs > connectionSetupTimeoutMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than Configuration '{}' with" +
+                    " value '{}'. A static connection setup timeout with value '{}' will be applied.",
+                SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, connectionSetupTimeoutMs,
+                SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, connectionSetupTimeoutMaxMs, connectionSetupTimeoutMs);
+        }
     }
 }

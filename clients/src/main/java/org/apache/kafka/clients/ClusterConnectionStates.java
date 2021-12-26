@@ -160,7 +160,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver));
+                reconnectBackoff.backoff(), connectionSetupTimeout.backoff(), host, hostResolver));
         connectingNodes.add(id);
     }
 
@@ -341,8 +341,8 @@ final class ClusterConnectionStates {
      * @param nodeState The node state object to update
      */
     private void resetReconnectBackoff(NodeConnectionState nodeState) {
-        nodeState.failedAttempts = 0;
-        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(0);
+        reconnectBackoff.resetAttemptedCount();
+        nodeState.reconnectBackoffMs = reconnectBackoff.backoff();
     }
 
     /**
@@ -352,8 +352,8 @@ final class ClusterConnectionStates {
      * @param nodeState The node state object to update
      */
     private void resetConnectionSetupTimeout(NodeConnectionState nodeState) {
-        nodeState.failedConnectAttempts = 0;
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff(0);
+        connectionSetupTimeout.resetAttemptedCount();
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff();
     }
 
     /**
@@ -365,8 +365,7 @@ final class ClusterConnectionStates {
      * @param nodeState The node state object to update
      */
     private void updateReconnectBackoff(NodeConnectionState nodeState) {
-        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(nodeState.failedAttempts);
-        nodeState.failedAttempts++;
+        nodeState.reconnectBackoffMs = reconnectBackoff.backoff();
     }
 
     /**
@@ -377,8 +376,7 @@ final class ClusterConnectionStates {
      * @param nodeState The node state object to update
      */
     private void updateConnectionSetupTimeout(NodeConnectionState nodeState) {
-        nodeState.failedConnectAttempts++;
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff(nodeState.failedConnectAttempts);
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff();
     }
 
     /**
@@ -470,8 +468,6 @@ final class ClusterConnectionStates {
         ConnectionState state;
         AuthenticationException authenticationException;
         long lastConnectAttemptMs;
-        long failedAttempts;
-        long failedConnectAttempts;
         long reconnectBackoffMs;
         long connectionSetupTimeoutMs;
         // Connection is being throttled if current time < throttleUntilTimeMs.
@@ -488,7 +484,6 @@ final class ClusterConnectionStates {
             this.addressIndex = -1;
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
-            this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
             this.connectionSetupTimeoutMs = connectionSetupTimeoutMs;
             this.throttleUntilTimeMs = 0;
@@ -536,7 +531,7 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + throttleUntilTimeMs + ")";
         }
     }
 }

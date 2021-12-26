@@ -38,6 +38,8 @@ public class MockTime implements Time {
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private final long autoTickMs;
+    // Record the sum of auto ticked milliseconds
+    private final AtomicLong autoTickedMs;
 
     // Values from `nanoTime` and `currentTimeMillis` are not comparable, so we store them separately to allow tests
     // using this class to detect bugs where this is incorrectly assumed to be true
@@ -56,6 +58,7 @@ public class MockTime implements Time {
         this.timeMs = new AtomicLong(currentTimeMs);
         this.highResTimeNs = new AtomicLong(currentHighResTimeNs);
         this.autoTickMs = autoTickMs;
+        this.autoTickedMs = new AtomicLong(0);
     }
 
     public void addListener(Listener listener) {
@@ -82,8 +85,17 @@ public class MockTime implements Time {
     @Override
     public void sleep(long ms) {
         timeMs.addAndGet(ms);
+        autoTickedMs.addAndGet(ms);
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
         tick();
+    }
+
+    public long autoTickedMs() {
+        return autoTickedMs.get();
+    }
+
+    public void resetAutoTickedCounter() {
+        autoTickedMs.set(0);
     }
 
     @Override

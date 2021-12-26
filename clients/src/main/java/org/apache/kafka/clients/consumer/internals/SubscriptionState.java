@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -103,6 +105,8 @@ public class SubscriptionState {
 
     private int assignmentId = 0;
 
+    private final ExponentialBackoff retryBackoff;
+
     @Override
     public synchronized String toString() {
         return "SubscriptionState{" +
@@ -130,6 +134,11 @@ public class SubscriptionState {
     }
 
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
+        this(logContext, defaultResetStrategy, CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS, CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS);
+    }
+
+    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy,
+                             long retryBackoffMs, long retryBackoffMaxMs) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new HashSet<>();
@@ -137,6 +146,8 @@ public class SubscriptionState {
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+        this.retryBackoff = new ExponentialBackoff(
+            retryBackoffMs, CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, CommonClientConfigs.RETRY_BACKOFF_JITTER);
     }
 
     /**
@@ -741,13 +752,32 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
-    synchronized void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+    private void incrementRetryBackoff(TopicPartitionState state, long now) {
+        int attempts = state.getAndIncrementAttempts();
+        long retryBackoffMs = retryBackoff.backoff(attempts);
+        long nextRetryTimeMs = now + retryBackoffMs;
+        state.setNextAllowedRetry(nextRetryTimeMs);
+    }
+
+    private void resetRetryBackoff(TopicPartitionState state) {
+        state.resetAttempts();
+    }
+
+    synchronized void requestFailed(Set<TopicPartition> partitions, long now) {
         for (TopicPartition partition : partitions) {
             // by the time the request failed, the assignment may no longer
             // contain this partition any more, in which case we would just ignore.
             final TopicPartitionState state = assignedStateOrNull(partition);
             if (state != null)
-                state.requestFailed(nextRetryTimeMs);
+                incrementRetryBackoff(state, now);
+        }
+    }
+
+    synchronized void requestSucceeded(Set<TopicPartition> partitions) {
+        for (TopicPartition partition : partitions) {
+            final TopicPartitionState state = assignment.stateValue(partition);
+            if (state != null)
+                resetRetryBackoff(state);
         }
     }
 
@@ -757,6 +787,14 @@ public class SubscriptionState {
 
     public synchronized ConsumerRebalanceListener rebalanceListener() {
         return rebalanceListener;
+    }
+
+    // Visible for testing
+    long nextAllowedRetry(TopicPartition tp) {
+        TopicPartitionState state = this.assignment.stateValue(tp);
+        if (state == null)
+            throw new IllegalStateException("No current assignment for partition " + tp);
+        return state.nextRetryTimeMs;
     }
 
     private static class TopicPartitionState {
@@ -773,6 +811,7 @@ public class SubscriptionState {
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
         private boolean endOffsetRequested;
+        private int attempts = 0;
         
         TopicPartitionState() {
             this.paused = false;
@@ -793,6 +832,14 @@ public class SubscriptionState {
 
         public void requestEndOffset() {
             endOffsetRequested = true;
+        }
+
+        public int getAndIncrementAttempts() {
+            return this.attempts++;
+        }
+
+        public void resetAttempts() {
+            this.attempts = 0;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -915,10 +962,6 @@ public class SubscriptionState {
         }
 
         private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
-            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
-        }
-
-        private void requestFailed(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
