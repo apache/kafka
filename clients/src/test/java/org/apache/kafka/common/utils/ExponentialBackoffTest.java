@@ -54,4 +54,17 @@ public class ExponentialBackoffTest {
         assertEquals(400, exponentialBackoff.backoff(2));
         assertEquals(400, exponentialBackoff.backoff(3));
     }
+
+    @Test
+    public void testExponentialBackoffWithoutJitterAndAttemptedCount() {
+        ExponentialBackoff exponentialBackoff = new ExponentialBackoff(100, 2, 400, 0.0);
+        ExponentialBackoff exponentialBackoffWithoutAttemptedCount = new ExponentialBackoff(100, 2, 400, 0.0);
+        assertEquals(exponentialBackoff.backoff(0), exponentialBackoffWithoutAttemptedCount.backoff());
+        assertEquals(exponentialBackoff.backoff(1), exponentialBackoffWithoutAttemptedCount.backoff());
+        assertEquals(exponentialBackoff.backoff(2), exponentialBackoffWithoutAttemptedCount.backoff());
+        assertEquals(exponentialBackoff.backoff(3), exponentialBackoffWithoutAttemptedCount.backoff());
+        assertEquals(4, exponentialBackoffWithoutAttemptedCount.attemptedCount());
+        exponentialBackoffWithoutAttemptedCount.resetAttemptedCount();
+        assertEquals(0, exponentialBackoffWithoutAttemptedCount.attemptedCount());
+    }
 }

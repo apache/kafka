@@ -94,7 +94,7 @@ public class MockTime implements Time {
         return autoTickedMs.get();
     }
 
-    public void resetAutoTickedCounter() {
+    public void resetAutoTickedRecord() {
         autoTickedMs.set(0);
     }
 

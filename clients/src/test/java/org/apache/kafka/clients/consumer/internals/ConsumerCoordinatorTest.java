@@ -137,6 +137,7 @@ public abstract class ConsumerCoordinatorTest {
     private final int sessionTimeoutMs = 10000;
     private final int heartbeatIntervalMs = 5000;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private final int autoCommitIntervalMs = 2000;
     private final int requestTimeoutMs = 30000;
     private final MockTime time = new MockTime();
@@ -212,6 +213,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupId,
                                         groupInstanceId,
                                         retryBackoffMs,
+                                        retryBackoffMaxMs,
                                         !groupInstanceId.isPresent());
     }
 

@@ -1928,7 +1928,7 @@ public class FetcherTest {
             new ListOffsetsResponse(responseData),
             false);
         fetcher.resetOffsetsIfNeeded();
-        time.resetAutoTickedCounter();
+        time.resetAutoTickedRecord();
         consumerClient.pollNoWakeup();
     }
 
@@ -1986,7 +1986,7 @@ public class FetcherTest {
         System.out.println("!!! resp:" + resp);
         client.prepareResponseFrom(resp, node);
         fetcher.validateOffsetsIfNeeded();
-        time.resetAutoTickedCounter();
+        time.resetAutoTickedRecord();
         consumerClient.pollNoWakeup();
     }
 

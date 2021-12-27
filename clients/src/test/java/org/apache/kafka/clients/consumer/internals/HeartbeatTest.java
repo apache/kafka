@@ -33,6 +33,7 @@ public class HeartbeatTest {
     private int heartbeatIntervalMs = 100;
     private int maxPollIntervalMs = 900;
     private long retryBackoffMs = 10L;
+    private long retryBackoffMaxMs = 100L;
     private MockTime time = new MockTime();
 
     private Heartbeat heartbeat;
@@ -45,6 +46,7 @@ public class HeartbeatTest {
                                                                         "group_id",
                                                                         Optional.empty(),
                                                                         retryBackoffMs,
+                                                                        retryBackoffMaxMs,
                                                                         true);
         heartbeat = new Heartbeat(rebalanceConfig, time);
     }

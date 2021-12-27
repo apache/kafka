@@ -590,8 +590,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
-        CommonClientConfigs.warnInconsistentConfigs(this);
         maybeOverrideClientId(refinedConfigs);
         return refinedConfigs;
     }

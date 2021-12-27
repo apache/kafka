@@ -100,6 +100,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerInterceptors<?, ?> interceptors;
     private final AtomicInteger pendingAsyncCommits;
 
+
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
     private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
@@ -868,6 +869,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
         }
+        int attempts = 0;
 
         do {
             if (!ensureCoordinatorReady(timer)) return null;
@@ -890,7 +892,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (!future.isRetriable()) {
                     throw future.exception();
                 } else {
-                    timer.sleep(rebalanceConfig.retryBackoffMs);
+                    timer.sleep(retryBackoff.backoff(attempts++));
                 }
             } else {
                 return null;
@@ -1021,6 +1023,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return true;
 
+        int attempts = 0;
+
         do {
             if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
                 return false;
@@ -1043,7 +1047,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
-            timer.sleep(rebalanceConfig.retryBackoffMs);
+            timer.sleep(retryBackoff.backoff(attempts++));
         } while (timer.notExpired());
 
         return false;
@@ -1066,13 +1070,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
                 if (exception instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
-                        exception);
-                    nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets, exception);
+                    nextAutoCommitTimer.updateAndReset(retryBackoff.backoff());
                 } else {
+                    retryBackoff.resetAttemptedCount();
                     log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                 }
             } else {
+                retryBackoff.resetAttemptedCount();
                 log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
             }
         });

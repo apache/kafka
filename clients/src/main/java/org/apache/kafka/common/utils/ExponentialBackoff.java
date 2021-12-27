@@ -20,7 +20,7 @@ package org.apache.kafka.common.utils;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * A utility class for keeping the parameters and providing the value of exponential
+ * An utility class for keeping the parameters and providing the value of exponential
  * retry backoff, exponential reconnect backoff, exponential timeout, etc.
  * The formula is:
  * Backoff(attempts) = random(1 - jitter, 1 + jitter) * initialInterval * multiplier ^ attempts
@@ -32,8 +32,16 @@ public class ExponentialBackoff {
     private final double expMax;
     private final long initialInterval;
     private final double jitter;
-    private int attemptedCount = 0;
+    private long attemptedCount = 0;
 
+    /**
+     * Create a new ExponentialBackoff instance
+     *
+     * @param initialInterval         The initial interval value for the backoff
+     * @param multiplier              The multiplier to calculate the exponential backoff
+     * @param maxInterval             The upper bound of the backoff value
+     * @param jitter                  The random jitter value for the exponential backoff
+     */
     public ExponentialBackoff(long initialInterval, int multiplier, long maxInterval, double jitter) {
         this.initialInterval = initialInterval;
         this.multiplier = multiplier;
@@ -42,17 +50,23 @@ public class ExponentialBackoff {
                 Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
     }
 
-    public long backoff(int attempted) {
+    /*
+     * calculate the backoff value based on the passed parameter {@code attempts}
+     */
+    public long backoff(long attempts) {
         if (expMax == 0) {
             return initialInterval;
         }
-        double exp = Math.min(attempted, this.expMax);
+        double exp = Math.min(attempts, this.expMax);
         double term = initialInterval * Math.pow(multiplier, exp);
         double randomFactor = jitter < Double.MIN_NORMAL ? 1.0 :
             ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);
     }
 
+    /*
+     * calculate the backoff value based on the stored {@code attemptedCount}
+     */
     public long backoff() {
         long backoffMs = backoff(attemptedCount);
         attemptedCount++;
@@ -61,5 +75,9 @@ public class ExponentialBackoff {
 
     public void resetAttemptedCount() {
         attemptedCount = 0;
+    }
+
+    public long attemptedCount() {
+        return attemptedCount;
     }
 }

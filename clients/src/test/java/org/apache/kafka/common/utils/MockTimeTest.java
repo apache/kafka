@@ -29,9 +29,17 @@ public class MockTimeTest extends TimeTest {
         MockTime time = new MockTime(0, 100, 200);
         assertEquals(100, time.milliseconds());
         assertEquals(200, time.nanoseconds());
+        assertEquals(0, time.autoTickedMs());
         time.sleep(1);
         assertEquals(101, time.milliseconds());
         assertEquals(1000200, time.nanoseconds());
+        assertEquals(1, time.autoTickedMs());
+        time.sleep(10);
+        assertEquals(111, time.milliseconds());
+        assertEquals(11000200, time.nanoseconds());
+        assertEquals(11, time.autoTickedMs());
+        time.resetAutoTickedRecord();
+        assertEquals(0, time.autoTickedMs());
     }
 
     @Test

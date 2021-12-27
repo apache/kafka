@@ -2561,6 +2561,7 @@ public class KafkaConsumerTest {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 30000;
         int minBytes = 1;
@@ -2590,6 +2591,7 @@ public class KafkaConsumerTest {
                 groupId,
                 groupInstanceId,
                 retryBackoffMs,
+                retryBackoffMaxMs,
                 true);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
                 loggerFactory,

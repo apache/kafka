@@ -121,7 +121,7 @@ public class WorkerCoordinatorTest {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
@@ -134,6 +134,7 @@ public class WorkerCoordinatorTest {
                                                         heartbeatIntervalMs,
                                                         groupId,
                                                         Optional.empty(),
+                                                        retryBackoffMs,
                                                         retryBackoffMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
