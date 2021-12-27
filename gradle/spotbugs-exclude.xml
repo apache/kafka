@@ -111,6 +111,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
     </Match>
 
+    <!-- false positive, see:
+       https://github.com/spotbugs/spotbugs/issues/600
+       https://github.com/spotbugs/spotbugs/issues/1791
+       -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+
+    <Match>
+        <Class name="org.apache.kafka.common.utils.Exit"/>
+        <Bug pattern="EI_EXPOSE_STATIC_REP2"/>
+    </Match>
+
     <Match>
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.api.package$ElectLeadersRequestOps"/>
