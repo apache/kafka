@@ -3203,6 +3203,11 @@ public abstract class ConsumerCoordinatorTest {
             return commitRequest.data().groupId().equals(groupId);
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
         client.prepareResponse(body -> {
+            commitRequested.set(true);
+            OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+            return commitRequest.data().groupId().equals(groupId);
+        }, new OffsetCommitResponse(new OffsetCommitResponseData()));
+        client.prepareResponse(body -> {
             leaveGroupRequested.set(true);
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
             return leaveRequest.data().groupId().equals(groupId);
