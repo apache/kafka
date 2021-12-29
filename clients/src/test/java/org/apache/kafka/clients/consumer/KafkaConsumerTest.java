@@ -2230,7 +2230,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
-                new RoundRobinAssignor(), false, groupInstanceId);
+                new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
         // concurrent access is illegal
         client.enableBlockingUntilWakeup(1);
@@ -2247,7 +2247,7 @@ public class KafkaConsumerTest {
         }
 
         // accessing closed consumer is illegal
-        consumer.close(Duration.ofSeconds(5));
+        consumer.close(Duration.ZERO);
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
