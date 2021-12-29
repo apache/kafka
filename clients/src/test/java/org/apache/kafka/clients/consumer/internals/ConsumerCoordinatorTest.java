@@ -3202,17 +3202,18 @@ public abstract class ConsumerCoordinatorTest {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
             return commitRequest.data().groupId().equals(groupId);
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
+        if (shouldLeaveGroup)
+            client.prepareResponse(body -> {
+                leaveGroupRequested.set(true);
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+                return leaveRequest.data().groupId().equals(groupId);
+            }, new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.NONE.code())));
         client.prepareResponse(body -> {
             commitRequested.set(true);
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
             return commitRequest.data().groupId().equals(groupId);
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
-        client.prepareResponse(body -> {
-            leaveGroupRequested.set(true);
-            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return leaveRequest.data().groupId().equals(groupId);
-        }, new LeaveGroupResponse(new LeaveGroupResponseData()
-                .setErrorCode(Errors.NONE.code())));
 
         coordinator.close();
         assertTrue(commitRequested.get(), "Commit not requested");
