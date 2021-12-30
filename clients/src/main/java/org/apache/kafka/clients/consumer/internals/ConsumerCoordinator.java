@@ -517,15 +517,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         } else {
-            // For manually assigned partitions, if there are no ready nodes, await metadata.
+            // For manually assigned partitions, if coordinator is unknown, make sure we lookup one and await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
             // requests result in polls returning immediately, causing a tight loop of polls. Without
             // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
-            // awaitMetadataUpdate() initiates new connections with configured backoff and avoids the busy loop.
-            // When group management is used, metadata wait is already performed for this scenario as
-            // coordinator is unknown, hence this check is not required.
-            if (metadata.updateRequested() && !client.hasReadyNodes(timer.currentTimeMs())) {
-                client.awaitMetadataUpdate(timer);
+            // awaitMetadataUpdate() in ensureCoordinatorReady initiates new connections with configured backoff and avoids the busy loop.
+            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+                return false;
             }
         }
 
