@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.TelemetryManagementInterface;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
@@ -78,6 +80,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.KafkaStorageException;
@@ -336,6 +339,8 @@ public class KafkaAdminClient extends AdminClient {
      */
     private final AdminMetadataManager metadataManager;
 
+    private final TelemetryManagementInterface tmi;
+
     /**
      * The metrics for this KafkaAdminClient.
      */
@@ -577,6 +582,7 @@ public class KafkaAdminClient extends AdminClient {
         this.defaultApiTimeoutMs = configureDefaultApiTimeoutMs(config);
         this.time = time;
         this.metadataManager = metadataManager;
+        this.tmi = TelemetryManagementInterface.instance(time, clientId);
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
@@ -619,6 +625,18 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public void close(Duration timeout) {
+        // TODO: figure out where/how to properly close telemetry metrics given that we need to
+        //       write out our terminal set of metrics when closing...
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
+        Utils.closeQuietly(tmi, "client telemetry metrics", firstException);
+        Throwable exception = firstException.get();
+        if (exception != null) {
+            if (exception instanceof InterruptException) {
+                throw (InterruptException) exception;
+            }
+            throw new KafkaException("Failed to close Kafka admin client", exception);
+        }
+
         long waitTimeMs = timeout.toMillis();
         if (waitTimeMs < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
@@ -3404,6 +3422,10 @@ public class KafkaAdminClient extends AdminClient {
         DeleteConsumerGroupOffsetsHandler handler = new DeleteConsumerGroupOffsetsHandler(groupId, partitions, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DeleteConsumerGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), partitions);
+    }
+
+    public String clientInstanceId(Duration timeout) {
+        return tmi.clientInstanceId(timeout);
     }
 
     @Override

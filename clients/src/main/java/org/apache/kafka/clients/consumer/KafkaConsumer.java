@@ -23,6 +23,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientMetricsRegistry;
+import org.apache.kafka.clients.TelemetryManagementInterface;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -567,6 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Visible for testing
     final Metrics metrics;
+    final TelemetryManagementInterface tmi;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
     private Logger log;
@@ -698,6 +700,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
+            this.tmi = TelemetryManagementInterface.instance(time, clientId);
             this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
@@ -758,7 +761,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     true,
                     apiVersions,
                     throttleTimeSensor,
-                    new NetworkClientMetricsRegistry(metrics),
+                    new NetworkClientMetricsRegistry(tmi.metrics()),
                     logContext);
             this.client = new ConsumerNetworkClient(
                     logContext,
@@ -855,6 +858,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.client = client;
+        this.tmi = TelemetryManagementInterface.instance(time, clientId);
         this.metrics = metrics;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
@@ -1902,6 +1906,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    public String clientInstanceId(Duration timeout) {
+        return tmi.clientInstanceId(timeout);
+    }
+
     /**
      * Get the metrics kept by the consumer
      */
@@ -2405,6 +2413,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         Utils.closeQuietly(fetcher, "fetcher", firstException);
         Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
         Utils.closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
+        // TODO: figure out where/how to properly close telemetry metrics given that we need to
+        //       write out our terminal set of metrics when closing...
+        Utils.closeQuietly(tmi, "client telemetry metrics", firstException);
         Utils.closeQuietly(metrics, "consumer metrics", firstException);
         Utils.closeQuietly(client, "consumer network client", firstException);
         Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);

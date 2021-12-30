@@ -1042,6 +1042,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public String clientInstanceId(Duration duration) {
+        // TODO: does this need to be anything realistic?
+        return "client-1";
+    }
+
+    @Override
     synchronized public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
     }

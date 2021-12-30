@@ -29,6 +29,7 @@ public class ProducerTopicMetricsRegistry extends ClientMetricsRegistry {
     final static String PRODUCER_TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
 
     public final MetricNameTemplate recordSuccessTotal;
+
     public final MetricNameTemplate recordFailureTotal;
 
     public ProducerTopicMetricsRegistry(Metrics metrics) {
@@ -40,11 +41,11 @@ public class ProducerTopicMetricsRegistry extends ClientMetricsRegistry {
 
         this.recordSuccessTotal = createTemplate("org.apache.kafka.client.producer.partition.record.success",
             PRODUCER_TOPIC_METRIC_GROUP_NAME,
-            "Number of records that permanently failed delivery.",
+            "Number of records that have been successfully produced.",
             topicAndPartitionTags);
         this.recordFailureTotal = createTemplate("org.apache.kafka.client.producer.partition.record.failures",
             PRODUCER_TOPIC_METRIC_GROUP_NAME,
-            "Number of records that have been successfully produced.",
+            "Number of records that permanently failed delivery.",
             topicAndPartitionTags);
     }
 

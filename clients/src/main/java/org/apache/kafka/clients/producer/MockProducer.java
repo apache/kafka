@@ -366,6 +366,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
+    @Override
+    public String clientInstanceId(Duration duration) {
+        // TODO: does this need to be anything realistic?
+        return "client-1";
+    }
+
     public Map<MetricName, Metric> metrics() {
         return mockMetrics;
     }

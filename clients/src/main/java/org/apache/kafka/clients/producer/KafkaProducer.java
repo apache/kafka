@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientMetricsRegistry;
+import org.apache.kafka.clients.TelemetryManagementInterface;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,11 +32,11 @@ import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
+import org.apache.kafka.clients.producer.internals.ProducerTopicMetricsRegistry;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
 import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
-import org.apache.kafka.clients.telemetry.internal.TelemetryClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -259,7 +260,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private final TelemetryClient telemetryClient;
+
+    private final TelemetryManagementInterface tmi;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -343,6 +345,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s] ", clientId, transactionalId));
             log = logContext.logger(KafkaProducer.class);
             log.trace("Starting the Kafka producer");
+
+            tmi = TelemetryManagementInterface.instance(time, clientId);
 
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -432,9 +436,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
-
-            this.telemetryClient = new TelemetryClient(kafkaClient, this.metadata, this.time, logContext);
-
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka producer started");
@@ -470,7 +471,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 true,
                 apiVersions,
                 throttleTimeSensor,
-                new NetworkClientMetricsRegistry(this.metrics),
+                new NetworkClientMetricsRegistry(tmi.metrics()),
                 logContext);
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
@@ -482,7 +483,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 acks,
                 producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
                 metricsRegistry.senderMetrics,
-                metricsRegistry.producerTopicMetricsRegistry,
+                new ProducerTopicMetricsRegistry(tmi.metrics()),
                 time,
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
@@ -1176,6 +1177,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    public String clientInstanceId(Duration timeout) {
+        return tmi.clientInstanceId(timeout);
+    }
+
     /**
      * Get the full set of internal metrics maintained by the producer.
      */
@@ -1271,6 +1276,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         Utils.closeQuietly(interceptors, "producer interceptors", firstException);
         Utils.closeQuietly(producerMetrics, "producer metrics wrapper", firstException);
+        // TODO: figure out where/how to properly close telemetry metrics given that we need to
+        //       write out our terminal set of metrics when closing...
+        Utils.closeQuietly(tmi, "client telemetry metrics", firstException);
         Utils.closeQuietly(metrics, "producer metrics", firstException);
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
@@ -1284,12 +1292,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new KafkaException("Failed to close kafka producer", exception);
         }
         log.debug("Kafka producer has been closed");
-    }
-    /**
-     * @returns the client's assigned instance id used for metrics collection.
-     */
-    public String clientInstanceId(Duration timeout) {
-        return telemetryClient.clientInstanceId(timeout);
     }
 
     private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {

@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.telemetry.internal;
+package org.apache.kafka.clients;
 
-import java.util.List;
 import java.util.Set;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.CompressionType;
 
@@ -29,51 +29,51 @@ public class TelemetrySubscription {
     private final int subscriptionId;
     private final Set<CompressionType> acceptedCompressionTypes;
     private final long pushIntervalMs;
-    private final DeltaTemporality deltaTemporality;
-    private final Set<MetricDef> metricDefs;
+    private final boolean deltaTemporality;
+    private final Set<MetricName> metricNames;
 
     public TelemetrySubscription(long throttleTimeMs,
         Uuid clientInstanceId,
         int subscriptionId,
         Set<CompressionType> acceptedCompressionTypes,
         long pushIntervalMs,
-        DeltaTemporality deltaTemporality,
-        Set<MetricDef> metricDefs) {
+        boolean deltaTemporality,
+        Set<MetricName> metricNames) {
         this.throttleTimeMs = throttleTimeMs;
         this.clientInstanceId = clientInstanceId;
         this.subscriptionId = subscriptionId;
         this.acceptedCompressionTypes = acceptedCompressionTypes;
         this.pushIntervalMs = pushIntervalMs;
         this.deltaTemporality = deltaTemporality;
-        this.metricDefs = metricDefs;
+        this.metricNames = metricNames;
     }
 
-    public long getThrottleTimeMs() {
+    public long throttleTimeMs() {
         return throttleTimeMs;
     }
 
-    public Uuid getClientInstanceId() {
+    public Uuid clientInstanceId() {
         return clientInstanceId;
     }
 
-    public int getSubscriptionId() {
+    public int subscriptionId() {
         return subscriptionId;
     }
 
-    public Set<CompressionType> getAcceptedCompressionTypes() {
+    public Set<CompressionType> acceptedCompressionTypes() {
         return acceptedCompressionTypes;
     }
 
-    public long getPushIntervalMs() {
+    public long pushIntervalMs() {
         return pushIntervalMs;
     }
 
-    public DeltaTemporality getDeltaTemporality() {
+    public boolean deltaTemporality() {
         return deltaTemporality;
     }
 
-    public Set<MetricDef> getMetricDefs() {
-        return metricDefs;
+    public Set<MetricName> metricNames() {
+        return metricNames;
     }
 
 }

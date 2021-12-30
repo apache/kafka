@@ -28,19 +28,16 @@ import org.apache.kafka.common.metrics.Metrics;
 public class ProducerMetrics {
 
     public final SenderMetricsRegistry senderMetrics;
-    public final ProducerTopicMetricsRegistry producerTopicMetricsRegistry;
     private final Metrics metrics;
 
     public ProducerMetrics(Metrics metrics) {
         this.metrics = metrics;
         this.senderMetrics = new SenderMetricsRegistry(this.metrics);
-        this.producerTopicMetricsRegistry = new ProducerTopicMetricsRegistry(this.metrics);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.senderMetrics.allTemplates());
-        l.addAll(this.producerTopicMetricsRegistry.allTemplates());
         return l;
     }
 

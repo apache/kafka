@@ -30,8 +30,6 @@ import org.apache.kafka.common.metrics.Sensor;
 
 public class SenderMetricsRegistry {
 
-    final static String KIP_714_METRIC_GROUP_NAME = "producer-kip-714-metrics";
-
     final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
 
     private final List<MetricNameTemplate> allTemplates;

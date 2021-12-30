@@ -1576,6 +1576,11 @@ public interface Admin extends AutoCloseable {
     ListTransactionsResult listTransactions(ListTransactionsOptions options);
 
     /**
+     * See {@link KafkaAdminClient#clientInstanceId(Duration)}}
+     */
+    String clientInstanceId(Duration timeout);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

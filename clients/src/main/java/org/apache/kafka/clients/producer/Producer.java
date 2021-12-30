@@ -96,6 +96,11 @@ public interface Producer<K, V> extends Closeable {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
+     * See {@link KafkaProducer#clientInstanceId(Duration)}}
+     */
+    String clientInstanceId(Duration timeout);
+
+    /**
      * See {@link KafkaProducer#close()}
      */
     void close();

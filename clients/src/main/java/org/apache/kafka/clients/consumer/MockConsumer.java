@@ -369,6 +369,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public String clientInstanceId(Duration duration) {
+        // TODO: does this need to be anything realistic?
+        return "client-1";
+    }
+
+    @Override
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
         return Collections.emptyMap();
