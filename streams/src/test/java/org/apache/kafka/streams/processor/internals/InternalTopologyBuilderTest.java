@@ -110,7 +110,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddSourceWithoutOffsetReset() {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
 
-        assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
+        assertEquals(Collections.singletonList("test-topic"), builder.fullSourceTopicNames());
 
         assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
@@ -285,7 +285,7 @@ public class InternalTopologyBuilderTest {
         builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
 
         assertFalse(builder.usesPatternSubscription());
-        assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.sourceTopicCollection());
+        assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.fullSourceTopicNames());
     }
 
     @Test
@@ -345,7 +345,7 @@ public class InternalTopologyBuilderTest {
             new MockApiProcessorSupplier<>()
         );
 
-        assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
+        assertThat(builder.fullSourceTopicNames(), equalTo(asList("topic-1", "topic-2")));
     }
 
     @Test

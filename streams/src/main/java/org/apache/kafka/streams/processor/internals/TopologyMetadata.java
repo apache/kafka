@@ -126,7 +126,7 @@ public class TopologyMetadata {
     }
 
     public Collection<String> sourceTopicsForTopology(final String name) {
-        return builders.get(name).sourceTopicCollection();
+        return builders.get(name).fullSourceTopicNames();
     }
 
     public boolean needsUpdate(final String threadName) {
@@ -220,7 +220,7 @@ public class TopologyMetadata {
             log.info("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
-            removedBuilder.sourceTopicCollection().forEach(allInputTopics::remove);
+            removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
         } finally {
             unlock();
@@ -243,7 +243,7 @@ public class TopologyMetadata {
 
         // As we go, check each topology for overlap in the set of input topics/patterns
         final int numInputTopics = allInputTopics.size();
-        final List<String> inputTopics = builder.sourceTopicCollection();
+        final List<String> inputTopics = builder.fullSourceTopicNames();
         final Collection<String> inputPatterns = builder.allSourcePatternStrings();
 
         final int numNewInputTopics = inputTopics.size() + inputPatterns.size();
@@ -354,11 +354,11 @@ public class TopologyMetadata {
     /**
      * NOTE: this should not be invoked until all topologies have been built via
      * {@link #buildAndVerifyTopology(InternalTopologyBuilder)}, otherwise the
-     * {@link InternalTopologyBuilder#sourceTopicCollection()}
+     * {@link InternalTopologyBuilder#fullSourceTopicNames()}
      */
     public Set<String> sourceTopicCollection() {
         final Set<String> sourceTopics = new HashSet<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
+        applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;
     }
 
@@ -464,7 +464,7 @@ public class TopologyMetadata {
             for (final String topic : topics) {
                 final Set<String> subscribingTopologies = new HashSet<>();
                 applyToEachBuilder(b -> {
-                    if (b.sourceTopicCollection().contains(topic) || b.matchesSubscribedPattern(topic)) {
+                    if (b.fullSourceTopicNames().contains(topic) || b.matchesSubscribedPattern(topic)) {
                         subscribingTopologies.add(getTopologyNameOrElseUnnamed(b.topologyName()));
                     }
                 });
