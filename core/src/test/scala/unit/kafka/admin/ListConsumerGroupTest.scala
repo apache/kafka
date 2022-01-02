@@ -18,16 +18,19 @@ package kafka.admin
 
 import joptsimple.OptionException
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
 import java.util.Optional
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test
-  def testListConsumerGroups(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListConsumerGroups(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -43,14 +46,16 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
-  @Test
-  def testListWithUnrecognizedNewConsumerOption(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListWithUnrecognizedNewConsumerOption(quorum: String): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
-  @Test
-  def testListConsumerGroupsWithStates(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListConsumerGroupsWithStates(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -78,8 +83,9 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
 
-  @Test
-  def testConsumerGroupStatesFromString(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumerGroupStatesFromString(quorum: String): Unit = {
     var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
     assertEquals(Set(ConsumerGroupState.STABLE), result)
 
@@ -98,8 +104,9 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"))
   }
 
-  @Test
-  def testListGroupCommand(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListGroupCommand(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
