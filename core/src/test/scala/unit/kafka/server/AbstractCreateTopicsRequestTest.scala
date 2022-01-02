@@ -100,7 +100,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
       s"There should be no errors, found ${response.errorCounts().keySet().asScala.mkString(", ")},")
@@ -162,7 +162,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],
                                                   checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request, createTopicsSocketServer)
+    val response = sendCreateTopicRequest(request)
     assertEquals(expectedResponse.size, response.data().topics().size, "The response size should match")
 
     expectedResponse.foreach { case (topicName, expectedError) =>
@@ -191,7 +191,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   protected def sendCreateTopicRequest(
     request: CreateTopicsRequest,
-    socketServer: SocketServer = controllerSocketServer
+    socketServer: SocketServer = adminSocketServer
   ): CreateTopicsResponse = {
     connectAndReceive[CreateTopicsResponse](request, socketServer)
   }

@@ -77,6 +77,14 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }
   }
 
+  def adminSocketServer: SocketServer = {
+    if (isKRaftTest()) {
+      anySocketServer
+    } else {
+      controllerSocketServer
+    }
+  }
+
   def brokerSocketServer(brokerId: Int): SocketServer = {
     brokers.find { broker =>
       broker.config.brokerId == brokerId
