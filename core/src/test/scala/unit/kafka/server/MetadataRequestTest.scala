@@ -29,6 +29,8 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -40,19 +42,25 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @Test
-  def testClusterIdWithRequestVersion1(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterIdWithRequestVersion1(quorum: String): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(v1ClusterId, s"v1 clusterId should be null")
   }
 
-  @Test
-  def testClusterIdIsValid(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterIdIsValid(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
+  /**
+   * This test only runs in ZK mode because in KRaft mode, the controller ID visible to
+   * the client is randomized.
+   */
   @Test
   def testControllerId(): Unit = {
     val controllerServer = servers.find(_.kafkaController.isActive).get
@@ -75,8 +83,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }, "Controller id should match the active controller after failover", 5000)
   }
 
-  @Test
-  def testRack(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRack(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.forEach { broker =>
@@ -84,8 +93,9 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @Test
-  def testIsInternal(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIsInternal(quorum: String): Unit = {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
@@ -105,7 +115,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(Set(internalTopic).asJava, metadataResponse.buildCluster().internalTopics)
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testNoTopicsRequest(): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
@@ -118,7 +129,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(metadataResponse.topicMetadata.isEmpty, "Response should have no topics")
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAutoTopicCreation(): Unit = {
     val topic1 = "t1"
     val topic2 = "t2"
@@ -146,7 +158,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(None, zkClient.getTopicPartitionCount(topic5))
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAutoCreateTopicWithInvalidReplicationFactor(): Unit = {
     // Shutdown all but one broker so that the number of brokers is less than the default replication factor
     servers.tail.foreach(_.shutdown())
@@ -161,7 +174,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(0, topicMetadata.partitionMetadata.size)
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAutoCreateOfCollidingTopics(): Unit = {
     val topic1 = "testAutoCreate.Topic"
     val topic2 = "testAutoCreate_Topic"
@@ -191,7 +205,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertTrue(partitionMetadata.leaderId.get >= 0)
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAllTopicsRequest(): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
@@ -208,7 +223,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(2, metadataResponseV1.topicMetadata.size(), "V1 Response should have 2 (all) topics")
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testTopicIdsInResponse(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
@@ -237,7 +253,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   /**
     * Preferred replica should be the first item in the replicas list
     */
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testPreferredReplica(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     createTopic("t1", replicaAssignment)
@@ -261,7 +278,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testReplicaDownResponse(): Unit = {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3
@@ -306,7 +324,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     assertEquals(replicaCount, v1PartitionMetadata.replicaIds.size, s"Response should have $replicaCount replicas")
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
       val activeBrokers = servers.filter(_.brokerState != BrokerState.NOT_RUNNING)
@@ -340,7 +359,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     checkIsr(servers, topic)
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAliveBrokersWithNoTopics(): Unit = {
     def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
       var controllerMetadataResponse: Option[MetadataResponse] = None

@@ -51,8 +51,8 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   }
 
   def anySocketServer: SocketServer = {
-    servers.find { server =>
-      val state = server.brokerState
+    brokers.find { broker =>
+      val state = broker.brokerState
       state != BrokerState.NOT_RUNNING && state != BrokerState.SHUTTING_DOWN
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
