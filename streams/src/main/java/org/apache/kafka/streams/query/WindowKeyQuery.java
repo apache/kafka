@@ -25,17 +25,22 @@ import java.util.Optional;
 
 @Evolving
 public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
+
     private final K key;
     private final Optional<Instant> timeFrom;
     private final Optional<Instant> timeTo;
 
-    private WindowKeyQuery(final K key, final Optional<Instant> timeTo, final Optional<Instant> timeFrom) {
+    private WindowKeyQuery(final K key,
+                           final Optional<Instant> timeTo,
+                           final Optional<Instant> timeFrom) {
         this.key = key;
         this.timeFrom = timeFrom;
         this.timeTo = timeTo;
     }
 
-    public static <K, V> WindowKeyQuery<K, V> withKeyAndWindowStartRange(final K key, final Instant timeFrom, final Instant timeTo) {
+    public static <K, V> WindowKeyQuery<K, V> withKeyAndWindowStartRange(final K key,
+                                                                         final Instant timeFrom,
+                                                                         final Instant timeTo) {
         return new WindowKeyQuery<>(key, Optional.of(timeFrom), Optional.of(timeTo));
     }
 
@@ -49,5 +54,14 @@ public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
 
     public Optional<Instant> getTimeTo() {
         return timeTo;
+    }
+
+    @Override
+    public String toString() {
+        return "WindowKeyQuery{" +
+            "key=" + key +
+            ", timeFrom=" + timeFrom +
+            ", timeTo=" + timeTo +
+            '}';
     }
 }

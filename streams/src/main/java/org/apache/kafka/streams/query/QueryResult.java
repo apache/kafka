@@ -58,7 +58,7 @@ public interface QueryResult<R> {
         final Query<R> query,
         final StateStore store) {
 
-        return new FailedQueryResult<>(
+        return forFailure(
             FailureReason.UNKNOWN_QUERY_TYPE,
             "This store (" + store.getClass() + ") doesn't know how to execute "
                 + "the given query (" + query + ")." +

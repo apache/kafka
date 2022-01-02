@@ -29,7 +29,9 @@ public class WindowRangeQuery<K, V> implements Query<KeyValueIterator<Windowed<K
     private final Optional<Instant> timeFrom;
     private final Optional<Instant> timeTo;
 
-    private WindowRangeQuery(final Optional<K> key, final Optional<Instant> timeFrom, final Optional<Instant> timeTo) {
+    private WindowRangeQuery(final Optional<K> key,
+                             final Optional<Instant> timeFrom,
+                             final Optional<Instant> timeTo) {
         this.key = key;
         this.timeFrom = timeFrom;
         this.timeTo = timeTo;
@@ -39,7 +41,8 @@ public class WindowRangeQuery<K, V> implements Query<KeyValueIterator<Windowed<K
         return new WindowRangeQuery<>(Optional.of(key), Optional.empty(), Optional.empty());
     }
 
-    public static <K, V> WindowRangeQuery<K, V> withWindowStartRange(final Instant timeFrom, final Instant timeTo) {
+    public static <K, V> WindowRangeQuery<K, V> withWindowStartRange(final Instant timeFrom,
+                                                                     final Instant timeTo) {
         return new WindowRangeQuery<>(Optional.empty(), Optional.of(timeFrom), Optional.of(timeTo));
     }
 
@@ -53,5 +56,14 @@ public class WindowRangeQuery<K, V> implements Query<KeyValueIterator<Windowed<K
 
     public Optional<Instant> getTimeTo() {
         return timeTo;
+    }
+
+    @Override
+    public String toString() {
+        return "WindowRangeQuery{" +
+            "key=" + key +
+            ", timeFrom=" + timeFrom +
+            ", timeTo=" + timeTo +
+            '}';
     }
 }

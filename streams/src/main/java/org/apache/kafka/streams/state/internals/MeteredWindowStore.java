@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
@@ -52,6 +53,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
@@ -73,16 +75,24 @@ public class MeteredWindowStore<K, V>
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
-            mkMap(
-                    mkEntry(
-                            WindowRangeQuery.class,
-                            (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
-                    ),
-                    mkEntry(
-                            WindowKeyQuery.class,
-                            (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(query, positionBound, collectExecutionInfo)
-                    )
-            );
+        mkMap(
+            mkEntry(
+                WindowRangeQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(
+                    query,
+                    positionBound,
+                    collectExecutionInfo
+                )
+            ),
+            mkEntry(
+                WindowKeyQuery.class,
+                (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(
+                    query,
+                    positionBound,
+                    collectExecutionInfo
+                )
+            )
+        );
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
@@ -227,7 +237,7 @@ public class MeteredWindowStore<K, V>
             wrapped().fetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::valueFrom,
             time
         );
     }
@@ -241,7 +251,7 @@ public class MeteredWindowStore<K, V>
             wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::valueFrom,
             time
         );
     }
@@ -259,7 +269,8 @@ public class MeteredWindowStore<K, V>
                 timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -276,7 +287,8 @@ public class MeteredWindowStore<K, V>
                 timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -287,7 +299,8 @@ public class MeteredWindowStore<K, V>
             wrapped().fetchAll(timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -298,18 +311,33 @@ public class MeteredWindowStore<K, V>
             wrapped().backwardFetchAll(timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
-        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchSensor, streamsMetrics, serdes, time);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().all(),
+            fetchSensor,
+            streamsMetrics,
+            serdes::keyFrom,
+            serdes::valueFrom,
+            time
+        );
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardAll() {
-        return new MeteredWindowedKeyValueIterator<>(wrapped().backwardAll(), fetchSensor, streamsMetrics, serdes, time);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardAll(),
+            fetchSensor,
+            streamsMetrics,
+            serdes::keyFrom,
+            serdes::valueFrom,
+            time
+        );
     }
 
     @Override
@@ -328,7 +356,9 @@ public class MeteredWindowStore<K, V>
 
     @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final boolean collectExecutionInfo) {
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final boolean collectExecutionInfo) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
@@ -337,19 +367,19 @@ public class MeteredWindowStore<K, V>
             result = wrapped().query(query, positionBound, collectExecutionInfo);
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
-                        "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
             result = (QueryResult<R>) handler.apply(
-                    query,
-                    positionBound,
-                    collectExecutionInfo,
-                    this
+                query,
+                positionBound,
+                collectExecutionInfo,
+                this
             );
             if (collectExecutionInfo) {
                 result.addExecutionInfo(
-                        "Handled in " + getClass() + " with serdes "
-                                + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                    "Handled in " + getClass() + " with serdes "
+                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
@@ -361,23 +391,48 @@ public class MeteredWindowStore<K, V>
                                              final boolean collectExecutionInfo) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
+        // There's no store API for open time ranges
         if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
-            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery = WindowRangeQuery.withWindowStartRange(typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
-            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                WindowRangeQuery.withWindowStartRange(
+                    typedQuery.getTimeFrom().get(),
+                    typedQuery.getTimeTo().get()
+                );
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                wrapped().query(
+                    rawKeyQuery,
+                    positionBound,
+                    collectExecutionInfo
+                );
             if (rawResult.isSuccess()) {
-                final MeteredWindowedKeyValueIterator typedResult = new MeteredWindowedKeyValueIterator(rawResult.getResult(),
+                final MeteredWindowedKeyValueIterator<K, V> typedResult =
+                    new MeteredWindowedKeyValueIterator<>(
+                        rawResult.getResult(),
                         fetchSensor,
                         streamsMetrics,
-                        serdes,
-                        time);
-                final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult = QueryResult.forResult(typedResult);
+                        serdes::keyFrom,
+                        getDeserializeValue(serdes, wrapped()),
+                        time
+                    );
+                final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
+                    QueryResult.forResult(
+                        typedResult
+                    );
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
                 result = (QueryResult<R>) rawResult;
             }
         } else {
-            result = QueryResult.forUnknownQueryType(query, this);
+
+            result = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " WindowStores only supports WindowRangeQuery.withWindowStartRange."
+                    + " Contact the store maintainer if you need support"
+                    + " for a new query type."
+            );
         }
         return result;
     }
@@ -389,23 +444,45 @@ public class MeteredWindowStore<K, V>
                                            final boolean collectExecutionInfo) {
         final QueryResult<R> queryResult;
         final WindowKeyQuery<K, V> typedQuery = (WindowKeyQuery<K, V>) query;
+        // There's no store API for open time ranges
         if (typedQuery.getTimeFrom().isPresent() && typedQuery.getTimeTo().isPresent()) {
-            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery = WindowKeyQuery.withKeyAndWindowStartRange(keyBytes(typedQuery.getKey()), typedQuery.getTimeFrom().get(), typedQuery.getTimeTo().get());
-            final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery =
+                WindowKeyQuery.withKeyAndWindowStartRange(
+                    keyBytes(typedQuery.getKey()),
+                    typedQuery.getTimeFrom().get(),
+                    typedQuery.getTimeTo().get()
+                );
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(
+                rawKeyQuery,
+                positionBound,
+                collectExecutionInfo
+            );
             if (rawResult.isSuccess()) {
-                final MeteredWindowStoreIterator typedResult = new MeteredWindowStoreIterator<V>(rawResult.getResult(),
-                        fetchSensor,
-                        streamsMetrics,
-                        serdes,
-                        time);
-                final QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult = QueryResult.forResult(typedResult);
+                final MeteredWindowStoreIterator<V> typedResult = new MeteredWindowStoreIterator<>(
+                    rawResult.getResult(),
+                    fetchSensor,
+                    streamsMetrics,
+                    getDeserializeValue(serdes, wrapped()),
+                    time
+                );
+                final QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult =
+                    QueryResult.forResult(
+                        typedResult
+                    );
                 queryResult = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.
                 queryResult = (QueryResult<R>) rawResult;
             }
         } else {
-            queryResult = QueryResult.forUnknownQueryType(query, this);
+
+            queryResult = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to execute"
+                    + " the given query (" + query + ") because it only supports closed-range"
+                    + " queries."
+                    + " Contact the store maintainer if you need support for a new query type."
+            );
         }
         return queryResult;
     }

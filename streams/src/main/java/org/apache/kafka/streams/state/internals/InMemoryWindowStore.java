@@ -33,8 +33,6 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.WindowKeyQuery;
-import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -42,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -353,10 +350,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return open;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final boolean collectExecutionInfo) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
