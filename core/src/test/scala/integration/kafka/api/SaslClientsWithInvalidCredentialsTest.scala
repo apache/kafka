@@ -221,7 +221,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       case e : Exception =>
         // expected exception
         val elapsedMs = System.currentTimeMillis - startMs
-        assertTrue(s"Poll took too long, elapsed=$elapsedMs", elapsedMs <= 5000)
+        assertTrue(s"Poll took too long, elapsed=$elapsedMs", elapsedMs <= 60000)
     }
   }
 
