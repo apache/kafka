@@ -86,4 +86,14 @@ public final class FailedQueryResult<R>
             "Cannot get result for failed query. Failure is " + failureReason.name() + ": "
                 + failure);
     }
+
+    @Override
+    public String toString() {
+        return "FailedQueryResult{" +
+            "failureReason=" + failureReason +
+            ", failure='" + failure + '\'' +
+            ", executionInfo=" + getExecutionInfo() +
+            ", position=" + getPosition() +
+            '}';
+    }
 }
