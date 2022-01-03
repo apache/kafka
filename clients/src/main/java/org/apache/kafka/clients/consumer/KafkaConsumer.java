@@ -725,7 +725,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy, retryBackoffMs, retryBackoffMaxMs);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                     valueDeserializer, metrics.reporters(), interceptorList);
-            this.metadata = new ConsumerMetadata(retryBackoffMs,
+            this.metadata = new ConsumerMetadata(
+                    retryBackoffMs,
                     retryBackoffMaxMs,
                     config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),

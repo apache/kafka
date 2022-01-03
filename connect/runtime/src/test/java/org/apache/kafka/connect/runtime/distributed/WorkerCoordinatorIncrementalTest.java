@@ -86,6 +86,7 @@ public class WorkerCoordinatorIncrementalTest {
     private int rebalanceTimeoutMs = 60;
     private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
+    private long retryBackoffMaxMs = 1000;
     private int requestTimeoutMs = 1000;
     private MockTime time;
     private MockClient client;
@@ -160,7 +161,7 @@ public class WorkerCoordinatorIncrementalTest {
                                                         groupId,
                                                         Optional.empty(),
                                                         retryBackoffMs,
-                                                        retryBackoffMs,
+                                                        retryBackoffMaxMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  loggerFactory,

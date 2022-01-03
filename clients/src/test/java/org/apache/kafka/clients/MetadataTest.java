@@ -175,7 +175,7 @@ public class MetadataTest {
         for (int i = 0; currentRefreshBackoffMs < refreshBackoffMaxMs * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER); i++) {
             metadata.failedUpdate(now);
             currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
-            long expected = (long) Math.min(refreshBackoffMaxMs, refreshBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_JITTER, i));
+            long expected = (long) Math.min(refreshBackoffMaxMs, refreshBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, i));
             assertEquals(expected, currentRefreshBackoffMs, expected * CommonClientConfigs.RETRY_BACKOFF_JITTER);
         }
 

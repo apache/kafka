@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -1902,6 +1903,42 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testAutoCommitExponentialRetryBackoff() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
+            subscriptions.subscribe(singleton(topic1), rebalanceListener);
+            joinAsFollowerAndReceiveAssignment(coordinator, singletonList(t1p));
+
+            subscriptions.seek(t1p, 100);
+
+            // Send an offset commit, but let it fail with a retriable error
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_LOAD_IN_PROGRESS);
+            // default is wait for commit interval
+            time.sleep(autoCommitIntervalMs);
+            coordinator.poll(time.timer(Long.MAX_VALUE));
+
+            for (int i = 0; i < 5; i++) {
+                coordinator.poll(time.timer(Long.MAX_VALUE));
+
+                long expectedBackoff = (long) Math.min(retryBackoffMaxMs,
+                    retryBackoffMs * Math.pow(CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, i) * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
+
+                // Send an offset commit, but let it fail with a retriable error
+                prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_LOAD_IN_PROGRESS);
+
+                time.sleep(expectedBackoff / 2);
+                // should have pending response before the backoff reached
+                assertTrue(client.hasPendingResponses());
+
+                time.sleep(expectedBackoff / 2);
+                // should receive the offset commit request and respond the response after backoff reached
+                assertTrue(client.hasPendingResponses());
+
+                coordinator.poll(time.timer(Long.MAX_VALUE));
+            }
+        }
+    }
+
+    @Test
     public void testAutoCommitRetryBackoff() {
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
@@ -1921,13 +1958,15 @@ public abstract class ConsumerCoordinatorTest {
 
             subscriptions.seek(t1p, 200);
 
+            long expectedMaxRetryBackOffMs = (long) (retryBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER)) + 1;
+
             // Until the retry backoff has expired, we should not retry the offset commit
-            time.sleep(retryBackoffMs / 2);
+            time.sleep(expectedMaxRetryBackOffMs / 2);
             coordinator.poll(time.timer(Long.MAX_VALUE));
             assertEquals(0, client.inFlightRequestCount());
 
             // Once the backoff expires, we should retry
-            time.sleep(retryBackoffMs / 2);
+            time.sleep(expectedMaxRetryBackOffMs / 2);
             coordinator.poll(time.timer(Long.MAX_VALUE));
             assertEquals(1, client.inFlightRequestCount());
             respondToOffsetCommitRequest(singletonMap(t1p, 200L), Errors.NONE);
@@ -2026,7 +2065,8 @@ public abstract class ConsumerCoordinatorTest {
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
             // sleep only for the retry backoff
-            time.sleep(retryBackoffMs);
+            time.sleep((long) (retryBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER) + 1));
+
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
             coordinator.poll(time.timer(Long.MAX_VALUE));
             assertFalse(client.hasPendingResponses());

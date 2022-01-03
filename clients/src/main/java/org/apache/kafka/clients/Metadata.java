@@ -500,7 +500,7 @@ public class Metadata implements Closeable {
 
     private void resetRefreshBackoff(long now) {
         this.refreshBackoff.resetAttemptedCount();
-        this.refreshBackoffMs = this.refreshBackoff.backoff();
+        this.refreshBackoffMs = this.refreshBackoff.backoff(0);
         this.lastRefreshMs = now;
     }
 

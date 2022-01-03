@@ -198,6 +198,7 @@ public class KafkaConsumerTest {
     @BeforeEach
     public void setup() {
         this.time = new MockTime();
+        // default to reset to the earliest offset
         this.subscription = createSubscriptionState(OffsetResetStrategy.EARLIEST);
     }
 
