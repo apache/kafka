@@ -78,6 +78,7 @@ public final class ProducerBatch {
     private long drainedMs;
     private boolean retry;
     private boolean reopened;
+    private long retryBackoffMs = 0;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
@@ -384,11 +385,13 @@ public final class ProducerBatch {
         return attempts.get();
     }
 
-    void reenqueued(long now) {
+    void reenqueued(long retryBackoffMs, long now) {
         attempts.getAndIncrement();
-        lastAttemptMs = Math.max(lastAppendTime, now);
-        lastAppendTime = Math.max(lastAppendTime, now);
+        long newLastAppendTime = Math.max(lastAppendTime, now);
+        lastAttemptMs = newLastAppendTime;
+        lastAppendTime = newLastAppendTime;
         retry = true;
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     long queueTimeMs() {
@@ -516,5 +519,9 @@ public final class ProducerBatch {
 
     public boolean sequenceHasBeenReset() {
         return reopened;
+    }
+
+    public long retryBackoffMs() {
+        return retryBackoffMs;
     }
 }

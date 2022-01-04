@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -230,7 +232,7 @@ public class TransactionManager {
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
     // error for the first AddPartitionsRequest in a transaction.
-    private final long retryBackoffMs;
+    private final ExponentialBackoff retryBackoff;
 
     // The retryBackoff is overridden to the following value if the first AddPartitions receives a
     // CONCURRENT_TRANSACTIONS error.
@@ -305,6 +307,7 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
+                              final long retryBackoffMaxMs,
                               final ApiVersions apiVersions) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
@@ -319,7 +322,8 @@ public class TransactionManager {
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new ExponentialBackoff(
+            retryBackoffMs, CommonClientConfigs.RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
     }
@@ -1125,7 +1129,8 @@ public class TransactionManager {
         return false;
     }
 
-    private void enqueueRequest(TxnRequestHandler requestHandler) {
+    // Visible for testing
+    void enqueueRequest(TxnRequestHandler requestHandler) {
         log.debug("Enqueuing transactional request {}", requestHandler.requestBuilder());
         pendingRequests.add(requestHandler);
     }
@@ -1225,6 +1230,8 @@ public class TransactionManager {
     abstract class TxnRequestHandler implements RequestCompletionHandler {
         protected final TransactionalRequestResult result;
         private boolean isRetry = false;
+        private int attempts = 0;
+        private long retryBackoffMs = retryBackoff.backoff(0);
 
         TxnRequestHandler(TransactionalRequestResult result) {
             this.result = result;
@@ -1260,6 +1267,7 @@ public class TransactionManager {
         void reenqueue() {
             synchronized (TransactionManager.this) {
                 this.isRetry = true;
+                this.retryBackoffMs = retryBackoff.backoff(this.attempts++);
                 enqueueRequest(this);
             }
         }
@@ -1311,6 +1319,10 @@ public class TransactionManager {
 
         boolean isRetry() {
             return isRetry;
+        }
+
+        int attempts() {
+            return attempts;
         }
 
         boolean isEndTxn() {
@@ -1393,7 +1405,7 @@ public class TransactionManager {
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             super("AddPartitionsToTxn");
             this.builder = builder;
-            this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
+            this.retryBackoffMs = TransactionManager.this.retryBackoff.backoff(0);
         }
 
         @Override
@@ -1412,7 +1424,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
-            retryBackoffMs = TransactionManager.this.retryBackoffMs;
+            retryBackoffMs = TransactionManager.this.retryBackoff.backoff(this.attempts());
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -1480,7 +1492,7 @@ public class TransactionManager {
 
         @Override
         public long retryBackoffMs() {
-            return Math.min(TransactionManager.this.retryBackoffMs, this.retryBackoffMs);
+            return this.retryBackoffMs;
         }
 
         private void maybeOverrideRetryBackoffMs() {

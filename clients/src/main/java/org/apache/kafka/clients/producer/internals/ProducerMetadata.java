@@ -42,17 +42,6 @@ public class ProducerMetadata extends Metadata {
     private final Logger log;
     private final Time time;
 
-    // this constructor will be removed after producer exponential backoff implemented in KAFKA-13566
-    public ProducerMetadata(long refreshBackoffMs,
-                            long metadataExpireMs,
-                            long metadataIdleMs,
-                            LogContext logContext,
-                            ClusterResourceListeners clusterResourceListeners,
-                            Time time) {
-        // put the refreshBackoffMaxMs = refreshBackoffMs temporarily
-        this(refreshBackoffMs, refreshBackoffMs, metadataExpireMs, metadataIdleMs, logContext, clusterResourceListeners, time);
-    }
-
     public ProducerMetadata(long refreshBackoffMs,
                             long refreshBackoffMaxMs,
                             long metadataExpireMs,
