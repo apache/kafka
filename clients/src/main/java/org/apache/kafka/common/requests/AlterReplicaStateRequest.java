@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 
 public class AlterReplicaStateRequest extends AbstractRequest {
 
-    public static final short OFFLINE_REPLICA_STATE = (short) 1;
+    public static final byte OFFLINE_REPLICA_STATE = (byte) 1;
 
     private final AlterReplicaStateRequestData data;
 

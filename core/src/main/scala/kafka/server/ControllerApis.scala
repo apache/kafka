@@ -108,6 +108,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
+        case ApiKeys.ALTER_REPLICA_STATE => handleAlterReplicaStateRequest(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
@@ -774,5 +775,19 @@ class ControllerApis(val requestChannel: RequestChannel,
           })
         }
       })
+  }
+
+  def handleAlterReplicaStateRequest(request: RequestChannel.Request): Unit ={
+    val alterReplicaStateRequest = request.body[AlterReplicaStateRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    val future = controller.alterReplicaState(alterReplicaStateRequest.data)
+    future.whenComplete { (result, exception) =>
+      val response = if (exception != null) {
+        alterReplicaStateRequest.getErrorResponse(exception)
+      } else {
+        new AlterReplicaStateResponse(result)
+      }
+      requestHelper.sendResponseExemptThrottle(request, response)
+    }
   }
 }

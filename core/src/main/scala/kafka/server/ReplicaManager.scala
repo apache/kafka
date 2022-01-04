@@ -1927,7 +1927,7 @@ class ReplicaManager(val config: KafkaConfig,
     logManager.handleLogDirFailure(dir)
 
     if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported)
-      sentLogDirEvent(dir, topicPartitionsInFailDir.toSeq, kafka.controller.OfflineReplica.state, "these partitions are in failed log directory")
+      sentLogDirEvent(dir, topicPartitionsInFailDir.toSeq, AlterReplicaStateRequest.OFFLINE_REPLICA_STATE, "these partitions are in failed log directory")
     else if (sendZkNotification)
       if (zkClient.isEmpty) {
         warn("Unable to propagate log dir failure via Zookeeper in KRaft mode")

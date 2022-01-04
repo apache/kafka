@@ -210,9 +210,6 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
 
   def isAlterReplicaStateSupported: Boolean = this >= KAFKA_3_1_IV1
 
-  // to be enabled after KAFKA-13005
-  def isKRaftAlterReplicaStateSupported: Boolean = false
-
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
 

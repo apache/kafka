@@ -149,7 +149,7 @@ class LogDirEventManagerImpl(val controllerChannelManager: BrokerToControllerCha
 
       case Errors.UNKNOWN_REPLICA_STATE =>
         val exception = Errors.CLUSTER_AUTHORIZATION_FAILED.exception("ReplicaStateChange failed with an unknown replica state")
-        error(s"Broker is not authorized to send AlterReplicaState to controller", exception)
+        error(s"ReplicaStateChange failed with an unknown replica state", exception)
         pendingReplicaStateUpdates.put(logDirEventItem)
 
       case Errors.NONE =>

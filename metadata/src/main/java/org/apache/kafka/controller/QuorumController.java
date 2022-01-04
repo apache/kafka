@@ -32,6 +32,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -1199,6 +1201,15 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("alterIsr", () ->
             replicationControl.alterIsr(request));
+    }
+
+    @Override
+    public CompletableFuture<AlterReplicaStateResponseData> alterReplicaState(AlterReplicaStateRequestData request) {
+        if (request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterReplicaStateResponseData());
+        }
+        return appendWriteEvent("alterReplicaState", () ->
+            replicationControl.alterReplicaState(request));
     }
 
     @Override

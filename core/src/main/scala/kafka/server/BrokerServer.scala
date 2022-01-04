@@ -260,16 +260,14 @@ class BrokerServer(
       alterIsrManager.start()
 
       val alterReplicaStateChannelManager = BrokerToControllerChannelManager(
-        controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+        controllerNodeProvider = controllerNodeProvider,
         time = time,
         metrics = metrics,
         config = config,
         channelName = "alterReplicaState",
         threadNamePrefix = threadNamePrefix,
         retryTimeoutMs = Long.MaxValue)
-      if (config.interBrokerProtocolVersion.isKRaftAlterReplicaStateSupported) {
-        alterReplicaStateChannelManager.start()
-      }
+      alterReplicaStateChannelManager.start()
 
       logDirEventManager = new LogDirEventManagerImpl(alterReplicaStateChannelManager, kafkaScheduler, time,
         config.brokerId, () => lifecycleManager.brokerEpoch)

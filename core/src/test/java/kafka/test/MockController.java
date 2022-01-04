@@ -27,6 +27,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -94,6 +96,11 @@ public class MockController implements Controller {
 
     @Override
     public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<AlterReplicaStateResponseData> alterReplicaState(AlterReplicaStateRequestData request) {
         throw new UnsupportedOperationException();
     }
 

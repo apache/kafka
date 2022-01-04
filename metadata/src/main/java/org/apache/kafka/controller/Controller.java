@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -58,6 +60,15 @@ public interface Controller extends AutoCloseable {
      * @return              A future yielding the response.
      */
     CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request);
+
+    /**
+     * Change replica states.
+     *
+     * @param request       The AlterReplicaStateResponse data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<AlterReplicaStateResponseData> alterReplicaState(AlterReplicaStateRequestData request);
 
     /**
      * Create a batch of topics.

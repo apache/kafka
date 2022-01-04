@@ -34,6 +34,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.Re
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -60,6 +62,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterReplicaStateRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
@@ -122,7 +125,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
-@Timeout(40)
 public class ReplicationControlManagerTest {
     private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
     private final static int BROKER_SESSION_TIMEOUT_MS = 1000;
@@ -695,6 +697,32 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testAlterReplicaState() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+            new int[][] {new int[] {0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        TopicPartition topicPartition = new TopicPartition("foo", 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+
+        ControllerResult<AlterReplicaStateResponseData> alterFollowerStateResult = sendAlterReplicaState(
+            replicationControl, 2, ctx.currentBrokerEpoch(2), "foo", topicIdPartition);
+        assertAlterReplicaStateResponse(
+            alterFollowerStateResult, topicPartition, NONE);
+        assertConsistentAlterReplicaStateResponse(replicationControl, topicIdPartition, 2);
+
+        ControllerResult<AlterReplicaStateResponseData> alterLeaderStateResult = sendAlterReplicaState(
+            replicationControl, 0, ctx.currentBrokerEpoch(0), "foo", topicIdPartition);
+        assertAlterReplicaStateResponse(
+            alterLeaderStateResult, topicPartition, NONE);
+        assertConsistentAlterReplicaStateResponse(replicationControl, topicIdPartition, 0);
+    }
+
+    @Test
     public void testInvalidAlterIsrRequests() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
@@ -748,6 +776,118 @@ public class ReplicationControlManagerTest {
             replicationControl, 1, ctx.currentBrokerEpoch(1),
             "foo", invalidIsrRequest2);
         assertAlterIsrResponse(invalidIsrResult2, topicPartition, Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testInvalidAlterReplicaStateRequests() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+            new int[][] {new int[] {0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        TopicPartition topicPartition = new TopicPartition("foo", 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        long brokerEpoch = ctx.currentBrokerEpoch(0);
+
+        // broker is not in replicas
+        ControllerResult<AlterReplicaStateResponseData> invalidLeaderResult = sendAlterReplicaState(
+            replicationControl, 3, ctx.currentBrokerEpoch(3), "foo", topicIdPartition
+        );
+        assertAlterReplicaStateResponse(invalidLeaderResult, topicPartition, Errors.INVALID_REQUEST);
+
+        // Stale broker epoch
+        assertThrows(StaleBrokerEpochException.class, () -> sendAlterReplicaState(
+            replicationControl, 0, brokerEpoch - 1, "foo", topicIdPartition)
+        );
+
+        // unknown replica state
+        ControllerResult<AlterReplicaStateResponseData> unknownStateResult = sendAlterReplicaState(
+            replicationControl,
+            new AlterReplicaStateRequestData()
+                .setBrokerId(0)
+                .setBrokerEpoch(brokerEpoch)
+                .setNewState((byte) 2)
+        );
+        assertEquals(Errors.UNKNOWN_REPLICA_STATE.code(), unknownStateResult.response().errorCode());
+
+        // unknown topic
+        ControllerResult<AlterReplicaStateResponseData> unknownTopicResult = sendAlterReplicaState(
+            replicationControl, 1, ctx.currentBrokerEpoch(1), "foo1", new TopicIdPartition(Uuid.randomUuid(), 0)
+        );
+        assertAlterReplicaStateResponse(unknownTopicResult, new TopicPartition("foo1", 0), Errors.UNKNOWN_TOPIC_OR_PARTITION);
+
+        // unknown partition
+        ControllerResult<AlterReplicaStateResponseData> unknownPartitionResult = sendAlterReplicaState(
+            replicationControl, 1, ctx.currentBrokerEpoch(1), "foo", new TopicIdPartition(createTopicResult.topicId(), 100)
+        );
+        assertAlterReplicaStateResponse(unknownPartitionResult, new TopicPartition("foo", 100), Errors.UNKNOWN_TOPIC_OR_PARTITION);
+    }
+
+    private ControllerResult<AlterReplicaStateResponseData> sendAlterReplicaState(
+        ReplicationControlManager replicationControl,
+        int brokerId,
+        long brokerEpoch,
+        String topic,
+        TopicIdPartition topicIdPartition
+    ) throws Exception {
+        AlterReplicaStateRequestData request = new AlterReplicaStateRequestData()
+            .setBrokerId(brokerId)
+            .setBrokerEpoch(brokerEpoch)
+            .setNewState(AlterReplicaStateRequest.OFFLINE_REPLICA_STATE)
+            .setReason("unitTest");
+
+        AlterReplicaStateRequestData.TopicData topicData = new AlterReplicaStateRequestData.TopicData()
+            .setName(topic);
+        request.topics().add(topicData);
+        topicData.partitions().add(
+            new AlterReplicaStateRequestData.PartitionData().setPartitionIndex(topicIdPartition.partitionId())
+        );
+
+        return sendAlterReplicaState(replicationControl, request);
+    }
+
+    private ControllerResult<AlterReplicaStateResponseData> sendAlterReplicaState(
+        ReplicationControlManager replicationControl,
+        AlterReplicaStateRequestData request
+    ) throws Exception {
+        ControllerResult<AlterReplicaStateResponseData> result = replicationControl.alterReplicaState(request);
+        RecordTestUtils.replayAll(replicationControl, result.records());
+        return result;
+    }
+
+
+    private AlterReplicaStateResponseData.PartitionData assertAlterReplicaStateResponse(
+        ControllerResult<AlterReplicaStateResponseData> alterIsrResult,
+        TopicPartition topicPartition,
+        Errors expectedError
+    ) {
+        AlterReplicaStateResponseData response = alterIsrResult.response();
+        assertEquals(1, response.topics().size());
+
+        AlterReplicaStateResponseData.TopicData topicData = response.topics().get(0);
+        assertEquals(topicPartition.topic(), topicData.name());
+        assertEquals(1, topicData.partitions().size());
+
+        AlterReplicaStateResponseData.PartitionData partitionData = topicData.partitions().get(0);
+        assertEquals(topicPartition.partition(), partitionData.partitionIndex());
+        assertEquals(expectedError, Errors.forCode(partitionData.errorCode()));
+        return partitionData;
+    }
+
+    private void assertConsistentAlterReplicaStateResponse(
+        ReplicationControlManager replicationControl,
+        TopicIdPartition topicIdPartition,
+        Integer replica
+    ) {
+        PartitionRegistration partition =
+            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+
+        assertFalse(Replicas.contains(partition.replicas, replica));
+        assertFalse(Replicas.contains(partition.isr, replica));
+        assertNotEquals(partition.leader, replica);
     }
 
     private PartitionData newAlterIsrPartition(

@@ -42,6 +42,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.Re
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -69,6 +71,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterReplicaStateRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
@@ -765,7 +768,7 @@ public class ReplicationControlManager {
                         // metadata record. We usually only do one or the other.
                         log.info("AlterIsr request from node {} for {}-{} completed " +
                             "the ongoing partition reassignment and triggered a " +
-                            "leadership change. Reutrning FENCED_LEADER_EPOCH.",
+                            "leadership change. Returning FENCED_LEADER_EPOCH.",
                             request.brokerId(), topic.name, partitionId);
                         responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                             setPartitionIndex(partitionId).
@@ -785,6 +788,94 @@ public class ReplicationControlManager {
                     setLeaderEpoch(partition.leaderEpoch).
                     setCurrentIsrVersion(partition.partitionEpoch).
                     setIsr(Replicas.toList(partition.isr)));
+            }
+        }
+        return ControllerResult.of(records, response);
+    }
+
+    public ControllerResult<AlterReplicaStateResponseData> alterReplicaState(AlterReplicaStateRequestData request) {
+        clusterControl.checkBrokerEpoch(request.brokerId(), request.brokerEpoch());
+        AlterReplicaStateResponseData response = new AlterReplicaStateResponseData();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+
+        if (request.newState() != AlterReplicaStateRequest.OFFLINE_REPLICA_STATE) {
+            log.info("Rejecting AlterReplicaState due to unknown replica state {}", request.newState());
+            return ControllerResult.of(records, response.setErrorCode(Errors.UNKNOWN_REPLICA_STATE.code()));
+        }
+
+        for (AlterReplicaStateRequestData.TopicData topicData : request.topics()) {
+            AlterReplicaStateResponseData.TopicData responseTopicData =
+                new AlterReplicaStateResponseData.TopicData().setName(topicData.name());
+            response.topics().add(responseTopicData);
+            Uuid topicId = topicsByName.get(topicData.name());
+            if (topicId == null || !topics.containsKey(topicId)) {
+                for (AlterReplicaStateRequestData.PartitionData partitionData : topicData.partitions()) {
+                    responseTopicData.partitions().add(new AlterReplicaStateResponseData.PartitionData().
+                        setPartitionIndex(partitionData.partitionIndex()).
+                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
+                }
+                log.info("Rejecting alterReplicaState request for unknown topic ID {}.", topicId);
+                continue;
+            }
+            TopicControlInfo topic = topics.get(topicId);
+            for (AlterReplicaStateRequestData.PartitionData partitionData : topicData.partitions()) {
+                int partitionId = partitionData.partitionIndex();
+                PartitionRegistration partition = topic.parts.get(partitionId);
+                if (partition == null) {
+                    responseTopicData.partitions().add(new AlterReplicaStateResponseData.PartitionData().
+                        setPartitionIndex(partitionId).
+                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
+                    log.info("Rejecting alterReplicaState request for unknown partition {}-{}.",
+                        topic.name, partitionId);
+                    continue;
+                }
+                if (!Replicas.contains(partition.replicas, request.brokerId())) {
+                    responseTopicData.partitions().add(new AlterReplicaStateResponseData.PartitionData().
+                        setPartitionIndex(partitionId).
+                        setErrorCode(INVALID_REQUEST.code()));
+                    log.info("Rejecting alterReplicaState request from node {} for {}-{} because " +
+                            "the current replicas is {}.", request.brokerId(), topic.name,
+                        partitionId, partition.replicas);
+                    continue;
+                }
+
+                // At this point, we have decided to perform the replica state change. We use
+                // PartitionChangeBuilder to find out what its effect will be.
+                PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+                    topic.topicId(),
+                    partitionId,
+                    r -> clusterControl.unfenced(r) && r != request.brokerId(),
+                    () -> configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name));
+
+                builder.setTargetIsr(Replicas.toList(
+                    Replicas.copyWithout(partition.isr, request.brokerId())));
+                builder.setTargetReplicas(Replicas.toList(
+                    Replicas.copyWithout(partition.replicas, request.brokerId())));
+                builder.setTargetAdding(Replicas.toList(
+                    Replicas.copyWithout(partition.addingReplicas, request.brokerId())));
+                Optional<ApiMessageAndVersion> record = builder.build();
+                if (record.isPresent()) {
+                    records.add(record.get());
+                }
+                responseTopicData.partitions().add(new AlterReplicaStateResponseData.PartitionData().
+                    setPartitionIndex(partitionId).
+                    setErrorCode(Errors.NONE.code()));
+            }
+
+        }
+        if (!records.isEmpty()) {
+            if (log.isDebugEnabled()) {
+                StringBuilder bld = new StringBuilder();
+                String prefix = "";
+                for (ApiMessageAndVersion apiMessageAndVersion : records) {
+                    PartitionChangeRecord record = (PartitionChangeRecord) apiMessageAndVersion.message();
+                    bld.append(prefix).append(topics.get(record.topicId()).name).append("-").
+                        append(record.partitionId());
+                    prefix = ", ";
+                }
+                log.debug("alterReplicaState: changing partition(s): {}", bld);
+            } else if (log.isInfoEnabled()) {
+                log.info("alterReplicaState: changing {} partition(s)", records.size());
             }
         }
         return ControllerResult.of(records, response);
