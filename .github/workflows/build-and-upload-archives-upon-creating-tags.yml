@@ -177,4 +177,4 @@ jobs:
           JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
           JFROG_API_KEY: ${{ secrets.JFROG_API_KEY }}
         run: |
-          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} clients:uploadArchivesAll core:uploadArchivesAll --no-daemon
+          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} uploadArchivesAll --no-daemon
