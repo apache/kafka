@@ -564,10 +564,10 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (value == null) {
             if (schema == null) // Any schema is valid and we don't have a default, so treat this as an optional schema
                 return null;
-            if (schema.defaultValue() != null)
-                return convertToJson(schema, schema.defaultValue());
             if (schema.isOptional())
                 return JSON_NODE_FACTORY.nullNode();
+            if (schema.defaultValue() != null)
+                return convertToJson(schema, schema.defaultValue());
             throw new DataException("Conversion error: null value for field that is required and has no default value");
         }
 
@@ -661,7 +661,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                         throw new DataException("Mismatching schema.");
                     ObjectNode obj = JSON_NODE_FACTORY.objectNode();
                     for (Field field : schema.fields()) {
-                        obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
+                        obj.set(field.name(), convertToJson(field.schema(), struct.getWithoutDefault(field.name())));
                     }
                     return obj;
                 }
@@ -680,10 +680,10 @@ public class JsonConverter implements Converter, HeaderConverter {
         if (schema != null) {
             schemaType = schema.type();
             if (jsonValue == null || jsonValue.isNull()) {
-                if (schema.defaultValue() != null)
-                    return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
                     return null;
+                if (schema.defaultValue() != null)
+                    return schema.defaultValue(); // any logical type conversions should already have been applied
                 throw new DataException("Invalid null value for required " + schemaType +  " field");
             }
         } else {

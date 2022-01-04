@@ -289,7 +289,7 @@ public class JsonConverterTest {
         String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"optional\": true, \"default\": \"AJw=\", \"parameters\": { \"scale\": \"2\" } }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
-        assertEquals(reference, schemaAndValue.value());
+        assertNull(schemaAndValue.value());
     }
 
     @Test
@@ -363,7 +363,7 @@ public class JsonConverterTest {
         String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Date\", \"version\": 1, \"optional\": true, \"default\": 0 }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
-        assertEquals(reference, schemaAndValue.value());
+        assertNull(schemaAndValue.value());
     }
 
     @Test
@@ -406,7 +406,7 @@ public class JsonConverterTest {
         String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Time\", \"version\": 1, \"optional\": true, \"default\": 0 }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
-        assertEquals(reference, schemaAndValue.value());
+        assertNull(schemaAndValue.value());
     }
 
     @Test
@@ -448,7 +448,7 @@ public class JsonConverterTest {
         String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.Timestamp\", \"version\": 1,  \"optional\": true, \"default\": 42 }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
-        assertEquals(new java.util.Date(42), schemaAndValue.value());
+        assertNull(schemaAndValue.value());
     }
 
     // Schema metadata
@@ -633,6 +633,20 @@ public class JsonConverterTest {
                         .put("field2", "string2")
                         .put("field3", "string3")
                         .put("field4", false),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void structToJsonFieldWithDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("field1", SchemaBuilder.string().optional().defaultValue("default").build()).field("field2", SchemaBuilder.STRING_SCHEMA).build();
+        Struct input = new Struct(schema).put("field1", null).put("field2", "string2");
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"optional\": false, \"fields\": [{ \"field\": \"field1\", \"type\": \"string\", \"optional\": true , \"default\": \"default\" }, { \"field\": \"field2\", \"type\": \"string\", \"optional\": false }] }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("field2", "string2")
+                        .set("field1", JsonNodeFactory.withExactBigDecimals(true).nullNode()),
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
@@ -923,7 +937,7 @@ public class JsonConverterTest {
         assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
-    
+
     private void assertStructSchemaEqual(Schema schema, Struct struct) {
         converter.fromConnectData(TOPIC, schema, struct);
         assertEquals(schema, struct.schema());
