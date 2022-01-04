@@ -151,7 +151,7 @@ object ConsoleProducer {
       "This is the option to control `retries` in producer configs.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
-      .defaultsTo(Integer.MAX_VALUE)
+      .defaultsTo(3)
     val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. " +
       "Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata. " +
       "This is the option to control `retry.backoff.ms` in producer configs.")
