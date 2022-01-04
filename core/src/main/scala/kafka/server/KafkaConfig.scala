@@ -176,6 +176,7 @@ object Defaults {
   val ControllerMessageQueueSize = Int.MaxValue
   val DefaultReplicationFactor = 1
   val ReplicaLagTimeMaxMs = 30000L
+  val ReplicaRequestTimeoutMs = 30 * 1000
   val ReplicaSocketTimeoutMs = 30 * 1000
   val ReplicaSocketReceiveBufferBytes = 64 * 1024
   val ReplicaFetchMaxBytes = 1024 * 1024
@@ -520,6 +521,7 @@ object KafkaConfig {
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
   val ReplicaLagTimeMaxMsProp = "replica.lag.time.max.ms"
+  val ReplicaRequestTimeoutMsProp = "replica.request.timeout.ms"
   val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
   val ReplicaSocketReceiveBufferBytesProp = "replica.socket.receive.buffer.bytes"
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
@@ -924,6 +926,9 @@ object KafkaConfig {
   val DefaultReplicationFactorDoc = "default replication factors for automatically created topics"
   val ReplicaLagTimeMaxMsDoc = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
   " the leader will remove the follower from isr"
+  val ReplicaRequestTimeoutMsDoc = "The configuration controls the maximum amount of time a follower will wait " +
+    "for the response of a fetch request from the leader. If the response is not received before the timeout " +
+    "elapses the follower will back off and retry fetching for the affected partitions"
   val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests"
   val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch for each partition. This is not an absolute maximum, " +
@@ -1275,6 +1280,7 @@ object KafkaConfig {
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
       .define(DefaultReplicationFactorProp, INT, Defaults.DefaultReplicationFactor, MEDIUM, DefaultReplicationFactorDoc)
       .define(ReplicaLagTimeMaxMsProp, LONG, Defaults.ReplicaLagTimeMaxMs, HIGH, ReplicaLagTimeMaxMsDoc)
+      .define(ReplicaRequestTimeoutMsProp, INT, Defaults.ReplicaRequestTimeoutMs, HIGH, ReplicaRequestTimeoutMsDoc)
       .define(ReplicaSocketTimeoutMsProp, INT, Defaults.ReplicaSocketTimeoutMs, HIGH, ReplicaSocketTimeoutMsDoc)
       .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.ReplicaSocketReceiveBufferBytes, HIGH, ReplicaSocketReceiveBufferBytesDoc)
       .define(ReplicaFetchMaxBytesProp, INT, Defaults.ReplicaFetchMaxBytes, atLeast(0), MEDIUM, ReplicaFetchMaxBytesDoc)
@@ -1680,6 +1686,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def numIoThreads = getInt(KafkaConfig.NumIoThreadsProp)
   def messageMaxBytes = getInt(KafkaConfig.MessageMaxBytesProp)
   val requestTimeoutMs = getInt(KafkaConfig.RequestTimeoutMsProp)
+  val replicaRequestTimeoutMs = getInt(KafkaConfig.ReplicaRequestTimeoutMsProp)
   val connectionSetupTimeoutMs = getLong(KafkaConfig.ConnectionSetupTimeoutMsProp)
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
   val heapDumpFolder = new File(getString(KafkaConfig.HeapDumpFolderProp))
