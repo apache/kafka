@@ -59,6 +59,7 @@ public class AllBrokersStrategyIntegrationTest {
             result,
             time.milliseconds() + TIMEOUT_MS,
             RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MS,
             logContext
         );
     }

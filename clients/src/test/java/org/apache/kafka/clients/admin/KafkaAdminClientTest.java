@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
@@ -742,13 +743,25 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
                 "Failed to add retry CreateTopics call");
 
-            time.sleep(retryBackoff);
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
 
-            future.get();
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "CreateTopics retry did not await expected backoff");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "CreateTopics retry did not await expected backoff");
         }
+    }
+
+    private <T> void waitUntilFutureComplete(Time time,  KafkaFuture<T> future) throws InterruptedException {
+        long waitMs = 10L;
+        TestUtils.retryOnExceptionWithTimeout(10000, 1, () -> {
+            time.sleep(1L);
+            future.get(waitMs, TimeUnit.MILLISECONDS);
+        });
     }
 
     @Test
@@ -2613,13 +2626,36 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting CommitOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry CommitOffsets call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "CommitOffsets retry did not await expected backoff");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "CommitOffsets retry did not await expected backoff");
         }
+    }
+
+    private void prepareFindCoordinatorResponse(AdminClientUnitTestEnv env, Errors errors) {
+        env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(errors, env.cluster().controller()));
+    }
+
+    private void prepareDescribeGroupResponse(AdminClientUnitTestEnv env, Errors errors) {
+        final DescribeGroupsResponseData data;
+        data = new DescribeGroupsResponseData();
+        data.groups().add(DescribeGroupsResponse.groupMetadata(
+            "group-0",
+            errors,
+            "",
+            ConsumerProtocol.PROTOCOL_TYPE,
+            "",
+            Collections.emptyList(),
+            Collections.emptySet()));
+        env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
     }
 
     @Test
@@ -2628,26 +2664,39 @@ public class KafkaAdminClientTest {
         final Time time = new MockTime();
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
-            AdminClientConfig.RETRIES_CONFIG, "0")) {
+            // set max retries as 1
+            AdminClientConfig.RETRIES_CONFIG, "1",
+            AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            // Below test cases are testing different combination of 2 retries (greater than max retries) will cause expected future error
 
-            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+            // Case 1: describeGroup error + describeGroup error
+            prepareFindCoordinatorResponse(env, Errors.NONE);
+            prepareDescribeGroupResponse(env, Errors.NOT_COORDINATOR);
+            prepareFindCoordinatorResponse(env, Errors.NONE);
+            prepareDescribeGroupResponse(env, Errors.NOT_COORDINATOR);
+            DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
 
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.NOT_COORDINATOR,
-                "",
-                "",
-                "",
-                Collections.emptyList(),
-                Collections.emptySet()));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            // Case 2: describeGroup error + findCoordinator error
+            prepareFindCoordinatorResponse(env, Errors.NONE);
+            prepareDescribeGroupResponse(env, Errors.NOT_COORDINATOR);
+            prepareFindCoordinatorResponse(env, Errors.COORDINATOR_NOT_AVAILABLE);
+            result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
 
-            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
+            // Case 3: findCoordinator error + describeGroup error
+            prepareFindCoordinatorResponse(env, Errors.COORDINATOR_NOT_AVAILABLE);
+            prepareFindCoordinatorResponse(env, Errors.NONE);
+            prepareDescribeGroupResponse(env, Errors.NOT_COORDINATOR);
+            result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
 
+            // Case 4: findCoordinator error + findCoordinator error
+            prepareFindCoordinatorResponse(env, Errors.COORDINATOR_NOT_AVAILABLE);
+            prepareFindCoordinatorResponse(env, Errors.COORDINATOR_NOT_AVAILABLE);
+            result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
             TestUtils.assertFutureError(result.all(), TimeoutException.class);
         }
     }
@@ -2659,7 +2708,7 @@ public class KafkaAdminClientTest {
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
             mockCluster(3, 0),
-            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
+            newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoff)))) {
             MockClient mockClient = env.kafkaClient();
 
             mockClient.setNodeApiVersions(NodeApiVersions.create());
@@ -2706,12 +2755,17 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DescribeConsumerGroup first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DescribeConsumerGroup call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "DescribeConsumerGroup retry did not await expected backoff!");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "DescribeConsumerGroup retry did not await expected backoff!");
         }
     }
 
@@ -2977,12 +3031,17 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting ListConsumerGroupOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry ListConsumerGroupOffsets call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "ListConsumerGroupOffsets retry did not await expected backoff!");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "ListConsumerGroupOffsets retry did not await expected backoff!");
         }
     }
 
@@ -3175,12 +3234,17 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroups first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DeleteConsumerGroups call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "DeleteConsumerGroups retry did not await expected backoff!");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "DeleteConsumerGroups retry did not await expected backoff!");
         }
     }
 
@@ -3386,12 +3450,17 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting DeleteConsumerGroupOffsets first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry DeleteConsumerGroupOffsets call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "DeleteConsumerGroupOffsets retry did not await expected backoff!");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "DeleteConsumerGroupOffsets retry did not await expected backoff!");
         }
     }
 
@@ -3678,12 +3747,17 @@ public class KafkaAdminClientTest {
 
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1, "Failed awaiting RemoveMembersFromGroup first request failure");
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry RemoveMembersFromGroup call on first failure");
-            time.sleep(retryBackoff);
 
-            future.get();
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
 
             long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
-            assertEquals(retryBackoff, actualRetryBackoff, "RemoveMembersFromGroup retry did not await expected backoff!");
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "RemoveMembersFromGroup retry did not await expected backoff!");
         }
     }
 
@@ -5049,6 +5123,114 @@ public class KafkaAdminClientTest {
         }
     }
 
+    private void prepareMetadataResponse(AdminClientUnitTestEnv env, Errors errors) {
+        env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), errors));
+    }
+
+    private void prepareListoffsetsResponse(List<TopicPartition> tps, AdminClientUnitTestEnv env, Errors errors) {
+        env.kafkaClient().prepareResponse(prepareListoffsetsResponse(tps, errors));
+    }
+
+    private ListOffsetsResponse prepareListoffsetsResponse(List<TopicPartition> tps, Errors errors) {
+        Map<String, ListOffsetsTopicResponse> responses = new HashMap<>();
+        for (TopicPartition tp : tps) {
+            ListOffsetsTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopicResponse().setName(tp.topic()));
+            topic.partitions().add(new ListOffsetsResponseData.ListOffsetsPartitionResponse()
+                .setPartitionIndex(tp.partition())
+                .setErrorCode(errors.code())
+                .setTimestamp(123456789L)
+                .setOffset(345L));
+        }
+
+        ListOffsetsResponseData data = new ListOffsetsResponseData()
+            .setTopics(new ArrayList<>(responses.values()));
+
+        return new ListOffsetsResponse(data);
+    }
+
+    private void verifyListOffsetsResult(Map<TopicPartition, OffsetSpec> partitionOffsets, AdminClientUnitTestEnv env,
+                                         boolean successful) throws ExecutionException, InterruptedException {
+        ListOffsetsResult result = env.adminClient().listOffsets(partitionOffsets);
+        if (successful) {
+            Map<TopicPartition, ListOffsetsResultInfo> offsets = result.all().get();
+            assertFalse(offsets.isEmpty());
+            partitionOffsets.keySet().forEach(tp -> {
+                assertEquals(345L, offsets.get(tp).offset());
+                assertEquals(123456789L, offsets.get(tp).timestamp());
+            });
+        } else {
+            TestUtils.assertFutureError(result.all(), TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testListOffsetsRetryBackoff() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0}));
+        pInfos.add(new PartitionInfo("bar", 0, node0, new Node[]{node0}, new Node[]{node0}));
+        pInfos.add(new PartitionInfo("baz", 0, node0, new Node[]{node0}, new Node[]{node0}));
+
+        MockTime time = new MockTime();
+        int retryBackoff = 100;
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                Arrays.asList(node0),
+                pInfos,
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(),
+                node0);
+
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+        final TopicPartition tp2 = new TopicPartition("bar", 0);
+        final TopicPartition tp3 = new TopicPartition("baz", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            Map<TopicPartition, OffsetSpec> partitionOffsets = new HashMap<>();
+            partitionOffsets.put(tp1, OffsetSpec.latest());
+            partitionOffsets.put(tp2, OffsetSpec.earliest());
+            partitionOffsets.put(tp3, OffsetSpec.forTimestamp(time.milliseconds()));
+            List<TopicPartition> tps = new ArrayList<>(partitionOffsets.keySet());
+
+            AtomicLong firstAttemptTime = new AtomicLong(0);
+            AtomicLong secondAttemptTime = new AtomicLong(0);
+
+            prepareMetadataResponse(env, Errors.NONE);
+            env.kafkaClient().prepareResponse(body -> {
+                firstAttemptTime.set(time.milliseconds());
+                return true;
+            }, prepareListoffsetsResponse(tps, Errors.LEADER_NOT_AVAILABLE));
+
+            prepareMetadataResponse(env, Errors.NONE);
+
+            env.kafkaClient().prepareResponse(body -> {
+                secondAttemptTime.set(time.milliseconds());
+                return true;
+            }, prepareListoffsetsResponse(tps, Errors.NONE));
+
+
+            ListOffsetsResult result = env.adminClient().listOffsets(partitionOffsets);
+            final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> future = result.all();
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 2, "Failed awaiting ListOffsets first request failure");
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1, "Failed to add retry ListOffsets call on first failure");
+
+            long belowLowerBoundBackoffMs = (long) (retryBackoff * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER)) - 1;
+
+            time.sleep(belowLowerBoundBackoffMs);
+            assertEquals(1, ((KafkaAdminClient) env.adminClient()).numPendingCalls());
+
+            waitUntilFutureComplete(time, future);
+
+            long actualRetryBackoff = secondAttemptTime.get() - firstAttemptTime.get();
+            assertEquals(retryBackoff, actualRetryBackoff, retryBackoff * CommonClientConfigs.RETRY_BACKOFF_JITTER,
+                "ListOffsets retry did not await expected backoff!");
+        }
+    }
+
     @Test
     public void testGetSubLevelError() {
         List<MemberIdentity> memberIdentities = Arrays.asList(
@@ -5077,10 +5259,12 @@ public class KafkaAdminClientTest {
 
         final int requestTimeoutMs = 1000;
         final int retryBackoffMs = 100;
+        final int retryBackoffMaxMs = 100;
         final int apiTimeoutMs = 3000;
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
                 AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs),
+                AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(retryBackoffMaxMs),
                 AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -5095,7 +5279,7 @@ public class KafkaAdminClientTest {
             // Wait for the request to be timed out before backing off
             TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
                     "Timed out waiting for inFlightRequests to be timed out");
-            time.sleep(retryBackoffMs);
+            time.sleep(retryBackoffMs + 1);
 
             // Since api timeout bound is not hit, AdminClient should retry
             TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),

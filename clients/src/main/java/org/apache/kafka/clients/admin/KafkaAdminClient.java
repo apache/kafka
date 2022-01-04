@@ -232,6 +232,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -368,8 +369,10 @@ public class KafkaAdminClient extends AdminClient {
     private final TimeoutProcessorFactory timeoutProcessorFactory;
 
     private final int maxRetries;
-
     private final long retryBackoffMs;
+    private final long retryBackoffMaxMs;
+
+    private final ExponentialBackoff retryBackoff;
 
     /**
      * Get or create a list value from a map.
@@ -585,6 +588,10 @@ public class KafkaAdminClient extends AdminClient {
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        this.retryBackoff = new ExponentialBackoff(
+            retryBackoffMs, CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMaxMs, CommonClientConfigs.RETRY_BACKOFF_JITTER);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -767,6 +774,11 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
+        final void incrementRetryBackoff(long now) {
+            this.nextAllowedTryMs = now + retryBackoff.backoff(tries);
+            this.tries++;
+        }
+
         /**
          * Handle a failure.
          *
@@ -796,8 +808,8 @@ public class KafkaAdminClient extends AdminClient {
                 runnable.pendingCalls.add(this);
                 return;
             }
-            tries++;
-            nextAllowedTryMs = now + retryBackoffMs;
+
+            incrementRetryBackoff(now);
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
@@ -1393,7 +1405,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there are pending calls which need to be sent
                 if (!pendingCalls.isEmpty())
-                    pollTimeout = Math.min(pollTimeout, retryBackoffMs);
+                    pollTimeout = Math.min(pollTimeout, retryBackoff.backoff(0));
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
@@ -3178,6 +3190,7 @@ public class KafkaAdminClient extends AdminClient {
         // Requeue the task so that we can re-attempt fetching metadata
         context.setResponse(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
+        metadataCall.incrementRetryBackoff(time.milliseconds());
         runnable.call(metadataCall, time.milliseconds());
     }
 
@@ -4391,6 +4404,7 @@ public class KafkaAdminClient extends AdminClient {
             future,
             deadlineMs,
             retryBackoffMs,
+            retryBackoffMaxMs,
             logContext
         );
 
