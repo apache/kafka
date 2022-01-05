@@ -608,7 +608,7 @@ public class IQv2StoreIntegrationTest {
         if (log) {
             keyValueStoreStoreBuilder.withLoggingEnabled(Collections.emptyMap());
         } else {
-            keyValueStoreStoreBuilder.withCachingDisabled();
+            keyValueStoreStoreBuilder.withLoggingDisabled();
         }
         if (storeToTest.global()) {
             builder.addGlobalStore(
