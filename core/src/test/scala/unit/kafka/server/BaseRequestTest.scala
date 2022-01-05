@@ -58,20 +58,28 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   }
 
   def controllerSocketServer: SocketServer = {
-    servers.find { server =>
-      server.kafkaController.isActive
-    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
+    if (isKRaftTest()) {
+     controllerServer.socketServer
+    } else {
+      servers.find { server =>
+        server.kafkaController.isActive
+      }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
+    }
   }
 
   def notControllerSocketServer: SocketServer = {
-    servers.find { server =>
-      !server.kafkaController.isActive
-    }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
+    if (isKRaftTest()) {
+      anySocketServer
+    } else {
+      servers.find { server =>
+        !server.kafkaController.isActive
+      }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
+    }
   }
 
   def brokerSocketServer(brokerId: Int): SocketServer = {
-    servers.find { server =>
-      server.config.brokerId == brokerId
+    brokers.find { broker =>
+      broker.config.brokerId == brokerId
     }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
   }
 
