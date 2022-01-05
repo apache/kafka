@@ -210,7 +210,7 @@ ssh -A hadoopgw01-dca1
 kinit
 klist
 
-hdfs dfs -fs hdfs://hadoopneonnamenode02-dca1.prod.uber.internal:8020 -ls -R /user/kloak/kafka-remote-storage/kafka-staging1-dca
+hdfs dfs -ls -R /user/kloak/kafka-remote-storage/kafka-staging1-dca
 ```
 
 ## Test Java Client

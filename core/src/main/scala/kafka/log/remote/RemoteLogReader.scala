@@ -26,16 +26,19 @@ class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo,
                       brokerTopicStats: BrokerTopicStats,
                       callback: RemoteLogReadResult => Unit) extends RemoteStorageTask[Unit] with Logging {
   brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteReadRequestRate.mark()
+  brokerTopicStats.allTopicsStats.remoteReadRequestRate.mark()
 
   override def execute(): Unit = {
     val result = {
       try {
         val r = rlm.read(fetchInfo)
         brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteBytesInRate.mark(r.records.sizeInBytes())
+        brokerTopicStats.allTopicsStats.remoteBytesInRate.mark(r.records.sizeInBytes())
         RemoteLogReadResult(Some(r), None)
       } catch {
         case e: Exception =>
           brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteReadRequestRate.mark()
+          brokerTopicStats.allTopicsStats.failedRemoteReadRequestRate.mark()
           error("Error due to", e)
           RemoteLogReadResult(None, Some(e))
       }
