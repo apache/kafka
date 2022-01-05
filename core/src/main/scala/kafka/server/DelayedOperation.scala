@@ -328,8 +328,15 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * Shutdown the expire reaper thread
    */
   def shutdown(): Unit = {
-    if (reaperEnabled)
-      expirationReaper.shutdown()
+    if (reaperEnabled) {
+      expirationReaper.initiateShutdown()
+      // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+      timeoutTimer.add(new TimerTask {
+        override val delayMs: Long = 0
+        override def run(): Unit = {}
+      })
+      expirationReaper.awaitShutdown()
+    }
     timeoutTimer.shutdown()
     removeMetric("PurgatorySize", metricsTags)
     removeMetric("NumDelayedOperations", metricsTags)
