@@ -38,6 +38,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -715,9 +716,10 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                Map<TopicPartition, FetchRequest.PartitionData> fetchData = request.fetchData(topicNames);
-                return fetchData.keySet().equals(singleton(tp0)) &&
-                        fetchData.get(tp0).fetchOffset == 50L;
+                Map<TopicIdPartition, FetchRequest.PartitionData> fetchData = request.fetchData(topicNames);
+                TopicIdPartition tidp0 = new TopicIdPartition(topicIds.get(tp0.topic()), tp0);
+                return fetchData.keySet().equals(singleton(tidp0)) &&
+                        fetchData.get(tidp0).fetchOffset == 50L;
 
             }, fetchResponse(tp0, 50L, 5));
 
@@ -1762,7 +1764,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchData(topicNames).containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+            && ((FetchRequest) body).fetchData(topicNames).containsKey(new TopicIdPartition(topicId, tp0)), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -2541,7 +2543,7 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -2558,14 +2560,14 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition,
+            tpResponses.put(new TopicIdPartition(topicIds.get(partition.topic()), partition),
                 new FetchResponseData.PartitionData()
                     .setPartitionIndex(partition.partition())
                     .setHighWatermark(highWatermark)
                     .setLogStartOffset(logStartOffset)
                     .setRecords(records));
         }
-        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses, topicIds);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

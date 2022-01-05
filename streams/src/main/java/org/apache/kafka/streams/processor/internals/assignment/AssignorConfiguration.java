@@ -105,13 +105,23 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
+                    // ATTENTION: The following log messages is used for verification in system test
+                    // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+                    // If you change it, please do also change the system test accordingly and
+                    // verify whether the test passes.
+                    log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
+                    log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
+                        " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        log.info("Cooperative rebalancing enabled now");
+        // ATTENTION: The following log messages is used for verification in system test
+        // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+        // If you change it, please do also change the system test accordingly and
+        // verify whether the test passes.
+        log.info("Cooperative rebalancing protocol is enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 

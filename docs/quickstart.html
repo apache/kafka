@@ -28,12 +28,12 @@
         </h4>
 
         <p>
-            <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/2.8.0/kafka_2.13-2.8.0.tgz">Download</a>
+            <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/3.1.0/kafka_2.13-3.1.0.tgz">Download</a>
             the latest Kafka release and extract it:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-2.8.0.tgz
-$ cd kafka_2.13-2.8.0</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-3.1.0.tgz
+$ cd kafka_2.13-3.1.0</code></pre>
     </div>
 
     <div class="quickstart-step">
@@ -161,12 +161,77 @@ This is my second event</code></pre>
             You probably have lots of data in existing systems like relational databases or traditional messaging systems,
             along with many applications that already use these systems.
             <a href="/documentation/#connect">Kafka Connect</a> allows you to continuously ingest
-            data from external systems into Kafka, and vice versa.  It is thus very easy to integrate existing systems with
-            Kafka. To make this process even easier, there are hundreds of such connectors readily available.
+            data from external systems into Kafka, and vice versa. It is an extensible tool that runs
+            <i>connectors</i>, which implement the custom logic for interacting with an external system.
+            It is thus very easy to integrate existing systems with Kafka. To make this process even easier,
+            there are hundreds of such connectors readily available.
         </p>
 
-        <p>Take a look at the <a href="/documentation/#connect">Kafka Connect section</a>
-            to learn more about how to continuously import/export your data into and out of Kafka.</p>
+        <p>
+            In this quickstart we'll see how to run Kafka Connect with simple connectors that import data
+            from a file to a Kafka topic and export data from a Kafka topic to a file.
+        </p>
+
+        <p>
+            First, we'll start by creating some seed data to test with:
+        </p>
+
+        <pre class="brush: bash;">
+&gt; echo -e "foo\nbar" > test.txt</pre>
+        Or on Windows:
+        <pre class="brush: bash;">
+&gt; echo foo> test.txt
+&gt; echo bar>> test.txt</pre>
+
+        <p>
+            Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
+            process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect
+            process, containing common configuration such as the Kafka brokers to connect to and the serialization format for data.
+            The remaining configuration files each specify a connector to create. These files include a unique connector name, the connector
+            class to instantiate, and any other configuration required by the connector.
+        </p>
+
+        <pre class="brush: bash;">
+&gt; bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</pre>
+
+        <p>
+            These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier
+            and create two connectors: the first is a source connector that reads lines from an input file and produces each to a Kafka topic
+            and the second is a sink connector that reads messages from a Kafka topic and produces each as a line in an output file.
+        </p>
+
+        <p>
+            During startup you'll see a number of log messages, including some indicating that the connectors are being instantiated.
+            Once the Kafka Connect process has started, the source connector should start reading lines from <code>test.txt</code> and
+            producing them to the topic <code>connect-test</code>, and the sink connector should start reading messages from the topic <code>connect-test</code>
+            and write them to the file <code>test.sink.txt</code>. We can verify the data has been delivered through the entire pipeline
+            by examining the contents of the output file:
+        </p>
+
+
+        <pre class="brush: bash;">
+&gt; more test.sink.txt
+foo
+bar</pre>
+
+        <p>
+            Note that the data is being stored in the Kafka topic <code>connect-test</code>, so we can also run a console consumer to see the
+            data in the topic (or use custom consumer code to process it):
+        </p>
+
+
+        <pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+{"schema":{"type":"string","optional":false},"payload":"foo"}
+{"schema":{"type":"string","optional":false},"payload":"bar"}
+...</pre>
+
+        <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
+
+        <pre class="brush: bash;">
+&gt; echo Another line>> test.txt</pre>
+
+        <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
     </div>
 

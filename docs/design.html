@@ -313,7 +313,7 @@
     replication factor is one.
     <p>
     The unit of replication is the topic partition. Under non-failure conditions, each partition in Kafka has a single leader and zero or more followers. The total number of replicas including the leader constitute the
-    replication factor. All reads and writes go to the leader of the partition. Typically, there are many more partitions than brokers and the leaders are evenly distributed among brokers. The logs on the followers are
+    replication factor. All writes go to the leader of the partition, and reads can go to the leader or the followers of the partition. Typically, there are many more partitions than brokers and the leaders are evenly distributed among brokers. The logs on the followers are
     identical to the leader's log&mdash;all have the same offsets and messages in the same order (though, of course, at any given time the leader may have a few as-yet unreplicated messages at the end of its log).
     <p>
     Followers consume messages from the leader just as a normal Kafka consumer would and apply them to their own log. Having the followers pull from the leader has the nice property of allowing the follower to naturally
@@ -621,10 +621,6 @@
             <li>/config/clients/&lt;client-id&gt;</li>
             <li>/config/clients/&lt;default&gt;</li>
         </ol>
-    <p>
-        Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults of network bandwidth quotas for client-id groups. These properties are being deprecated and will be removed in a later release.
-        Default quotas for client-id can be set in Zookeeper similar to the other quota overrides and defaults.
-    </p>
     <h4 class="anchor-heading"><a id="design_quotasbandwidth" class="anchor-link"></a><a href="#design_quotasbandwidth">Network Bandwidth Quotas</a></h4>
     <p>
         Network bandwidth quotas are defined as the byte rate threshold for each group of clients sharing a quota.

@@ -77,8 +77,9 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -123,6 +124,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0)).get();
             testConfigurationOperations(controlEnv.activeController());
         }
     }
@@ -154,6 +157,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0)).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
@@ -170,7 +175,7 @@ public class QuorumControllerTest {
             new ResultOrError<>(Collections.emptyMap())),
             controller.describeConfigs(Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
+        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(2L));
         assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -493,7 +498,7 @@ public class QuorumControllerTest {
     }
 
     private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
-        return SnapshotReader.of(
+        return RecordsSnapshotReader.of(
             reader,
             new MetadataRecordSerde(),
             BufferSupplier.create(),
