@@ -128,6 +128,8 @@ public class IQv2StoreIntegrationTest {
     private static final String STORE_NAME = "kv-store";
 
     private static final long RECORD_TIME = System.currentTimeMillis();
+    private static final long WINDOW_START =
+        (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
@@ -484,7 +486,7 @@ public class IQv2StoreIntegrationTest {
         if (log) {
             materialized.withLoggingEnabled(Collections.emptyMap());
         } else {
-            materialized.withCachingDisabled();
+            materialized.withLoggingDisabled();
         }
 
         builder
@@ -513,7 +515,7 @@ public class IQv2StoreIntegrationTest {
         if (log) {
             materialized.withLoggingEnabled(Collections.emptyMap());
         } else {
-            materialized.withCachingDisabled();
+            materialized.withLoggingDisabled();
         }
 
         builder
@@ -541,7 +543,7 @@ public class IQv2StoreIntegrationTest {
         if (log) {
             materialized.withLoggingEnabled(Collections.emptyMap());
         } else {
-            materialized.withCachingDisabled();
+            materialized.withLoggingDisabled();
         }
 
         if (storeToTest.global()) {
@@ -717,14 +719,11 @@ public class IQv2StoreIntegrationTest {
 
     private <T> void shouldHandleWindowKeyQueries(final Function<T, Integer> extractor) {
 
-        final long windowSize = WINDOW_SIZE.toMillis();
-        final long windowStart = (RECORD_TIME / windowSize) * windowSize;
-
         // tightest possible start range
         shouldHandleWindowKeyQuery(
             2,
-            Instant.ofEpochMilli(windowStart),
-            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
             extractor,
             mkSet(2)
         );
@@ -732,8 +731,8 @@ public class IQv2StoreIntegrationTest {
         // miss the window start range
         shouldHandleWindowKeyQuery(
             2,
-            Instant.ofEpochMilli(windowStart - 1),
-            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
             extractor,
             mkSet()
         );
@@ -741,8 +740,8 @@ public class IQv2StoreIntegrationTest {
         // miss the key
         shouldHandleWindowKeyQuery(
             999,
-            Instant.ofEpochMilli(windowStart),
-            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
             extractor,
             mkSet()
         );
@@ -750,8 +749,8 @@ public class IQv2StoreIntegrationTest {
         // miss both
         shouldHandleWindowKeyQuery(
             999,
-            Instant.ofEpochMilli(windowStart - 1),
-            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
             extractor,
             mkSet()
         );
