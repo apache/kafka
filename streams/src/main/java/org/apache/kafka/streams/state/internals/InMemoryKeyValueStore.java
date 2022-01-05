@@ -27,7 +27,6 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -93,20 +92,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <R> QueryResult<R> query(
-        final Query<R> query,
-        final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final boolean collectExecutionInfo) {
 
-        if (query instanceof RangeQuery) {
-            final RangeQuery<Bytes, byte[]> typedQuery = (RangeQuery<Bytes, byte[]>) query;
-            final KeyValueIterator<Bytes, byte[]> keyValueIterator =  this.range(
-                    typedQuery.getLowerBound().orElse(null), typedQuery.getUpperBound().orElse(null));
-            final R result = (R) keyValueIterator;
-            final QueryResult<R> queryResult = QueryResult.forResult(result);
-            return queryResult;
-        }
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,

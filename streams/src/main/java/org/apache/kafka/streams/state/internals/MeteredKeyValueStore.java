@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -35,12 +34,12 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -51,11 +50,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -269,7 +270,7 @@ public class MeteredKeyValueStore<K, V>
             final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
                 iterator,
                 getSensor,
-                getValueDeserializer()
+                getDeserializeValue(serdes, wrapped())
             );
             final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
@@ -296,8 +297,8 @@ public class MeteredKeyValueStore<K, V>
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
         if (rawResult.isSuccess()) {
-            final Deserializer<V> deserializer = getValueDeserializer();
-            final V value = deserializer.deserialize(serdes.topic(), rawResult.getResult());
+            final Function<byte[], V> deserializer = getDeserializeValue(serdes, wrapped());
+            final V value = deserializer.apply(rawResult.getResult());
             final QueryResult<V> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, value);
             result = (QueryResult<R>) typedQueryResult;
@@ -306,21 +307,6 @@ public class MeteredKeyValueStore<K, V>
             result = (QueryResult<R>) rawResult;
         }
         return result;
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private Deserializer<V> getValueDeserializer() {
-        final Serde<V> valueSerde = serdes.valueSerde();
-        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped());
-        final Deserializer<V> deserializer;
-        if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
-            final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
-                (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) valueSerde).deserializer();
-            deserializer = (Deserializer<V>) valueAndTimestampDeserializer.valueDeserializer;
-        } else {
-            deserializer = valueSerde.deserializer();
-        }
-        return deserializer;
     }
 
     @Override
@@ -507,11 +493,11 @@ public class MeteredKeyValueStore<K, V>
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
-        private final Deserializer<V> valueDeserializer;
+        private final Function<byte[], V> valueDeserializer;
 
         private MeteredKeyValueTimestampedIterator(final KeyValueIterator<Bytes, byte[]> iter,
                                         final Sensor sensor,
-                                        final Deserializer<V> valueDeserializer) {
+                                        final Function<byte[], V> valueDeserializer) {
             this.iter = iter;
             this.sensor = sensor;
             this.valueDeserializer = valueDeserializer;
@@ -528,7 +514,7 @@ public class MeteredKeyValueStore<K, V>
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             return KeyValue.pair(
                     serdes.keyFrom(keyValue.key.get()),
-                    valueDeserializer.deserialize(serdes.topic(), keyValue.value));
+                    valueDeserializer.apply(keyValue.value));
         }
 
         @Override
