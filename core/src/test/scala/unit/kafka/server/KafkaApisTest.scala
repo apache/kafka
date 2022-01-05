@@ -135,6 +135,7 @@ class KafkaApisTest {
       properties.put(KafkaConfig.ProcessRolesProp, "broker")
       val voterId = (brokerId + 1)
       properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
+      properties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")

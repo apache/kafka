@@ -224,4 +224,9 @@ public class MetadataRequestBenchmark {
     public String testRequestToJson() {
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
+
+    @Benchmark
+    public void testTopicIdInfo() {
+        metadataCache.topicIdInfo();
+    }
 }
