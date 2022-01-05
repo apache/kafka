@@ -25,14 +25,10 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.header.Header
-import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.utils.Utils
 
 import java.io._
-import java.lang
 import java.nio.charset.StandardCharsets
-import java.util.Arrays.asList
 import java.util.Properties
 import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
@@ -329,14 +325,18 @@ object ConsoleProducer {
           val key = parse(parseKey, line.substring(offset(headers)), keySeparator, "key separator")
           val value = line.substring(offset(headers) + offset(key))
 
-          new ProducerRecord[Array[Byte], Array[Byte]](
+          val record = new ProducerRecord[Array[Byte], Array[Byte]](
             topic,
-            null,
-            null,
             if (key != null) key.getBytes(StandardCharsets.UTF_8) else null,
             if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
-            if (headers != null) mapHeaders(headers) else null
           )
+
+          if (headers != null){
+            splitHeaders(headers)
+              .foreach(header => record.headers().add(header._1, header._2))
+          }
+
+          record
       }
     }
 
@@ -350,15 +350,14 @@ object ConsoleProducer {
       }
     }
 
-    def mapHeaders(headers: String): lang.Iterable[Header] = {
-      val recordHeaders = headerSeparatorPattern.split(headers)
+    private def splitHeaders(headers: String): Array[(String, Array[Byte])] = {
+      headerSeparatorPattern.split(headers)
         .map(pair =>
           (pair.indexOf(headerKeySeparator), ignoreError) match {
             case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
-            case (-1, true) => new RecordHeader(pair, null)
-            case (i, _) => new RecordHeader(pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
+            case (-1, true) => (pair, null)
+            case (i, _) => (pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
           })
-      asList(recordHeaders: _*)
     }
 
     private def offset(headers: String) = {
