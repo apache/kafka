@@ -144,8 +144,10 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         }
       }
 
-      // Verify controller broker has the correct metadata
-      verifyMetadata(createTopicsSocketServer)
+      if (!isKRaftTest()) {
+        // Verify controller broker has the correct metadata
+        verifyMetadata(controllerSocketServer)
+      }
       if (!request.data.validateOnly) {
         // Wait until metadata is propagated and validate non-controller broker has the correct metadata
         TestUtils.waitForPartitionMetadata(brokers, topic.name(), 0)
