@@ -100,30 +100,37 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       ), checkErrorMessage = false
     )
     validateTopicExists("partial-none")
-
-    if (!isKRaftTest()) {
-      // Timeout
-      // When using ZooKeeper, we don't expect a request to ever complete within 1ms.
-      // A timeout of 1 ms allows us to test the purgatory timeout logic.
-      validateErrorCreateTopicsRequests(topicsReq(Seq(
-        topicReq("error-timeout", numPartitions = 10, replicationFactor = 3)), timeout = 1),
-        Map("error-timeout" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-      validateErrorCreateTopicsRequests(topicsReq(Seq(
-        topicReq("error-timeout-zero", numPartitions = 10, replicationFactor = 3)), timeout = 0),
-        Map("error-timeout-zero" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-      // Negative timeouts are treated the same as 0
-      validateErrorCreateTopicsRequests(topicsReq(Seq(
-        topicReq("error-timeout-negative", numPartitions = 10, replicationFactor = 3)), timeout = -1),
-        Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-      // The topics should still get created eventually
-      TestUtils.waitForPartitionMetadata(servers, "error-timeout", 0)
-      TestUtils.waitForPartitionMetadata(servers, "error-timeout-zero", 0)
-      TestUtils.waitForPartitionMetadata(servers, "error-timeout-negative", 0)
-      validateTopicExists("error-timeout")
-      validateTopicExists("error-timeout-zero")
-      validateTopicExists("error-timeout-negative")
-    }
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk"))
+  def testCreateTopicsWithVeryShortTimeouts(quorum: String): Unit = {
+    // When using ZooKeeper, we don't expect a request to ever complete within 1ms.
+    // A timeout of 1 ms allows us to test the purgatory timeout logic.
+    //
+    // Note: we do not test KRaft here because its behavior is different. Server-side
+    // timeouts are much less likely to happen with KRaft since the operation is much
+    // faster. Additionally, if a server side timeout does happen, the operation is
+    // usually not performed.
+    validateErrorCreateTopicsRequests(topicsReq(Seq(
+      topicReq("error-timeout", numPartitions = 10, replicationFactor = 3)), timeout = 1),
+      Map("error-timeout" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
+    validateErrorCreateTopicsRequests(topicsReq(Seq(
+      topicReq("error-timeout-zero", numPartitions = 10, replicationFactor = 3)), timeout = 0),
+      Map("error-timeout-zero" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
+    // Negative timeouts are treated the same as 0
+    validateErrorCreateTopicsRequests(topicsReq(Seq(
+      topicReq("error-timeout-negative", numPartitions = 10, replicationFactor = 3)), timeout = -1),
+      Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
+    // The topics should still get created eventually
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-zero", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-negative", 0)
+    validateTopicExists("error-timeout")
+    validateTopicExists("error-timeout-zero")
+    validateTopicExists("error-timeout-negative")
+  }
+
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
