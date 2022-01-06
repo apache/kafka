@@ -160,7 +160,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      controller = new QuorumController.Builder(config.nodeId).
+      controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
