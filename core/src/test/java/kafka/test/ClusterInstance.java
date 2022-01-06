@@ -37,6 +37,10 @@ public interface ClusterInstance {
      */
     ClusterType clusterType();
 
+    default boolean isKRaftTest() {
+        return clusterType() == ClusterType.RAFT;
+    }
+
     /**
      * The cluster configuration used to create this cluster. Changing data in this instance through this accessor will
      * have no affect on the cluster since it is already provisioned.

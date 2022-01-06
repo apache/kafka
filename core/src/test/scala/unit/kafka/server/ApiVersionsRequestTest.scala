@@ -21,7 +21,7 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotation.ClusterTest
+import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
@@ -29,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@ClusterTestDefaults(clusterType = Type.BOTH, brokers = 1)
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @BeforeEach
@@ -47,7 +48,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse)
+    validateApiVersionsResponse(apiVersionsResponse, controllerApi = true)
   }
 
   @ClusterTest
@@ -73,7 +74,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse)
+    validateApiVersionsResponse(apiVersionsResponse, controllerApi = true)
   }
 
   @ClusterTest
