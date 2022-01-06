@@ -48,6 +48,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,7 +126,7 @@ public class TopologyMetadata {
     }
 
     public Collection<String> sourceTopicsForTopology(final String name) {
-        return builders.get(name).sourceTopicCollection();
+        return builders.get(name).fullSourceTopicNames();
     }
 
     public boolean needsUpdate(final String threadName) {
@@ -312,14 +313,14 @@ public class TopologyMetadata {
      * @return true iff any of the topologies have a global topology
      */
     public boolean hasGlobalTopology() {
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasGlobalStores);
+        return anyBuildersMatch(InternalTopologyBuilder::hasGlobalStores);
     }
 
     /**
      * @return true iff any of the topologies have no local (aka non-global) topology
      */
     public boolean hasNoLocalTopology() {
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasNoLocalTopology);
+        return anyBuildersMatch(InternalTopologyBuilder::hasNoLocalTopology);
     }
 
     public boolean hasPersistentStores() {
@@ -328,16 +329,16 @@ public class TopologyMetadata {
         if (hasNamedTopologies()) {
             return true;
         }
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasPersistentStores);
+        return anyBuildersMatch(InternalTopologyBuilder::hasPersistentStores);
     }
 
     public boolean hasStore(final String name) {
-        return evaluateConditionIsTrueForAnyBuilders(b -> b.hasStore(name));
+        return anyBuildersMatch(b -> b.hasStore(name));
     }
 
     public boolean hasOffsetResetOverrides() {
         // Return true if using named topologies, as there may be named topologies added later which do have overrides
-        return hasNamedTopologies() || evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
+        return hasNamedTopologies() || anyBuildersMatch(InternalTopologyBuilder::hasOffsetResetOverrides);
     }
 
     public OffsetResetStrategy offsetResetStrategy(final String topic) {
@@ -350,9 +351,14 @@ public class TopologyMetadata {
         return null;
     }
 
-    public Collection<String> sourceTopicCollection() {
-        final List<String> sourceTopics = new ArrayList<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
+    /**
+     * NOTE: this should not be invoked until all topologies have been built via
+     * {@link #buildAndVerifyTopology(InternalTopologyBuilder)}, otherwise the
+     * {@link InternalTopologyBuilder#fullSourceTopicNames()}
+     */
+    public Set<String> sourceTopicCollection() {
+        final Set<String> sourceTopics = new HashSet<>();
+        applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;
     }
 
@@ -375,7 +381,7 @@ public class TopologyMetadata {
     }
 
     public boolean usesPatternSubscription() {
-        return evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::usesPatternSubscription);
+        return anyBuildersMatch(InternalTopologyBuilder::usesPatternSubscription);
     }
 
     // Can be empty if app is started up with no Named Topologies, in order to add them on later
@@ -436,6 +442,10 @@ public class TopologyMetadata {
         return sourceTopics;
     }
 
+    private String getTopologyNameOrElseUnnamed(final String topologyName) {
+        return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
+    }
+
     public Map<Subtopology, TopicsInfo> topicGroups() {
         final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
         applyToEachBuilder(b -> topicGroups.putAll(b.topicGroups()));
@@ -447,11 +457,106 @@ public class TopologyMetadata {
     }
 
     void addSubscribedTopicsFromMetadata(final Set<String> topics, final String logPrefix) {
-        applyToEachBuilder(b -> b.addSubscribedTopicsFromMetadata(topics, logPrefix));
+        if (usesPatternSubscription()) {
+            final Map<String, Set<String>> newTopicsByTopology = new HashMap<>();
+            final Set<String> duplicateInputTopics = new HashSet<>();
+            final Set<String> subscriptionTopicsWithUnknownSource = new HashSet<>();
+            for (final String topic : topics) {
+                final Set<String> subscribingTopologies = new HashSet<>();
+                applyToEachBuilder(b -> {
+                    if (b.fullSourceTopicNames().contains(topic) || b.matchesSubscribedPattern(topic)) {
+                        subscribingTopologies.add(getTopologyNameOrElseUnnamed(b.topologyName()));
+                    }
+                });
+                if (subscribingTopologies.size() > 1) {
+                    log.error("{}Subscribed topic {} matches more than one topology: {}",
+                        logPrefix, topic, subscribingTopologies);
+                    duplicateInputTopics.add(topic);
+                } else if (subscribingTopologies.isEmpty()) {
+                    log.error("{}Topic {} is subscribed to by the consumer, but no topology can be identified " +
+                        "that is subscribing to that topic or to a matching Pattern", logPrefix, topic);
+                    subscriptionTopicsWithUnknownSource.add(topic);
+                }
+                for (final String topology : subscribingTopologies) {
+                    if (!allInputTopics.contains(topic)) {
+                        newTopicsByTopology
+                            .computeIfAbsent(topology, t -> new HashSet<>())
+                            .add(topic);
+                    }
+                }
+            }
+
+            if (!duplicateInputTopics.isEmpty()) {
+                throw new IllegalStateException("The following topics are subscribed to " +
+                    "by multiple topologies: " + duplicateInputTopics);
+            } else if (!subscriptionTopicsWithUnknownSource.isEmpty()) {
+                throw new IllegalStateException("The following topics appear in the subscription " +
+                    "but can't be located in the topology: " + subscriptionTopicsWithUnknownSource);
+            }
+
+            updateAndVerifyNewInputTopics(newTopicsByTopology);
+            for (final Map.Entry<String, Set<String>> topology : newTopicsByTopology.entrySet()) {
+                lookupBuilderForNamedTopology(topology.getKey())
+                    .addSubscribedTopicsFromMetadata(topology.getValue(), logPrefix);
+            }
+        } else {
+            if (!topics.equals(sourceTopicCollection())) {
+                log.error("{}Consumer's subscription does not match the known source topics.\n" +
+                        "consumer subscription: {}\n" +
+                        "topics in topology metadata: {}",
+                    logPrefix, topics, sourceTopicCollection());
+                throw new IllegalStateException("Consumer subscribed topics and topology's known topics do not match.");
+            }
+        }
     }
 
-    void addSubscribedTopicsFromAssignment(final List<TopicPartition> partitions, final String logPrefix) {
-        applyToEachBuilder(b -> b.addSubscribedTopicsFromAssignment(partitions, logPrefix));
+    void addSubscribedTopicsFromAssignment(final Map<TaskId, Set<TopicPartition>> tasks, final String logPrefix) {
+        final Map<String, Set<String>> assignedTopicsByTopology = new HashMap<>();
+
+        for (final Map.Entry<TaskId, Set<TopicPartition>> task : tasks.entrySet()) {
+            final String topologyName = getTopologyNameOrElseUnnamed(task.getKey().topologyName());
+            // Skip updating subscription with topics if their topology is not yet known to this client,
+            // the subscription will be updated when the topology is added
+            if (builders.containsKey(topologyName)) {
+                assignedTopicsByTopology
+                    .computeIfAbsent(topologyName, t -> new HashSet<>())
+                    .addAll(task.getValue().stream().map(TopicPartition::topic).collect(Collectors.toSet()));
+            }
+        }
+        for (final Map.Entry<String, Set<String>> assignedTopics : assignedTopicsByTopology.entrySet()) {
+            final Set<String> newTopics =
+                lookupBuilderForNamedTopology(assignedTopics.getKey())
+                    .addSubscribedTopicsFromAssignment(assignedTopics.getValue(), logPrefix);
+            assignedTopics.getValue().retainAll(newTopics);
+        }
+        updateAndVerifyNewInputTopics(assignedTopicsByTopology);
+    }
+
+    private void updateAndVerifyNewInputTopics(final Map<String, Set<String>> newTopicsByTopology) {
+        final Set<String> duplicateInputTopics = new HashSet<>();
+
+        for (final Map.Entry<String, Set<String>> newTopics : newTopicsByTopology.entrySet()) {
+            final String topologyName = newTopics.getKey();
+            for (final String newTopic : newTopics.getValue()) {
+                if (allInputTopics.contains(newTopic)) {
+                    duplicateInputTopics.add(newTopic);
+                    final String namedTopologyErrorMessagePrefix = UNNAMED_TOPOLOGY.equals(topologyName) ?
+                        "" :
+                        "Topology {}: ";
+                    log.error("{}Cannot add topic {} to the subscription as the application is " +
+                        "already consuming from this topic elsewhere in the topology",
+                        namedTopologyErrorMessagePrefix, newTopic);
+                } else {
+                    allInputTopics.add(newTopic);
+                }
+            }
+        }
+        if (!duplicateInputTopics.isEmpty()) {
+            throw new IllegalStateException("Found overlapping input topics when updating subscription, you may " +
+                "not consume from the same source topic more than once per application. Please make sure there are " +
+                "no topics that are subscribed to in more than one place, whether directly or by matching Pattern " +
+                "subscriptions. The following topics were found to be duplicates: " + duplicateInputTopics);
+        }
     }
 
     public Collection<Set<String>> copartitionGroups() {
@@ -465,13 +570,13 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
+     * @return the InternalTopologyBuilder for a Topology, or null if no such Topology exists
      */
     public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
         return builders.get(name);
     }
 
-    private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {
+    private boolean anyBuildersMatch(final Function<InternalTopologyBuilder, Boolean> condition) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             if (condition.apply(builder)) {
                 return true;
