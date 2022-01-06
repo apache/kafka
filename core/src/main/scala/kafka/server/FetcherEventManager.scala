@@ -18,17 +18,16 @@
 package kafka.server
 
 
-import java.util.concurrent.TimeUnit
-
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.ShutdownableThread
+import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 
-import scala.collection.{Map, Set}
+import java.util.concurrent.TimeUnit
+import scala.collection.Map
 
 trait FetcherEventProcessor {
   def process(event: FetcherEvent)
@@ -53,7 +52,7 @@ object FetcherEventManager {
  * @param time
  */
 class FetcherEventManager(name: String,
-                          fetcherEventBus: FetcherEventBus,
+                          val fetcherEventBus: FetcherEventBus,
                           processor: FetcherEventProcessor,
                           time: Time) extends KafkaMetricsGroup {
 
@@ -100,21 +99,10 @@ class FetcherEventManager(name: String,
     thread.start()
   }
 
-  def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): KafkaFuture[Void] = {
-    val future = new KafkaFutureImpl[Void] {}
-    fetcherEventBus.put(AddPartitions(initialFetchStates, future))
-    future
-  }
-
-  def removePartitions(topicPartitions: Set[TopicPartition]): KafkaFuture[Void] = {
-    val future = new KafkaFutureImpl[Void] {}
-    fetcherEventBus.put(RemovePartitions(topicPartitions, future))
-    future
-  }
-
-  def getPartitionsCount(): KafkaFuture[Int] = {
+  def modifyPartitionsAndGetCount(partitionModifications: PartitionModifications): KafkaFuture[Int] = {
     val future = new KafkaFutureImpl[Int]{}
-    fetcherEventBus.put(GetPartitionCount(future))
+    fetcherEventBus.put(ModifyPartitionsAndGetCount(partitionModifications.partitionsToRemove,
+      partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch, future))
     future
   }
 

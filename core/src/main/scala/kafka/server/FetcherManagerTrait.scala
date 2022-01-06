@@ -18,11 +18,11 @@
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
-import scala.collection.{Map, Set}
+
+import scala.collection.Map
 
 trait FetcherManagerTrait {
-  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit
-  def removeFetcherForPartitions(partitions: Set[TopicPartition]): Unit
-  def shutdownIdleFetcherThreads(): Unit
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState], partitionModifications: PartitionModifications): Unit
+  def modifyPartitionsAndShutdownIdleFetchers(partitionModifications: PartitionModifications): Unit
   def shutdown(): Unit
 }

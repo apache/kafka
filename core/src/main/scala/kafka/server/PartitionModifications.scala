@@ -17,28 +17,16 @@
 
 package kafka.server
 
-sealed abstract class FetcherState {
-  def value: Byte
+import org.apache.kafka.common.TopicPartition
 
-  def rateAndTimeMetricName: Option[String] =
-    if (hasRateAndTimeMetric) Some(s"${toString}RateAndTimeMs") else None
+import scala.collection.mutable
 
-  protected def hasRateAndTimeMetric: Boolean = true
+case class FollowerPartitionStateInFetcher(brokerIdAndFetcherId: BrokerIdAndFetcherId, offsetAndEpoch: OffsetAndEpoch) {
+
 }
 
-object FetcherState {
-  case object Idle extends FetcherState {
-    def value = 0
-    override protected def hasRateAndTimeMetric: Boolean = false
-  }
-
-  case object ModifyPartitionsAndGetCount extends FetcherState {
-    def value = 1
-  }
-
-  case object TruncateAndFetch extends FetcherState {
-    def value = 2
-  }
-
-  val values: Seq[FetcherState] = Seq(Idle, ModifyPartitionsAndGetCount, TruncateAndFetch)
+class PartitionModifications {
+  val partitionsToRemove = mutable.Set[TopicPartition]()
+  val partitionsToMakeFollowerWithOffsetAndEpoch = mutable.Map[TopicPartition, FollowerPartitionStateInFetcher]()
 }
+

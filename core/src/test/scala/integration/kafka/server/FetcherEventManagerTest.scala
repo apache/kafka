@@ -49,21 +49,13 @@ class FetcherEventManagerTest {
     val time = Time.SYSTEM
     val fetcherEventBus = new FetcherEventBus(time)
 
-    @volatile var addPartitionsProcessed = 0
-    @volatile var removePartitionsProcessed = 0
-    @volatile var getPartitionsProcessed = 0
+    @volatile var modifyPartitionsProcessed = 0
     @volatile var truncateAndFetchProcessed = 0
     val processor : FetcherEventProcessor = new FetcherEventProcessor {
       override def process(event: FetcherEvent): Unit = {
         event match {
-          case AddPartitions(initialFetchStates, future) =>
-            addPartitionsProcessed += 1
-            future.complete(null)
-          case RemovePartitions(topicPartitions, future) =>
-            removePartitionsProcessed += 1
-            future.complete(null)
-          case GetPartitionCount(future) =>
-            getPartitionsProcessed += 1
+          case ModifyPartitionsAndGetCount(partitionsToRemove, partitionsToAdd, future) =>
+            modifyPartitionsProcessed += 1
             future.complete(1)
           case TruncateAndFetch =>
             truncateAndFetchProcessed += 1
@@ -81,18 +73,13 @@ class FetcherEventManagerTest {
     }
 
     val fetcherEventManager = new FetcherEventManager("thread-1", fetcherEventBus, processor, time)
-    val addPartitionsFuture = fetcherEventManager.addPartitions(Map.empty)
-    val removePartitionsFuture = fetcherEventManager.removePartitions(Set.empty)
-    val getPartitionCountFuture = fetcherEventManager.getPartitionsCount()
+    val partitionModifications = new PartitionModifications
+    val modifyPartitionsFuture = fetcherEventManager.modifyPartitionsAndGetCount(partitionModifications)
 
     fetcherEventManager.start()
-    addPartitionsFuture.get()
-    removePartitionsFuture.get()
-    getPartitionCountFuture.get()
+    modifyPartitionsFuture.get()
 
-    assertEquals(1, addPartitionsProcessed)
-    assertEquals(1, removePartitionsProcessed)
-    assertEquals(1, getPartitionsProcessed)
+    assertEquals(1, modifyPartitionsProcessed)
     fetcherEventManager.close()
   }
 

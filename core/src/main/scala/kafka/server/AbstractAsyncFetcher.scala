@@ -50,20 +50,10 @@ sealed trait FetcherEvent extends Comparable[FetcherEvent] {
   }
 }
 
-// TODO: merge the AddPartitions and RemovePartitions into a single event
-case class AddPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch], future: KafkaFutureImpl[Void]) extends FetcherEvent {
+case class ModifyPartitionsAndGetCount(partitionsToRemove: Set[TopicPartition], partitionsToAdd: Map[TopicPartition, FollowerPartitionStateInFetcher],
+  future: KafkaFutureImpl[Int]) extends FetcherEvent {
   override def priority = 2
-  override def state = FetcherState.AddPartitions
-}
-
-case class RemovePartitions(topicPartitions: Set[TopicPartition], future: KafkaFutureImpl[Void]) extends FetcherEvent {
-  override def priority = 2
-  override def state = FetcherState.RemovePartitions
-}
-
-case class GetPartitionCount(future: KafkaFutureImpl[Int]) extends FetcherEvent {
-  override def priority = 2
-  override def state = FetcherState.GetPartitionCount
+  override def state = FetcherState.ModifyPartitionsAndGetCount
 }
 
 case object TruncateAndFetch extends FetcherEvent {
@@ -79,7 +69,8 @@ abstract class AbstractAsyncFetcher(clientId: String,
                                     val sourceBroker: BrokerEndPoint,
                                     failedPartitions: FailedPartitions,
                                     fetchBackOffMs: Int = 0,
-                                    fetcherEventBus: FetcherEventBus) extends FetcherEventProcessor with Logging {
+                                    fetcherEventBus: FetcherEventBus,
+                                    fetcherId: Int) extends FetcherEventProcessor with Logging {
 
   type FetchData = FetchResponse.PartitionData[Records]
   type EpochData = OffsetsForLeaderEpochRequest.PartitionData
@@ -160,13 +151,19 @@ abstract class AbstractAsyncFetcher(clientId: String,
 
   override def process(event: FetcherEvent): Unit = {
     event match {
-      case AddPartitions(initialFetchStates, future) =>
-        addPartitions(initialFetchStates)
-        future.complete(null)
-      case RemovePartitions(topicPartitions, future) =>
-        removePartitions(topicPartitions)
-        future.complete(null)
-      case GetPartitionCount(future) =>
+      case ModifyPartitionsAndGetCount(partitionsToRemove, partitionsToAdd, future) =>
+        // 1. remove partitions
+        removePartitions(partitionsToRemove)
+
+        // 2. add partitions that are destined to the current fetcher
+        val currentBrokerIdAndFetcherId = BrokerIdAndFetcherId(sourceBroker.id, fetcherId)
+        val partitionsToBeAdded = for {
+          (topicPartition, partitionStateInFetcher) <- partitionsToAdd
+          if partitionStateInFetcher.brokerIdAndFetcherId == currentBrokerIdAndFetcherId
+        } yield (topicPartition -> partitionStateInFetcher.offsetAndEpoch)
+        addPartitions(partitionsToBeAdded)
+
+        // 3. complete the future with the partitions count
         future.complete(partitionStates.size())
       case TruncateAndFetch =>
         truncateAndFetch()
