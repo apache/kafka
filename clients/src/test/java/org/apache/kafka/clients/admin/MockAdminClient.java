@@ -187,7 +187,9 @@ public class MockAdminClient extends AdminClient {
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         for (int i = 0; i < brokers.size(); i++) {
-            this.brokerConfigs.add(new HashMap<>());
+            final Map<String, String> config = new HashMap<>();
+            config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
+            this.brokerConfigs.add(config);
         }
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();

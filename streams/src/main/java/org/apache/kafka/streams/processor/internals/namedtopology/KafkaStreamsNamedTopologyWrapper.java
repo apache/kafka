@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -221,9 +222,14 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                     .getMessage()
                                     .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
                                 ex.printStackTrace();
+                            } else if (ex.getCause() != null &&
+                                ex.getCause() instanceof GroupIdNotFoundException) {
+                                log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
+                                break;
                             } else {
                                 future.completeExceptionally(ex);
                             }
+                            deleteOffsetsResult = null;
                         }
                         try {
                             Thread.sleep(100);

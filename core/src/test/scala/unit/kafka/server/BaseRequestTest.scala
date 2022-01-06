@@ -59,7 +59,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
 
   def controllerSocketServer: SocketServer = {
     if (isKRaftTest()) {
-      controllerServer.socketServer
+     controllerServer.socketServer
     } else {
       servers.find { server =>
         server.kafkaController.isActive
@@ -69,7 +69,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
 
   def notControllerSocketServer: SocketServer = {
     if (isKRaftTest()) {
-      brokers.head.socketServer
+      anySocketServer
     } else {
       servers.find { server =>
         !server.kafkaController.isActive

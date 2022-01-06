@@ -1097,15 +1097,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (encryptedString.isEmpty()) {
             return RecordQueue.UNKNOWN;
         }
-        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
-        final byte version = buffer.get();
-        switch (version) {
-            case LATEST_MAGIC_BYTE:
-                return buffer.getLong();
-            default:
-                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
-                         LATEST_MAGIC_BYTE, version);
-                return RecordQueue.UNKNOWN;
+        try {
+            final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+            final byte version = buffer.get();
+            switch (version) {
+                case LATEST_MAGIC_BYTE:
+                    return buffer.getLong();
+                default:
+                    log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.",
+                            LATEST_MAGIC_BYTE, version);
+                    return RecordQueue.UNKNOWN;
+            }
+        } catch (final Exception exception) {
+            log.warn("Unsupported offset metadata found");
+            return RecordQueue.UNKNOWN;
         }
     }
 

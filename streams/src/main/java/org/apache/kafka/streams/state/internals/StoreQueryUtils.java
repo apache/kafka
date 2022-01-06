@@ -16,22 +16,80 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class StoreQueryUtils {
 
-    // make this class uninstantiable
-    private StoreQueryUtils() {
+    /**
+     * a utility interface to facilitate stores' query dispatch logic,
+     * allowing them to generically store query execution logic as the values
+     * in a map.
+     */
+    @FunctionalInterface
+    public interface QueryHandler {
+        QueryResult<?> apply(
+            final Query<?> query,
+            final PositionBound positionBound,
+            final boolean collectExecutionInfo,
+            final StateStore store
+        );
     }
 
+    @SuppressWarnings("rawtypes")
+    private static final Map<Class, QueryHandler> QUERY_HANDLER_MAP =
+        mkMap(
+            mkEntry(
+                RangeQuery.class,
+                StoreQueryUtils::runRangeQuery
+            ),
+            mkEntry(
+                KeyQuery.class,
+                StoreQueryUtils::runKeyQuery
+            ),
+            mkEntry(
+                WindowKeyQuery.class,
+                StoreQueryUtils::runWindowKeyQuery
+            ),
+            mkEntry(
+                WindowRangeQuery.class,
+                StoreQueryUtils::runWindowRangeQuery
+            )
+        );
+
+    // make this class uninstantiable
+
+    private StoreQueryUtils() {
+    }
     @SuppressWarnings("unchecked")
     public static <R> QueryResult<R> handleBasicQueries(
         final Query<R> query,
@@ -42,16 +100,21 @@ public final class StoreQueryUtils {
         final int partition
     ) {
 
-        final QueryResult<R> result;
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        if (query instanceof PingQuery) {
-            if (!isPermitted(position, positionBound, partition)) {
-                result = QueryResult.notUpToBound(position, positionBound, partition);
-            } else {
-                result = (QueryResult<R>) QueryResult.forResult(true);
-            }
-        } else {
+        final QueryResult<R> result;
+
+        final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
+        if (handler == null) {
             result = QueryResult.forUnknownQueryType(query, store);
+        } else if (!isPermitted(position, positionBound, partition)) {
+            result = QueryResult.notUpToBound(position, positionBound, partition);
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                query,
+                positionBound,
+                collectExecutionInfo,
+                store
+            );
         }
         if (collectExecutionInfo) {
             result.addExecutionInfo(
@@ -94,5 +157,189 @@ public final class StoreQueryUtils {
             }
         }
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runRangeQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo,
+        final StateStore store
+    ) {
+        if (!(store instanceof KeyValueStore)) {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
+        final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
+        final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
+        final KeyValueIterator<Bytes, byte[]> iterator;
+        try {
+            if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+                iterator = kvStore.all();
+            } else {
+                iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
+            }
+            final R result = (R) iterator;
+            return QueryResult.forResult(result);
+        } catch (final Exception e) {
+            final String message = parseStoreException(e, store, query);
+            return QueryResult.forFailure(
+                FailureReason.STORE_EXCEPTION,
+                message
+            );
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                                  final PositionBound positionBound,
+                                                  final boolean collectExecutionInfo,
+                                                  final StateStore store) {
+        if (store instanceof KeyValueStore) {
+            final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
+            final KeyValueStore<Bytes, byte[]> keyValueStore =
+                (KeyValueStore<Bytes, byte[]>) store;
+            try {
+                final byte[] bytes = keyValueStore.get(rawKeyQuery.getKey());
+                return (QueryResult<R>) QueryResult.forResult(bytes);
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
+            }
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
+                                                        final PositionBound positionBound,
+                                                        final boolean collectExecutionInfo,
+                                                        final StateStore store) {
+        if (store instanceof WindowStore) {
+            final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
+                (WindowKeyQuery<Bytes, byte[]>) query;
+            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            try {
+                if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
+                    final WindowStoreIterator<byte[]> iterator = windowStore.fetch(
+                        windowKeyQuery.getKey(),
+                        windowKeyQuery.getTimeFrom().get(),
+                        windowKeyQuery.getTimeTo().get()
+                    );
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(
+                        FailureReason.UNKNOWN_QUERY_TYPE,
+                        "This store (" + store.getClass() + ") doesn't know how to"
+                            + " execute the given query (" + query + ") because it only supports"
+                            + " closed-range queries."
+                            + " Contact the store maintainer if you need support"
+                            + " for a new query type."
+                    );
+                }
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(FailureReason.STORE_EXCEPTION, message);
+            }
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
+                                                          final PositionBound positionBound,
+                                                          final boolean collectExecutionInfo,
+                                                          final StateStore store) {
+        if (store instanceof WindowStore) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
+                (WindowRangeQuery<Bytes, byte[]>) query;
+            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            try {
+                // There's no store API for open time ranges
+                if (windowRangeQuery.getTimeFrom().isPresent() && windowRangeQuery.getTimeTo().isPresent()) {
+                    final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                        windowStore.fetchAll(
+                            windowRangeQuery.getTimeFrom().get(),
+                            windowRangeQuery.getTimeTo().get()
+                        );
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(
+                        FailureReason.UNKNOWN_QUERY_TYPE,
+                        "This store (" + store.getClass() + ") doesn't know how to"
+                            + " execute the given query (" + query + ") because"
+                            + " WindowStores only supports WindowRangeQuery.withWindowStartRange."
+                            + " Contact the store maintainer if you need support"
+                            + " for a new query type."
+                    );
+                }
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
+            }
+        } else if (store instanceof SessionStore) {
+            final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
+                (WindowRangeQuery<Bytes, byte[]>) query;
+            final SessionStore<Bytes, byte[]> sessionStore = (SessionStore<Bytes, byte[]>) store;
+            try {
+                if (windowRangeQuery.getKey().isPresent()) {
+                    final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = sessionStore.fetch(
+                        windowRangeQuery.getKey().get());
+                    return (QueryResult<R>) QueryResult.forResult(iterator);
+                } else {
+                    return QueryResult.forFailure(
+                        FailureReason.UNKNOWN_QUERY_TYPE,
+                        "This store (" + store.getClass() + ") doesn't know how to"
+                            + " execute the given query (" + query + ") because"
+                            + " SessionStores only support WindowRangeQuery.withKey."
+                            + " Contact the store maintainer if you need support"
+                            + " for a new query type."
+                    );
+                }
+            } catch (final Exception e) {
+                final String message = parseStoreException(e, store, query);
+                return QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    message
+                );
+            }
+        } else {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes,
+                                                              final StateStore wrapped) {
+        final Serde<V> valueSerde = serdes.valueSerde();
+        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped);
+        final Deserializer<V> deserializer;
+        if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
+            final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
+                (ValueAndTimestampDeserializer) ((ValueAndTimestampSerde) valueSerde).deserializer();
+            deserializer = (Deserializer<V>) valueAndTimestampDeserializer.valueDeserializer;
+        } else {
+            deserializer = valueSerde.deserializer();
+        }
+        return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+    }
+
+    private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
+        final StringWriter stringWriter = new StringWriter();
+        final PrintWriter printWriter = new PrintWriter(stringWriter);
+        printWriter.println(
+            store.getClass() + " failed to handle query " + query + ":");
+        e.printStackTrace(printWriter);
+        printWriter.flush();
+        return stringWriter.toString();
     }
 }
