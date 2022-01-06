@@ -24,6 +24,7 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
+import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
@@ -381,22 +382,41 @@ object TestUtils extends Logging {
 
   def createTopicWithAdmin[B <: KafkaBroker](
       topic: String,
+      brokers: Seq[B],
       numPartitions: Int = 1,
       replicationFactor: Int = 1,
-      brokers: Seq[B],
+      replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
       topicConfig: Properties = new Properties,
       adminConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
+    val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
+      numPartitions
+    } else {
+      replicaAssignment.size
+    }
     val adminClient = createAdminClient(brokers, adminConfig)
     try {
-      val configsMap = new java.util.HashMap[String, String]()
+      val configsMap = new util.HashMap[String, String]()
       topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
       try {
-        adminClient.createTopics(Collections.singletonList(new NewTopic(
-          topic, numPartitions, replicationFactor.toShort).configs(configsMap))).all().get()
+        val result = if (replicaAssignment.isEmpty) {
+          adminClient.createTopics(Collections.singletonList(new NewTopic(
+            topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        } else {
+          val assignment = new util.HashMap[Integer, util.List[Integer]]()
+          replicaAssignment.forKeyValue { case (k, v) =>
+            val replicas = new util.ArrayList[Integer]
+            v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
+            assignment.put(k.asInstanceOf[Integer], replicas)
+          }
+          adminClient.createTopics(Collections.singletonList(new NewTopic(
+            topic, assignment).configs(configsMap)))
+        }
+        result.all().get()
       } catch {
         case e: ExecutionException => if (!(e.getCause != null &&
             e.getCause.isInstanceOf[TopicExistsException] &&
-            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic, numPartitions, replicationFactor))) {
+            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic,
+              effectiveNumPartitions, replicationFactor))) {
           throw e
         }
       }
@@ -404,9 +424,9 @@ object TestUtils extends Logging {
       adminClient.close()
     }
     // wait until we've propagated all partitions metadata to all brokers
-    val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, numPartitions)
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
 
-    (0 until numPartitions).map { i =>
+    (0 until effectiveNumPartitions).map { i =>
       i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
         throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
@@ -1063,7 +1083,8 @@ object TestUtils extends Logging {
    */
   def waitForAllPartitionsMetadata[B <: KafkaBroker](
       brokers: Seq[B],
-      topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
+      topic: String,
+      expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
