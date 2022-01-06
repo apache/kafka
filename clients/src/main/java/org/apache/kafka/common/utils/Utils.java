@@ -924,7 +924,8 @@ public final class Utils {
      * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
      * to repeatedly flush the same parent directory.
      *
-     * @throws IOException if both atomic and non-atomic moves fail, or parent dir flush fails.
+     * @throws IOException if both atomic and non-atomic moves fail,
+     * or parent dir flush fails if needFlushParentDir is true.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
