@@ -35,6 +35,7 @@ import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -96,6 +97,13 @@ public class SslSelectorTest extends SelectorTest {
     @Override
     protected Map<String, Object> clientConfigs() {
         return sslClientConfigs;
+    }
+
+    @Override
+    @Test
+    @Disabled
+    public void testCloseOldestConnectionWithMultiplePendingReceives() throws Exception {
+        super.testCloseOldestConnectionWithMultiplePendingReceives();
     }
 
     @Test
@@ -189,6 +197,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Test
+    @Disabled
     public void testBytesBufferedChannelAfterMute() throws Exception {
         verifyNoUnnecessaryPollWithBytesBuffered(key -> ((KafkaChannel) key.attachment()).mute());
     }

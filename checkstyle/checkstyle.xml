@@ -27,9 +27,10 @@
   <module name="Header">
     <property name="headerFile" value="${headerFile}" />
   </module>
+  <module name="SuppressWarningsFilter" />
 
   <module name="TreeWalker">
-
+    <module name="SuppressWarningsHolder" />
     <!-- code cleanup -->
     <module name="UnusedImports">
       <property name="processJavadoc" value="true" />

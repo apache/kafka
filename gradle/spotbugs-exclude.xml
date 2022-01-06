@@ -300,6 +300,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress some warnings about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.common.network.NetworkReceive"/>
+        <Or>
+            <Method name="readFrom"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+
+    <Match>
         <!-- Suppress a warning about intentional switch statement fallthrough. -->
         <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
         <Method name="authenticate"/>
