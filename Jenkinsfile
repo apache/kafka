@@ -38,7 +38,33 @@ def doTest(env, target = "unitTest integrationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
-  junit '**/build/test-results/**/TEST-*.xml'
+
+  def summary = junit '**/build/test-results/**/TEST-*.xml'
+  def total = summary.getTotalCount()
+  def failed = summary.getFailCount()
+  def skipped = summary.getSkipCount()
+  summary = "Test results:\n\t"
+  summary = summary + ("Passed: " + (total - failed - skipped))
+  summary = summary + (", Failed: " + failed)
+  summary = summary + (", Skipped: " + skipped)
+
+  String flakySummary = "Flaky Report: \n"
+  def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+  if (testResultAction != null && testResultAction instanceof TestResultAction) {
+	  flakyDescriptor = "Flaky Report: <br>"
+		  def testResult = (TestResult) testResultAction.getResult()
+		  for (SuiteResult suiteResult : testResult.getSuites()) {
+			  def log = readFile(suiteResult.getFile())
+				  Document document = DocumentHelper.parseText(log)
+				  Element root = document.getRootElement()
+				  String[] parseResult = parse(root)
+				  flakySummary = flakySummary + parseResult[0]
+				  flakyDescriptor = flakyDescriptor + parseResult[1]
+		  }
+  }
+
+  // Display flakiness information in Pipeline Steps and Console Output
+  echo flakySummary
 }
 
 def doStreamsArchetype() {
