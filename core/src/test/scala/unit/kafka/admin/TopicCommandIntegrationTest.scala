@@ -308,8 +308,11 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
-    assertTrue(topicDescription.partitions().size() == 3)
+    TestUtils.retry(60000) {
+      val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).
+        topicNameValues().get(testTopicName).get()
+      assertEquals(3, topicDescription.partitions().size())
+    }
   }
 
   @ParameterizedTest
@@ -322,8 +325,12 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
 
-    val topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get()
-    assertTrue(topicDescription.partitions().size() == 3)
+    var topicDescription: TopicDescription = null
+    TestUtils.retry(60000) {
+      topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).
+        topicNameValues().get(testTopicName).get()
+      assertEquals(3, topicDescription.partitions().size())
+    }
     assertEquals(List(4,2), topicDescription.partitions().get(2).replicas().asScala.map(_.id()))
   }
 
@@ -402,10 +409,12 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       "--partitions", alteredNumPartitions.toString,
       "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
-    assignment = TestUtils.getReplicaAssignmentForTopics(Seq(testTopicName), brokers).map {
-      case (tp, replicas) => tp.partition -> replicas
+    TestUtils.retry(60000) {
+      assignment = TestUtils.getReplicaAssignmentForTopics(Seq(testTopicName), brokers).map {
+        case (tp, replicas) => tp.partition -> replicas
+      }
+      checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
     }
-    checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
 
   @ParameterizedTest
