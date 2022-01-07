@@ -130,14 +130,13 @@ abstract class AbstractAsyncFetcher(clientId: String,
 
       (fetchStates, fetchRequestOpt)
     }
-    if (fetchRequestOpt.isEmpty) {
-      trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
-      true
-    } else {
-      fetchRequestOpt.foreach { fetchRequest =>
+
+    fetchRequestOpt match {
+      case None =>
+        trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
+        true
+      case Some(fetchRequest) =>
         processFetchRequest(fetchStates, fetchRequest)
-      }
-      false
     }
   }
 
