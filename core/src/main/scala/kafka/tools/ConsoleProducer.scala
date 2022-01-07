@@ -218,11 +218,11 @@ object ConsoleProducer {
         | headers.key.separator=:
         |Default parsing pattern when:
         | parse.headers=true & parse.key=true:
-        |  "h1:v1,h2...\tkey\tvalue"
+        |  "h1:v1,h2:v2...\tkey\tvalue"
         | parse.key=true:
         |  "key\tvalue"
         | parse.headers=true:
-        |  "h1:v1,h2...\tvalue"
+        |  "h1:v1,h2:v2...\tvalue"
       """.stripMargin
       )
       .withRequiredArg
