@@ -88,7 +88,7 @@ class LineMessageReaderTest {
 
     val input =
       "headerKey0.0:headerValue0.0&headerKey0.1:headerValue0.1!key0#value0\n" +
-        "headerKey1.0:headerValue1.0!key1#value1"
+      "headerKey1.0:headerValue1.0!key1#value1"
 
     val record0 = record("key0", "value0", List("headerKey0.0" -> "headerValue0.0", "headerKey0.1" -> "headerValue0.1"))
     val record1 = record("key1", "value1", List("headerKey1.0" -> "headerValue1.0"))
@@ -101,7 +101,7 @@ class LineMessageReaderTest {
     val lineReader = new LineMessageReader()
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
-        "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
+      "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     lineReader.readMessage()
@@ -141,7 +141,7 @@ class LineMessageReaderTest {
   def testIgnoreErrorInInput(): Unit = {
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0\n" +
-        "headerKey1.0:headerValue1.0\tkey1\tvalue1"
+      "headerKey1.0:headerValue1.0\tkey1\tvalue1"
 
     val props = defaultTestProps
     props.put("ignore.error", "true")
