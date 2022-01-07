@@ -20,15 +20,10 @@ package unit.kafka.tools
 import kafka.tools.ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.header.Header
-import org.apache.kafka.common.header.internals.RecordHeader
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
 import java.io.ByteArrayInputStream
-import java.lang
-import java.nio.charset.StandardCharsets
-import java.util.Arrays.asList
 import java.util.Properties
 
 class LineMessageReaderTest {
@@ -43,9 +38,7 @@ class LineMessageReaderTest {
 
   @Test
   def testLineReader(): Unit = {
-    val input =
-    "key0\tvalue0\n" +
-    "key1\tvalue1"
+    val input = "key0\tvalue0\nkey1\tvalue1"
 
     val props = defaultTestProps
     props.put("parse.headers", "false")
@@ -54,27 +47,15 @@ class LineMessageReaderTest {
   }
 
   @Test
-  def minimalValidInputWithHeaderKeyAndValue(): Unit = {
-    runTest(
-      defaultTestProps,
-      ":\t\t",
-      record("", "", asList(new RecordHeader("", "".getBytes(StandardCharsets.UTF_8))))
-    )
+  def testLineReaderHeader(): Unit = {
+    val input = "headerKey0:headerValue0,headerKey1:headerValue1\tkey0\tvalue0\n"
+    val expected = record("key0", "value0", List("headerKey0" -> "headerValue0", "headerKey1" -> "headerValue1"))
+    runTest(defaultTestProps, input, expected)
   }
 
   @Test
-  def testLineReaderHeader(): Unit = {
-
-    val input = "headerKey0:headerValue0,headerKey1:headerValue1\tkey0\tvalue0\n"
-
-    val expectedHeaders: lang.Iterable[Header] = asList(
-      new RecordHeader("headerKey0", "headerValue0".getBytes()),
-      new RecordHeader("headerKey1", "headerValue1".getBytes())
-    )
-
-    val expected = record("key0", "value0", expectedHeaders)
-
-    runTest(defaultTestProps, input, expected)
+  def minimalValidInputWithHeaderKeyAndValue(): Unit = {
+    runTest(defaultTestProps, ":\t\t", record("", "", List("" -> "")))
   }
 
   @Test
@@ -84,8 +65,7 @@ class LineMessageReaderTest {
     val props = defaultTestProps
     props.put("parse.key", "false")
 
-    val expectedHeaders: lang.Iterable[Header] = asList(new RecordHeader("headerKey", "headerValue".getBytes()))
-    runTest(props, input, record(null, "value", expectedHeaders))
+    runTest(props, input, record(null, "value", List("headerKey" -> "headerValue")))
   }
 
   @Test
@@ -108,16 +88,10 @@ class LineMessageReaderTest {
 
     val input =
       "headerKey0.0:headerValue0.0&headerKey0.1:headerValue0.1!key0#value0\n" +
-      "headerKey1.0:headerValue1.0!key1#value1"
+        "headerKey1.0:headerValue1.0!key1#value1"
 
-    val headers0: lang.Iterable[Header] = asList(
-      new RecordHeader("headerKey0.0", "headerValue0.0".getBytes()),
-      new RecordHeader("headerKey0.1", "headerValue0.1".getBytes())
-    )
-
-    val record0 = new ProducerRecord("topic", null, null, "key0", "value0", headers0)
-    val headers1: lang.Iterable[Header] = asList(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes()))
-    val record1 = new ProducerRecord("topic", null, null, "key1", "value1", headers1)
+    val record0 = record("key0", "value0", List("headerKey0.0" -> "headerValue0.0", "headerKey0.1" -> "headerValue0.1"))
+    val record1 = record("key1", "value1", List("headerKey1.0" -> "headerValue1.0"))
 
     runTest(props, input, record0, record1)
   }
@@ -127,7 +101,7 @@ class LineMessageReaderTest {
     val lineReader = new LineMessageReader()
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
-      "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
+        "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     lineReader.readMessage()
@@ -140,7 +114,7 @@ class LineMessageReaderTest {
   }
 
   @Test
-  def testHeaderDemarcationCollision(): Unit ={
+  def testHeaderDemarcationCollision(): Unit = {
     val props = defaultTestProps
     props.put("headers.delimiter", "\t")
     props.put("headers.separator", "\t")
@@ -167,27 +141,19 @@ class LineMessageReaderTest {
   def testIgnoreErrorInInput(): Unit = {
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0\n" +
-      "headerKey1.0:headerValue1.0\tkey1\tvalue1"
+        "headerKey1.0:headerValue1.0\tkey1\tvalue1"
 
     val props = defaultTestProps
     props.put("ignore.error", "true")
 
-    val invalidHeaders: lang.Iterable[Header] = asList(
-      new RecordHeader("headerKey0.0", "headerValue0.0".getBytes()),
-      new RecordHeader("headerKey0.1", "headerValue0.1[MISSING-DELIMITER]key0".getBytes())
-    )
     val invalidRecord: ProducerRecord[String, String] =
-      new ProducerRecord(
-        "topic",
-        null,
-        null,
+      record(
         null,
         "value0",
-        invalidHeaders
+        List("headerKey0.0" -> "headerValue0.0", "headerKey0.1" -> "headerValue0.1[MISSING-DELIMITER]key0")
       )
 
-    val headers: lang.Iterable[Header] = asList(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes()))
-    val validRecord = new ProducerRecord("topic", null, null, "key1", "value1", headers)
+    val validRecord = record("key1", "value1", List("headerKey1.0" -> "headerValue1.0"))
 
     runTest(props, input, invalidRecord, validRecord)
   }
@@ -195,8 +161,7 @@ class LineMessageReaderTest {
   @Test
   def testMalformedHeader(): Unit = {
     val lineReader = new LineMessageReader()
-    val input =
-      "key-val\tkey0\tvalue0\n"
+    val input = "key-val\tkey0\tvalue0\n"
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
@@ -209,14 +174,12 @@ class LineMessageReaderTest {
 
   @Test
   def testMalformedHeaderIgnoreError(): Unit = {
-    val input =
-      "key-val\tkey0\tvalue0\n"
+    val input = "key-val\tkey0\tvalue0\n"
 
     val props = defaultTestProps
     props.put("ignore.error", "true")
 
-    val headers: lang.Iterable[Header] = asList(new RecordHeader("key-val", null))
-    val expected = new ProducerRecord("topic", null, null, "key0", "value0", headers)
+    val expected = record("key0", "value0", List("key-val" -> null))
 
     runTest(props, input, expected)
   }
@@ -234,8 +197,10 @@ class LineMessageReaderTest {
     assertEquals(expected.headers().toArray.toList, actual.headers().toArray.toList)
   }
 
-  private def record[K, V](key: K, value: V, headers: lang.Iterable[Header]): ProducerRecord[K, V] = {
-    new ProducerRecord("topic", null, null, key, value, headers)
+  private def record[K, V](key: K, value: V, headers: List[(String, String)]): ProducerRecord[K, V] = {
+    val record = new ProducerRecord("topic", key, value)
+    headers.foreach(h => record.headers().add(h._1, if (h._2 != null) h._2.getBytes() else null))
+    record
   }
 
   private def record[K, V](key: K, value: V): ProducerRecord[K, V] = {
