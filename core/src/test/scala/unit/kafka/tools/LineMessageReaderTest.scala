@@ -105,6 +105,7 @@ class LineMessageReaderTest {
 
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
     lineReader.readMessage()
+
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
@@ -162,8 +163,8 @@ class LineMessageReaderTest {
   def testMalformedHeader(): Unit = {
     val lineReader = new LineMessageReader()
     val input = "key-val\tkey0\tvalue0\n"
-
     lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
+
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
