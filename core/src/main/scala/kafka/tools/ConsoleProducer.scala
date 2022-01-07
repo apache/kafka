@@ -217,7 +217,7 @@ object ConsoleProducer {
         | headers.separator=,
         | headers.key.separator=:
         |Default parsing pattern when:
-        | parse.headers=true & parse.key=true:
+        | parse.headers=true and parse.key=true:
         |  "h1:v1,h2:v2...\tkey\tvalue"
         | parse.key=true:
         |  "key\tvalue"
