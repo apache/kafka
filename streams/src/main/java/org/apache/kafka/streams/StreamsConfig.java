@@ -951,7 +951,7 @@ public class StreamsConfig extends AbstractConfig {
         public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"
             + ".vector.enabled__";
 
-        // Private API used to control the usage of consistency offset vectors
+        // Private API used to control the prefix of the auto created topics
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
