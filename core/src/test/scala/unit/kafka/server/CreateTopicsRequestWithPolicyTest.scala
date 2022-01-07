@@ -25,7 +25,8 @@ import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -37,7 +38,8 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
       numPartitions = 5))))
@@ -55,7 +57,8 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 1, 1)

@@ -19,7 +19,8 @@ package kafka.server
 
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -27,8 +28,9 @@ class CreateTopicsRequestWithForwardingTest extends AbstractCreateTopicsRequestT
 
   override def enableForwarding: Boolean = true
 
-  @Test
-  def testForwardToController(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testForwardToController(quorum: String): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     // With forwarding enabled, request could be forwarded to the active controller.
