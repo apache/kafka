@@ -49,6 +49,7 @@ import java.util.function.Consumer;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
+import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 
 
 public class ConfigurationControlManager {
@@ -184,7 +185,7 @@ public class ConfigurationControlManager {
                 alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
             }
         } catch (ConfigException e) {
-            return new ApiError(INVALID_CONFIG, e.getMessage());
+            return new ApiError(INVALID_REQUEST, e.getMessage());
         } catch (Throwable e) {
             return ApiError.fromThrowable(e);
         }

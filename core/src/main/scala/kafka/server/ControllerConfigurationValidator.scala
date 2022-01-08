@@ -29,7 +29,7 @@ import org.apache.kafka.common.internals.Topic
 
 import scala.collection.mutable
 
-class ControllerConfigurationValidator extends ConfigurationValidator {
+class ControllerConfigurationValidator(dynamicConfig: DynamicBrokerConfig) extends ConfigurationValidator {
   override def validate(resource: ConfigResource, config: util.Map[String, String]): Unit = {
     resource.`type`() match {
       case TOPIC =>
@@ -63,6 +63,10 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
             throw new InvalidRequestException("Invalid negative broker ID.")
           }
         }
+        val perBrokerConfig = resource.name().isEmpty
+        val configProps = new Properties()
+        configProps.putAll(config)
+        dynamicConfig.validate(configProps, perBrokerConfig)
       case _ =>
         // Note: we should never handle BROKER_LOGGER resources here, since changes to
         // those resources are not persisted in the metadata.

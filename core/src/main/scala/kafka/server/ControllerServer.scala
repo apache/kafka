@@ -173,7 +173,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
-        setConfigurationValidator(new ControllerConfigurationValidator()).
+        setConfigurationValidator(new ControllerConfigurationValidator(config.dynamicConfig)).
         build()
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))

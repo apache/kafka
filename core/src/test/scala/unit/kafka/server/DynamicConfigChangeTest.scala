@@ -453,6 +453,23 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerValidateFailed(quorum: String): Unit = {
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
+      val op = new AlterConfigOp(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181"), SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+      fail("Should fail with InvalidRequestException for config validate failed")
+    } catch {
+      case e: ExecutionException =>
+        assertEquals(classOf[InvalidRequestException], e.getCause().getClass())
+    } finally {
+      admin.close()
+    }
+  }
+
   private def createAdminClient(): Admin = {
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
