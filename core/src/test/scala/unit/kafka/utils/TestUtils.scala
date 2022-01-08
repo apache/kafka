@@ -1889,6 +1889,7 @@ object TestUtils extends Logging {
           .map(_.id)
           .toSet
 
+        System.err.println("!!! isr:" + isr)
         brokerIds.intersect(isr).isEmpty
       },
       s"Expected brokers $brokerIds to no longer be in the ISR for $partition"

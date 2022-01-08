@@ -174,6 +174,7 @@ object LeaderElectionCommand extends Logging {
       val rootException = new AdminCommandFailedException(s"${failed.size} replica(s) could not be elected")
       failed.forKeyValue { (topicPartition, exception) =>
         println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
+        System.err.println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
         rootException.addSuppressed(exception)
       }
       throw rootException

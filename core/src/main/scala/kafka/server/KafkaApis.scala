@@ -1152,6 +1152,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
+    System.err.println("topicResponses:" + topicResponses)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
@@ -1187,6 +1188,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleTopicMetadataRequest(request: RequestChannel.Request): Unit = {
     val metadataRequest = request.body[MetadataRequest]
     val requestVersion = request.header.apiVersion
+    System.err.println("handleTopicMetadataRequest:" + metadataRequest)
 
     // Topic IDs are not supported for versions 10 and 11. Topic names can not be null in these versions.
     if (!metadataRequest.isAllTopics) {
@@ -1293,6 +1295,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
+      brokers.mkString(","), request.header.correlationId, request.header.clientId))
+    System.err.println("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

@@ -68,6 +68,453 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
     val topicPartition = new TopicPartition(topic, partition)
 
     TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition2(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+  @ClusterTest
+  def testAllTopicPartition3(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+  @ClusterTest
+  def testAllTopicPartition4(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition5(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition6(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition7(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition8(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition9(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition10(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition11(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition12(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition13(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition14(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--all-topic-partitions"
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testAllTopicPartition15(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+    System.err.println("!!! shutdown 3")
     cluster.shutdownBroker(broker3)
     TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
     cluster.shutdownBroker(broker2)
@@ -100,6 +547,7 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
     TestUtils.assertLeader(client, topicPartition, broker2)
 
+    System.err.println("!!! shutdown 3")
     cluster.shutdownBroker(broker3)
     TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
     cluster.shutdownBroker(broker2)
@@ -133,6 +581,147 @@ final class LeaderElectionCommandTest(cluster: ClusterInstance) {
 
     TestUtils.assertLeader(client, topicPartition, broker2)
 
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--path-to-json-file", topicPartitionPath.toString
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testPathToJsonFile2(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--path-to-json-file", topicPartitionPath.toString
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testPathToJsonFile3(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--path-to-json-file", topicPartitionPath.toString
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testPathToJsonFile4(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+
+    System.err.println("!!! shutdown 3")
+    cluster.shutdownBroker(broker3)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    cluster.shutdownBroker(broker2)
+    TestUtils.assertNoLeader(client, topicPartition)
+    cluster.startBroker(broker3)
+    TestUtils.waitForOnlineBroker(client, broker3)
+
+    val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
+
+    LeaderElectionCommand.main(
+      Array(
+        "--bootstrap-server", cluster.bootstrapServers(),
+        "--election-type", "unclean",
+        "--path-to-json-file", topicPartitionPath.toString
+      )
+    )
+
+    TestUtils.assertLeader(client, topicPartition, broker3)
+  }
+
+  @ClusterTest
+  def testPathToJsonFile5(): Unit = {
+    val client = cluster.createAdminClient()
+    val topic = "unclean-topic"
+    val partition = 0
+    val assignment = Seq(broker2, broker3)
+
+    cluster.waitForReadyBrokers()
+    createTopic(client, topic, Map(partition -> assignment))
+
+    val topicPartition = new TopicPartition(topic, partition)
+
+    TestUtils.assertLeader(client, topicPartition, broker2)
+
+    System.err.println("!!! shutdown 3")
     cluster.shutdownBroker(broker3)
     TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
     cluster.shutdownBroker(broker2)
