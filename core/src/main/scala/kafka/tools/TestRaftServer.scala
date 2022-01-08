@@ -23,7 +23,7 @@ import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, Observer, SimpleApiVersionManager}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -61,6 +61,7 @@ class TestRaftServer(
   private val shutdownLatch = new CountDownLatch(1)
   private val threadNamePrefix = "test-raft"
 
+  var observer: Observer = null
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
@@ -73,7 +74,8 @@ class TestRaftServer(
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+    observer = Observer(config)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, observer, apiVersionManager)
     socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(

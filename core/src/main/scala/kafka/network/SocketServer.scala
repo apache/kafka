@@ -25,7 +25,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
@@ -33,7 +32,7 @@ import kafka.network.Processor._
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
-import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
+import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig, Observer}
 import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
@@ -78,6 +77,7 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
+                   val observer: Observer,
                    val apiVersionManager: ApiVersionManager)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
@@ -97,12 +97,12 @@ class SocketServer(val config: KafkaConfig,
   // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
-  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time, apiVersionManager.newRequestMetrics)
+  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time, observer, apiVersionManager.newRequestMetrics)
   // control-plane
   private var controlPlaneProcessorOpt : Option[Processor] = None
   private[network] var controlPlaneAcceptorOpt : Option[Acceptor] = None
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
-    new RequestChannel(20, ControlPlaneMetricPrefix, time, apiVersionManager.newRequestMetrics))
+    new RequestChannel(20, ControlPlaneMetricPrefix, time, observer, apiVersionManager.newRequestMetrics))
 
   private var nextProcessorId = 0
   val connectionQuotas = new ConnectionQuotas(config, time, metrics)

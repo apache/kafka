@@ -102,6 +102,7 @@ class KafkaApisTest {
   private val metrics = new Metrics()
   private val brokerId = 1
   private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId)
+  private val observer: Observer = EasyMock.createNiceMock(classOf[Observer])
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
@@ -182,6 +183,7 @@ class KafkaApisTest {
       metadataCache,
       metrics,
       authorizer,
+      observer,
       quotas,
       fetchManager,
       brokerTopicStats,
@@ -1589,7 +1591,7 @@ class KafkaApisTest {
 
       assertEquals(1, response.data.responses.size)
       val topicProduceResponse = response.data.responses.asScala.head
-      assertEquals(1, topicProduceResponse.partitionResponses.size)   
+      assertEquals(1, topicProduceResponse.partitionResponses.size)
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
     }

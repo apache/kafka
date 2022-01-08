@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, Observer}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -337,6 +337,7 @@ object RequestChannel extends Logging {
 class RequestChannel(val queueSize: Int,
                      val metricNamePrefix: String,
                      time: Time,
+                     val observer: Observer,
                      val metrics: RequestChannel.Metrics) extends KafkaMetricsGroup {
   import RequestChannel._
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
@@ -393,6 +394,7 @@ class RequestChannel(val queueSize: Int,
     onComplete: Option[Send => Unit]
   ): Unit = {
     updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala)
+    observeRequestResponse(request, response)
     sendResponse(new RequestChannel.SendResponse(
       request,
       request.buildResponseSend(response),
@@ -402,6 +404,7 @@ class RequestChannel(val queueSize: Int,
   }
 
   def sendNoOpResponse(request: RequestChannel.Request): Unit = {
+    observeRequestResponse(request, null)
     sendResponse(new network.RequestChannel.NoOpResponse(request))
   }
 
@@ -484,6 +487,14 @@ class RequestChannel(val queueSize: Int,
   }
 
   def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+
+  private def observeRequestResponse(request: RequestChannel.Request, response: AbstractResponse): Unit = {
+    try {
+      observer.observe(request.context, request.body[AbstractRequest], response)
+    } catch {
+      case e: Exception => error(s"Observer failed to observe ${Observer.describeRequestAndResponse(request, response)}", e)
+    }
+  }
 
 }
 

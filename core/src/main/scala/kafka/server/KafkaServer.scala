@@ -108,6 +108,7 @@ class KafkaServer(
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
+  var observer: Observer = null
   var socketServer: SocketServer = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
@@ -297,13 +298,15 @@ class KafkaServer(
           featureCache
         )
 
+        observer = Observer(config)
+
         // Create and start the socket server acceptor threads so that the bound port is known.
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         //
         // Note that we allow the use of KRaft mode controller APIs when forwarding is enabled
         // so that the Envelope request is exposed. This is only used in testing currently.
-        socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+        socketServer = new SocketServer(config, metrics, time, credentialProvider, observer, apiVersionManager)
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
@@ -405,7 +408,7 @@ class KafkaServer(
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
-          autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
+          autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, observer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -413,7 +416,7 @@ class KafkaServer(
 
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
-            autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
+            autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, observer, quotaManagers,
             fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
@@ -711,6 +714,9 @@ class KafkaServer(
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
         CoreUtils.swallow(authorizer.foreach(_.close()), this)
+
+        CoreUtils.swallow(observer.close(config.ObserverShutdownTimeoutMs, TimeUnit.MILLISECONDS), this)
+
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown(), this)
 

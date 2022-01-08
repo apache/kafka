@@ -68,6 +68,7 @@ class ControllerServer(
   var authorizer: Option[Authorizer] = null
   var tokenCache: DelegationTokenCache = null
   var credentialProvider: CredentialProvider = null
+  var observer: Observer = null
   var socketServer: SocketServer = null
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var controller: Controller = null
@@ -132,10 +133,12 @@ class ControllerServer(
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
+      observer = Observer(config)
       socketServer = new SocketServer(config,
         metrics,
         time,
         credentialProvider,
+        observer,
         apiVersionManager)
       socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
 
