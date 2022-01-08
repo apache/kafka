@@ -60,7 +60,7 @@ import scala.util.Random
  *
  * Also see [[org.apache.kafka.clients.admin.KafkaAdminClientTest]] for unit tests of the admin client.
  */
-class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
+class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
   import PlaintextAdminIntegrationTest._
 
   val topic = "topic"
@@ -166,8 +166,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * describe should not auto create topics
-    */
+   * describe should not auto create topics
+   */
   @Test
   def testDescribeNonExistingTopic(): Unit = {
     client = Admin.create(createConfig)
@@ -482,7 +482,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // try a newCount which would be a decrease
       alterResult = client.createPartitions(Map(topic1 ->
         NewPartitions.increaseTo(1)).asJava, option)
-      
+
       var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when newCount is a decrease")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
@@ -689,7 +689,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
           e.getCause.isInstanceOf[NotLeaderOrFollowerException] => false
-        }
+      }
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
   }
 
@@ -720,7 +720,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
       TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.localLog(topicPartition) != None,
-                              "Expected follower to create replica for partition")
+        "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
@@ -942,9 +942,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive timeouts.
-    */
+   * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
+   * since they can be done within the timeout.  New calls should receive timeouts.
+   */
   @Test
   def testDelayedClose(): Unit = {
     client = Admin.create(createConfig)
@@ -959,9 +959,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
-    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
-    */
+   * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
+   * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
+   */
   @Test
   def testForceClose(): Unit = {
     val config = createConfig
@@ -976,9 +976,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
-    * even when the default request timeout is shorter.
-    */
+   * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
+   * even when the default request timeout is shorter.
+   */
   @Test
   def testMinimumRequestTimeouts(): Unit = {
     val config = createConfig
@@ -994,8 +994,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test injecting timeouts for calls that are in flight.
-    */
+   * Test injecting timeouts for calls that are in flight.
+   */
   @Test
   def testCallInFlightTimeouts(): Unit = {
     val config = createConfig
@@ -1004,7 +1004,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-        new CreateTopicsOptions().validateOnly(true)).all()
+      new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().validateOnly(true)).all()
@@ -1098,7 +1098,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get.asScala.filter(group =>
-                group.groupId == testGroupId &&
+              group.groupId == testGroupId &&
                 group.state.get == ConsumerGroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId")
@@ -1106,7 +1106,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           TestUtils.waitUntilTrue(() => {
             val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.STABLE).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(group =>
-                group.groupId == testGroupId &&
+              group.groupId == testGroupId &&
                 group.state.get == ConsumerGroupState.STABLE)
             matching.size == 1
           }, s"Expected to be able to list $testGroupId in state Stable")
@@ -1114,7 +1114,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           TestUtils.waitUntilTrue(() => {
             val options = new ListConsumerGroupsOptions().inStates(Set(ConsumerGroupState.EMPTY).asJava)
             val matching = client.listConsumerGroups(options).all.get.asScala.filter(
-                _.groupId == testGroupId)
+              _.groupId == testGroupId)
             matching.isEmpty
           }, s"Expected to find zero groups")
 
@@ -1210,7 +1210,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // The group should contain no members now.
           testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-              .describedGroups().get(testGroupId).get()
+            .describedGroups().get(testGroupId).get()
           assertTrue(testGroupDescription.members().isEmpty)
 
           // Consumer group deletion on empty group should succeed
@@ -1219,13 +1219,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
           assertNull(deleteResult.deletedGroups().get(testGroupId).get())
-      } finally {
-        consumerThreads.foreach {
-          case consumerThread =>
-            consumerThread.interrupt()
-            consumerThread.join()
+        } finally {
+          consumerThreads.foreach {
+            case consumerThread =>
+              consumerThread.interrupt()
+              consumerThread.join()
+          }
         }
-      }
       } finally {
         consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
       }
@@ -1821,7 +1821,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
       Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
-          AlterConfigOp.OpType.SET),
+        AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
@@ -2020,7 +2020,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
     val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
-                         new NewTopic(longTopicName, 3, 3.toShort))
+      new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2.asJava).values()
     assertTrue(results.containsKey(longTopicName))
     results.get(longTopicName).get()
@@ -2146,12 +2146,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * 1. Assume ROOT logger == TRACE
-    * 2. Change kafka.controller.KafkaController logger to INFO
-    * 3. Unset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
-    * 4. Change ROOT logger to ERROR
-    * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
-    */
+   * 1. Assume ROOT logger == TRACE
+   * 2. Change kafka.controller.KafkaController logger to INFO
+   * 3. Unset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
+   * 4. Change ROOT logger to ERROR
+   * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
+   */
   @Test
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
@@ -2246,8 +2246,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * The AlterConfigs API is deprecated and should not support altering log levels
-    */
+   * The AlterConfigs API is deprecated and should not support altering log levels
+   */
   @nowarn("cat=deprecation")
   @Test
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
@@ -2298,7 +2298,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
 }
 
-object PlaintextAdminIntegrationTest {
+object PlaintextAdminIntegrationTest2 {
 
   @nowarn("cat=deprecation")
   def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
