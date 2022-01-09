@@ -138,11 +138,15 @@ final class LeaderElectionCommandTest7(cluster: ClusterInstance) {
 
     TestUtils.assertLeader(client, topicPartition, broker2)
 
-    System.err.println("!!! shutdown 3")
+    System.err.println("shutdown 3")
     cluster.shutdownBroker(broker3)
+    System.err.println("wait")
     TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+    System.err.println("shutdown 2")
     cluster.shutdownBroker(broker2)
+    System.err.println("wait")
     TestUtils.assertNoLeader(client, topicPartition)
+    System.err.println("start")
     cluster.startBroker(broker3)
     TestUtils.waitForOnlineBroker(client, broker3)
 

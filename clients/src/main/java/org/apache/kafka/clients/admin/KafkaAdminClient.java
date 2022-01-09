@@ -1121,6 +1121,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 Node node = entry.getKey();
                 if (callsInFlight.containsKey(node.idString())) {
+                    System.err.println("waiting:" + node);
                     log.trace("Still waiting for other calls to finish on node {}.", node);
                     nodeReadyDeadlines.remove(node);
                     continue;
@@ -1132,6 +1133,7 @@ public class KafkaAdminClient extends AdminClient {
                             log.info("Disconnecting from {} and revoking {} node assignment(s) " +
                                 "because the node is taking too long to become ready.",
                                 node.idString(), calls.size());
+                            System.err.println("disconnect:" + node.idString());
                             transitionToPendingAndClearList(calls);
                             client.disconnect(node.idString());
                             nodeReadyDeadlines.remove(node);
@@ -1145,6 +1147,7 @@ public class KafkaAdminClient extends AdminClient {
                     long nodeTimeout = client.pollDelayMs(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
+                    System.err.println("not ready:" + node + nodeTimeout);
                     continue;
                 }
                 // Subtract the time we spent waiting for the node to become ready from
@@ -1172,6 +1175,7 @@ public class KafkaAdminClient extends AdminClient {
                         requestBuilder, now, true, timeoutMs, null);
                     log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
                         requestBuilder, node, clientRequest.correlationId(), timeoutMs);
+                    System.err.println("sending " + requestBuilder + ", " + node + ", " + timeoutMs);
                     client.send(clientRequest, now);
                     callsInFlight.put(node.idString(), call);
                     correlationIdToCalls.put(clientRequest.correlationId(), call);
@@ -1197,6 +1201,7 @@ public class KafkaAdminClient extends AdminClient {
                 String nodeId = entry.getKey();
                 if (processor.callHasExpired(call)) {
                     log.info("Disconnecting from {} due to timeout while awaiting {}", nodeId, call);
+                    System.err.println("disconnecting:" + nodeId + ", " + call);
                     client.disconnect(nodeId);
                     numTimedOut++;
                     // We don't remove anything from the callsInFlight data structure. Because the connection

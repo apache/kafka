@@ -117,7 +117,8 @@ public class MetadataRequest extends AbstractRequest {
                             " does not support non-zero topic IDs.");
                 });
             }
-            return new MetadataRequest(data, version);
+            MetadataRequest mr = new MetadataRequest(data, version);
+            return mr;
         }
 
         @Override

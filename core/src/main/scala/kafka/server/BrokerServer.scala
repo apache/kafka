@@ -456,8 +456,10 @@ class BrokerServer(
         } catch {
           case _: TimeoutException =>
             error("Timed out waiting for the controller to approve controlled shutdown")
+            System.err.println("Timed out waiting for the controller to approve controlled shutdown")
           case e: Throwable =>
             error("Got unexpected exception waiting for controlled shutdown future", e)
+            System.err.println("controller shutdown:" + e)
         }
       }
       lifecycleManager.beginShutdown()
@@ -534,6 +536,7 @@ class BrokerServer(
     } catch {
       case e: Throwable =>
         fatal("Fatal error during broker shutdown.", e)
+        System.err.println("Fatal error during broker shutdown." + e)
         throw e
     } finally {
       maybeChangeStatus(SHUTTING_DOWN, SHUTDOWN)
