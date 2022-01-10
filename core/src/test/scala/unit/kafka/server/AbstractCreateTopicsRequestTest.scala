@@ -91,14 +91,6 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     topic
   }
 
-  def createTopicsSocketServer: SocketServer = {
-    if (isKRaftTest()) {
-      anySocketServer
-    } else {
-      controllerSocketServer
-    }
-  }
-
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
     val response = sendCreateTopicRequest(request)
 
