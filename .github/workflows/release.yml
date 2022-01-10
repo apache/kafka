@@ -1,0 +1,32 @@
+name: Release
+
+# Triggered when a draft released is "published" (not a draft anymore)
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Setup gradle.properties
+        shell: bash
+        env:
+          USERNAME: ${{ github.actor }}
+          PASSWORD: ${{ secrets.CONDUKTOR_BOT_TOKEN }}
+        run: |
+            echo "mavenUrl=https://maven.pkg.github.com/conduktor/kafka" >> ./gradle.properties
+            echo "group=io.conduktor.kafka" >> ./gradle.properties
+            echo "mavenUsername=$USERNAME" >> ./gradle.properties
+            echo "mavenPassword=$PASSWORD" >> ./gradle.properties
+            echo "version=$RELEASE_VERSION" >> ./gradle.properties
+            echo "skipSigning=true" >> ./gradle.properties
+      - run: ./gradlew clients:publish
