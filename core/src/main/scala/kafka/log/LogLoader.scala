@@ -333,7 +333,7 @@ object LogLoader extends Logging {
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
           case _: NoSuchFileException =>
-            if (segment.baseOffset < params.recoveryPointCheckpoint)
+            if (params.hadCleanShutdown || segment.baseOffset < params.recoveryPointCheckpoint)
               error(s"${params.logIdentifier}Could not find offset index file corresponding to log file" +
                 s" ${segment.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
             recoverSegment(segment, params)

@@ -328,7 +328,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void flush(boolean inclusive) {
+    public void flush(boolean forceFlushActiveSegment) {
         lastFlushedOffset = endOffset().offset;
     }
 

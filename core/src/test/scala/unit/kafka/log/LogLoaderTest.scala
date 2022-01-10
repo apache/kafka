@@ -1695,12 +1695,13 @@ class LogLoaderTest {
     log.flush(false)
     assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
     var lastOffset = log.logEndOffset
+    log.closeHandlers()
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
     assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
     assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
     assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
-    log.activeSegment.sanityCheck(true) // this should not throw
+    log.activeSegment.sanityCheck(true) // this should not throw because the LogLoader created the empty active log index file during recovery
 
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
@@ -1708,7 +1709,7 @@ class LogLoaderTest {
     log.roll()
     assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
     log.flush(true)
-    log.activeSegment.sanityCheck(true) // this should not throw
+    log.activeSegment.sanityCheck(true) // this should not throw because we flushed the active segment which created the empty log index file
     lastOffset = log.logEndOffset
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
