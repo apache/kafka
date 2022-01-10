@@ -3925,7 +3925,9 @@ public class KafkaAdminClientTest {
                 }
                 LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
 
-                return leaveGroupRequest.members().stream().allMatch(member -> member.reason().equals("testing remove members reason"));
+                return leaveGroupRequest.members().stream().allMatch(
+                    member -> member.reason().equals("member was removed by an admin: testing remove members reason")
+                );
             }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
                     Arrays.asList(
                         new MemberResponse().setGroupInstanceId("instance-1"),
