@@ -572,8 +572,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def shutdown(): Unit = {
-    initiateShutdown()
-    throttledChannelReaper.awaitShutdown()
+    throttledChannelReaper.shutdown()
+//    initiateShutdown()
+//    throttledChannelReaper.awaitShutdown()
   }
 
   class DefaultQuotaCallback extends ClientQuotaCallback {
