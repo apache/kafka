@@ -184,14 +184,15 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
          *                  returned in this epoch.
          */
         int next(int epoch) {
-            if (brokers.size() == 0) return -1;
+            final int brokersSize = brokers.size();
+            if (brokersSize == 0) return -1;
             if (this.epoch != epoch) {
                 this.epoch = epoch;
                 this.index = 0;
                 this.offset = (offset + 1) % brokers.size();
             }
-            if (index >= brokers.size()) return -1;
-            int broker = brokers.get((index + offset) % brokers.size());
+            if (index >= brokersSize) return -1;
+            int broker = brokers.get((index + offset) % brokersSize);
             index++;
             return broker;
         }
