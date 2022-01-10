@@ -17,10 +17,13 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
@@ -56,11 +59,24 @@ sealed trait MetadataSupport {
    */
   def ensureConsistentWith(config: KafkaConfig): Unit
 
-  def maybeForward(request: RequestChannel.Request,
-                   handler: RequestChannel.Request => Unit,
-                   responseCallback: Option[AbstractResponse] => Unit): Unit
+  /**
+   * Get the dynamic configuration associated with a given resource.
+   */
+  def getResourceConfig(resource: ConfigResource): Properties
 
-  def controllerId: Option[Int]
+  def canForward(): Boolean
+
+  def maybeForward(
+    request: RequestChannel.Request,
+    handler: RequestChannel.Request => Unit,
+    responseCallback: Option[AbstractResponse] => Unit
+  ): Unit = {
+    if (!request.isForwarded && canForward()) {
+      forwardingManager.get.forwardRequest(request, responseCallback)
+    } else {
+      handler(request)
+    }
+  }
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -79,16 +95,15 @@ case class ZkSupport(adminManager: ZkAdminManager,
     }
   }
 
-  override def maybeForward(request: RequestChannel.Request,
-                            handler: RequestChannel.Request => Unit,
-                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
-    forwardingManager match {
-      case Some(mgr) if !request.isForwarded && !controller.isActive => mgr.forwardRequest(request, responseCallback)
-      case _ => handler(request)
+  override def getResourceConfig(resource: ConfigResource): Properties = {
+    resource.`type`() match {
+      case ConfigResource.Type.BROKER => adminZkClient.fetchEntityConfig(ConfigType.Broker, resource.name())
+      case ConfigResource.Type.TOPIC => adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name())
+      case _ => throw new RuntimeException(s"Unsupported type for resourceConfig: ${resource.`type`()}")
     }
   }
 
-  override def controllerId: Option[Int] =  metadataCache.getControllerId
+  override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCache)
@@ -103,19 +118,8 @@ case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCa
     }
   }
 
-  override def maybeForward(request: RequestChannel.Request,
-                            handler: RequestChannel.Request => Unit,
-                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
-    if (!request.isForwarded) {
-      fwdMgr.forwardRequest(request, responseCallback)
-    } else {
-      handler(request) // will reject
-    }
-  }
+  override def getResourceConfig(resource: ConfigResource): Properties =
+      metadataCache.currentImage().configs().configProperties(resource)
 
-  /**
-   * Get the broker ID to return from a MetadataResponse. This will be a broker ID, as
-   * described in KRaftMetadataCache#getControllerId. See that function for more details.
-   */
-  override def controllerId: Option[Int] = metadataCache.getControllerId
+  override def canForward(): Boolean = true
 }

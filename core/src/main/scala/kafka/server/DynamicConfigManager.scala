@@ -18,12 +18,18 @@
 package kafka.server
 
 import java.nio.charset.StandardCharsets
+import java.util.Properties
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.{Json, Logging}
 import kafka.utils.json.JsonObject
 import kafka.zk.{AdminZkClient, ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient}
+import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.Time
 
@@ -180,5 +186,54 @@ class DynamicConfigManager(private val zkClient: KafkaZkClient,
 
   def shutdown(): Unit = {
     configChangeListener.close()
+  }
+}
+
+object DynamicConfigManager {
+  def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
+    configProps.asScala.map {
+      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
+  def prepareIncrementalConfigs(
+    alterConfigOps: Seq[AlterConfigOp],
+    configProps: Properties,
+    configKeys: Map[String, ConfigKey]
+  ): Unit = {
+    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
+      val configKey = configKeys(configName)
+      if (configKey == null)
+        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
+      configKey.`type` == ConfigDef.Type.LIST
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val configPropName = alterConfigOp.configEntry.name
+      alterConfigOp.opType() match {
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
+        case OpType.APPEND => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+        case OpType.SUBTRACT => {
+          if (!listType(alterConfigOp.configEntry.name, configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
+          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
+            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+            .getOrElse("")
+            .split(",").toList
+          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
+        }
+      }
+    }
   }
 }
