@@ -1348,6 +1348,9 @@ public class InternalTopologyBuilder {
     }
 
     String getPrefix() {
+        if (topologyConfigs == null) {
+            return applicationId;
+        }
         return StreamsConfig.InternalConfig.getString(
             topologyConfigs.applicationConfigs.originals(),
             StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,

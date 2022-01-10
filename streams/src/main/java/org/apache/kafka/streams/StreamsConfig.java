@@ -983,7 +983,7 @@ public class StreamsConfig extends AbstractConfig {
             if (value instanceof String) {
                 return (String) value;
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
                 return defaultValue;
             }
         }
