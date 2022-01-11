@@ -1147,7 +1147,7 @@ public class KafkaAdminClient extends AdminClient {
                     long nodeTimeout = client.pollDelayMs(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
-                    System.err.println("not ready:" + node);
+                    System.err.println("not ready:" + node.idString());
                     continue;
                 }
                 // Subtract the time we spent waiting for the node to become ready from
@@ -1175,7 +1175,7 @@ public class KafkaAdminClient extends AdminClient {
                         requestBuilder, now, true, timeoutMs, null);
                     log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
                         requestBuilder, node, clientRequest.correlationId(), timeoutMs);
-                    System.err.println("sending " + requestBuilder + ", " + node + ", " + timeoutMs);
+                    System.err.println("sending " + requestBuilder + ", " + node);
                     client.send(clientRequest, now);
                     callsInFlight.put(node.idString(), call);
                     correlationIdToCalls.put(clientRequest.correlationId(), call);

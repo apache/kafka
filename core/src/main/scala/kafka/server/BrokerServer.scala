@@ -158,7 +158,7 @@ class BrokerServer(
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
-      System.err.println("status:" + status)
+//      System.err.println("status:" + status)
       if (status != from) return false
       info(s"Transition from $status to $to")
 

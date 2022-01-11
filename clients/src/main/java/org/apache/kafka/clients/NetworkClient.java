@@ -687,6 +687,7 @@ public class NetworkClient implements KafkaClient {
                 if (currInflight == 0) {
                     // if we find an established connection with no in-flight requests we can stop right away
                     log.trace("Found least loaded node {} connected with no in-flight requests", node);
+                    System.err.println("found ll no inflight:" + node.idString());
                     return node;
                 } else if (currInflight < inflight) {
                     // otherwise if this is the best we have found so far, record that
@@ -704,6 +705,7 @@ public class NetworkClient implements KafkaClient {
             } else {
                 log.trace("Removing node {} from least loaded node selection since it is neither ready " +
                         "for sending or connecting", node);
+                System.err.println("re node from ll:" + node.idString());
             }
         }
 
@@ -711,15 +713,19 @@ public class NetworkClient implements KafkaClient {
         // which are being established before connecting to new nodes.
         if (foundReady != null) {
             log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
+            System.err.println("found ll:" + foundReady.idString() + "," + inflight);
             return foundReady;
         } else if (foundConnecting != null) {
             log.trace("Found least loaded connecting node {}", foundConnecting);
+            System.err.println("found ll:" + foundConnecting.idString());
             return foundConnecting;
         } else if (foundCanConnect != null) {
             log.trace("Found least loaded node {} with no active connection", foundCanConnect);
+            System.err.println("found ll no:" + foundCanConnect.idString());
             return foundCanConnect;
         } else {
             log.trace("Least loaded node selection failed to find an available node");
+            System.err.println("found null");
             return null;
         }
     }
