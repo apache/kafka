@@ -3540,7 +3540,6 @@ class ReplicaManagerTest {
   def testReplicaAlterLogDirsWithAndWithoutIds(usesTopicIds: Boolean): Unit = {
     val version = if (usesTopicIds) LeaderAndIsrRequestData.HIGHEST_SUPPORTED_VERSION else 4.toShort
     val topicId = if (usesTopicIds) this.topicId else Uuid.ZERO_UUID
-    val topicIdOpt = if (usesTopicIds) Some(topicId) else None
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
       val topicPartition = new TopicPartition(topic, 0)
@@ -3568,8 +3567,6 @@ class ReplicaManagerTest {
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == partition.log.get.dir.getParentFile).head
       assertEquals(0, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
       replicaManager.alterReplicaLogDirs(Map(topicPartition -> newReplicaFolder.getAbsolutePath))
-
-      assertFetcherHasTopicId(replicaManager.replicaAlterLogDirsManager, partition.topicPartition, topicIdOpt)
 
       // Make sure the future log is created.
       replicaManager.futureLocalLogOrException(topicPartition)
