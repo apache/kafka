@@ -1529,11 +1529,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def flush(offset: Long, includingOffset: Boolean): Unit = {
     val flushOffset = if (includingOffset) offset + 1  else offset
     val newRecoveryPoint = offset
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset ("
-      + { if (includingOffset) "inclusive" else "exclusive" }
-      + s") and recovery point $newRecoveryPoint") {
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset (" +
+      { if (includingOffset) "inclusive" else "exclusive" } +
+      s") and recovery point $newRecoveryPoint") {
       if (flushOffset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $flushOffset with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+        debug(s"Flushing log up to offset (" +
+          { if (includingOffset) "inclusive" else "exclusive" } +
+          s") with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: ${localLog.unflushedMessages}")
         localLog.flush(flushOffset)
         lock synchronized {
