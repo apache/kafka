@@ -324,20 +324,21 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     @Test
     public void shouldDistributeTasksOnLeastLoadedClientsWhenThereAreNoEnoughUniqueTagDimensions() {
         final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(UUID_2, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0, TASK_1_1, TASK_1_2)),
-
-            mkEntry(UUID_3, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)))),
-            mkEntry(UUID_4, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1))))
+            mkEntry(UUID_1, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_2)), TASK_0_1)),
+            mkEntry(UUID_3, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_2)),
+            mkEntry(UUID_4, createClientStateWithCapacity(3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1)), TASK_1_0))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
-        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG, ZONE_TAG);
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertEquals(3, clientStates.get(UUID_3).standbyTaskCount());
-        assertEquals(3, clientStates.get(UUID_4).standbyTaskCount());
+        assertEquals(1, clientStates.get(UUID_1).standbyTaskCount());
+        assertEquals(1, clientStates.get(UUID_2).standbyTaskCount());
+        assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
+        assertEquals(1, clientStates.get(UUID_4).standbyTaskCount());
     }
 
     @Test
