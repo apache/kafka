@@ -38,6 +38,7 @@ buildscript {
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath libs.jaxbApi
   }
 }
 
