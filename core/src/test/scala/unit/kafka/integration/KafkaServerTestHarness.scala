@@ -128,6 +128,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   def recreateBrokers(reconfigure: Boolean = false, startup: Boolean = false): Unit = {
+    // The test must be allowed to fail and be torn down if an exception is raised here.
     if (reconfigure) {
       instanceConfigs = null
     }
@@ -136,6 +137,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
     TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
     _brokers.clear()
+    Arrays.fill(alive, false)
 
     createBrokers(startup)
   }
@@ -249,7 +251,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   private def createBrokers(startup: Boolean): Unit = {
-    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
+    // Add each broker to `brokers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs) {
       val broker = createBrokerFromConfig(config)

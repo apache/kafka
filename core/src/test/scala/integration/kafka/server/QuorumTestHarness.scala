@@ -207,7 +207,11 @@ abstract class QuorumTestHarness extends Logging {
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()
 
-  def shutdownKRaftController(): Unit = asKRaft().shutdown()
+  def shutdownKRaftController(): Unit = {
+    // Note that the RaftManager instance is left running; it will be shut down in tearDown()
+    val kRaftQuorumImplementation = asKRaft()
+    CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
+  }
 
   private def formatDirectories(directories: immutable.Seq[String],
                                 metaProperties: MetaProperties): Unit = {
