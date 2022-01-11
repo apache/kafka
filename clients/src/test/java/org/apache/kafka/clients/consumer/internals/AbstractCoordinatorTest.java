@@ -517,7 +517,7 @@ public class AbstractCoordinatorTest {
                 () -> coordinator.joinGroupIfNeeded(mockTime.timer(100L)));
 
         // next join group request should contain exception message
-        expectJoinGroup(memberId, "rebalance failed due to '" + e.getMessage() + "' (" + e.getClass().getSimpleName() + ")", generation, memberId);
+        expectJoinGroup(memberId, String.format("rebalance failed due to '%s' (%s)", e.getMessage(), e.getClass().getSimpleName()), generation, memberId);
         expectSyncGroup(generation, memberId);
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());

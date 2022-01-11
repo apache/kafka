@@ -1690,7 +1690,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         joinGroupRequest.data.protocolType,
         protocols,
         sendResponseCallback,
-        Option(joinGroupRequest.data.reason()),
+        Option(joinGroupRequest.data.reason),
         requestLocal)
     }
   }
