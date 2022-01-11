@@ -377,6 +377,11 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
+                        public Position getPosition() {
+                            throw new UnsupportedOperationException("Position handling not implemented");
+                        }
+
+                        @Override
                         public byte[] get(final Bytes key) {
                             return map.get(key);
                         }

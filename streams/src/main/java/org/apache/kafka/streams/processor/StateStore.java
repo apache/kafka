@@ -21,8 +21,10 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 
 /**
@@ -141,15 +143,22 @@ public interface StateStore {
      * <p>
      * @param query The query to execute
      * @param positionBound The position the store must be at or past
-     * @param collectExecutionInfo Whether the store should collect detailed execution info for the query
+     * @param config Per query configuration parameters, such as whether the store should collect detailed execution
+     * info for the query
      * @param <R> The result type
      */
     @Evolving
     default <R> QueryResult<R> query(
         Query<R> query,
         PositionBound positionBound,
-        boolean collectExecutionInfo) {
+        QueryConfig config) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
     }
+
+    /**
+     * Returns the position the state store is at
+     * @return
+     */
+    Position getPosition();
 }

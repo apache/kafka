@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -45,7 +44,6 @@ class ChangeLoggingWindowBytesStore
 
     private final boolean retainDuplicates;
     InternalProcessorContext context;
-    Position position;
     private int seqnum = 0;
     private final ChangeLoggingKeySerializer keySerializer;
 
@@ -55,7 +53,6 @@ class ChangeLoggingWindowBytesStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.keySerializer = requireNonNull(keySerializer, "keySerializer");
-        this.position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -137,13 +134,12 @@ class ChangeLoggingWindowBytesStore
                     final byte[] value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
-        StoreQueryUtils.updatePosition(position, context);
 
         log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     void log(final Bytes key, final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp(), position);
+        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

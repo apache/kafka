@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -330,12 +331,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+        final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
-            collectExecutionInfo,
+            config,
             this,
             position,
             context
@@ -741,7 +742,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         return userSpecifiedOptions;
     }
 
-    Position getPosition() {
+    @Override
+    public Position getPosition() {
         return position;
     }
 }

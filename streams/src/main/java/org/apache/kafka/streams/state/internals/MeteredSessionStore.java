@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
@@ -76,7 +77,7 @@ public class MeteredSessionStore<K, V>
             mkMap(
                     mkEntry(
                             WindowRangeQuery.class,
-                            (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
+                            (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                     )
             );
 
@@ -405,14 +406,14 @@ public class MeteredSessionStore<K, V>
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
         if (handler == null) {
-            result = wrapped().query(query, positionBound, collectExecutionInfo);
-            if (collectExecutionInfo) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
@@ -420,10 +421,10 @@ public class MeteredSessionStore<K, V>
             result = (QueryResult<R>) handler.apply(
                 query,
                 positionBound,
-                collectExecutionInfo,
+                config,
                 this
             );
-            if (collectExecutionInfo) {
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " with serdes "
                         + serdes + " in " + (time.nanoseconds() - start) + "ns");
@@ -435,7 +436,7 @@ public class MeteredSessionStore<K, V>
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                              final PositionBound positionBound,
-                                             final boolean collectExecutionInfo) {
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
         if (typedQuery.getKey().isPresent()) {
@@ -444,7 +445,7 @@ public class MeteredSessionStore<K, V>
                     Bytes.wrap(serdes.rawKey(typedQuery.getKey().get()))
                 );
             final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+                wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredWindowedKeyValueIterator<K, V> typedResult =
                     new MeteredWindowedKeyValueIterator<>(
