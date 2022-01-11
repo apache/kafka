@@ -28,6 +28,7 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+    classpath libs.jaxbApi
   }
 }
 
@@ -104,7 +105,7 @@ ext {
 
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
-  if (JavaVersion.current() == JavaVersion.VERSION_16)  
+  if (JavaVersion.current() == JavaVersion.VERSION_16)
     defaultJvmArgs.add("--illegal-access=permit")
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
