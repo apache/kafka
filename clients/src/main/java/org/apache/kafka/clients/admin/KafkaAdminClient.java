@@ -306,7 +306,7 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The base reason for a LeaveGroupRequest
      */
-    private static final String LEAVE_GROUP_REASON = "member was removed by an admin";
+    static final String LEAVE_GROUP_REASON = "member was removed by an admin";
 
     /**
      * Thread name prefix for admin client network thread
