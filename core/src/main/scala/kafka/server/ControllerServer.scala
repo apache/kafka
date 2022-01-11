@@ -160,7 +160,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      controller = new QuorumController.Builder(config.nodeId).
+      controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
@@ -173,6 +173,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
+        setConfigurationValidator(new ControllerConfigurationValidator()).
         build()
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))

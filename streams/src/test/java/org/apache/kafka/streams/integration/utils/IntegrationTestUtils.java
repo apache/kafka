@@ -32,6 +32,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.utils.Time;
@@ -50,6 +51,10 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -88,6 +93,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -103,6 +109,99 @@ public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 60 * 1000L;
     private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
+
+    /**
+     * Repeatedly runs the query until the response is valid and then return the response.
+     * <p>
+     * Validity in this case means that the response contains all the desired partitions or that
+     * it's a global response.
+     * <p>
+     * Once position bounding is generally supported, we should migrate tests to wait on the
+     * expected response position.
+     */
+    public static <R> StateQueryResult<R> iqv2WaitForPartitions(
+        final KafkaStreams kafkaStreams,
+        final StateQueryRequest<R> request,
+        final Set<Integer> partitions) {
+
+        final long start = System.currentTimeMillis();
+        final long deadline = start + DEFAULT_TIMEOUT;
+
+        do {
+            if (Thread.currentThread().isInterrupted()) {
+                fail("Test was interrupted.");
+            }
+            final StateQueryResult<R> result = kafkaStreams.query(request);
+            if (result.getPartitionResults().keySet().containsAll(partitions)) {
+                return result;
+            } else {
+                sleep(100L);
+            }
+        } while (System.currentTimeMillis() < deadline);
+
+        throw new TimeoutException("The query never returned the desired partitions");
+    }
+
+    /**
+     * Repeatedly runs the query until the response is valid and then return the response.
+     * <p>
+     * Validity in this case means that the response position is up to the specified bound.
+     * <p>
+     * Once position bounding is generally supported, we should migrate tests to wait on the
+     * expected response position.
+     */
+    public static <R> StateQueryResult<R> iqv2WaitForResult(
+        final KafkaStreams kafkaStreams,
+        final StateQueryRequest<R> request) {
+
+        final long start = System.currentTimeMillis();
+        final long deadline = start + DEFAULT_TIMEOUT;
+
+        StateQueryResult<R> result;
+        do {
+            if (Thread.currentThread().isInterrupted()) {
+                fail("Test was interrupted.");
+            }
+
+            result = kafkaStreams.query(request);
+            final LinkedList<QueryResult<R>> allResults = getAllResults(result);
+
+            if (allResults.isEmpty()) {
+                sleep(100L);
+            } else {
+                final boolean needToWait = allResults
+                    .stream()
+                    .anyMatch(IntegrationTestUtils::needToWait);
+                if (needToWait) {
+                    sleep(100L);
+                } else {
+                    return result;
+                }
+            }
+        } while (System.currentTimeMillis() < deadline);
+
+        throw new TimeoutException(
+            "The query never returned within the bound. Last result: "
+            + result
+        );
+    }
+
+    private static <R> LinkedList<QueryResult<R>> getAllResults(
+        final StateQueryResult<R> result) {
+        final LinkedList<QueryResult<R>> allResults =
+            new LinkedList<>(result.getPartitionResults().values());
+        if (result.getGlobalResult() != null) {
+            allResults.add(result.getGlobalResult());
+        }
+        return allResults;
+    }
+
+    private static <R> boolean needToWait(final QueryResult<R> queryResult) {
+        return queryResult.isFailure()
+            && (
+            FailureReason.NOT_UP_TO_BOUND.equals(queryResult.getFailureReason())
+                || FailureReason.NOT_PRESENT.equals(queryResult.getFailureReason()));
+    }
 
     /*
      * Records state transition for StreamThread

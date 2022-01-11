@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -54,9 +55,11 @@ public class CachingKeyValueStore
     private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private Position position;
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
+        position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -80,9 +83,12 @@ public class CachingKeyValueStore
         streamThread = Thread.currentThread();
     }
 
+    Position getPosition() {
+        return position;
+    }
+
     private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
-
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
@@ -101,10 +107,10 @@ public class CachingKeyValueStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(entry.key(), entry.newValue());
-
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
+                wrapped().put(entry.key(), entry.newValue());
+
                 try {
                     flushListener.apply(
                         new Record<>(
@@ -158,6 +164,8 @@ public class CachingKeyValueStore
                 context.timestamp(),
                 context.partition(),
                 context.topic()));
+
+        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override

@@ -45,6 +45,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
@@ -58,6 +60,7 @@ import static org.junit.Assert.assertTrue;
 
 public class GlobalStateStoreProviderTest {
     private final Map<String, StateStore> stores = new HashMap<>();
+    private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
 
     @Before
     public void before() {
@@ -110,6 +113,7 @@ public class GlobalStateStoreProviderTest {
             );
         expect(mockContext.taskId()).andStubReturn(new TaskId(0, 0));
         expect(mockContext.recordCollector()).andStubReturn(null);
+        expect(mockContext.appConfigs()).andStubReturn(CONFIGS);
         expectSerdes(mockContext);
         replay(mockContext);
         for (final StateStore store : stores.values()) {

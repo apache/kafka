@@ -1184,6 +1184,13 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldReturnUnknownTimestampIfInvalidMetadata() {
+        task = createStatelessTask(createConfig("100"));
+        final String invalidBase64String = "{}";
+        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(invalidBase64String));
+    }
+
+    @Test
     public void shouldBeProcessableIfAllPartitionsBuffered() {
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
