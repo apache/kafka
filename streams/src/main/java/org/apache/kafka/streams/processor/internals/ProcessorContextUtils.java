@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
+import java.util.Map;
 
 /**
  * This class bridges the gap for components that _should_ be compatible with
@@ -54,15 +57,29 @@ public final class ProcessorContextUtils {
     }
 
     public static String changelogFor(final ProcessorContext context, final String storeName) {
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().topologyName());
+            : ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
     public static String changelogFor(final StateStoreContext context, final String storeName) {
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
-            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().topologyName());
+            : ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
+    }
+
+    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+        if (configs == null) {
+            return applicationId;
+        } else {
+            return StreamsConfig.InternalConfig.getString(
+                configs,
+                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                applicationId
+            );
+        }
     }
 
     public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {

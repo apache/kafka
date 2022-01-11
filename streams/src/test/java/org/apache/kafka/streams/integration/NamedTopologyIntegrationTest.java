@@ -151,6 +151,7 @@ public class NamedTopologyIntegrationTest {
         asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
     private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
         asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
+    private final static String TOPIC_PREFIX = "unique_topic_prefix";
 
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
@@ -182,15 +183,16 @@ public class NamedTopologyIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10 * 1000);
+        streamsConfiguration.put(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, TOPIC_PREFIX);
         return streamsConfiguration;
     }
 
     @Before
     public void setup() throws Exception {
         appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testName);
-        changelog1 = appId + "-" + TOPOLOGY_1 + "-store-changelog";
-        changelog2 = appId + "-" + TOPOLOGY_2 + "-store-changelog";
-        changelog3 = appId + "-" + TOPOLOGY_3 + "-store-changelog";
+        changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
+        changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
+        changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
         props = configProps(appId);
 
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
@@ -223,8 +225,9 @@ public class NamedTopologyIntegrationTest {
             streams2.close(Duration.ofSeconds(30));
         }
 
-        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog")).forEach(t -> {
+        CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
+                assertThat("topic was not decorated", t.contains(TOPIC_PREFIX));
                 CLUSTER.deleteTopicsAndWait(t);
             } catch (final InterruptedException e) {
                 e.printStackTrace();
@@ -265,11 +268,11 @@ public class NamedTopologyIntegrationTest {
         streams.start(asList(fkjBuilder.build(), countBuilder.build()));
         waitForApplicationState(singletonList(streams), State.RUNNING, Duration.ofSeconds(60));
 
-        final String countTopicPrefix = appId + "-" + countTopologyName;
-        final String fkjTopicPrefix = appId + "-" + fkjTopologyName;
+        final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
+        final String fkjTopicPrefix = TOPIC_PREFIX + "-" + fkjTopologyName;
         final  Set<String> internalTopics = CLUSTER
             .getAllTopicsInCluster().stream()
-            .filter(t -> t.contains(appId))
+            .filter(t -> t.contains(TOPIC_PREFIX))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
             .collect(Collectors.toSet());
         assertThat(internalTopics, is(mkSet(
@@ -296,8 +299,8 @@ public class NamedTopologyIntegrationTest {
         assertThat(results, equalTo(COUNT_OUTPUT_DATA));
 
         final Set<String> allTopics = CLUSTER.getAllTopicsInCluster();
-        assertThat(allTopics.contains(appId + "-" + "topology-1" + "-store-changelog"), is(true));
-        assertThat(allTopics.contains(appId + "-" + "topology-1" + "-store-repartition"), is(true));
+        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-changelog"), is(true));
+        assertThat(allTopics.contains(TOPIC_PREFIX + "-" + "topology-1" + "-store-repartition"), is(true));
     }
 
     @Test

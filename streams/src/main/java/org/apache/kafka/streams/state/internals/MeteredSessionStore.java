@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -136,10 +137,11 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
@@ -148,13 +150,26 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
+    }
+
+    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+        if (configs == null) {
+            return applicationId;
+        } else {
+            return StreamsConfig.InternalConfig.getString(
+                configs,
+                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                applicationId
+            );
+        }
     }
 
     @SuppressWarnings("unchecked")

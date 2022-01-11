@@ -1057,7 +1057,7 @@ public class InternalTopologyBuilder {
                     // remember the changelog topic if this state store is change-logging enabled
                     if (stateStoreFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
                         final String changelogTopic =
-                            ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName, topologyName);
+                            ProcessorStateManager.storeChangelogTopic(getPrefix(), stateStoreName, topologyName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
@@ -1341,11 +1341,23 @@ public class InternalTopologyBuilder {
                                             + "setApplicationId first");
         }
         if (hasNamedTopology()) {
-            return applicationId + "-" + topologyName + "-" + topic;
+            return getPrefix() + "-" + topologyName + "-" + topic;
         } else {
-            return applicationId + "-" + topic;
+            return getPrefix() + "-" + topic;
         }
     }
+
+    String getPrefix() {
+        if (topologyConfigs == null) {
+            return applicationId;
+        }
+        return StreamsConfig.InternalConfig.getString(
+            topologyConfigs.applicationConfigs.originals(),
+            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+            applicationId
+        );
+    }
+
 
     void initializeSubscription() {
         if (usesPatternSubscription()) {
