@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 public interface StateUpdater {
 
@@ -30,13 +32,6 @@ public interface StateUpdater {
      */
     void add(final Task task);
 
-    /**
-     * Removes a task (active and standby) from the state updater.
-     *
-     * A task is removed from the state updater irrespective of whether its state is up-to-date or not.
-     *
-     * @param task tasks to remove
-     */
     void remove(final Task task);
 
     /**
@@ -49,13 +44,11 @@ public interface StateUpdater {
     List<StreamTask> getRestoredActiveTasks(final Duration timeout);
 
     /**
-     * Gets a list of tasks that failed during restoration.
+     * Gets a list of exceptions thrown during restoration.
      *
-     * The exception that caused the failure can be retrieved by {@link Task#getException()}
-     *
-     * @return failed tasks
+     * @return exceptions
      */
-    List<Task> getFailedTasks();
+    List<RuntimeException> getExceptions();
 
     /**
      * Shuts down the state updater.

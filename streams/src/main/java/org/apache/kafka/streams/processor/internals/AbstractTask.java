@@ -126,7 +126,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final Task.State state() {
+    public final synchronized Task.State state() {
         return state;
     }
 
@@ -202,7 +202,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public Optional<RuntimeException> getException() {
-        return Optional.empty();
+    public ProcessorStateManager stateManager() {
+        return stateMgr;
     }
 }

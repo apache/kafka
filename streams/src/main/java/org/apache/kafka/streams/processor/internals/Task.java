@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.swing.text.html.HTMLDocument.RunElement;
 
 public interface Task {
 
@@ -248,9 +249,10 @@ public interface Task {
     Optional<Long> timeCurrentIdlingStarted();
 
     /**
-     * Gets the exception that caused the failure of the task.
+     * Gets the state manager of this task.
      *
-     * @return exception that caused the failure of the task
+     * @return state manager of this task
      */
-    Optional<RuntimeException> getException();
+    ProcessorStateManager stateManager();
+
 }
