@@ -36,6 +36,7 @@ class DeleteSegmentsByRetentionTimeTest extends TieredStorageTestHarness {
       .updateTopicConfig(topicA, Map(TopicConfig.RETENTION_MS_CONFIG -> 1.toString), Seq.empty)
       .expectDeletionInRemoteStorage(broker0, topicA, p0, atMostDeleteSegmentCallCount = 3)
       .waitForRemoteLogSegmentDeletion(topicA)
+      .expectLeaderEpochCheckpoint(broker0, topicA, p0, beginEpoch = 0, startOffset = 3)
       .expectFetchFromTieredStorage(broker0, topicA, p0, remoteFetchRequestCount = 0)
       .consume(topicA, p0, fetchOffset = 0, expectedTotalRecord = 1, expectedRecordsFromSecondTier = 0)
   }
