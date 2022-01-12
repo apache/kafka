@@ -402,7 +402,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
             val fetchOffset = lso
             debug(s"Checking for segments to copy, readOffset: $readOffset and fetchOffset: $fetchOffset")
             val activeSegBaseOffset = log.activeSegment.baseOffset
-            val sortedSegments = log.logSegments(readOffset + 1, fetchOffset).toSeq.sortBy(_.baseOffset)
+            // log-start-offset can be ahead of the read-offset, when:
+            // 1) log-start-offset gets incremented via delete-records API (or)
+            // 2) enabling the remote log for the first time, the log-start-offset can be ahead of the local-log base-segment-offset due to segment deletion.
+            val fromOffset = Math.max(readOffset + 1, log.logStartOffset)
+            val sortedSegments = log.logSegments(fromOffset, fetchOffset).toSeq.sortBy(_.baseOffset)
             val index: Int = sortedSegments.map(x => x.baseOffset).search(activeSegBaseOffset) match {
               case Found(x) => x
               case InsertionPoint(y) => y - 1

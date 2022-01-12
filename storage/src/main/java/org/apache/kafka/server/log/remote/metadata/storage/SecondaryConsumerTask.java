@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,14 +46,14 @@ public class SecondaryConsumerTask {
     private long lastProcessedTimestamp;
     private final long subscriptionIntervalMs;
     private final Time time;
-    private final RemoteLogMetadataTopicPartitioner partitioner;
     private final RemoteLogMetadataSerde serde;
     private final RemotePartitionMetadataEventHandler handler;
     private final long pollIntervalMs;
     private volatile boolean closing = false;
 
     // User topic partitions that need to be catch up with secondary consumer.
-    private final UserPartitions userPartitions = new UserPartitions();
+    private final UserPartitions userPartitions;
+    private final Set<Integer> inProgressMetadataPartitions = new HashSet<>();
 
     public SecondaryConsumerTask(Map<String, Object> consumerProperties,
                                  long subscriptionIntervalMs,
@@ -66,10 +65,10 @@ public class SecondaryConsumerTask {
         this.consumer = createSecondaryConsumer(consumerProperties);
         this.subscriptionIntervalMs = subscriptionIntervalMs;
         this.time = time;
-        this.partitioner = partitioner;
         this.serde = serde;
         this.handler = handler;
         this.pollIntervalMs = pollIntervalMs;
+        this.userPartitions = new UserPartitions(partitioner);
         lastProcessedTimestamp = time.milliseconds();
     }
 
@@ -92,12 +91,10 @@ public class SecondaryConsumerTask {
         }
         try {
             // Compute metadata partitions for the respective user partitions.
-            Set<TopicIdPartition> assignedUserPartitions = userPartitions.removeAll();
-            Set<Integer> metadataPartitions = new HashSet<>();
+            Set<TopicIdPartition> assignedUserPartitions = new HashSet<>();
             Set<TopicPartition> metadataTopicPartitions = new HashSet<>();
-            for (TopicIdPartition topicIdPartition: assignedUserPartitions) {
-                int metadataPartition = partitioner.metadataPartition(topicIdPartition);
-                metadataPartitions.add(metadataPartition);
+            userPartitions.drainTo(assignedUserPartitions, inProgressMetadataPartitions);
+            for (Integer metadataPartition: inProgressMetadataPartitions) {
                 metadataTopicPartitions.add(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, metadataPartition));
             }
             log.info("Assigning secondary consumer partitions with [{}]", metadataTopicPartitions);
@@ -113,12 +110,12 @@ public class SecondaryConsumerTask {
                 (topicPartition, endOffset) -> targetOffsets.put(topicPartition, endOffset - 1));
 
             metadataPartitionToConsumedOffsets.forEach((partition, offset) -> {
-                if (metadataPartitions.contains(partition)) {
+                if (inProgressMetadataPartitions.contains(partition)) {
                     targetOffsets.merge(new TopicPartition(REMOTE_LOG_METADATA_TOPIC_NAME, partition), offset, Math::min);
                 }
             });
 
-            Set<Integer> remainingPartitions = new HashSet<>(metadataPartitions);
+            Set<Integer> remainingPartitions = new HashSet<>(inProgressMetadataPartitions);
             Map<Integer, Long> consumedOffsets = new HashMap<>();
             // Check whether the existing consumption is finished or not. If not, continue processing from the existing
             // assignment. Continuously process them until it reaches the target end-offsets.
@@ -155,10 +152,15 @@ public class SecondaryConsumerTask {
             return true;
         } finally {
             lastProcessedTimestamp = time.milliseconds();
+            inProgressMetadataPartitions.clear();
             if (closing) {
                 closeConsumer();
             }
         }
+    }
+
+    public boolean isMetadataPartitionAssigned(int partition) {
+        return userPartitions.containsMetadataPartition(partition) || inProgressMetadataPartitions.contains(partition);
     }
 
     public void closeConsumer() {
@@ -177,28 +179,37 @@ public class SecondaryConsumerTask {
     }
 
     private static class UserPartitions {
+        private final RemoteLogMetadataTopicPartitioner partitioner;
         private final Set<TopicIdPartition> topicIdPartitions = new HashSet<>();
+        private final Set<Integer> metadataPartitions = new HashSet<>();
+
+        public UserPartitions(RemoteLogMetadataTopicPartitioner partitioner) {
+            this.partitioner = partitioner;
+        }
 
         public synchronized boolean isEmpty() {
             return topicIdPartitions.isEmpty();
         }
 
-        public synchronized Set<TopicIdPartition> removeAll() {
-            if (topicIdPartitions.isEmpty()) {
-                return Collections.emptySet();
-            } else {
-                Set<TopicIdPartition> result = new HashSet<>(topicIdPartitions);
-                topicIdPartitions.clear();
-                return result;
+        public synchronized void drainTo(Set<TopicIdPartition> idPartitions,
+                                         Set<Integer> inProgressMetadataPartitions) {
+            if (!this.topicIdPartitions.isEmpty()) {
+                idPartitions.addAll(this.topicIdPartitions);
+                inProgressMetadataPartitions.addAll(this.metadataPartitions);
+                this.topicIdPartitions.clear();
+                this.metadataPartitions.clear();
             }
         }
 
-        public synchronized boolean contains(TopicIdPartition topicIdPartition) {
-            return topicIdPartitions.contains(topicIdPartition);
+        public synchronized boolean containsMetadataPartition(Integer metadataPartition) {
+            return metadataPartitions.contains(metadataPartition);
         }
 
-        public synchronized void addAll(Set<TopicIdPartition> partitions) {
-            topicIdPartitions.addAll(partitions);
+        public synchronized void addAll(Set<TopicIdPartition> idPartitions) {
+            for (TopicIdPartition idPartition: idPartitions) {
+                topicIdPartitions.add(idPartition);
+                metadataPartitions.add(partitioner.metadataPartition(idPartition));
+            }
         }
     }
 }

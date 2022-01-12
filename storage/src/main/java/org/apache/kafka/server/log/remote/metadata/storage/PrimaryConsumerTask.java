@@ -356,7 +356,7 @@ class PrimaryConsumerTask implements Runnable, Closeable {
     }
 
     public boolean isMetadataPartitionAssigned(int partition) {
-        return assignedMetaPartitions.contains(partition);
+        return assignedMetaPartitions.contains(partition) || secondaryConsumerTask.isMetadataPartitionAssigned(partition);
     }
 
     public boolean isUserPartitionAssignedToPrimary(TopicIdPartition partition) {
