@@ -46,10 +46,10 @@ public class VersionRange {
     }
 
     /**
-     * Check if a given range is fully contained within this range
+     * Check if a given version is fully contained within this range
      */
-    public boolean contains(VersionRange other) {
-        return other.min >= min && other.max <= max;
+    public boolean contains(short version) {
+        return version >= min && version <= max;
     }
 
     /**

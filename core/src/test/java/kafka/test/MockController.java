@@ -49,7 +49,7 @@ import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.ResultOrError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -207,7 +207,7 @@ public class MockController implements Controller {
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures() {
         throw new UnsupportedOperationException();
     }
 

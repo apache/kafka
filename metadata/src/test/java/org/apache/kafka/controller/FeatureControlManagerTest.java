@@ -29,8 +29,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.FeatureMap;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
@@ -56,6 +55,16 @@ public class FeatureControlManagerTest {
         return result;
     }
 
+    private static Map<String, Short> versionMap(Object... args) {
+        Map<String, Short> result = new HashMap<>();
+        for (int i = 0; i < args.length; i += 2) {
+            String feature = (String) args[i];
+            Integer ver = (Integer) args[i + 1];
+            result.put(feature, ver.shortValue());
+        }
+        return result;
+    }
+
     public static QuorumFeatures features(Object... args) {
         return new QuorumFeatures(0, new ApiVersions(), rangeMap(args), Collections.emptyList());
     }
@@ -77,7 +86,7 @@ public class FeatureControlManagerTest {
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
             features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
-        assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
+        assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -95,7 +104,7 @@ public class FeatureControlManagerTest {
         assertEquals(expectedMap, result.response());
         List<ApiMessageAndVersion> expectedMessages = new ArrayList<>();
         expectedMessages.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2),
+            setName("foo").setFeatureLevel((short) 2),
             (short) 0));
         assertEquals(expectedMessages, result.records());
     }
@@ -103,14 +112,14 @@ public class FeatureControlManagerTest {
     @Test
     public void testReplay() {
         FeatureLevelRecord record = new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2);
+            setName("foo").setFeatureLevel((short) 2);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
             features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
-        assertEquals(new FeatureMapAndEpoch(new FeatureMap(rangeMap("foo", 1, 2)), 123),
+        assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
             manager.finalizedFeatures(123));
     }
 
@@ -157,8 +166,7 @@ public class FeatureControlManagerTest {
                     new ApiMessageAndVersion(
                         new FeatureLevelRecord()
                             .setName("foo")
-                            .setMinFeatureLevel((short) 1)
-                            .setMaxFeatureLevel((short) 2),
+                            .setFeatureLevel((short) 2),
                         (short) 0
                     )
                 ),
@@ -184,12 +192,10 @@ public class FeatureControlManagerTest {
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("foo").
-                setMinFeatureLevel((short) 1).
-                setMaxFeatureLevel((short) 5), (short) 0)),
+                setFeatureLevel((short) 5), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("bar").
-                setMinFeatureLevel((short) 1).
-                setMaxFeatureLevel((short) 1), (short) 0))),
+                setFeatureLevel((short) 1), (short) 0))),
             manager.iterator(Long.MAX_VALUE));
     }
 }

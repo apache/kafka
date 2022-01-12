@@ -69,7 +69,7 @@ import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
@@ -887,11 +887,10 @@ public final class QuorumController implements Controller {
      */
     class QuorumFeatureListener implements FeatureLevelListener {
         @Override
-        public void handle(String featureName, short finalizedMinVersion, short finalizedMaxVersion) {
-            log.debug("Feature flag {} finalized to min={} and max={}", featureName, finalizedMinVersion, finalizedMaxVersion);
-
+        public void handle(String featureName, short finalizedMaxVersion) {
+            log.debug("Feature flag {} finalized {}", featureName, finalizedMaxVersion);
             boolean isActiveController = curClaimEpoch != -1;
-            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, VersionRange.of(finalizedMinVersion, finalizedMaxVersion));
+            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedMaxVersion);
             if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!isFeatureSupported) {
                     if (isActiveController) {
@@ -1318,7 +1317,7 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures() {
         return appendReadEvent("getFinalizedFeatures",
             () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }

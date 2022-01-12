@@ -43,7 +43,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 
 import java.util.Collection;
 import java.util.List;
@@ -141,7 +141,7 @@ public interface Controller extends AutoCloseable {
      *
      * @return              A future yielding the feature ranges.
      */
-    CompletableFuture<FeatureMapAndEpoch> finalizedFeatures();
+    CompletableFuture<FinalizedControllerFeatures> finalizedFeatures();
 
     /**
      * Perform some incremental configuration changes.

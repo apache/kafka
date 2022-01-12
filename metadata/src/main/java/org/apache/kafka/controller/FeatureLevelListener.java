@@ -18,5 +18,5 @@
 package org.apache.kafka.controller;
 
 public interface FeatureLevelListener {
-    void handle(String featureName, short finalizedMinVersion, short finalizedMaxVersion);
+    void handle(String featureName, short finalizedVersion);
 }
