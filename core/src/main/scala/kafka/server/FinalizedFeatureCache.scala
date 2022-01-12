@@ -141,7 +141,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
       e.getValue().asScala match {
         case None => newFeatures.remove(e.getKey)
         case Some(feature) => newFeatures.put(e.getKey,
-          new FinalizedVersionRange(feature.min(), feature.max()))
+          new FinalizedVersionRange(feature, feature))
       }
     }
     featuresAndEpoch = Some(FinalizedFeaturesAndEpoch(Features.finalizedFeatures(

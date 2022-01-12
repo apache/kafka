@@ -575,8 +575,7 @@ public class QuorumControllerTest {
                 setProducerIdsEnd(1000), (short) 0),
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("metadata.version").
-                setMinFeatureLevel((short) 1).
-                setMaxFeatureLevel((short) 1), (short) 0)
+                setFeatureLevel((short) 1), (short) 0)
         );
     }
 

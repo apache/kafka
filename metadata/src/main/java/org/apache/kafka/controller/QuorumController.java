@@ -71,7 +71,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;

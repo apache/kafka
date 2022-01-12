@@ -124,7 +124,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersion = newImage.features().metadataVersion().asScala
+      val metadataVersion: Option[Short] = newImage.features().metadataVersion().asScala.map(Short.box(_))
       val versionDelta = metadataVersionManager.update(metadataVersion, highestOffsetAndEpoch.offset)
 
       if (_firstPublish) {

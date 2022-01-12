@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.metadata.{MetadataVersionProvider, MetadataVersions, VersionRange}
+import org.apache.kafka.metadata.{MetadataVersionProvider, MetadataVersions}
 
 import scala.collection.mutable
 
@@ -48,7 +48,7 @@ class MetadataVersionManager extends MetadataVersionProvider with Logging {
    * This method is not thread-safe and is intended to be called from the event processor of BrokerMetadataListener's
    * internal queue.
    */
-  def update(metadataVersionOpt: Option[VersionRange], highestMetadataOffset: Long): MetadataVersionDelta = {
+  def update(metadataVersionOpt: Option[Short], highestMetadataOffset: Long): MetadataVersionDelta = {
     if (metadataVersionOpt.isEmpty && version == MetadataVersions.UNINITIALIZED) {
       // No version initialized and no change
       throw new IllegalStateException("Cannot proceed without metadata.version set")
@@ -58,7 +58,7 @@ class MetadataVersionManager extends MetadataVersionProvider with Logging {
     } else {
       // Check for new version
       val prev = version
-      val updated = metadataVersionOpt.get.max
+      val updated = metadataVersionOpt.get
       val delta = prev match {
         case p if p.version < updated => UpgradedVersion(p.version, updated)
         case p if p.version > updated => DowngradedVersion(p.version, updated)

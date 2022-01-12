@@ -22,7 +22,6 @@ import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.MetadataVersions;
-import org.apache.kafka.metadata.VersionRange;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,22 +35,22 @@ import java.util.Optional;
 public final class FeaturesDelta {
     private final FeaturesImage image;
 
-    private final Map<String, Optional<VersionRange>> changes = new HashMap<>();
+    private final Map<String, Optional<Short>> changes = new HashMap<>();
 
     private final MetadataVersionProvider metadataVersionProvider;
 
-    private VersionRange metadataVersionChange = null;
+    private Short metadataVersionChange = null;
 
     public FeaturesDelta(FeaturesImage image, MetadataVersionProvider metadataVersionProvider) {
         this.image = image;
         this.metadataVersionProvider = metadataVersionProvider;
     }
 
-    public Map<String, Optional<VersionRange>> changes() {
+    public Map<String, Optional<Short>> changes() {
         return changes;
     }
 
-    public Optional<VersionRange> metadataVersionChange() {
+    public Optional<Short> metadataVersionChange() {
         return Optional.ofNullable(metadataVersionChange);
     }
 
@@ -64,10 +63,9 @@ public final class FeaturesDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        VersionRange versionRange = VersionRange.of(record.minFeatureLevel(), record.maxFeatureLevel());
-        changes.put(record.name(), Optional.of(versionRange));
+        changes.put(record.name(), Optional.of(record.featureLevel()));
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = versionRange;
+            metadataVersionChange = record.featureLevel();
         }
     }
 
@@ -76,27 +74,27 @@ public final class FeaturesDelta {
     }
 
     public FeaturesImage apply() {
-        Map<String, VersionRange> newFinalizedVersions =
+        Map<String, Short> newFinalizedVersions =
             new HashMap<>(image.finalizedVersions().size());
-        for (Entry<String, VersionRange> entry : image.finalizedVersions().entrySet()) {
+        for (Entry<String, Short> entry : image.finalizedVersions().entrySet()) {
             String name = entry.getKey();
-            Optional<VersionRange> change = changes.get(name);
+            Optional<Short> change = changes.get(name);
             if (change == null) {
                 newFinalizedVersions.put(name, entry.getValue());
             } else if (change.isPresent()) {
                 newFinalizedVersions.put(name, change.get());
             }
         }
-        for (Entry<String, Optional<VersionRange>> entry : changes.entrySet()) {
+        for (Entry<String, Optional<Short>> entry : changes.entrySet()) {
             String name = entry.getKey();
-            Optional<VersionRange> change = entry.getValue();
+            Optional<Short> change = entry.getValue();
             if (!newFinalizedVersions.containsKey(name)) {
                 if (change.isPresent()) {
                     newFinalizedVersions.put(name, change.get());
                 }
             }
         }
-        MetadataVersion metadataVersion = MetadataVersions.fromValue(newFinalizedVersions.get(MetadataVersion.FEATURE_NAME).max());
+        MetadataVersion metadataVersion = MetadataVersions.fromValue(newFinalizedVersions.get(MetadataVersion.FEATURE_NAME));
         return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
 
