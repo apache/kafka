@@ -70,7 +70,7 @@ object KafkaController extends Logging {
             }
             // Use min size of all replica lists as a stand in for replicationFactor. Generally replicas sizes should be
             // the same, but minBy gets us the worst case.
-            val replicationFactor = partitionsAssignment.minBy(_._2.replicas.size)._1.toShort
+            val replicationFactor = partitionsAssignment.minBy(_._2.replicas.size)._2.replicas.size.toShort
             policy.validate(new CreateTopicPolicy.RequestMetadata(topic, partitionsAssignment.size, replicationFactor,
               jPartitionAssignment.asJava, new java.util.HashMap[String, String]()))
           }
