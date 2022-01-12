@@ -17,14 +17,15 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.Gauge
+import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.Logging
-import org.apache.kafka.common.utils.Utils
+import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.utils.Utils
 
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, Set, mutable}
+import scala.collection.mutable.ArrayBuffer
 
 abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: String, clientId: String, numFetchers: Int)
   extends FetcherManagerTrait with Logging with KafkaMetricsGroup {
@@ -160,8 +161,7 @@ abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: S
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
-  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState],
-    partitionModifications: PartitionModifications): Unit = {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
     lock synchronized {
       val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
         BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
@@ -175,11 +175,13 @@ abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: S
         fetcherThread
       }
 
+      val addPartitionFutures = mutable.Buffer[KafkaFuture[Void]]()
       for ((brokerAndFetcherId, initialFetchOffsets) <- partitionsPerFetcher) {
         val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerAndFetcherId.broker.id, brokerAndFetcherId.fetcherId)
-        fetcherThreadMap.get(brokerIdAndFetcherId) match {
+        val fetcherThread = fetcherThreadMap.get(brokerIdAndFetcherId) match {
           case Some(currentFetcherThread) if currentFetcherThread.sourceBroker == brokerAndFetcherId.broker =>
             // reuse the fetcher thread
+            currentFetcherThread
           case Some(f) =>
             f.close()
             addAndStartFetcherThread(brokerAndFetcherId, brokerIdAndFetcherId)
@@ -188,20 +190,43 @@ abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: S
         }
 
         val initialOffsetAndEpochs = initialFetchOffsets.map { case (tp, brokerAndInitOffset) =>
-          tp -> FollowerPartitionStateInFetcher(brokerIdAndFetcherId, OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch))
+          tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch)
         }
 
-        partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch ++= initialOffsetAndEpochs
+        addPartitionFutures += addPartitionsToFetcherThread(fetcherThread, initialOffsetAndEpochs)
       }
+
+      // wait for all futures to finish
+      KafkaFuture.allOf(addPartitionFutures:_*).get()
     }
   }
 
-  def modifyPartitionsAndShutdownIdleFetchers(partitionModifications: PartitionModifications): Unit = {
+  protected def addPartitionsToFetcherThread(fetcherThread: T,
+                                             initialOffsetAndEpochs: collection.Map[TopicPartition, OffsetAndEpoch]): KafkaFuture[Void] = {
+    val future = fetcherThread.addPartitions(initialOffsetAndEpochs)
+    info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
+    future
+  }
+
+  def removeFetcherForPartitions(partitions: Set[TopicPartition]): Unit = {
+    lock synchronized {
+      val futures = mutable.Buffer[KafkaFuture[Void]]()
+      for (fetcher <- fetcherThreadMap.values)
+        futures += fetcher.removePartitions(partitions)
+      KafkaFuture.allOf(futures:_*).get()
+      failedPartitions.removeAll(partitions)
+    }
+
+    if (partitions.nonEmpty)
+      info(s"Removed fetcher for partitions $partitions")
+  }
+
+  def shutdownIdleFetcherThreads(): Unit = {
     lock synchronized {
       val futures = mutable.Map[BrokerIdAndFetcherId, KafkaFuture[Int]]()
 
       for ((key, fetcher) <- fetcherThreadMap) {
-        futures.put(key, fetcher.modifyPartitionsAndGetCount(partitionModifications))
+        futures.put(key, fetcher.getPartitionsCount())
       }
 
       for ((key, partitionCountFuture) <- futures) {
@@ -210,14 +235,6 @@ abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: S
           fetcherThreadMap -= key
         }
       }
-      failedPartitions.removeAll(partitionModifications.partitionsToRemove)
-    }
-
-    if (partitionModifications.partitionsToRemove.nonEmpty) {
-      info(s"Removed fetcher for partitions ${partitionModifications.partitionsToRemove}")
-    }
-    if (partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch.nonEmpty) {
-      info(s"Added fetcher for partitions ${partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch}")
     }
   }
 

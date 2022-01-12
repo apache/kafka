@@ -20,9 +20,9 @@ package unit.kafka.server
 import java.util.Date
 import java.util.concurrent.locks.{Condition, Lock}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
+
 import kafka.server._
 import kafka.utils.MockTime
-import org.apache.kafka.common.TopicPartition
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
 
@@ -52,7 +52,7 @@ class FetcherEventBusTest {
     assertTrue(counter == 0)
 
     // put a event to unblock the runnable
-    fetcherEventBus.put(ModifyPartitionsAndGetCount(Set.empty, Map.empty, null))
+    fetcherEventBus.put(AddPartitions(Map.empty, null))
     service.shutdown()
     runnableFinished.await()
     assertTrue(counter == 1)
@@ -61,9 +61,9 @@ class FetcherEventBusTest {
   @Test
   def testQueuedEvent(): Unit = {
     val fetcherEventBus = new FetcherEventBus(new MockTime())
-    val modifyPartitions = ModifyPartitionsAndGetCount(Set.empty, Map.empty, null)
-    fetcherEventBus.put(modifyPartitions)
-    assertTrue(fetcherEventBus.getNextEvent().event == modifyPartitions)
+    val addPartitions = AddPartitions(Map.empty, null)
+    fetcherEventBus.put(addPartitions)
+    assertTrue(fetcherEventBus.getNextEvent().event == addPartitions)
   }
 
 
@@ -74,7 +74,7 @@ class FetcherEventBusTest {
     val lowPriorityTask = TruncateAndFetch
     fetcherEventBus.put(lowPriorityTask)
 
-    val highPriorityTask = ModifyPartitionsAndGetCount(Set.empty, Map.empty, null)
+    val highPriorityTask = AddPartitions(Map.empty, null)
     fetcherEventBus.put(highPriorityTask)
 
     val expectedSequence = Seq(highPriorityTask, lowPriorityTask)
@@ -94,10 +94,10 @@ class FetcherEventBusTest {
     // according to their sequence numbers in a FIFO manner
     val fetcherEventBus = new FetcherEventBus(new MockTime())
 
-    val task1 = ModifyPartitionsAndGetCount(Set.empty, Map.empty, null)
+    val task1 = AddPartitions(Map.empty, null)
     fetcherEventBus.put(task1)
 
-    val task2 = ModifyPartitionsAndGetCount(Set.empty, Map.empty, null)
+    val task2 = AddPartitions(Map.empty, null)
     fetcherEventBus.put(task2)
 
     val expectedSequence = Seq(task1, task2)
@@ -141,15 +141,15 @@ class FetcherEventBusTest {
     val time = new MockTime()
     val condition = new MockCondition
     val fetcherEventBus = new FetcherEventBus(time, new MockConditionFactory(condition))
-    val modifyPartitions = ModifyPartitionsAndGetCount(Set.empty, Map.empty, null)
+    val addPartitions = AddPartitions(Map.empty, null)
     val delay = 1000
-    fetcherEventBus.schedule(new DelayedFetcherEvent(delay, modifyPartitions))
+    fetcherEventBus.schedule(new DelayedFetcherEvent(delay, addPartitions))
     assertEquals(1, fetcherEventBus.scheduledEventQueueSize())
     val service = Executors.newSingleThreadExecutor()
 
     val future = service.submit(new Runnable {
       override def run(): Unit = {
-        assertTrue(fetcherEventBus.getNextEvent().event == modifyPartitions)
+        assertTrue(fetcherEventBus.getNextEvent().event == addPartitions)
         assertTrue(condition.awaitCalled)
         assertEquals(0, fetcherEventBus.scheduledEventQueueSize())
       }
@@ -164,10 +164,10 @@ class FetcherEventBusTest {
     val time = new MockTime()
     val condition = new MockCondition
     val fetcherEventBus = new FetcherEventBus(time, new MockConditionFactory(condition))
-    val secondTask = ModifyPartitionsAndGetCount(Set(new TopicPartition("topic1", 1)), Map.empty, null)
+    val secondTask = AddPartitions(Map.empty, null)
     fetcherEventBus.schedule(new DelayedFetcherEvent(200, secondTask))
 
-    val firstTask = ModifyPartitionsAndGetCount(Set(new TopicPartition("topic2", 2)), Map.empty, null)
+    val firstTask = RemovePartitions(Set.empty, null)
     fetcherEventBus.schedule(new DelayedFetcherEvent(100, firstTask))
 
     val service = Executors.newSingleThreadExecutor()
@@ -194,11 +194,11 @@ class FetcherEventBusTest {
     val condition = new MockCondition
     val fetcherEventBus = new FetcherEventBus(time, new MockConditionFactory(condition))
 
-    val queuedEvent = ModifyPartitionsAndGetCount(Set(new TopicPartition("topic1", 1)), Map.empty, null)
+    val queuedEvent = RemovePartitions(Set.empty, null)
     fetcherEventBus.put(queuedEvent)
 
     val delay = 10
-    val scheduledEvent = ModifyPartitionsAndGetCount(Set(new TopicPartition("topic2", 2)), Map.empty, null)
+    val scheduledEvent = AddPartitions(Map.empty, null)
     fetcherEventBus.schedule(new DelayedFetcherEvent(delay, scheduledEvent))
 
     val service = Executors.newSingleThreadExecutor()

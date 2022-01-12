@@ -422,10 +422,7 @@ class ReplicaManager(val config: KafkaConfig,
         val partitions = stopReplicaRequest.partitions.asScala.toSet
         controllerEpoch = stopReplicaRequest.controllerEpoch
         // First stop fetchers for all partitions, then stop the corresponding replicas
-        // replicaFetcherManager.removeFetcherForPartitions(partitions)
-        val partitionModifications = new PartitionModifications
-        partitionModifications.partitionsToRemove ++= partitions
-        replicaFetcherManager.modifyPartitionsAndShutdownIdleFetchers(partitionModifications)
+        replicaFetcherManager.removeFetcherForPartitions(partitions)
         // replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
         for (topicPartition <- partitions){
           try {
@@ -1295,15 +1292,14 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToBeFollower = partitionStates -- partitionsTobeLeader.keys
 
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-        val partitionModifications = new PartitionModifications
         val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
           makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap,
-            highWatermarkCheckpoints, partitionModifications)
+            highWatermarkCheckpoints)
         else
           Set.empty[Partition]
         val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
-            highWatermarkCheckpoints, partitionModifications)
+            highWatermarkCheckpoints)
         else
           Set.empty[Partition]
 
@@ -1357,8 +1353,8 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
 //        replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
-        replicaFetcherManager.modifyPartitionsAndShutdownIdleFetchers(partitionModifications)
 
+        replicaFetcherManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
         val responsePartitions = responseMap.iterator.map { case (tp, error) =>
           new LeaderAndIsrPartitionError()
@@ -1391,8 +1387,7 @@ class ReplicaManager(val config: KafkaConfig,
                           partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                           correlationId: Int,
                           responseMap: mutable.Map[TopicPartition, Errors],
-                          highWatermarkCheckpoints: OffsetCheckpoints,
-                          partitionModifications: PartitionModifications): Set[Partition] = {
+                          highWatermarkCheckpoints: OffsetCheckpoints): Set[Partition] = {
     partitionStates.keys.foreach { partition =>
       stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from " +
         s"controller $controllerId epoch $controllerEpoch starting the become-leader transition for " +
@@ -1405,7 +1400,8 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToMakeLeaders = mutable.Set[Partition]()
 
     try {
-      partitionModifications.partitionsToRemove ++= partitionStates.keySet.map(_.topicPartition)
+      // First stop fetchers for all the partitions
+      replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
       // Update the partition information to be the leader
       partitionStates.foreach { case (partition, partitionState) =>
         try {
@@ -1472,8 +1468,7 @@ class ReplicaManager(val config: KafkaConfig,
                             partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
-                            highWatermarkCheckpoints: OffsetCheckpoints,
-                            partitionModifications: PartitionModifications) : Set[Partition] = {
+                            highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
     partitionStates.foreach { case (partition, partitionState) =>
       stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
         s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
@@ -1525,7 +1520,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
 
-      partitionModifications.partitionsToRemove ++= partitionsToMakeFollower.map(_.topicPartition)
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.map(_.topicPartition))
       partitionsToMakeFollower.foreach { partition =>
         stateChangeLogger.trace(s"Stopped fetchers as part of become-follower request from controller $controllerId " +
           s"epoch $controllerEpoch with correlation id $correlationId for partition ${partition.topicPartition} with leader " +
@@ -1558,7 +1553,7 @@ class ReplicaManager(val config: KafkaConfig,
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
        }.toMap
 
-        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset, partitionModifications)
+        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
         partitionsToMakeFollowerWithLeaderAndOffset.foreach { case (partition, initialFetchState) =>
           stateChangeLogger.trace(s"Started fetcher to new leader as part of become-follower " +
             s"request from controller $controllerId epoch $controllerEpoch with correlation id $correlationId for " +
@@ -1686,9 +1681,7 @@ class ReplicaManager(val config: KafkaConfig,
         partition.futureLog.exists { _.parentDir == dir }
       }.toSet
 
-      val partitionModifications = new PartitionModifications
-      partitionModifications.partitionsToRemove ++= newOfflinePartitions
-      replicaFetcherManager.modifyPartitionsAndShutdownIdleFetchers(partitionModifications)
+      replicaFetcherManager.removeFetcherForPartitions(newOfflinePartitions)
 //      replicaAlterLogDirsManager.removeFetcherForPartitions(newOfflinePartitions ++ partitionsWithOfflineFutureReplica.map(_.topicPartition))
 
       partitionsWithOfflineFutureReplica.foreach(partition => partition.removeFutureLocalReplica(deleteFromLogDir = false))

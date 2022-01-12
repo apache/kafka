@@ -854,7 +854,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
         new Node(leaderBrokerId, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
       (_, followers) => assertEquals(followerBrokerId, followers.head.partitionId))
-    assertTrue(countDownLatch.await(5000L, TimeUnit.MILLISECONDS))
+    assertTrue(countDownLatch.await(1000L, TimeUnit.MILLISECONDS))
 
     // Truncation should have happened once
     EasyMock.verify(mockLogMgr)
@@ -1391,7 +1391,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
       isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
     if (expectTruncation) {
       EasyMock.expect(mockLogMgr.truncateTo(Map(topicPartitionObj -> offsetFromLeader),
-        isFuture = false)).atLeastOnce()
+        isFuture = false)).once
     }
     EasyMock.expect(mockLogMgr.initializingLog(topicPartitionObj)).anyTimes
     EasyMock.expect(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).andReturn(None)
@@ -1481,16 +1481,7 @@ class ReplicaManagerTest(liAsyncFetcherEnabled: Boolean) {
 
             val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = leaderEpochInLeaderAndIsr)
 
-            val partitionModifications = new PartitionModifications
-            partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch ++= Map(new TopicPartition(topic, topicPartition) ->
-              FollowerPartitionStateInFetcher(BrokerIdAndFetcherId(sourceBroker.id, fetcherId), initialOffset))
-            fetcherEventManager.modifyPartitionsAndGetCount(partitionModifications)
-            // call doWork to add the partitions
-            fetcherEventManager.thread.doWork()
-            // trigger one round of TruncateAndFetch
-            fetcherEventManager.fetcherEventBus.put(TruncateAndFetch)
-            fetcherEventManager.thread.doWork()
-
+            fetcherEventManager.addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
             countDownLatch.countDown()
             fetcherEventManager
           }

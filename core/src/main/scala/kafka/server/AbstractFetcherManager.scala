@@ -110,7 +110,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         removeFetcherForPartitions(removedPartitions.keySet)
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        addFetcherForPartitions(removedPartitions, new PartitionModifications)
+        addFetcherForPartitions(removedPartitions)
       }
     }
     lock synchronized {
@@ -157,8 +157,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
-  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState],
-    partitionModifications: PartitionModifications): Unit = {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
     lock synchronized {
       val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
         BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
@@ -186,10 +185,10 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         }
 
         val initialOffsetAndEpochs = initialFetchOffsets.map { case (tp, brokerAndInitOffset) =>
-          tp -> FollowerPartitionStateInFetcher(brokerIdAndFetcherId, OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch))
+          tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch)
         }
 
-        partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch ++= initialOffsetAndEpochs
+        addPartitionsToFetcherThread(fetcherThread, initialOffsetAndEpochs)
       }
     }
   }

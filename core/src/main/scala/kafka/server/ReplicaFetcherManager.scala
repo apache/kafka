@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
@@ -44,25 +43,5 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     info("shutting down")
     closeAllFetchers()
     info("shutdown completed")
-  }
-
-  override def modifyPartitionsAndShutdownIdleFetchers(partitionModifications: PartitionModifications): Unit = {
-    removeFetcherForPartitions(partitionModifications.partitionsToRemove)
-
-    partitionModifications.partitionsToMakeFollowerWithOffsetAndEpoch.groupBy(_._2.brokerIdAndFetcherId).map {
-      case (brokerIdAndFetcherId, followerPartitionStates) => {
-        fetcherThreadMap.get(brokerIdAndFetcherId) match {
-          case Some(thread) => {
-            val initialOffsetAndEpochs = followerPartitionStates.map{ case (topicPartition, followerPartitionState) =>
-              (topicPartition, followerPartitionState.offsetAndEpoch)
-            }
-            addPartitionsToFetcherThread(thread, initialOffsetAndEpochs)
-          }
-          case _ => error(s"Unable to find the fetcher with id $brokerIdAndFetcherId")
-        }
-      }
-    }
-
-    shutdownIdleFetcherThreads()
   }
 }

@@ -258,6 +258,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val stopReplicaResponse = doHandleStopReplicaRequest(request, stopReplicaRequest)
       sendResponseExemptThrottle(request, stopReplicaResponse)
+      CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
     }
   }
 

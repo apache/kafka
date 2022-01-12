@@ -32,13 +32,21 @@ object FetcherState {
     override protected def hasRateAndTimeMetric: Boolean = false
   }
 
-  case object ModifyPartitionsAndGetCount extends FetcherState {
+  case object AddPartitions extends FetcherState {
     def value = 1
   }
 
-  case object TruncateAndFetch extends FetcherState {
+  case object RemovePartitions extends FetcherState {
     def value = 2
   }
 
-  val values: Seq[FetcherState] = Seq(Idle, ModifyPartitionsAndGetCount, TruncateAndFetch)
+  case object GetPartitionCount extends FetcherState {
+    def value = 3
+  }
+
+  case object TruncateAndFetch extends FetcherState {
+    def value = 4
+  }
+
+  val values: Seq[FetcherState] = Seq(Idle, AddPartitions, RemovePartitions, GetPartitionCount, TruncateAndFetch)
 }
