@@ -17,13 +17,14 @@
 
 package org.apache.kafka.controller;
 
+import com.yammer.metrics.core.Histogram;
+import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import java.util.Set;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
-
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumControllerMetricsTest {
@@ -49,36 +50,67 @@ public class QuorumControllerMetricsTest {
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }
 
+    @Test
+    public void testUpdateEventQueueTime() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+                quorumControllerMetrics.updateEventQueueTime(1000);
+                assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueTimeMs"), 1, 1000);
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testUpdateEventQueueProcessingTime() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+                quorumControllerMetrics.updateEventQueueProcessingTime(1000);
+                assertMetricHistogram(registry, metricName("ControllerEventManager", "EventQueueProcessingTimeMs"), 1, 1000);
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static void assertMetricsCreatedAndRemovedUponClose(String expectedType, Set<String> expectedMetricNames) {
         MetricsRegistry registry = new MetricsRegistry();
-        try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
-            assertMetricsCreated(registry, expectedMetricNames, expectedType);
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry)) {
+                assertMetricsCreated(registry, expectedMetricNames, expectedType);
+            }
+            assertMetricsRemoved(registry, expectedMetricNames, expectedType);
+        } finally {
+            registry.shutdown();
         }
-        assertMetricsRemoved(registry, expectedMetricNames, expectedType);
+    }
+
+    private static void assertMetricHistogram(MetricsRegistry registry, MetricName metricName, long count, double sum) {
+        Histogram histogram = (Histogram) registry.allMetrics().get(metricName);
+
+        assertEquals(count, histogram.count());
+        assertEquals(sum, histogram.sum(), .1);
+    }
+
+    private static MetricName metricName(String type, String name) {
+        String mBeanName = String.format("kafka.controller:type=%s,name=%s", type, name);
+        return new MetricName("kafka.controller", type, name, null, mBeanName);
     }
 
     private static void assertMetricsCreated(MetricsRegistry registry, Set<String> expectedMetricNames, String expectedType) {
-        expectedMetricNames.forEach(expectedMetricName -> assertTrue(
-            registry.allMetrics().keySet().stream().anyMatch(metricName -> {
-                if (metricName.getGroup().equals(EXPECTED_GROUP) && metricName.getType().equals(expectedType)
-                    && metricName.getScope() == null && metricName.getName().equals(expectedMetricName)) {
-                    // It has to exist AND the MBean name has to be correct;
-                    // fail right here if the MBean name doesn't match
-                    String expectedMBeanPrefix = EXPECTED_GROUP + ":type=" + expectedType + ",name=";
-                    assertEquals(expectedMBeanPrefix + expectedMetricName, metricName.getMBeanName(),
-                        "Incorrect MBean name");
-                    return true; // the metric name exists and the associated MBean name matches
-                } else {
-                    return false; // this one didn't match
-                }
-            }), "Missing metric: " + expectedMetricName));
+        expectedMetricNames.forEach(expectedName -> {
+            MetricName expectMetricName = metricName(expectedType, expectedName);
+            assertTrue(registry.allMetrics().containsKey(expectMetricName), "Missing metric: " + expectMetricName);
+        });
     }
 
     private static void assertMetricsRemoved(MetricsRegistry registry, Set<String> expectedMetricNames, String expectedType) {
-        expectedMetricNames.forEach(expectedMetricName -> assertTrue(
-            registry.allMetrics().keySet().stream().noneMatch(metricName ->
-                metricName.getGroup().equals(EXPECTED_GROUP) && metricName.getType().equals(expectedType)
-                    && metricName.getScope() == null && metricName.getName().equals(expectedMetricName)),
-            "Metric not removed when closed: " + expectedMetricName));
+        expectedMetricNames.forEach(expectedName -> {
+            MetricName expectMetricName = metricName(expectedType, expectedName);
+            assertFalse(registry.allMetrics().containsKey(expectMetricName), "Found metric: " + expectMetricName);
+        });
     }
 }

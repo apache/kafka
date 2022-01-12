@@ -135,7 +135,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
-        eventQueueTime.update(durationMs);
+        eventQueueProcessingTime.update(durationMs);
     }
 
     @Override
