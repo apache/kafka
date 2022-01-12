@@ -490,7 +490,7 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       assertFalse(zkClient.pathExists(deleteOffsetTopicPath), "Delete path for topic shouldn't exist before deletion.")
     }
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    TestUtils.waitForAllPartitionsMetadata(brokers, testTopicName, 0)
+    TestUtils.waitForAllPartitionsMetadata(brokers, Topic.GROUP_METADATA_TOPIC_NAME, 0)
   }
 
   @ParameterizedTest
