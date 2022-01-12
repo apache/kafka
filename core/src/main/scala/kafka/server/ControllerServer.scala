@@ -171,7 +171,8 @@ class ControllerServer(
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
       val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
-      controller = new QuorumController.Builder(config.nodeId).
+
+      controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
@@ -185,6 +186,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
+        setConfigurationValidator(new ControllerConfigurationValidator()).
         setInitialMetadataVersion(initialMetadataVersion).
         build()
 

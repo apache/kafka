@@ -20,6 +20,9 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**
@@ -101,6 +104,22 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     @Override
     public void close() {
         wrapped.close();
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+        final PositionBound positionBound,
+        final boolean collectExecutionInfo) {
+
+        final long start = collectExecutionInfo ? System.nanoTime() : -1L;
+        final QueryResult<R> result = wrapped().query(query, positionBound, collectExecutionInfo);
+        if (collectExecutionInfo) {
+            final long end = System.nanoTime();
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " via WrappedStateStore" + " in " + (end - start)
+                    + "ns");
+        }
+        return result;
     }
 
     public S wrapped() {

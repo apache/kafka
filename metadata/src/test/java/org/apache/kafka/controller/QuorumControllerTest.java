@@ -79,8 +79,9 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -125,6 +126,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
         }
     }
@@ -156,6 +159,8 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))
         ) {
+            controlEnv.activeController().registerBroker(new BrokerRegistrationRequestData().
+                setBrokerId(0).setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
         }
     }
@@ -198,7 +203,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -271,7 +276,7 @@ public class QuorumControllerTest {
                 CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                     new BrokerRegistrationRequestData().
                         setBrokerId(0).
-                        setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                        setClusterId(active.clusterId()).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
                         setFeatures(brokerFeatures()).
                         setListeners(listeners));
@@ -337,7 +342,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -409,7 +414,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -464,7 +469,7 @@ public class QuorumControllerTest {
                         new BrokerRegistrationRequestData().
                             setBrokerId(i).
                             setRack(null).
-                            setClusterId("06B-K3N1TBCNYFgruEVP0Q").
+                            setClusterId(active.clusterId()).
                             setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                             setListeners(new ListenerCollection(Arrays.asList(new Listener().
                                 setName("PLAINTEXT").setHost("localhost").
@@ -505,7 +510,7 @@ public class QuorumControllerTest {
     }
 
     private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
-        return SnapshotReader.of(
+        return RecordsSnapshotReader.of(
             reader,
             new MetadataRecordSerde(),
             BufferSupplier.create(),
@@ -836,7 +841,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData()
                     .setBrokerId(brokerId)
                     .setRack(null)
-                    .setClusterId("06B-K3N1TBCNYFgruEVP0Q")
+                    .setClusterId(controller.clusterId())
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setListeners(
                         new ListenerCollection(

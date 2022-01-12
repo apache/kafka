@@ -25,7 +25,9 @@ import java.util.Optional;
 import java.util.Random;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -58,9 +60,8 @@ public class ClusterControlManagerTest {
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
-            new StripedReplicaPlacer(new Random()), new MockControllerMetrics(),
-            MetadataVersions::latest);
+            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
+                new StripedReplicaPlacer(new Random()), new MockControllerMetrics(), MetadataVersions::latest);
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
 
@@ -87,6 +88,24 @@ public class ClusterControlManagerTest {
     }
 
     @Test
+    public void testRegistrationWithIncorrectClusterId() throws Exception {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClusterControlManager clusterControl = new ClusterControlManager(
+            new LogContext(), "fPZv1VBsRFmnlRvmGcOW9w", new MockTime(0, 0, 0),
+            snapshotRegistry, 1000,
+            new StripedReplicaPlacer(new Random()), new MockControllerMetrics());
+        clusterControl.activate();
+        assertThrows(InconsistentClusterIdException.class, () ->
+            clusterControl.registerBroker(new BrokerRegistrationRequestData().
+                    setClusterId("WIjw3grwRZmR2uOpdpVXbg").
+                    setBrokerId(0).
+                    setRack(null).
+                    setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                123L,
+                new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), 456L)));
+    }
+
+    @Test
     public void testUnregister() throws Exception {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerId(1).
@@ -100,7 +119,8 @@ public class ClusterControlManagerTest {
             setHost("example.com"));
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), new MockTime(0, 0, 0), snapshotRegistry, 1000,
+            new LogContext(), Uuid.randomUuid().toString(), new MockTime(0, 0, 0),
+            snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics(),
             MetadataVersions::latest);
         clusterControl.activate();
@@ -124,7 +144,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         MockRandom random = new MockRandom();
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
+            new LogContext(),  Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(random), new MockControllerMetrics(),
             MetadataVersions::latest);
         clusterControl.activate();
@@ -162,7 +182,7 @@ public class ClusterControlManagerTest {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
-            new LogContext(), time, snapshotRegistry, 1000,
+            new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics(),
             MetadataVersions::latest);
         clusterControl.activate();

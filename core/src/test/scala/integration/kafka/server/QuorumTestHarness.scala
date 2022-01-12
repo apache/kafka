@@ -103,9 +103,10 @@ abstract class QuorumTestHarness extends Logging {
   protected def zkAclsEnabled: Option[Boolean] = None
 
   /**
-   * When in KRaft mode, this test harness only support PLAINTEXT
+   * When in KRaft mode, the security protocol to use for the controller listener.
+   * Can be overridden by subclasses.
    */
-  private val controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected val controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
   protected def kraftControllerConfigs(): Seq[Properties] = {
     Seq(new Properties())
@@ -324,6 +325,7 @@ abstract class QuorumTestHarness extends Logging {
     if (implementation != null) {
       implementation.shutdown()
     }
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
 

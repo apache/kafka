@@ -67,7 +67,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             ApiVersions apiVersions = new ApiVersions();
             List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
             for (int i = 0; i < numControllers; i++) {
-                QuorumController.Builder builder = new QuorumController.Builder(i);
+                QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
                 builder.setInitialMetadataVersion(metadataVersion);
                 builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));

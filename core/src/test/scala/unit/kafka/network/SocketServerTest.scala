@@ -296,7 +296,7 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startProcessingRequests = false)
 
-    val updatedEndPoints = config.advertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
@@ -1169,7 +1169,6 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SASL_SSL")
     val overrideServer = new SocketServer(
       KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
     ) {

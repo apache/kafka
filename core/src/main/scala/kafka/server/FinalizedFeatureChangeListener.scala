@@ -242,7 +242,6 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
     zkClient.unregisterZNodeChangeHandler(FeatureZNodeChangeHandler.path)
     queue.clear()
     thread.shutdown()
-    thread.join()
   }
 
   // For testing only.

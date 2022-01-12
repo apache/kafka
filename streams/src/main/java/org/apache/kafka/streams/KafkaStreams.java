@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -40,27 +41,34 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
+import org.apache.kafka.streams.errors.StreamsStoppedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
-import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
@@ -78,17 +86,18 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -155,10 +164,10 @@ public class KafkaStreams implements AutoCloseable {
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
     protected final StateDirectory stateDirectory;
-    private final StreamsMetadataState streamsMetadataState;
+    protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
-    private final Admin adminClient;
+    protected final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
     private final long totalCacheSize;
     private final StreamStateListener streamStateListener;
@@ -364,7 +373,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void validateIsRunningOrRebalancing() {
+    protected void validateIsRunningOrRebalancing() {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
                 throw new StreamsNotStartedException("KafkaStreams has not been started, you can retry after calling start()");
@@ -1285,7 +1294,9 @@ public class KafkaStreams implements AutoCloseable {
                 globalStreamThread.start();
             }
 
-            processStreamThread(StreamThread::start);
+            final int numThreads = processStreamThread(StreamThread::start);
+
+            log.info("Started {} stream threads", numThreads);
 
             final Long cleanupDelay = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
             stateDirCleaner.scheduleAtFixedRate(() -> {
@@ -1330,20 +1341,31 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
-            processStreamThread(StreamThread::shutdown);
+            int numStreamThreads = processStreamThread(StreamThread::shutdown);
+
+            log.info("Shutting down {} stream threads", numStreamThreads);
+
             topologyMetadata.wakeupThreads();
 
-            processStreamThread(thread -> {
+            numStreamThreads = processStreamThread(thread -> {
                 try {
                     if (!thread.isRunning()) {
+                        log.debug("Shutdown {} complete", thread.getName());
+
                         thread.join();
                     }
                 } catch (final InterruptedException ex) {
+                    log.warn("Shutdown {} interrupted", thread.getName());
+
                     Thread.currentThread().interrupt();
                 }
             });
 
+            log.info("Shutdown {} stream threads complete", numStreamThreads);
+
             if (globalStreamThread != null) {
+                log.info("Shutting down the global stream threads");
+
                 globalStreamThread.shutdown();
             }
 
@@ -1351,9 +1373,13 @@ public class KafkaStreams implements AutoCloseable {
                 try {
                     globalStreamThread.join();
                 } catch (final InterruptedException e) {
+                    log.warn("Shutdown the global stream thread interrupted");
+
                     Thread.currentThread().interrupt();
                 }
                 globalStreamThread = null;
+
+                log.info("Shutdown global stream threads complete");
             }
 
             stateDirectory.close();
@@ -1366,7 +1392,7 @@ public class KafkaStreams implements AutoCloseable {
             } else {
                 setState(State.ERROR);
             }
-        }, "kafka-streams-close-thread");
+        }, clientId + "-CloseThread");
     }
 
     private boolean close(final long timeoutMs) {
@@ -1615,9 +1641,11 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
-    protected void processStreamThread(final Consumer<StreamThread> consumer) {
+    protected int processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
+
+        return copy.size();
     }
 
     /**
@@ -1682,18 +1710,22 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if the admin client request throws exception
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final List<Task> allTasks = new ArrayList<>();
+        processStreamThread(thread -> allTasks.addAll(thread.allTasks().values()));
+        return allLocalStorePartitionLags(allTasks);
+    }
+
+    protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
         final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
-        processStreamThread(thread -> {
-            for (final Task task : thread.allTasks().values()) {
-                allPartitions.addAll(task.changelogPartitions());
-                // Note that not all changelog partitions, will have positions; since some may not have started
-                allChangelogPositions.putAll(task.changelogOffsets());
-            }
-        });
+        for (final Task task : tasksToCollectLagFor) {
+            allPartitions.addAll(task.changelogPartitions());
+            // Note that not all changelog partitions, will have positions; since some may not have started
+            allChangelogPositions.putAll(task.changelogOffsets());
+        }
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
@@ -1716,4 +1748,118 @@ public class KafkaStreams implements AutoCloseable {
 
         return Collections.unmodifiableMap(localStorePartitionLags);
     }
+
+    /**
+     * Run an interactive query against a state store.
+     * <p>
+     * This method allows callers outside of the Streams runtime to access the internal state of
+     * stateful processors. See https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html
+     * for more information.
+     *
+     * @param <R> The result type specified by the query.
+     * @throws StreamsNotStartedException If Streams has not yet been started. Just call {@link
+     *                                    KafkaStreams#start()} and then retry this call.
+     * @throws StreamsStoppedException    If Streams is in a terminal state like PENDING_SHUTDOWN,
+     *                                    NOT_RUNNING, PENDING_ERROR, or ERROR. The caller should
+     *                                    discover a new instance to query.
+     * @throws UnknownStateStoreException If the specified store name does not exist in the
+     *                                    topology.
+     */
+    @Evolving
+    public <R> StateQueryResult<R> query(final StateQueryRequest<R> request) {
+        final String storeName = request.getStoreName();
+        if (!topologyMetadata.hasStore(storeName)) {
+            throw new UnknownStateStoreException(
+                "Cannot get state store "
+                    + storeName
+                    + " because no such store is registered in the topology."
+            );
+        }
+        if (state().hasNotStarted()) {
+            throw new StreamsNotStartedException(
+                "KafkaStreams has not been started, you can retry after calling start()."
+            );
+        }
+        if (state().isShuttingDown() || state.hasCompletedShutdown()) {
+            throw new StreamsStoppedException(
+                "KafkaStreams has been stopped (" + state + ")."
+                    + " This instance can no longer serve queries."
+            );
+        }
+        final StateQueryResult<R> result = new StateQueryResult<>();
+
+        final Map<String, StateStore> globalStateStores = topologyMetadata.globalStateStores();
+        if (globalStateStores.containsKey(storeName)) {
+            // See KAFKA-13523
+            result.setGlobalResult(
+                QueryResult.forFailure(
+                    FailureReason.UNKNOWN_QUERY_TYPE,
+                    "Global stores do not yet support the KafkaStreams#query API. Use KafkaStreams#store instead."
+                )
+            );
+        } else {
+            for (final StreamThread thread : threads) {
+                final Map<TaskId, Task> tasks = thread.allTasks();
+                for (final Entry<TaskId, Task> entry : tasks.entrySet()) {
+
+                    final TaskId taskId = entry.getKey();
+                    final int partition = taskId.partition();
+                    if (request.isAllPartitions()
+                        || request.getPartitions().contains(partition)) {
+                        final Task task = entry.getValue();
+                        final StateStore store = task.getStore(storeName);
+                        if (store != null) {
+                            final StreamThread.State state = thread.state();
+                            final boolean active = task.isActive();
+                            if (request.isRequireActive()
+                                && (state != StreamThread.State.RUNNING
+                                || !active)) {
+                                result.addResult(
+                                    partition,
+                                    QueryResult.forFailure(
+                                        FailureReason.NOT_ACTIVE,
+                                        "Query requires a running active task,"
+                                            + " but partition was in state "
+                                            + state + " and was "
+                                            + (active ? "active" : "not active") + "."
+                                    )
+                                );
+                            } else {
+                                final QueryResult<R> r = store.query(
+                                    request.getQuery(),
+                                    request.isRequireActive()
+                                        ? PositionBound.unbounded()
+                                        : request.getPositionBound(),
+                                    request.executionInfoEnabled()
+                                );
+                                result.addResult(partition, r);
+                            }
+
+
+                            // optimization: if we have handled all the requested partitions,
+                            // we can return right away.
+                            if (!request.isAllPartitions()
+                                && result.getPartitionResults().keySet().containsAll(request.getPartitions())) {
+                                return result;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!request.isAllPartitions()) {
+            for (final Integer partition : request.getPartitions()) {
+                if (!result.getPartitionResults().containsKey(partition)) {
+                    result.addResult(partition, QueryResult.forFailure(
+                        FailureReason.NOT_PRESENT,
+                        "The requested partition was not present at the time of the query."
+                    ));
+                }
+            }
+        }
+
+        return result;
+    }
+
 }
