@@ -84,6 +84,7 @@ public class TaskManager {
     private final StateDirectory stateDirectory;
     private final StreamThread.ProcessingMode processingMode;
     private final Tasks tasks;
+    private final List<Task> successfullyProcessed = new ArrayList<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -1321,9 +1322,20 @@ public class TaskManager {
                 totalProcessed += processed;
                 task.recordProcessBatchTime(now - then);
             }
+            successfullyProcessed.add(task);
         }
-
+        successfullyProcessed.clear();
         return totalProcessed;
+    }
+
+    public int commitSuccessfullyProcessedTasks() {
+        final int committed = commit(successfullyProcessed);
+        if (0 < committed) {
+            maybePurgeCommittedRecords();
+        }
+        log.info("Committed {} tasks that were processed before entering error handling logic", successfullyProcessed);
+        successfullyProcessed.clear();
+        return committed;
     }
 
     void recordTaskProcessRatio(final long totalProcessLatencyMs, final long now) {

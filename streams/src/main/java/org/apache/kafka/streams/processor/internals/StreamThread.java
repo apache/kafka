@@ -788,7 +788,15 @@ public class StreamThread extends Thread {
              */
             do {
                 log.debug("Processing tasks with {} iterations.", numIterations);
-                final int processed = taskManager.process(numIterations, time);
+                final int processed;
+                try {
+                    processed = taskManager.process(numIterations, time);
+                } catch (final Exception e) {
+                    log.error("encountered an error when processing tasks." +
+                        " Will commit all previously successfully processed tasks", e);
+                    taskManager.commitSuccessfullyProcessedTasks();
+                    throw e;
+                }
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
                 if (processed > 0) {
