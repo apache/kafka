@@ -3910,8 +3910,7 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testRemoveMembersFromGroupReason() throws Exception {
+    private void testRemoveMembersFromGroup(String reason, String expectedReason) throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
 
@@ -3927,45 +3926,7 @@ public class KafkaAdminClientTest {
                 LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
 
                 return leaveGroupRequest.members().stream().allMatch(
-                    member -> member.reason().equals(LEAVE_GROUP_REASON + ": testing remove members reason")
-                );
-            }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
-                    Arrays.asList(
-                        new MemberResponse().setGroupInstanceId("instance-1"),
-                        new MemberResponse().setGroupInstanceId("instance-2")
-                    ))
-            ));
-
-            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
-
-            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(membersToRemove);
-            options.reason("testing remove members reason");
-
-            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
-                    GROUP_ID, options);
-
-            assertNull(result.all().get());
-        }
-    }
-
-    @Test
-    public void testRemoveMembersFromGroupDefaultReason() throws Exception {
-        final Cluster cluster = mockCluster(3, 0);
-        final Time time = new MockTime();
-
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster)) {
-
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-            env.kafkaClient().prepareResponse(body -> {
-                if (!(body instanceof LeaveGroupRequest)) {
-                    return false;
-                }
-                LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
-
-                return leaveGroupRequest.members().stream().allMatch(
-                        member -> member.reason().equals(LEAVE_GROUP_REASON)
+                        member -> member.reason().equals(expectedReason)
                 );
             }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
                     Arrays.asList(
@@ -3976,11 +3937,24 @@ public class KafkaAdminClientTest {
 
             Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
 
+            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(membersToRemove);
+            options.reason(reason);
+
             final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
-                    GROUP_ID, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                    GROUP_ID, options);
 
             assertNull(result.all().get());
         }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupReason() throws Exception {
+        testRemoveMembersFromGroup("testing remove members reason", LEAVE_GROUP_REASON + ": testing remove members reason");
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupDefaultReason() throws Exception {
+        testRemoveMembersFromGroup(null, LEAVE_GROUP_REASON);
     }
 
     @Test
