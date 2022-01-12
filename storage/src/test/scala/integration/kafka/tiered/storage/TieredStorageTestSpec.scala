@@ -24,7 +24,7 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.utils.{TestUtils, nonthreadsafe}
 import kafka.utils.RecordsKeyValueMatcher.correspondTo
-import org.apache.kafka.clients.admin.NewPartitionReassignment
+import org.apache.kafka.clients.admin.{NewPartitionReassignment, RecordsToDelete}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{ElectionType, TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
@@ -602,6 +602,17 @@ final class ExpectUserTopicMappedToMetadataPartitionsAction(val topic: String, v
   }
 }
 
+final class DeleteRecordsAction(partition: TopicPartition, beforeOffset: Int) extends TieredStorageTestAction {
+  override protected def doExecute(context: TieredStorageTestContext): Unit = {
+    val recordsToDelete = Map(partition -> RecordsToDelete.beforeOffset(beforeOffset)).asJava
+    context.admin().deleteRecords(recordsToDelete).all().get
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"delete-records tp: $partition before-offset: $beforeOffset")
+  }
+}
+
 /**
   * This builder helps to formulate a test case exercising the tiered storage functionality and formulate
   * the expectations following the execution of the test.
@@ -824,6 +835,15 @@ final class TieredStorageTestBuilder {
 
   def expectUserTopicMappedToMetadataPartitions(topic: String, metadataPartitions: Seq[Int]): this.type = {
     actions += new ExpectUserTopicMappedToMetadataPartitionsAction(topic, metadataPartitions)
+    this
+  }
+
+  def deleteRecords(topic: String, partition: Int, beforeOffset: Int): this.type = {
+    maybeCreateProduceAction()
+    maybeCreateConsumeActions()
+
+    val topicPartition = new TopicPartition(topic, partition)
+    actions += new DeleteRecordsAction(topicPartition, beforeOffset)
     this
   }
 
