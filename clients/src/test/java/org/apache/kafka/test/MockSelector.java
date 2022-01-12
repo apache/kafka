@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.test;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -48,6 +50,7 @@ public class MockSelector implements Selectable {
     private final List<String> connected = new ArrayList<>();
     private final List<DelayedReceive> delayedReceives = new ArrayList<>();
     private final Predicate<InetSocketAddress> canConnect;
+    private final Set<String> ready = new HashSet<>();
 
     public MockSelector(Time time) {
         this(time, null);
@@ -62,6 +65,7 @@ public class MockSelector implements Selectable {
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         if (canConnect == null || canConnect.test(address)) {
             this.connected.add(id);
+            this.ready.add(id);
         }
     }
 
@@ -91,8 +95,8 @@ public class MockSelector implements Selectable {
     /**
      * Since MockSelector.connect will always succeed and add the
      * connection id to the Set connected, we can only simulate
-     * that the connection is still pending by remove the connection
-     * id from the Set connected
+     * that the connection is still pending by removing the connection
+     * id from the Set connected.
      *
      * @param id connection id
      */
@@ -221,9 +225,13 @@ public class MockSelector implements Selectable {
     public void unmuteAll() {
     }
 
+    public void chanelNotReady(String id) {
+        ready.remove(id);
+    }
+
     @Override
     public boolean isChannelReady(String id) {
-        return true;
+        return ready.contains(id);
     }
 
     public void reset() {
