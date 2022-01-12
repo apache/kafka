@@ -495,66 +495,52 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           fetchLog(tpId.topicPartition()).foreach { log =>
             val retentionMs = log.config.retentionMs
             val totalSize = log.size + segmentMetadataList.map(_.segmentSizeInBytes()).sum
-            var (checkTimestampRetention, cleanupTs) = (retentionMs > -1, time.milliseconds() - retentionMs)
+            val (checkTimestampRetention, cleanupTs) = (retentionMs > -1, time.milliseconds() - retentionMs)
+            val checkSizeRetention = log.config.retentionSize > -1
             var remainingSize = totalSize - log.config.retentionSize
-            var checkSizeRetention = log.config.retentionSize > -1
+            var logStartOffset: Option[Long] = None
 
             def deleteRetentionTimeBreachedSegments(metadata: RemoteLogSegmentMetadata): Boolean = {
-              val isSegmentDeleted = deleteRemoteLogSegment(metadata, _.maxTimestampMs() <= cleanupTs)
-              if (isSegmentDeleted && remainingSize > 0) {
-                remainingSize -= metadata.segmentSizeInBytes()
+              val isSegmentDeleted = deleteRemoteLogSegment(
+                metadata, checkTimestampRetention && _.maxTimestampMs() <= cleanupTs)
+              if (isSegmentDeleted) {
+                remainingSize = Math.max(0, remainingSize - metadata.segmentSizeInBytes())
+                // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals
+                // are ascending with in an epoch.
+                logStartOffset = Some(metadata.endOffset() + 1)
+                info(s"Deleted remote log segment ${metadata.remoteLogSegmentId()} due to retention time " +
+                  s"${retentionMs}ms breach based on the largest record timestamp in the segment")
               }
               isSegmentDeleted
             }
 
             def deleteRetentionSizeBreachedSegments(metadata: RemoteLogSegmentMetadata): Boolean = {
-              deleteRemoteLogSegment(metadata, metadata =>
+              val isSegmentDeleted = deleteRemoteLogSegment(metadata, metadata => {
                 // Assumption that segments contain size > 0
-                if (remainingSize > 0) {
+                if (checkSizeRetention && remainingSize > 0) {
                   remainingSize -= metadata.segmentSizeInBytes()
                   remainingSize >= 0
                 } else false
-              )
+              })
+              if (isSegmentDeleted) {
+                logStartOffset = Some(metadata.endOffset() + 1)
+                info(s"Deleted remote log segment ${metadata.remoteLogSegmentId()} due to retention size " +
+                  s"${log.config.retentionSize} breach. Log size after deletion will be " +
+                  s"${remainingSize + log.config.retentionSize}.")
+              }
+              isSegmentDeleted
             }
 
-            // Get earliest leader epoch and start deleting the segments.
-            var logStartOffset: Option[Long] = None
             log.leaderEpochCache.foreach { cache =>
               cache.epochEntries.find { epochEntry =>
-                // segmentsIterator returns the segments in the ascending order.
                 val segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(tpId, epochEntry.epoch)
-                // Continue checking for one of the time or size retentions are valid for next segment if available.
-                while ((checkTimestampRetention || checkSizeRetention) && segmentsIterator.hasNext) {
+                var isSegmentDeleted = true
+                while (isSegmentDeleted && segmentsIterator.hasNext) {
                   val metadata = segmentsIterator.next()
-                  var isSegmentDeleted = false
-                  if (checkTimestampRetention) {
-                    if (deleteRetentionTimeBreachedSegments(metadata)) {
-                      // It is fine to have logStartOffset as metadata.endOffset() + 1 as the segment offset intervals
-                      // are ascending with in an epoch
-                      logStartOffset = Some(metadata.endOffset() + 1)
-                      info(s"Deleted remote log segment ${metadata.remoteLogSegmentId()} due to retention time " +
-                        s"${retentionMs}ms breach based on the largest record timestamp in the segment")
-                      isSegmentDeleted = true
-                    } else {
-                      // If we have any segment that is having the timestamp not eligible for deletion then
-                      // we will skip all the subsequent segments for the time retention checks.
-                      checkTimestampRetention = false
-                    }
-                  }
-                  if (checkSizeRetention && !isSegmentDeleted) {
-                    if (deleteRetentionSizeBreachedSegments(metadata)) {
-                      logStartOffset = Some(metadata.endOffset() + 1)
-                      info(s"Deleted remote log segment ${metadata.remoteLogSegmentId()} due to retention size " +
-                        s"${log.config.retentionSize} breach. Log size after deletion will be ${remainingSize + log.config.retentionSize}.")
-                    } else {
-                      // If we have exhausted of segments eligible for retention size, we will skip the subsequent
-                      // segments.
-                      checkSizeRetention = false
-                    }
-                  }
+                  isSegmentDeleted = deleteRetentionTimeBreachedSegments(metadata) ||
+                    deleteRetentionSizeBreachedSegments(metadata)
                 }
-                // Return only when both the retention checks are exhausted.
-                checkTimestampRetention && checkSizeRetention
+                !isSegmentDeleted
               }
             }
             logStartOffset.foreach(handleLogStartOffsetUpdate(tpId.topicPartition(), _))

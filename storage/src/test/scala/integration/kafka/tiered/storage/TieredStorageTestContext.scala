@@ -24,6 +24,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminUtils.assignReplicasToBrokers
 import kafka.admin.BrokerMetadata
+import kafka.log.Log
 import kafka.server.KafkaServer
 import kafka.utils.BrokerLocalStorage
 import kafka.utils.TestUtils
@@ -217,6 +218,10 @@ final class TieredStorageTestContext(private val zookeeperClient: KafkaZkClient,
   def isAssignedReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
     val assignments = zookeeperClient.getPartitionAssignmentForTopics(Set(topicPartition.topic()))
     assignments(topicPartition.topic())(topicPartition.partition()).replicas.contains(replicaId)
+  }
+
+  def log(brokerId: Int, topicPartition: TopicPartition): Option[Log] = {
+    brokers(brokerId).logManager.getLog(topicPartition)
   }
 
   def succeed(action: TieredStorageTestAction): Unit = {

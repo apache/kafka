@@ -18,6 +18,8 @@
 
 package kafka.tiered.storage
 
+import kafka.server.epoch.EpochEntry
+
 import java.io.PrintStream
 import java.util
 import java.util.{Optional, Properties}
@@ -613,6 +615,23 @@ final class DeleteRecordsAction(partition: TopicPartition, beforeOffset: Int) ex
   }
 }
 
+final class ExpectLeaderEpochCheckpointAction(brokerId: Int, partition: TopicPartition, beginEpoch: Int, startOffset: Long) extends TieredStorageTestAction {
+  override protected def doExecute(context: TieredStorageTestContext): Unit = {
+    var earliestEntry: Option[EpochEntry] = None
+    TestUtils.waitUntilTrue(() => {
+      earliestEntry = context.log(brokerId, partition)
+        .flatMap(log => log.leaderEpochCache)
+        .flatMap(cache => cache.earliestEntry)
+      assertTrue(earliestEntry.isDefined)
+      beginEpoch == earliestEntry.get.epoch && startOffset == earliestEntry.get.startOffset
+    }, msg = s"leader-epoch-checkpoint begin-epoch: $beginEpoch and start-offset: $startOffset doesn't match with actual: $earliestEntry", waitTimeMs = 2000L)
+  }
+
+  override def describe(output: PrintStream): Unit = {
+    output.println(s"expect-leader-epoch-checkpoint partition: $partition begin-epoch: $beginEpoch start-offset: $startOffset")
+  }
+}
+
 /**
   * This builder helps to formulate a test case exercising the tiered storage functionality and formulate
   * the expectations following the execution of the test.
@@ -780,6 +799,12 @@ final class TieredStorageTestBuilder {
     maybeCreateProduceAction()
     maybeCreateConsumeActions()
     actions += buildDeleteTopicAction(topic, shouldDelete = false)
+    this
+  }
+
+  def expectLeaderEpochCheckpoint(brokerId: Int, topic: String, partition: Int, beginEpoch: Int, startOffset: Long): this.type = {
+    val tp = new TopicPartition(topic, partition)
+    actions += new ExpectLeaderEpochCheckpointAction(brokerId, tp, beginEpoch, startOffset)
     this
   }
 

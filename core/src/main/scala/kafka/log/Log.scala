@@ -373,8 +373,10 @@ class Log(@volatile private var _dir: File,
   }
 
   def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
-    if (remoteLogEnabled()) logStartOffset = if (remoteLogStartOffset < 0) localLogStartOffset else remoteLogStartOffset
-    else warn(s"updateLogStartOffsetFromRemoteTier call is ignored as remoteLogEnabled is determined to be false.")
+    if (!remoteLogEnabled()) {
+      warn("Ignoring the call as the remote log storage is disabled")
+    }
+    maybeIncrementLogStartOffset(remoteLogStartOffset, SegmentDeletion)
   }
 
   def topicId: Option[Uuid] = _topicId
