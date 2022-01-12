@@ -19,7 +19,6 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
-import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.MetadataVersions;
 
@@ -37,13 +36,10 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
 
-    private final MetadataVersionProvider metadataVersionProvider;
-
     private Short metadataVersionChange = null;
 
-    public FeaturesDelta(FeaturesImage image, MetadataVersionProvider metadataVersionProvider) {
+    public FeaturesDelta(FeaturesImage image) {
         this.image = image;
-        this.metadataVersionProvider = metadataVersionProvider;
     }
 
     public Map<String, Optional<Short>> changes() {
@@ -63,9 +59,10 @@ public final class FeaturesDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        changes.put(record.name(), Optional.of(record.featureLevel()));
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             metadataVersionChange = record.featureLevel();
+        } else {
+            changes.put(record.name(), Optional.of(record.featureLevel()));
         }
     }
 
@@ -94,7 +91,13 @@ public final class FeaturesDelta {
                 }
             }
         }
-        MetadataVersion metadataVersion = MetadataVersions.fromValue(newFinalizedVersions.get(MetadataVersion.FEATURE_NAME));
+
+        final MetadataVersion metadataVersion;
+        if (metadataVersionChange == null) {
+            metadataVersion = image.metadataVersion();
+        } else {
+            metadataVersion = MetadataVersions.fromValue(metadataVersionChange);
+        }
         return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
 
@@ -102,6 +105,7 @@ public final class FeaturesDelta {
     public String toString() {
         return "FeaturesDelta(" +
             "changes=" + changes +
+            "metadataVersionChange=" + metadataVersionChange +
             ')';
     }
 }

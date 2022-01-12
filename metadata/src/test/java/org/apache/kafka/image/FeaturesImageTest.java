@@ -58,7 +58,7 @@ public class FeaturesImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
             setName("baz"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
 
-        DELTA1 = new FeaturesDelta(IMAGE1, MetadataVersions::latest);
+        DELTA1 = new FeaturesDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<String, Short> map2 = new HashMap<>();
@@ -89,7 +89,7 @@ public class FeaturesImageTest {
     private void testToImageAndBack(FeaturesImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
         image.write(writer);
-        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY, MetadataVersions::latest);
+        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
         FeaturesImage nextImage = delta.apply();
         assertEquals(image, nextImage);

@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
@@ -55,8 +54,8 @@ public final class FeaturesImage {
         return finalizedVersions.isEmpty();
     }
 
-    public Optional<Short> metadataVersion() {
-        return Optional.ofNullable(finalizedVersions.get(MetadataVersions.FEATURE_NAME));
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
     }
 
     Map<String, Short> finalizedVersions() {
@@ -89,9 +88,12 @@ public final class FeaturesImage {
         return finalizedVersions.equals(other.finalizedVersions);
     }
 
+
     @Override
     public String toString() {
-        return finalizedVersions.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", "));
+        return "FeaturesImage{" +
+                "finalizedVersions=" + finalizedVersions +
+                ", metadataVersion=" + metadataVersion +
+                '}';
     }
 }

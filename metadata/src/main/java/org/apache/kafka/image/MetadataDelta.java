@@ -83,7 +83,7 @@ public final class MetadataDelta {
     }
 
     public FeaturesDelta getOrCreateFeaturesDelta() {
-        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features(), metadataVersionProvider);
+        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
         return featuresDelta;
     }
 

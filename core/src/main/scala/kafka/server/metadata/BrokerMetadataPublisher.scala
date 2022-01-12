@@ -27,9 +27,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
 
 
 object BrokerMetadataPublisher extends Logging {
@@ -124,7 +124,9 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersion: Option[Short] = newImage.features().metadataVersion().asScala.map(Short.box(_))
+      val metadataVersion: Option[Short] = Option(newImage.features().metadataVersion())
+        .filterNot(mv => mv.equals(MetadataVersions.UNINITIALIZED))
+        .map(_.version)
       val versionDelta = metadataVersionManager.update(metadataVersion, highestOffsetAndEpoch.offset)
 
       if (_firstPublish) {
