@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -31,9 +29,11 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
