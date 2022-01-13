@@ -23,6 +23,7 @@ import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawM
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
+import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataVersions
@@ -32,40 +33,10 @@ import scala.collection.mutable
 object StorageTool extends Logging {
   def main(args: Array[String]): Unit = {
     try {
-      val parser = ArgumentParsers.
-        newArgumentParser("kafka-storage").
-        defaultHelp(true).
-        description("The Kafka storage tool.")
-      val subparsers = parser.addSubparsers().dest("command")
-
-      val infoParser = subparsers.addParser("info").
-        help("Get information about the Kafka log directories on this node.")
-      val formatParser = subparsers.addParser("format").
-        help("Format the Kafka log directories on this node.")
-      subparsers.addParser("random-uuid").help("Print a random UUID.")
-      List(infoParser, formatParser).foreach(parser => {
-        parser.addArgument("--config", "-c").
-          action(store()).
-          required(true).
-          help("The Kafka configuration file to use.")
-      })
-      formatParser.addArgument("--cluster-id", "-t").
-        action(store()).
-        required(true).
-        help("The cluster ID to use.")
-      formatParser.addArgument("--ignore-formatted", "-g").
-        action(storeTrue())
-      formatParser.addArgument("--metadata-version", "-v").
-        action(store()).
-        `type`(classOf[Short]).
-        setDefault[Short](MetadataVersions.stable().version()).
-        help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
-
-      val namespace = parser.parseArgsOrFail(args)
+      val namespace = parseArguments(args)
       val command = namespace.getString("command")
       val config = Option(namespace.getString("config")).flatMap(
         p => Some(new KafkaConfig(Utils.loadProps(p))))
-
       command match {
         case "info" =>
           val directories = configToLogDirectories(config.get)
@@ -75,7 +46,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = MetadataVersions.fromValue(namespace.getShort("metadata_version"))
+          val metadataVersion = MetadataVersions.fromValue(namespace.getString("metadata_version").toShort)
           val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -96,6 +67,38 @@ object StorageTool extends Logging {
         System.err.println(e.getMessage)
         System.exit(1)
     }
+  }
+
+  def parseArguments(args: Array[String]): Namespace = {
+    val parser = ArgumentParsers.
+      newArgumentParser("kafka-storage").
+      defaultHelp(true).
+      description("The Kafka storage tool.")
+    val subparsers = parser.addSubparsers().dest("command")
+
+    val infoParser = subparsers.addParser("info").
+      help("Get information about the Kafka log directories on this node.")
+    val formatParser = subparsers.addParser("format").
+      help("Format the Kafka log directories on this node.")
+    subparsers.addParser("random-uuid").help("Print a random UUID.")
+    List(infoParser, formatParser).foreach(parser => {
+      parser.addArgument("--config", "-c").
+        action(store()).
+        required(true).
+        help("The Kafka configuration file to use.")
+    })
+    formatParser.addArgument("--cluster-id", "-t").
+      action(store()).
+      required(true).
+      help("The cluster ID to use.")
+    formatParser.addArgument("--ignore-formatted", "-g").
+      action(storeTrue())
+    formatParser.addArgument("--metadata-version", "-v").
+      action(store()).
+      setDefault(MetadataVersions.stable().version().toString).
+      help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
+
+    parser.parseArgsOrFail(args)
   }
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
@@ -204,7 +207,12 @@ object StorageTool extends Logging {
       case e: Throwable => throw new TerseFailure(s"Cluster ID string $clusterIdStr " +
         s"does not appear to be a valid UUID: ${e.getMessage}")
     }
-    require(config.nodeId >= 0, s"The node.id must be set to a non-negative integer.")
+    if (config.nodeId < 0) {
+      throw new TerseFailure(s"The node.id must be set to a non-negative integer. We saw ${config.nodeId}")
+    }
+    if (metadataVersion < 1) {
+      throw new TerseFailure("The initial metadata.version must be greater than zero.")
+    }
     new MetaProperties(effectiveClusterId.toString, config.nodeId, metadataVersion)
   }
 
