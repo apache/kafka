@@ -1135,11 +1135,8 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers = makeServers(1)
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
 
-    var topicIdAfterUpgrade = Option.empty[Uuid]
-    TestUtils.waitUntilTrue(() => {
-      topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic)
-      topicIdAfterUpgrade.nonEmpty
-    }, s"topic id for ${tp.topic} not found in ZK")
+    val (topicIdAfterUpgrade, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
+    assertNotEquals(None, topicIdAfterUpgrade, s"topic id for ${tp.topic} not found in ZK")
 
     val controller2 = getController().kafkaController
     val topicId = controller2.controllerContext.topicIds.get(tp.topic)
