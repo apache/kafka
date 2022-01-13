@@ -341,6 +341,7 @@ abstract class QuorumTestHarness extends Logging {
 
 object QuorumTestHarness {
   val ZkClientEventThreadSuffix = "-EventThread"
+  val RaftClientThreadPrefix = "raft"
 
   /**
    * Verify that a previous test that doesn't use QuorumTestHarness hasn't left behind an unexpected thread.

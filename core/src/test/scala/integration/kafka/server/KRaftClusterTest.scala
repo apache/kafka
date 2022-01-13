@@ -30,6 +30,10 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeCluster
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.TestInstance.Lifecycle
 
 import java.util
 import java.util.{Arrays, Collections, Optional}
@@ -39,7 +43,17 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @Tag("integration")
+@TestInstance(Lifecycle.PER_CLASS)
 class KRaftClusterTest {
+  @BeforeAll
+  def setUpClass(): Unit = {
+    TestUtils.verifyNoUnexpectedThreads("@BeforeAll")
+  }
+
+  @AfterAll
+  def tearDownClass(): Unit = {
+    TestUtils.verifyNoUnexpectedThreads("@AfterAll")
+  }
 
   @Test
   def testCreateClusterAndClose(): Unit = {
