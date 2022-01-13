@@ -490,6 +490,7 @@ public class KafkaAdminClient extends AdminClient {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            System.out.println("!!! addresses:" + addresses);
             metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
@@ -1175,7 +1176,7 @@ public class KafkaAdminClient extends AdminClient {
                         requestBuilder, now, true, timeoutMs, null);
                     log.debug("Sending {} to {}. correlationId={}, timeoutMs={}",
                         requestBuilder, node, clientRequest.correlationId(), timeoutMs);
-                    System.err.println("sending " + requestBuilder + ", " + node);
+                    System.err.println("sending " + requestBuilder + ", " + node.idString());
                     client.send(clientRequest, now);
                     callsInFlight.put(node.idString(), call);
                     correlationIdToCalls.put(clientRequest.correlationId(), call);
