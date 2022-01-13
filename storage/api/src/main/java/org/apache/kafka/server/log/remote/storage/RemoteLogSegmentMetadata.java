@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
@@ -215,6 +216,10 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, startOffset,
                 endOffset, maxTimestampMs, rlsmUpdate.brokerId(), rlsmUpdate.eventTimestampMs(),
                 segmentSizeInBytes, rlsmUpdate.state(), segmentLeaderEpochs);
+    }
+
+    public TopicIdPartition topicIdPartition() {
+        return remoteLogSegmentId.topicIdPartition();
     }
 
     @Override

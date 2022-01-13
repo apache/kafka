@@ -298,9 +298,18 @@
 
     <subpackage name="log">
       <allow pkg="com.fasterxml.jackson" />
+      <allow pkg="kafka.api" />
+      <allow pkg="kafka.utils" />
+      <allow pkg="org.apache.kafka.clients" />
       <allow pkg="org.apache.kafka.server.common" />
       <allow pkg="org.apache.kafka.server.log" />
       <allow pkg="org.apache.kafka.test" />
+
+      <subpackage name="remote">
+        <allow pkg="scala.collection" />
+        <allow pkg="scala.jdk" />
+      </subpackage>
+
     </subpackage>
   </subpackage>
 
