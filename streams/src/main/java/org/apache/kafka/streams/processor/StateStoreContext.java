@@ -94,7 +94,8 @@ public interface StateStoreContext {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback);
+                  final StateRestoreCallback stateRestoreCallback,
+                  final CheckpointCallback checkpointCallback);
 
     /**
      * Returns all the application config properties as key/value pairs.

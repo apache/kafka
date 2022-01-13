@@ -118,6 +118,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     protected StateStoreContext context;
     // VisibleForTesting
     protected Position position;
+    private File positionCheckpointFile;
+    private OffsetCheckpoint positionCheckpoint;
 
     // VisibleForTesting
     public RocksDBStore(final String name,
@@ -190,6 +192,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             throw new ProcessorStateException(fatal);
         }
 
+        this.positionCheckpointFile = new File(stateDir, this.name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
         maybeSetUpStatistics(configs);
@@ -250,10 +255,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
+        context.register(root,
+                         (RecordBatchingStateRestoreCallback) this::restoreBatch,
+                         this::checkpoint);
+    }
+
+    public void checkpoint() throws IOException {
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
     }
 
     @Override
@@ -262,11 +274,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(getMetricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         this.context = context;
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
+        context.register(root,
+                         (RecordBatchingStateRestoreCallback) this::restoreBatch,
+                         this::checkpoint);
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,

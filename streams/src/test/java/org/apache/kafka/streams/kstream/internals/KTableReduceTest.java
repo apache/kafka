@@ -49,7 +49,7 @@ public class KTableReduceTest {
         final TimestampedKeyValueStore<String, Set<String>> myStore =
             new GenericInMemoryTimestampedKeyValueStore<>("myStore");
 
-        context.register(myStore, null);
+        context.register(myStore, null, null);
         reduceProcessor.init(context);
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
 

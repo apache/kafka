@@ -70,7 +70,7 @@ public class AbstractProcessorContextTest {
     public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
         context.initialize();
         try {
-            context.register(stateStore, null);
+            context.register(stateStore, null, null);
             fail("should throw illegal state exception when context already initialized");
         } catch (final IllegalStateException e) {
             // pass
@@ -79,12 +79,12 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() {
-        context.register(stateStore, null);
+        context.register(stateStore, null, null);
     }
 
     @Test
     public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        assertThrows(NullPointerException.class, () -> context.register(null, null));
+        assertThrows(NullPointerException.class, () -> context.register(null, null, null));
     }
 
     @Test

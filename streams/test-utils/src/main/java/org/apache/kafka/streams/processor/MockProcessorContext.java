@@ -459,7 +459,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
+                         final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock, final CheckpointCallback checkpoint) {
         stateStores.put(store.name(), store);
     }
 

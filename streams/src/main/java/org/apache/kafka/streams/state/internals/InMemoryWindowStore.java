@@ -75,7 +75,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
-    private final Position position;
+    private Position position;
+
     private StateStoreContext stateStoreContext;
 
     public InMemoryWindowStore(final String name,

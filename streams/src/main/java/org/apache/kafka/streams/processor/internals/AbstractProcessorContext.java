@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.CheckpointCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -111,12 +112,12 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+                         final StateRestoreCallback stateRestoreCallback, final CheckpointCallback checkpoint) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager().registerStore(store, stateRestoreCallback);
+        stateManager().registerStore(store, stateRestoreCallback, checkpoint);
     }
 
     @Override

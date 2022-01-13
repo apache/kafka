@@ -28,12 +28,11 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
-
 public class RocksDBSessionStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
     implements SessionStore<Bytes, byte[]> {
 
-    private final Position position;
+    private Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
@@ -45,6 +44,8 @@ public class RocksDBSessionStore
     public void init(final StateStoreContext context, final StateStore root) {
         super.init(context, root);
         this.stateStoreContext = context;
+
+        this.position = super.getPosition();
     }
 
     @Override

@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CheckpointCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -81,8 +82,8 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        delegate.register(store, stateRestoreCallback);
+                         final StateRestoreCallback stateRestoreCallback, final CheckpointCallback checkpoint) {
+        delegate.register(store, stateRestoreCallback, checkpoint);
     }
 
     @Override

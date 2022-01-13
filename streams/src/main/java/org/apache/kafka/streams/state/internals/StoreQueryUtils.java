@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -40,17 +42,21 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class StoreQueryUtils {
-
     /**
      * a utility interface to facilitate stores' query dispatch logic,
      * allowing them to generically store query execution logic as the values
@@ -336,6 +342,46 @@ public final class StoreQueryUtils {
             deserializer = valueSerde.deserializer();
         }
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+    }
+
+    public static void checkpointPosition(final OffsetCheckpoint checkpointFile, final Position position) throws IOException {
+        try {
+            final Map<TopicPartition, Long> topicPartitions = StoreQueryUtils.positionToTopicPartitionMap(position);
+            checkpointFile.write(topicPartitions);
+        } catch (final IOException e) {
+            throw new ProcessorStateException("Error writing checkpoint file", e);
+        }
+    }
+
+    public static Position readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
+        try {
+            final Map<TopicPartition, Long> topicPartitions = checkpointFile.read();
+            return StoreQueryUtils.topicPartitionMapToPosition(topicPartitions);
+        } catch (final IOException e) {
+            throw new ProcessorStateException("Error reading checkpoint file", e);
+        }
+    }
+
+    private static Map<TopicPartition, Long> positionToTopicPartitionMap(final Position position) {
+        final Map<TopicPartition, Long> topicPartitions = new HashMap<>();
+        final Set<String> topics = position.getTopics();
+        for (final String t : topics) {
+            final Map<Integer, Long> partitions = position.getPartitionPositions(t);
+            for (final Entry<Integer, Long> e : partitions.entrySet()) {
+                final TopicPartition tp = new TopicPartition(t, e.getKey());
+                topicPartitions.put(tp, e.getValue());
+            }
+        }
+        return topicPartitions;
+    }
+
+    private static Position topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
+        final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> pos = new ConcurrentHashMap<>();
+        for (final Entry<TopicPartition, Long> e: topicPartitions.entrySet()) {
+            pos.putIfAbsent(e.getKey().topic(), new ConcurrentHashMap<>());
+            pos.get(e.getKey().topic()).put(e.getKey().partition(), e.getValue());
+        }
+        return Position.fromMap(pos);
     }
 
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {

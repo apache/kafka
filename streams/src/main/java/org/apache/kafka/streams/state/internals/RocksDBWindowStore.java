@@ -38,7 +38,7 @@ public class RocksDBWindowStore
 
     private int seqnum = 0;
 
-    private final Position position;
+    private Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -53,6 +53,7 @@ public class RocksDBWindowStore
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         super.init(context, root);
+        this.position = super.getPosition();
         this.stateStoreContext = context;
     }
 

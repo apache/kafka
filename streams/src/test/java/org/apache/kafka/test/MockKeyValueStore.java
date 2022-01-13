@@ -60,7 +60,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        context.register(root, stateRestoreCallback);
+        context.register(root, stateRestoreCallback, null);
         initialized = true;
         closed = false;
     }

@@ -38,6 +38,8 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -59,7 +61,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-
+    protected File positionCheckpointFile;
+    protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
@@ -264,8 +267,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(this.context, observedStreamTime);
 
+        this.positionCheckpointFile = new File(context.stateDir(), this.name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+
         // register and possibly restore the state from the logs
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreAllInternal);
+        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreAllInternal, this::checkpoint);
 
         open = true;
 
@@ -273,6 +280,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+    }
+
+    public void checkpoint() throws IOException {
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
     }
 
     @Override

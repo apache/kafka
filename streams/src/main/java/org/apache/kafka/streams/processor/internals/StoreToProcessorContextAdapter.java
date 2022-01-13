@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CheckpointCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -79,8 +80,10 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
     }
 
     @Override
-    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-        delegate.register(store, stateRestoreCallback);
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CheckpointCallback checkpoint) {
+        delegate.register(store, stateRestoreCallback, checkpoint);
     }
 
     @Override

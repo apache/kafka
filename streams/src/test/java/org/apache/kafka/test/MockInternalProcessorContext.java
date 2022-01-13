@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.CheckpointCallback;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -133,9 +134,9 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback, final CheckpointCallback checkpoint) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
-        super.register(store, stateRestoreCallback);
+        super.register(store, stateRestoreCallback, checkpoint);
     }
 
     public StateRestoreCallback stateRestoreCallback(final String storeName) {

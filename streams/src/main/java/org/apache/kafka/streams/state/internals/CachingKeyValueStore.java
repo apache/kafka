@@ -63,7 +63,7 @@ public class CachingKeyValueStore
     private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private Position position;
+    private final Position position;
     private final boolean timestampedSchema;
 
     @FunctionalInterface
@@ -94,15 +94,12 @@ public class CachingKeyValueStore
         this.timestampedSchema = timestampedSchema;
     }
 
+    @SuppressWarnings("deprecation") // This can be removed when it's removed from the interface.
     @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-        // save the stream thread as we only ever want to trigger a flush
-        // when the stream thread is the current thread.
-        streamThread = Thread.currentThread();
+        init((StateStoreContext) asInternalProcessorContext(context), root);
     }
 
     @Override

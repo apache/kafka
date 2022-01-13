@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.CheckpointCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
@@ -58,7 +59,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {}
+    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback, final CheckpointCallback checkpoint) {}
 
     @Override
     public void flush() {}
