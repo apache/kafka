@@ -245,7 +245,7 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
-            if (initialMetadataVersion == null) {
+            if (initialMetadataVersion == null || initialMetadataVersion.equals(MetadataVersions.UNINITIALIZED)) {
                 throw new RuntimeException("You must set an initial metadata.version in meta.properties");
             }
             if (quorumFeatures == null) {
@@ -871,6 +871,10 @@ public final class QuorumController implements Controller {
                     if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
                         final CompletableFuture<Map<String, ApiError>> future;
                         if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
+                            future = new CompletableFuture<>();
+                            future.completeExceptionally(
+                                new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
+                        } else if (initialMetadataVersion == MetadataVersions.V1) {
                             future = prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
                                 return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
