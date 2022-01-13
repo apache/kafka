@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -1132,7 +1133,14 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-        mockClient.prepareResponse(leaveGroupResponse);
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof LeaveGroupRequest)) {
+                return false;
+            }
+            LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
+            return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
+                   leaveGroupRequest.members().get(0).reason().equals("test maybe leave group");
+        }, leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
         return coordinator.maybeLeaveGroup("test maybe leave group");
