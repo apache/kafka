@@ -15,8 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.test;
+package kafka.test.junit;
 
+import kafka.test.ClusterConfig;
+import kafka.test.ClusterGenerator;
+import kafka.test.ClusterInstance;
 import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
@@ -24,13 +27,19 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+
+/**
+ * This class is a test itself of the testkit + junit framework. It also serves as an example of how to use the various
+ * features of the framework.
+ */
 @ClusterTestDefaults(clusterType = Type.ZK)   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
@@ -95,7 +104,7 @@ public class ClusterTestExtensionsTest {
         if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "bar");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggs");
-        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
+        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.KRAFT)) {
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "baz");
             Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggz");
         } else {
@@ -108,5 +117,11 @@ public class ClusterTestExtensionsTest {
         Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
         clusterInstance.start();
         Assertions.assertNotNull(clusterInstance.anyBrokerSocketServer());
+    }
+
+    @ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1)
+    public void testKRaftMetadataImage(KRaftClusterInstance instance) {
+        MetadataImage image = instance.brokerCurrentMetadataImages().get(0);
+        assertTrue(image.cluster().brokers().containsKey(0));
     }
 }

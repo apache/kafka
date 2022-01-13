@@ -87,7 +87,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
   ): T = {
     IntegrationTestUtils.connectAndReceive(
       request,
-      cluster.brokerSocketServers().asScala.head,
+      cluster.brokerSocketServers().asScala.head._2,
       cluster.clientListener()
     )
   }
