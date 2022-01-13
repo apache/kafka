@@ -96,7 +96,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         assignedFollowerTopicReplicas.put(0, JavaConverters.asScalaBuffer(followerTopicReplicas));
         remoteLogMetadataManagerHarness.createTopic(followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas));
 
-        Map<String, Uuid> allTopicUuids = JavaConverters.asJava(remoteLogMetadataManagerHarness.getTopicIds());
+        Map<String, Uuid> allTopicUuids = JavaConverters.mapAsJavaMap(remoteLogMetadataManagerHarness.getTopicIds());
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(allTopicUuids.get(leaderTopic), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition newFollowerTopicIdPartition = new TopicIdPartition(allTopicUuids.get(followerTopic), new TopicPartition(followerTopic, 0));
 
