@@ -282,7 +282,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_non_existing",
-      new FeatureUpdate(3, true),
+      new FeatureUpdate(3.toShort, true),
       ".*Could not apply finalized feature update because the provided feature is not supported.*".r)
   }
 

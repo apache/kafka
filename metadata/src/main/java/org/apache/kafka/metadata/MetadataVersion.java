@@ -14,26 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
 
-import java.util.Map;
-import org.apache.kafka.common.annotation.InterfaceStability;
+package org.apache.kafka.metadata;
 
-/**
- * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
- */
-@InterfaceStability.Evolving
-public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
-    private boolean dryRun = false;
+import org.apache.kafka.common.metadata.MetadataRecordType;
 
-    public boolean shouldDryRun() {
-        return dryRun;
-    }
+import java.util.Optional;
 
-    public UpdateFeaturesOptions dryRun(boolean dryRun) {
-        this.dryRun = dryRun;
-        return this;
+public interface MetadataVersion extends Comparable<MetadataVersions> {
+    String FEATURE_NAME = "metadata.version";
+
+    short version();
+
+    boolean isBackwardsCompatible();
+
+    Optional<MetadataVersion> previous();
+
+    String description();
+
+    short recordVersion(MetadataRecordType type);
+
+    @Override
+    default int compareTo(MetadataVersions o) {
+        return Short.compare(this.version(), o.version());
     }
 }

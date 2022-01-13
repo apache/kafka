@@ -20,11 +20,11 @@ package kafka.server
 import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
-
 import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -34,6 +34,7 @@ object RawMetaProperties {
   val BrokerIdKey = "broker.id"
   val NodeIdKey = "node.id"
   val VersionKey = "version"
+  val InitialMetadataVersion = "init.metadata.version"
 }
 
 class RawMetaProperties(val props: Properties = new Properties()) {
@@ -70,6 +71,14 @@ class RawMetaProperties(val props: Properties = new Properties()) {
     props.setProperty(VersionKey, ver.toString)
   }
 
+  def initialMetadataVersion: Option[Short] = {
+    intValue(InitialMetadataVersion).map(_.shortValue)
+  }
+
+  def initialMetadataVersion_=(metaVer: Int): Unit = {
+    props.setProperty(InitialMetadataVersion, metaVer.toString)
+  }
+
   def requireVersion(expectedVersion: Int): Unit = {
     if (version != expectedVersion) {
       throw new RuntimeException(s"Expected version $expectedVersion, but got "+
@@ -94,11 +103,16 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 }
 
 object MetaProperties {
+  def apply(clusterId: String, nodeId: Int): MetaProperties = {
+    MetaProperties(clusterId, nodeId, MetadataVersions.latest().version())
+  }
+
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
-    new MetaProperties(clusterId, nodeId)
+    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersions.V1.version())
+    new MetaProperties(clusterId, nodeId, metadataVersion)
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -126,17 +140,19 @@ case class ZkMetaProperties(
 case class MetaProperties(
   clusterId: String,
   nodeId: Int,
+  initialMetadataVersion: Short
 ) {
   def toProperties: Properties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId
     properties.nodeId = nodeId
+    properties.initialMetadataVersion = initialMetadataVersion
     properties.props
   }
 
   override def toString: String  = {
-    s"MetaProperties(clusterId=$clusterId, nodeId=$nodeId)"
+    s"MetaProperties(clusterId=$clusterId, nodeId=$nodeId, initialMetadataVersion=$initialMetadataVersion)"
   }
 }
 

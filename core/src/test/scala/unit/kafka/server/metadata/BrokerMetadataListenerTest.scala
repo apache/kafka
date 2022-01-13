@@ -20,12 +20,11 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
-
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
+import org.apache.kafka.metadata.{BrokerRegistration, MetadataVersions, RecordTestUtils, VersionRange}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
@@ -36,14 +35,14 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      snapshotter = None)
+      snapshotter = None, () => MetadataVersions.latest())
     listener.close()
   }
 
   @Test
   def testPublish(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000000L,
-      snapshotter = None)
+      snapshotter = None, () => MetadataVersions.latest())
     try {
       listener.handleCommit(RecordTestUtils.mockBatchReader(100L,
         util.Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -138,7 +137,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testHandleCommitsWithNoSnapshotterDefined(): Unit = {
     val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L,
-      snapshotter = None)
+      snapshotter = None, () => MetadataVersions.latest())
     try {
       val brokerIds = 0 to 3
 
@@ -157,7 +156,8 @@ class BrokerMetadataListenerTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
-    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L, Some(snapshotter))
+    val listener = new BrokerMetadataListener(0, Time.SYSTEM, None, 1000L,
+      Some(snapshotter), () => MetadataVersions.latest())
     try {
       val brokerIds = 0 to 3
 

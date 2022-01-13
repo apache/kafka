@@ -20,10 +20,9 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-
 import kafka.api.LeaderAndIsr
 import kafka.log.{AppendOrigin, LogConfig}
-import kafka.server.metadata.MockConfigRepository
+import kafka.server.metadata.{MockConfigRepository, Version}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
@@ -36,7 +35,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{MetadataVersions, PartitionRegistration}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
@@ -338,17 +337,17 @@ class ReplicaManagerConcurrencyTest {
     override def doWork(): Unit = {
       channel.poll() match {
         case InitializeEvent =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta(latestImage, () => MetadataVersions.latest)
           topic.initialize(delta)
           latestImage = delta.apply()
-          replicaManager.applyDelta(delta.topicsDelta, latestImage)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage, Version(1))
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta(latestImage, () => MetadataVersions.latest)
           val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
           latestImage = delta.apply()
           future.complete(updatedLeaderAndIsr)
-          replicaManager.applyDelta(delta.topicsDelta, latestImage)
+          replicaManager.applyDelta(delta.topicsDelta, latestImage, Version(1))
 
         case ShutdownEvent =>
       }

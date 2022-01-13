@@ -33,6 +33,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -47,6 +48,8 @@ import java.util.List;
  */
 public final class MetadataDelta {
     private final MetadataImage image;
+
+    private final MetadataVersionProvider metadataVersionProvider;
 
     private long highestOffset;
 
@@ -64,8 +67,9 @@ public final class MetadataDelta {
 
     private ProducerIdsDelta producerIdsDelta = null;
 
-    public MetadataDelta(MetadataImage image) {
+    public MetadataDelta(MetadataImage image, MetadataVersionProvider metadataVersionProvider) {
         this.image = image;
+        this.metadataVersionProvider = metadataVersionProvider;
         this.highestOffset = image.highestOffsetAndEpoch().offset;
         this.highestEpoch = image.highestOffsetAndEpoch().epoch;
     }
@@ -234,6 +238,14 @@ public final class MetadataDelta {
 
     public void replay(FeatureLevelRecord record) {
         getOrCreateFeaturesDelta().replay(record);
+        featuresDelta.metadataVersionChange().ifPresent(__ -> {
+            // If any feature flags change, need to trigger components to possibly handle the new flags
+            getOrCreateClusterDelta();
+            getOrCreateConfigsDelta();
+            getOrCreateTopicsDelta();
+            getOrCreateClientQuotasDelta();
+            getOrCreateProducerIdsDelta();
+        });
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {

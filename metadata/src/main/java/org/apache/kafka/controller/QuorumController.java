@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
@@ -42,6 +43,8 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -63,11 +66,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.MetadataVersion;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
-import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -86,6 +90,7 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
@@ -121,6 +126,10 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * the fact that the controller may have several operations in progress at any given
  * point.  The future associated with each operation will not be completed until the
  * results of the operation have been made durable to the metadata log.
+ *
+ * The QuorumController uses the "metadata.version" feature flag as a mechanism to control
+ * the usage of new log record schemas. Starting with 3.2, this version must be set before
+ * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
     /**
@@ -134,7 +143,7 @@ public final class QuorumController implements Controller {
         private LogContext logContext = null;
         private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
         private RaftClient<ApiMessageAndVersion> raftClient = null;
-        private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
+        private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
@@ -144,6 +153,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
+        private MetadataVersion initialMetadataVersion = null;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -175,8 +185,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
-            this.supportedFeatures = supportedFeatures;
+        public Builder setQuorumFeatures(QuorumFeatures quorumFeatures) {
+            this.quorumFeatures = quorumFeatures;
             return this;
         }
 
@@ -210,6 +220,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setInitialMetadataVersion(MetadataVersion metadataVersion) {
+            this.initialMetadataVersion = metadataVersion;
+            return this;
+        }
+
         public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.createTopicPolicy = createTopicPolicy;
             return this;
@@ -230,6 +245,12 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
+            if (initialMetadataVersion == null) {
+                throw new RuntimeException("You must set an initial metadata.version in meta.properties");
+            }
+            if (quorumFeatures == null) {
+                throw new RuntimeException("You must specify the quorum features");
+            }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
@@ -240,14 +261,15 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
+
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(logContext, nodeId, clusterId, queue, time,
-                    configDefs, raftClient, supportedFeatures, defaultReplicationFactor,
+                    configDefs, raftClient, quorumFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
-                    alterConfigPolicy, configurationValidator);
+                    alterConfigPolicy, configurationValidator, initialMetadataVersion);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -696,6 +718,13 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
+    private <T> CompletableFuture<T> prependWriteEvent(String name,
+                                                       ControllerWriteOperation<T> op) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, op);
+        queue.prepend(event);
+        return event.future();
+    }
+
     class QuorumMetaLogListener implements RaftClient.Listener<ApiMessageAndVersion> {
 
         @Override
@@ -827,14 +856,38 @@ public final class QuorumController implements Controller {
                             curEpoch);
                     }
                     log.info(
-                        "Becoming the active controller at epoch {}, committed offset {} and committed epoch {}.",
-                        newEpoch, lastCommittedOffset, lastCommittedEpoch
+                        "Becoming the active controller at epoch {}, committed offset {}, committed epoch {}, and metadata.version {}",
+                        newEpoch, lastCommittedOffset, lastCommittedEpoch, activeMetadataVersion
                     );
 
                     curClaimEpoch = newEpoch;
                     controllerMetrics.setActive(true);
                     writeOffset = lastCommittedOffset;
                     clusterControl.activate();
+
+                    // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
+                    // write any records to the log since we need the metadata.version to determine the correct
+                    // record version
+                    if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
+                        final CompletableFuture<Map<String, ApiError>> future;
+                        if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                                log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
+                                return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
+                            });
+                        } else {
+                            future = prependWriteEvent("initializeMetadataVersion", () -> {
+                                log.info("Initializing metadata.version to {}", initialMetadataVersion.version());
+                                return featureControl.initializeMetadataVersion(initialMetadataVersion.version());
+                            });
+                        }
+                        future.whenComplete((result, exception) -> {
+                            if (exception != null) {
+                                log.error("Failed to initialize metadata.version", exception);
+                                renounce();
+                            }
+                        });
+                    }
 
                     // Before switching to active, create an in-memory snapshot at the last committed offset. This is
                     // required because the active controller assumes that there is always an in-memory snapshot at the
@@ -864,6 +917,38 @@ public final class QuorumController implements Controller {
                     runnable.run();
                 }
             });
+        }
+    }
+
+    /**
+     * A callback for changes to feature levels including metadata.version. This is called synchronously from
+     * {@link FeatureControlManager#replay(FeatureLevelRecord)} which is part of a ControllerWriteEvent. It is safe
+     * to modify controller state here. By the time this listener is called, a FeatureLevelRecord has been committed and
+     * the in-memory state of FeatureControlManager has been updated.
+     */
+    class QuorumFeatureListener implements FeatureLevelListener {
+        @Override
+        public void handle(String featureName, short finalizedMaxVersion) {
+            log.debug("Feature flag {} finalized {}", featureName, finalizedMaxVersion);
+            boolean isActiveController = curClaimEpoch != -1;
+            boolean isFeatureSupported = featureControl.canSupportVersion(featureName, finalizedMaxVersion);
+            if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                if (!isFeatureSupported) {
+                    if (isActiveController) {
+                        // TODO if we get here, somehow the active controller wrote an unsupported version to the log
+                        //      how could this happen? What should we do?
+                        log.error("Active controller cannot support metadata.version {}", finalizedMaxVersion);
+                    } else {
+                        log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedMaxVersion);
+                        beginShutdown();
+                    }
+                } else {
+                    log.info("Setting our metadata.version to {}", finalizedMaxVersion);
+                    activeMetadataVersion = finalizedMaxVersion;
+                    // TODO other synchronous controller stuff here.
+                }
+            }
+            // In the future, handle other feature flags that are relevant to the controller here.
         }
     }
 
@@ -1014,6 +1099,7 @@ public final class QuorumController implements Controller {
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
         lastCommittedTimestamp = -1;
+        activeMetadataVersion = MetadataVersions.UNINITIALIZED.version();
     }
 
     private final LogContext logContext;
@@ -1079,6 +1165,11 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ClusterControlManager clusterControl;
+
+    /**
+     * TODO
+     */
+    private final QuorumFeatureListener featureListener;
 
     /**
      * An object which stores the controller's view of the cluster features.
@@ -1153,6 +1244,11 @@ public final class QuorumController implements Controller {
      */
     private long newBytesSinceLastSnapshot = 0;
 
+    private final MetadataVersion initialMetadataVersion;
+
+    private short activeMetadataVersion = MetadataVersions.UNINITIALIZED.version();
+
+
     private QuorumController(LogContext logContext,
                              int nodeId,
                              String clusterId,
@@ -1160,7 +1256,7 @@ public final class QuorumController implements Controller {
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
                              RaftClient<ApiMessageAndVersion> raftClient,
-                             Map<String, VersionRange> supportedFeatures,
+                             QuorumFeatures quorumFeatures,
                              short defaultReplicationFactor,
                              int defaultNumPartitions,
                              ReplicaPlacer replicaPlacer,
@@ -1169,7 +1265,8 @@ public final class QuorumController implements Controller {
                              ControllerMetrics controllerMetrics,
                              Optional<CreateTopicPolicy> createTopicPolicy,
                              Optional<AlterConfigPolicy> alterConfigPolicy,
-                             ConfigurationValidator configurationValidator) {
+                             ConfigurationValidator configurationValidator,
+                             MetadataVersion initialMetadataVersion) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -1178,20 +1275,22 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
+        this.featureListener = new QuorumFeatureListener();
         this.purgatory = new ControllerPurgatory();
         this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager(logContext,
             snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
-        this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics, this::activeMetadataVersion);
+        this.featureControl = new FeatureControlManager(quorumFeatures, snapshotRegistry, this::activeMetadataVersion);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl, controllerMetrics, createTopicPolicy);
         this.raftClient = raftClient;
+        this.initialMetadataVersion = initialMetadataVersion;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.writeOffset = -1L;
@@ -1199,6 +1298,7 @@ public final class QuorumController implements Controller {
         resetState();
 
         this.raftClient.register(metaLogListener);
+        this.featureControl.register("quorumController", featureListener);
     }
 
     @Override
@@ -1272,7 +1372,7 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<FeatureMapAndEpoch> finalizedFeatures() {
+    public CompletableFuture<FinalizedControllerFeatures> finalizedFeatures() {
         return appendReadEvent("getFinalizedFeatures",
             () -> featureControl.finalizedFeatures(lastCommittedOffset));
     }
@@ -1402,6 +1502,38 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<UpdateFeaturesResponseData> updateFeatures(
+            UpdateFeaturesRequestData request) {
+        return appendWriteEvent("updateFeatures", () -> {
+            Map<String, Short> updates = new HashMap<>();
+            Map<String, FeatureControlManager.DowngradeType> downgrades = new HashMap<>();
+            request.featureUpdates().forEach(featureUpdate -> {
+                String featureName = featureUpdate.feature();
+                if (featureUpdate.downgradeType() == FeatureUpdate.DowngradeType.SAFE.code()) {
+                    downgrades.put(featureName, FeatureControlManager.DowngradeType.SAFE);
+                } else if (featureUpdate.downgradeType() == FeatureUpdate.DowngradeType.UNSAFE.code()) {
+                    downgrades.put(featureName, FeatureControlManager.DowngradeType.UNSAFE);
+                } else {
+                    downgrades.put(featureName, FeatureControlManager.DowngradeType.NONE);
+
+                }
+                updates.put(featureName, featureUpdate.maxVersionLevel());
+            });
+            return featureControl.updateFeatures(updates, downgrades, clusterControl.brokerSupportedVersions(),
+                request.validateOnly());
+        }).thenApply(result -> {
+            UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
+            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
+            result.forEach((featureName, error) -> responseData.results().add(
+                new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                    .setFeature(featureName)
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())));
+            return responseData;
+        });
+    }
+
+    @Override
     public CompletableFuture<List<CreatePartitionsTopicResult>>
             createPartitions(long deadlineNs, List<CreatePartitionsTopic> topics) {
         if (topics.isEmpty()) {
@@ -1452,6 +1584,10 @@ public final class QuorumController implements Controller {
     @Override
     public int curClaimEpoch() {
         return curClaimEpoch;
+    }
+
+    private MetadataVersions activeMetadataVersion() {
+        return MetadataVersions.fromValue(activeMetadataVersion);
     }
 
     @Override

@@ -71,6 +71,7 @@ versions += [
   javassist: "3.27.0-GA",
   jetty: "9.4.43.v20210629",
   jersey: "2.34",
+  jgit: "5.12.0.202106070339-r",
   jline: "3.12.1",
   jmh: "1.32",
   hamcrest: "2.2",

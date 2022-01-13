@@ -22,18 +22,18 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
-
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.{MetadataRecordSerde, MetadataVersions}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.zookeeper.client.ZKClientConfig
@@ -76,7 +76,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
   override def createAndStartBroker(config: KafkaConfig,
                                     time: Time): KafkaBroker = {
     val broker = new BrokerServer(config = config,
-      metaProps = new MetaProperties(clusterId, config.nodeId),
+      metaProps = new MetaProperties(clusterId, config.nodeId, MetadataVersions.latest().version()),
       raftManager = raftManager,
       time = time,
       metrics = new Metrics(),
@@ -224,7 +224,7 @@ abstract class QuorumTestHarness extends Logging {
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
     val clusterId = Uuid.randomUuid().toString
     val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(clusterId, 0)
+    val metaProperties = new MetaProperties(clusterId, 0, MetadataVersions.latest().version())
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
     val controllerMetrics = new Metrics()
     val propsList = kraftControllerConfigs()
@@ -243,6 +243,7 @@ abstract class QuorumTestHarness extends Logging {
     val config = new KafkaConfig(props)
     val threadNamePrefix = "Controller_" + testInfo.getDisplayName
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
+    val apiVersions = new ApiVersions
     val raftManager = new KafkaRaftManager(
       metaProperties = metaProperties,
       config = config,
@@ -252,7 +253,8 @@ abstract class QuorumTestHarness extends Logging {
       time = Time.SYSTEM,
       metrics = controllerMetrics,
       threadNamePrefixOpt = Option(threadNamePrefix),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      apiVersions = apiVersions)
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(
@@ -262,7 +264,8 @@ abstract class QuorumTestHarness extends Logging {
         time = Time.SYSTEM,
         metrics = controllerMetrics,
         threadNamePrefix = Option(threadNamePrefix),
-        controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+        controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+        raftApiVersions = apiVersions)
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
           error("Error completing controller socket server future", e)

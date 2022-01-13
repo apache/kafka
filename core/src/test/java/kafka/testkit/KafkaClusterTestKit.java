@@ -27,6 +27,7 @@ import kafka.server.MetaProperties;
 import kafka.server.Server;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -172,11 +174,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("controller%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
+                    ApiVersions apiVersions = new ApiVersions();
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
-                        Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
+                        Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future, apiVersions);
                     ControllerServer controller = new ControllerServer(
                         nodes.controllerProperties(node.id()),
                         config,
@@ -184,7 +187,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         Option.apply(threadNamePrefix),
-                        connectFutureManager.future
+                        connectFutureManager.future,
+                        apiVersions
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
@@ -224,11 +228,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id(), MetadataVersions.latest().version());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
-                            Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
+                            Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future, new ApiVersions());
                     BrokerServer broker = new BrokerServer(
                         config,
                         nodes.brokerProperties(node.id()),

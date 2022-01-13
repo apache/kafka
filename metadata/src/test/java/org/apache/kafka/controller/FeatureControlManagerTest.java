@@ -23,12 +23,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.FeatureMap;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
+import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -48,7 +50,31 @@ public class FeatureControlManagerTest {
             String feature = (String) args[i];
             Integer low = (Integer) args[i + 1];
             Integer high = (Integer) args[i + 2];
-            result.put(feature, new VersionRange(low.shortValue(), high.shortValue()));
+            result.put(feature, VersionRange.of(low.shortValue(), high.shortValue()));
+        }
+        return result;
+    }
+
+    private static Map<String, Short> versionMap(Object... args) {
+        Map<String, Short> result = new HashMap<>();
+        for (int i = 0; i < args.length; i += 2) {
+            String feature = (String) args[i];
+            Integer ver = (Integer) args[i + 1];
+            result.put(feature, ver.shortValue());
+        }
+        return result;
+    }
+
+    public static QuorumFeatures features(Object... args) {
+        return new QuorumFeatures(0, new ApiVersions(), rangeMap(args), Collections.emptyList());
+    }
+
+    private static Map<String, Short> updateMap(Object... args) {
+        Map<String, Short> result = new HashMap<>();
+        for (int i = 0; i < args.length; i += 2) {
+            String feature = (String) args[i];
+            Integer ver = (Integer) args[i + 1];
+            result.put(feature, ver.shortValue());
         }
         return result;
     }
@@ -58,26 +84,26 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 2), snapshotRegistry);
-        assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
+            features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
+        assertEquals(new FinalizedControllerFeatures(Collections.emptyMap(), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature range."))),
-            manager.updateFeatures(rangeMap("foo", 1, 3),
-                Collections.singleton("foo"),
-                Collections.emptyMap()));
+            manager.updateFeatures(updateMap("foo", 3),
+                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.emptyMap(), false));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
-            rangeMap("foo", 1, 2, "bar", 1, 1), Collections.emptySet(),
-                Collections.emptyMap());
+                updateMap("foo", 2, "bar", 1), Collections.emptyMap(),
+                Collections.emptyMap(), false);
         Map<String, ApiError> expectedMap = new HashMap<>();
         expectedMap.put("foo", ApiError.NONE);
         expectedMap.put("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The controller does not support the given feature range."));
+                "The controller does not support the given feature."));
         assertEquals(expectedMap, result.response());
         List<ApiMessageAndVersion> expectedMessages = new ArrayList<>();
         expectedMessages.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2),
+            setName("foo").setFeatureLevel((short) 2),
             (short) 0));
         assertEquals(expectedMessages, result.records());
     }
@@ -85,14 +111,14 @@ public class FeatureControlManagerTest {
     @Test
     public void testReplay() {
         FeatureLevelRecord record = new FeatureLevelRecord().
-            setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2);
+            setName("foo").setFeatureLevel((short) 2);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         snapshotRegistry.getOrCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 2), snapshotRegistry);
+            features("foo", 1, 2), snapshotRegistry, MetadataVersions::latest);
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
-        assertEquals(new FeatureMapAndEpoch(new FeatureMap(rangeMap("foo", 1, 2)), 123),
+        assertEquals(new FinalizedControllerFeatures(versionMap("foo", 2), 123),
             manager.finalizedFeatures(123));
     }
 
@@ -100,7 +126,7 @@ public class FeatureControlManagerTest {
     public void testUpdateFeaturesErrorCases() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -114,14 +140,14 @@ public class FeatureControlManagerTest {
                 )
             ),
             manager.updateFeatures(
-                rangeMap("foo", 1, 3),
-                Collections.singleton("foo"),
-                Collections.singletonMap(5, rangeMap())
-            )
+                updateMap("foo", 3),
+                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.singletonMap(5, rangeMap()),
+                false)
         );
 
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
-            rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
+            updateMap("foo", 3), Collections.emptyMap(), Collections.emptyMap(), false);
         assertEquals(Collections.singletonMap("foo", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
         snapshotRegistry.getOrCreateSnapshot(3);
@@ -129,9 +155,9 @@ public class FeatureControlManagerTest {
         assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "Can't downgrade the maximum version of this feature without " +
-                    "setting downgradable to true."))),
-            manager.updateFeatures(rangeMap("foo", 1, 2),
-                Collections.emptySet(), Collections.emptyMap()));
+                    "setting the downgrade type."))),
+            manager.updateFeatures(updateMap("foo", 2),
+                Collections.emptyMap(), Collections.emptyMap(), false));
 
         assertEquals(
             ControllerResult.atomicOf(
@@ -139,18 +165,17 @@ public class FeatureControlManagerTest {
                     new ApiMessageAndVersion(
                         new FeatureLevelRecord()
                             .setName("foo")
-                            .setMinFeatureLevel((short) 1)
-                            .setMaxFeatureLevel((short) 2),
+                            .setFeatureLevel((short) 2),
                         (short) 0
                     )
                 ),
                 Collections.singletonMap("foo", ApiError.NONE)
             ),
             manager.updateFeatures(
-                rangeMap("foo", 1, 2),
-                Collections.singleton("foo"),
-                Collections.emptyMap()
-            )
+                updateMap("foo", 2),
+                Collections.singletonMap("foo", FeatureControlManager.DowngradeType.SAFE),
+                Collections.emptyMap(),
+                false)
         );
     }
 
@@ -158,20 +183,18 @@ public class FeatureControlManagerTest {
     public void testFeatureControlIterator() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
-            rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
+            features("foo", 1, 5, "bar", 1, 2), snapshotRegistry, MetadataVersions::latest);
         ControllerResult<Map<String, ApiError>> result = manager.
-            updateFeatures(rangeMap("foo", 1, 5, "bar", 1, 1),
-                Collections.emptySet(), Collections.emptyMap());
+            updateFeatures(updateMap("foo", 5, "bar", 1),
+                Collections.emptyMap(), Collections.emptyMap(), false);
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("foo").
-                setMinFeatureLevel((short) 1).
-                setMaxFeatureLevel((short) 5), (short) 0)),
+                setFeatureLevel((short) 5), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("bar").
-                setMinFeatureLevel((short) 1).
-                setMaxFeatureLevel((short) 1), (short) 0))),
+                setFeatureLevel((short) 1), (short) 0))),
             manager.iterator(Long.MAX_VALUE));
     }
 }

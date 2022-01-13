@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
@@ -30,6 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -37,13 +37,13 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
-import org.apache.kafka.metadata.VersionRange
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.metadata.MetadataVersions
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
@@ -59,7 +59,8 @@ class ControllerServer(
   val time: Time,
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val raftApiVersions: ApiVersions
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -76,7 +77,6 @@ class ControllerServer(
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
   var controller: Controller = null
-  val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -160,11 +160,24 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
+      if (config.interBrokerProtocolVersionString != Defaults.InterBrokerProtocolVersion) {
+        // TODO can we have a stronger check here?
+        throw new ConfigException(s"Detected non-default IBP value ${config.interBrokerProtocolVersionString}. Cannot run KRaft mode with IBP set!")
+      }
+
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+
+      val initialMetadataVersion = MetadataVersions.fromValue(metaProperties.initialMetadataVersion)
+
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
+      val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
+
       controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
         setRaftClient(raftManager.client).
+        setQuorumFeatures(quorumFeatures).
         setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
@@ -174,20 +187,18 @@ class ControllerServer(
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
         setConfigurationValidator(new ControllerConfigurationValidator()).
+        setInitialMetadataVersion(initialMetadataVersion).
         build()
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
         time,
-        supportedFeatures,
         controller,
         raftManager,
         config,
         metaProperties,
-        controllerNodes.toSeq,
+        controllerNodes.asScala.toSeq,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,

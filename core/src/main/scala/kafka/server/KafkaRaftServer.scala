@@ -24,6 +24,7 @@ import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
+import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -61,6 +62,7 @@ class KafkaRaftServer(
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
     RaftConfig.parseVoterConnections(config.quorumVoters))
 
+  private val raftApiVersions = new ApiVersions
   private val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
     metaProps,
     config,
@@ -70,7 +72,8 @@ class KafkaRaftServer(
     time,
     metrics,
     threadNamePrefix,
-    controllerQuorumVotersFuture
+    controllerQuorumVotersFuture,
+    raftApiVersions
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
@@ -97,7 +100,8 @@ class KafkaRaftServer(
       time,
       metrics,
       threadNamePrefix,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      raftApiVersions
     ))
   } else {
     None

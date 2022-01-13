@@ -36,7 +36,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.FeatureMapAndEpoch;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
+import org.apache.kafka.metadata.MetadataVersionProvider;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -118,6 +119,11 @@ public class ClusterControlManager {
     private final ReplicaPlacer replicaPlacer;
 
     /**
+     * The metadata.version provider
+     */
+    private final MetadataVersionProvider metadataVersionProvider;
+
+    /**
      * Maps broker IDs to broker registrations.
      */
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
@@ -144,13 +150,15 @@ public class ClusterControlManager {
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
                           ReplicaPlacer replicaPlacer,
-                          ControllerMetrics metrics) {
+                          ControllerMetrics metrics,
+                          MetadataVersionProvider metadataVersionProvider) {
         this.logContext = logContext;
         this.clusterId = clusterId;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
         this.replicaPlacer = replicaPlacer;
+        this.metadataVersionProvider = metadataVersionProvider;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
@@ -178,6 +186,13 @@ public class ClusterControlManager {
         return brokerRegistrations;
     }
 
+    Map<Integer, Map<String, VersionRange>> brokerSupportedVersions() {
+        return brokerRegistrations()
+            .entrySet()
+            .stream()
+            .collect(Collectors.toMap(Entry::getKey, entry -> entry.getValue().supportedFeatures()));
+    }
+
     Set<Integer> fencedBrokerIds() {
         return brokerRegistrations.values()
             .stream()
@@ -192,7 +207,7 @@ public class ClusterControlManager {
     public ControllerResult<BrokerRegistrationReply> registerBroker(
             BrokerRegistrationRequestData request,
             long brokerEpoch,
-            FeatureMapAndEpoch finalizedFeatures) {
+            FinalizedControllerFeatures finalizedFeatures) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
@@ -229,13 +244,14 @@ public class ClusterControlManager {
                 setSecurityProtocol(listener.securityProtocol()));
         }
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
-            Optional<VersionRange> finalized = finalizedFeatures.map().get(feature.name());
+            Optional<Short> finalized = finalizedFeatures.get(feature.name());
             if (finalized.isPresent()) {
-                if (!finalized.get().contains(new VersionRange(feature.minSupportedVersion(),
-                        feature.maxSupportedVersion()))) {
+                if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
                     throw new UnsupportedVersionException("Unable to register because " +
-                        "the broker has an unsupported version of " + feature.name());
+                            "the broker has an unsupported version of " + feature.name());
                 }
+            } else {
+                log.warn("Broker registered with feature {} that is unknown to the controller", feature.name());
             }
             record.features().add(new BrokerFeature().
                 setName(feature.name()).
@@ -251,7 +267,7 @@ public class ClusterControlManager {
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record,
-            REGISTER_BROKER_RECORD.highestSupportedVersion()));
+            metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
         return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
@@ -265,10 +281,10 @@ public class ClusterControlManager {
         }
         Map<String, VersionRange> features = new HashMap<>();
         for (BrokerFeature feature : record.features()) {
-            features.put(feature.name(), new VersionRange(
+            features.put(feature.name(), VersionRange.of(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
-       
+
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
                 new BrokerRegistration(brokerId, record.brokerEpoch(),
@@ -446,7 +462,7 @@ public class ClusterControlManager {
                 setFeatures(features).
                 setRack(registration.rack().orElse(null)).
                 setFenced(registration.fenced()),
-                    REGISTER_BROKER_RECORD.highestSupportedVersion()));
+                    metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
             return batch;
         }
     }

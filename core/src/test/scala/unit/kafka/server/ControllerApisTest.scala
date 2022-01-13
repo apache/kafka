@@ -101,7 +101,6 @@ class ControllerApisTest {
       authorizer,
       quotas,
       time,
-      Map.empty,
       controller,
       raftManager,
       new KafkaConfig(props),

@@ -14,26 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
 
-import java.util.Map;
-import org.apache.kafka.common.annotation.InterfaceStability;
+package org.apache.kafka.metadata;
 
-/**
- * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
- */
-@InterfaceStability.Evolving
-public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
-    private boolean dryRun = false;
+import org.apache.kafka.common.metadata.MetadataRecordType;
 
-    public boolean shouldDryRun() {
-        return dryRun;
-    }
-
-    public UpdateFeaturesOptions dryRun(boolean dryRun) {
-        this.dryRun = dryRun;
-        return this;
-    }
+@FunctionalInterface
+public interface MetadataRecordVersionResolver {
+    short recordVersion(MetadataRecordType type);
 }
