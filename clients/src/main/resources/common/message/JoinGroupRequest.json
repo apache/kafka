@@ -57,7 +57,7 @@
       { "name": "Metadata", "type": "bytes", "versions": "0+",
         "about": "The protocol metadata." }
     ]},
-    { "name": "Reason", "type": "string", "versions": "8+", "nullableVersions": "8+", "default": "null",
+    { "name": "Reason", "type": "string", "versions": "8+", "nullableVersions": "8+", "default": "null", "ignorable": true,
       "about": "The reason why the member (re-)joins the group." }
   ]
 }
