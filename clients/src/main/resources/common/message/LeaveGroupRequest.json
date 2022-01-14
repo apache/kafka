@@ -40,7 +40,7 @@
         "versions": "3+", "nullableVersions": "3+", "default": "null",
         "about": "The group instance ID to remove from the group." },
       { "name": "Reason", "type": "string",
-        "versions": "5+", "nullableVersions": "5+", "default": "null",
+        "versions": "5+", "nullableVersions": "5+", "default": "null", "ignorable": true,
         "about": "The reason why the member left the group." }
     ]}
   ]
