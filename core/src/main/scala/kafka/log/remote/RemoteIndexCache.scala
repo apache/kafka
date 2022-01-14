@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import kafka.log._
+import kafka.log.remote.RemoteIndexCache.DirName
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.utils.Utils
@@ -32,21 +33,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 object RemoteIndexCache {
   val DirName = "remote-log-index-cache"
   val TmpFileSuffix = ".tmp"
-  val OffsetIndexFileSuffix = ".oi"
-  val TimeIndexFileSuffix = ".ti"
-  val TxnIndexFileSuffix = ".tx"
 }
 
 class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
   private val markedForCleanup = new AtomicBoolean(false)
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
-    if (markedForCleanup.get()) throw new IllegalStateException("This entry is already closed")
+    if (markedForCleanup.get()) throw new IllegalStateException("This entry is marked for cleanup")
     else offsetIndex.lookup(targetOffset)
   }
 
   def lookupTimestamp(timestamp: Long, startingOffset: Long): OffsetPosition = {
-    if (markedForCleanup.get()) throw new IllegalStateException("This entry is already closed")
+    if (markedForCleanup.get()) throw new IllegalStateException("This entry is marked for cleanup")
 
     val timestampOffset = timeIndex.lookup(timestamp)
     offsetIndex.lookup(math.max(startingOffset, timestampOffset.offset))
@@ -84,7 +82,7 @@ class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex
 //todo-tier make maxSize configurable
 class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String) extends Logging {
 
-  val cacheDir = new File(logDir, "remote-log-index-cache")
+  val cacheDir = new File(logDir, DirName)
   @volatile var closed = false
 
   val expiredIndexes = new LinkedBlockingQueue[Entry]()
@@ -154,7 +152,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
           }
         }
 
-        Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath)
+        Utils.atomicMoveWithFallback(tmpIndexFile.toPath, indexFile.toPath, false)
         readIndex(indexFile)
       }
 
@@ -176,7 +174,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
         val fileName = key.id().toString
         val startOffset = remoteLogSegmentMetadata.startOffset()
 
-        val offsetIndex: OffsetIndex = loadIndexFile(fileName, RemoteIndexCache.OffsetIndexFileSuffix,
+        val offsetIndex: OffsetIndex = loadIndexFile(fileName, UnifiedLog.IndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.OFFSET),
           file => {
             val index = new OffsetIndex(file, startOffset, Int.MaxValue, writable = false)
@@ -184,7 +182,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val timeIndex: TimeIndex = loadIndexFile(fileName, RemoteIndexCache.TimeIndexFileSuffix,
+        val timeIndex: TimeIndex = loadIndexFile(fileName, UnifiedLog.TimeIndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TIMESTAMP),
           file => {
             val index = new TimeIndex(file, startOffset, Int.MaxValue, writable = false)
@@ -192,7 +190,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
             index
           })
 
-        val txnIndex: TransactionIndex = loadIndexFile(fileName, RemoteIndexCache.TxnIndexFileSuffix,
+        val txnIndex: TransactionIndex = loadIndexFile(fileName, UnifiedLog.TxnIndexFileSuffix,
           rlsMetadata => remoteStorageManager.fetchIndex(rlsMetadata, IndexType.TRANSACTION),
           file => {
             val index = new TransactionIndex(startOffset, file)

@@ -22,11 +22,10 @@ import kafka.server.KafkaConfig
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.Logging
 import org.apache.kafka.common._
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, Utils}
-import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
+import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentMetadata, RemoteStorageManager}
 
 import java.io.{Closeable, InputStream}
@@ -148,10 +147,9 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     // Partitions logs are available when this callback is invoked.
     // Compact topics and internal topics are filtered here as they are not supported with tiered storage.
     def filterPartitions(partitions: Set[Partition]): Set[TopicIdPartition] = {
-      partitions.filterNot(partition => Topic.isInternal(partition.topic) ||
-        partition.topicPartition.topic().equals(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME) ||
-         partition.log.exists(log => log.remoteLogEnabled())).map(partition =>
-        new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
+      // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
+      partitions.filter(partition => partition.log.exists(log => log.remoteLogEnabled()))
+        .map(partition => new TopicIdPartition(topicIds.get(partition.topic), partition.topicPartition))
     }
 
     val followerTopicPartitions = filterPartitions(partitionsBecomeFollower)
