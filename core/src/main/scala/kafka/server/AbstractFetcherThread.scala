@@ -717,7 +717,7 @@ abstract class AbstractFetcherThread(name: String,
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
-  protected def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
+  private def fetchOffsetAndTruncate(topicPartition: TopicPartition, topicId: Option[Uuid], currentLeaderEpoch: Int): PartitionFetchState = {
     fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
       (epoch, leaderLogStartOffset) => truncateFullyAndStartAt(topicPartition, leaderLogStartOffset))
   }
@@ -725,10 +725,10 @@ abstract class AbstractFetcherThread(name: String,
   /**
    * Handle a partition whose offset is moved to tiered storage and return a new fetch offset.
    */
-  protected def fetchOffsetAndBuildRemoteLogAuxState(topicPartition: TopicPartition,
-                                                     topicId: Option[Uuid],
-                                                     currentLeaderEpoch: Int,
-                                                     leaderLogStartOffset: Long): PartitionFetchState = {
+  private def fetchOffsetAndBuildRemoteLogAuxState(topicPartition: TopicPartition,
+                                                   topicId: Option[Uuid],
+                                                   currentLeaderEpoch: Int,
+                                                   leaderLogStartOffset: Long): PartitionFetchState = {
     fetchOffsetAndApplyFun(topicPartition, topicId, currentLeaderEpoch,
       (offsetEpoch, leaderLocalLogStartOffset) =>
         buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, offsetEpoch, leaderLogStartOffset))
