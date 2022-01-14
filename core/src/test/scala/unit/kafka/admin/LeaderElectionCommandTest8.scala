@@ -19,7 +19,6 @@ package kafka.admin
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-
 import kafka.common.AdminCommandFailedException
 import kafka.server.IntegrationTestUtils.createTopic
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -27,13 +26,15 @@ import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
+
+import java.util.Properties
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
@@ -55,6 +56,12 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
     clusterConfig.serverProperties().put(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
   }
 
+  def createAdminClient(): Admin = {
+    val prop = new Properties
+    prop.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, 5000)
+    cluster.createAdminClient(prop)
+  }
+
   @ClusterTest
   def testAllTopicPartition(): Unit = {
     System.err.println("testAll start")
@@ -64,7 +71,7 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = cluster.createAdminClient()
+    val client = createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -98,7 +105,7 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = cluster.createAdminClient()
+    val client = createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -135,7 +142,7 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
 
     cluster.waitForReadyBrokers()
 
-    val client = cluster.createAdminClient()
+    val client = createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -175,7 +182,7 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = cluster.createAdminClient()
+    val client = createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -221,7 +228,7 @@ final class LeaderElectionCommandTest8(cluster: ClusterInstance) {
     val assignment1 = Seq(broker3, broker2)
 
     cluster.waitForReadyBrokers()
-    val client = cluster.createAdminClient()
+    val client = createAdminClient()
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1

@@ -404,7 +404,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public Properties clientProperties() {
-        Properties properties = new Properties();
+        return clientProperties(new Properties());
+    }
+
+    public Properties clientProperties(Properties configOverrides) {
         if (!brokers.isEmpty()) {
             StringBuilder bld = new StringBuilder();
             String prefix = "";
@@ -421,9 +424,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 bld.append(prefix).append("localhost:").append(port);
                 prefix = ",";
             }
-            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
         }
-        return properties;
+        return configOverrides;
     }
 
     public Map<Integer, ControllerServer> controllers() {
