@@ -17,13 +17,10 @@
 
 package kafka.server
 
-import java.util.Properties
-
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
@@ -59,11 +56,6 @@ sealed trait MetadataSupport {
    */
   def ensureConsistentWith(config: KafkaConfig): Unit
 
-  /**
-   * Get the dynamic configuration associated with a given resource.
-   */
-  def getResourceConfig(resource: ConfigResource): Properties
-
   def canForward(): Boolean
 
   def maybeForward(
@@ -95,14 +87,6 @@ case class ZkSupport(adminManager: ZkAdminManager,
     }
   }
 
-  override def getResourceConfig(resource: ConfigResource): Properties = {
-    resource.`type`() match {
-      case ConfigResource.Type.BROKER => adminZkClient.fetchEntityConfig(ConfigType.Broker, resource.name())
-      case ConfigResource.Type.TOPIC => adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name())
-      case _ => throw new RuntimeException(s"Unsupported type for resourceConfig: ${resource.`type`()}")
-    }
-  }
-
   override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
 }
 
@@ -117,9 +101,6 @@ case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: KRaftMetadataCa
       throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
     }
   }
-
-  override def getResourceConfig(resource: ConfigResource): Properties =
-      metadataCache.currentImage().configs().configProperties(resource)
 
   override def canForward(): Boolean = true
 }

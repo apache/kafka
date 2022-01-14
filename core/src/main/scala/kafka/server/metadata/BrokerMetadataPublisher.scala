@@ -20,7 +20,7 @@ package kafka.server.metadata
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.DynamicConfigManager.toLoggableProps
+import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -188,7 +188,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
             case BROKER => if (resource.name().isEmpty) {
               // Apply changes to "cluster configs" (also known as default BROKER configs).
               // These are stored in KRaft with an empty name field.
-              info(s"Updating brokers with new configuration : " +
+              info(s"Updating cluster configuration : " +
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Broker).
                 processConfigChanges(ConfigEntityName.Default, props)
@@ -269,6 +269,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     // Start log manager, which will perform (potentially lengthy)
     // recovery-from-unclean-shutdown if required.
     logManager.startup(metadataCache.getAllTopics())
+
+    // Make the LogCleaner available for reconfiguration. We can't do this prior to this
+    // point because LogManager#startup creates the LogCleaner object, if
+    // log.cleaner.enable is true.
+    //
+    // TODO: it would probably be better to make log.cleaner.enable dynamically
+    // configurable as well. It would also be cleaner to unconditionally create the log
+    // cleaner object in the LogManager constructor even if we never start it.
+    Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
 
     // Start the replica manager.
     replicaManager.startup()

@@ -38,7 +38,7 @@ trait ForwardingManager {
     forwardRequest(originalRequest.context,
       buffer,
       originalRequest.body[AbstractRequest],
-      () => originalRequest.toString(),
+      () => originalRequest.toString,
       responseCallback)
   }
 
@@ -51,10 +51,25 @@ trait ForwardingManager {
     forwardRequest(originalRequest.context,
       buffer,
       newRequestBody,
-      () => originalRequest.toString(),
+      () => originalRequest.toString,
       responseCallback)
   }
 
+  /**
+   * Forward given request to the active controller.
+   *
+   * @param requestContext      The request context of the original envelope request.
+   * @param requestBufferCopy   The request buffer we want to send. This should not be the original
+   *                            byte buffer from the envelope request, since we will be mutating
+   *                            the position and limit fields. It should be a copy.
+   * @param requestBody         The AbstractRequest we are sending.
+   * @param requestToString     A callback which can be invoked to produce a human-readable decription
+   *                            of the request.
+   * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
+   *                            We will call this function with Some(x) after the controller responds with x.
+   *                            Or, if the controller doesn't support the request version, we will complete
+   *                            the callback with None.
+   */
   def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,
@@ -92,21 +107,6 @@ class ForwardingManagerImpl(
   channelManager: BrokerToControllerChannelManager
 ) extends ForwardingManager with Logging {
 
-  /**
-   * Forward given request to the active controller.
-   *
-   * @param requestContext      The request context of the original envelope request.
-   * @param requestBufferCopy   The request buffer we want to send. This should not be the original
-   *                            byte buffer from the envelope request, since we will be mutating
-   *                            the position and limit fields. It should be a copy.
-   * @param requestBody         The AbstractRequest we are sending.
-   * @param requestToString     A callback which can be invoked to produce a human-readable decription
-   *                            of the request.
-   * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
-   *                            We will call this function with Some(x) after the controller responds with x.
-   *                            Or, if the controller doesn't support the request version, we will complete
-   *                            the callback with None.
-   */
   override def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,

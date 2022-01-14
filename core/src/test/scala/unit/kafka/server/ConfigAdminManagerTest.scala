@@ -18,8 +18,9 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Collections
 
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{Log4jController, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
@@ -39,7 +40,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
 import org.slf4j.LoggerFactory
 
@@ -50,7 +51,7 @@ class ConfigAdminManagerTest {
 
   def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
     val config = TestUtils.createBrokerConfig(nodeId = brokerId, zkConnect = null)
-    new ConfigAdminManager(brokerId, new KafkaConfig(config), _ => new Properties())
+    new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
   }
 
   def broker0Incremental(): IAlterConfigsResource = new IAlterConfigsResource().
@@ -452,5 +453,14 @@ class ConfigAdminManagerTest {
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
           unknown).iterator()))))
+  }
+
+  @Test
+  def testContainsDuplicates(): Unit = {
+    assertFalse(ConfigAdminManager.containsDuplicates(Seq()))
+    assertFalse(ConfigAdminManager.containsDuplicates(Seq("foo")))
+    assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "foo")))
+    assertFalse(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz")))
+    assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz", "foo")))
   }
 }
