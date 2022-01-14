@@ -3540,7 +3540,15 @@ class ReplicaManagerTest {
   def testReplicaAlterLogDirsWithAndWithoutIds(usesTopicIds: Boolean): Unit = {
     val version = if (usesTopicIds) LeaderAndIsrRequestData.HIGHEST_SUPPORTED_VERSION else 4.toShort
     val topicId = if (usesTopicIds) this.topicId else Uuid.ZERO_UUID
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    val topicIdOpt = if (usesTopicIds) Some(topicId) else None
+
+    // We use a low `replica.fetch.max.bytes` in order to have multiple fetch
+    // requests issued by the ReplicaAlterLogDirsThread.
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      new MockTimer(time),
+      propsModifier = props => props.put(KafkaConfig.ReplicaFetchMaxBytesProp, "1")
+    )
+
     try {
       val topicPartition = new TopicPartition(topic, 0)
       val aliveBrokersIds = Seq(0, 1)
@@ -3571,6 +3579,9 @@ class ReplicaManagerTest {
       // Make sure the future log is created.
       replicaManager.futureLocalLogOrException(topicPartition)
       assertEquals(1, replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.size)
+
+      // Verify that the fetcher has the correct topic id.
+      assertFetcherHasTopicId(replicaManager.replicaAlterLogDirsManager, partition.topicPartition, topicIdOpt)
 
       // Wait for the ReplicaAlterLogDirsThread to complete.
       TestUtils.waitUntilTrue(() => {
