@@ -48,7 +48,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   def initiateShutdown(): Boolean = {
     this.synchronized {
       if (isRunning) {
-        info("Shutting down")
+        info("init Shutting down")
         shutdownInitiated.countDown()
         if (isInterruptible)
           interrupt()
@@ -67,7 +67,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     else {
       if (isStarted)
         shutdownComplete.await()
-      info("Shutdown completed")
+      info("await Shutdown completed")
     }
   }
 
@@ -106,7 +106,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     } finally {
        shutdownComplete.countDown()
     }
-    info("Stopped")
+    info("shut Stopped")
   }
 
   def isRunning: Boolean = !isShutdownInitiated

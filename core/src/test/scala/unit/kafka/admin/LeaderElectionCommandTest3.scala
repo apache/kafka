@@ -134,24 +134,41 @@ final class LeaderElectionCommandTest3(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+
+    cluster.shutdownBroker(broker3)
+
+    cluster.shutdownBroker(broker2)
+
     val client = cluster.createAdminClient()
+
+    println("!!! 1")
+    TestUtils.waitForNumNodesUp(client, 1)
+    println("!!! 1 done")
+
+    cluster.startBroker(broker3)
+    cluster.startBroker(broker2)
+
+    println("!!! 3")
+    TestUtils.waitForNumNodesUp(client, 3)
+    println("!!! 3 done")
+
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
 
     TestUtils.assertLeader(client, topicPartition, broker2)
 
-    System.err.println("shutdown 3")
-    cluster.shutdownBroker(broker3)
-    System.err.println("wait")
-    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
-    System.err.println("shutdown 2")
-    cluster.shutdownBroker(broker2)
-    System.err.println("wait")
-    TestUtils.assertNoLeader(client, topicPartition)
-    System.err.println("start")
-    cluster.startBroker(broker3)
-    TestUtils.waitForOnlineBroker(client, broker3)
+//    System.err.println("shutdown 3")
+//    cluster.shutdownBroker(broker3)
+//    System.err.println("wait")
+//    TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
+//    System.err.println("shutdown 2")
+//    cluster.shutdownBroker(broker2)
+//    System.err.println("wait")
+//    TestUtils.assertNoLeader(client, topicPartition)
+//    System.err.println("start")
+//    cluster.startBroker(broker3)
+//    TestUtils.waitForOnlineBroker(client, broker3)
 
     val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
 
@@ -220,7 +237,10 @@ final class LeaderElectionCommandTest3(cluster: ClusterInstance) {
     val assignment1 = Seq(broker3, broker2)
 
     cluster.waitForReadyBrokers()
+
     val client = cluster.createAdminClient()
+
+
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1

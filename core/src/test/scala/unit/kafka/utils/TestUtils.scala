@@ -965,6 +965,18 @@ object TestUtils extends Logging {
     value.get
   }
 
+  def waitForNumNodesUp(client: Admin, expectedNodesNum: Int): Unit = {
+    waitUntilTrue(
+      () => {
+        val nodes = client.describeCluster().nodes().get()
+        println("!!! nodes:" + nodes)
+        nodes.size() == expectedNodesNum
+      },
+      s"Expected $expectedNodesNum brokers be on line"
+    )
+  }
+
+
   /**
     * Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
@@ -1889,7 +1901,6 @@ object TestUtils extends Logging {
           .map(_.id)
           .toSet
 
-//        System.err.println("!!! isr:" + isr)
         brokerIds.intersect(isr).isEmpty
       },
       s"Expected brokers $brokerIds to no longer be in the ISR for $partition"

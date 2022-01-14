@@ -565,6 +565,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def initiateShutdown(): Unit = {
     throttledChannelReaper.initiateShutdown()
     // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+
     delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback {
       override def startThrottling(): Unit = {}
       override def endThrottling(): Unit = {}

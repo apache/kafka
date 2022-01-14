@@ -4472,4 +4472,9 @@ public class KafkaAdminClient extends AdminClient {
             return subLevelErrors.get(subKey).exception();
         }
     }
+
+    // visible for testing
+    public void requestMetadataUpdate() {
+        metadataManager.requestUpdate();
+    }
 }
