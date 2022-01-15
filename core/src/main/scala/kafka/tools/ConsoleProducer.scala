@@ -17,6 +17,10 @@
 
 package kafka.tools
 
+import java.io._
+import java.nio.charset.StandardCharsets
+import java.util.Properties
+import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
@@ -26,10 +30,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
-import java.io._
-import java.nio.charset.StandardCharsets
-import java.util.Properties
-import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
