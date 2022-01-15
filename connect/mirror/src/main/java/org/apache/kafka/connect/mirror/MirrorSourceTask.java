@@ -117,6 +117,7 @@ public class MirrorSourceTask extends SourceTask {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
             log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            Thread.currentThread().interrupt();
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetProducer, "offset producer");

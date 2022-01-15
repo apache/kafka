@@ -137,6 +137,7 @@ abstract class WorkerTask implements Runnable {
         try {
             return shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         }
     }
