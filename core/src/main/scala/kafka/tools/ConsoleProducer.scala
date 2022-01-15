@@ -349,13 +349,13 @@ object ConsoleProducer {
     }
 
     private def splitHeaders(headers: String): Array[(String, Array[Byte])] = {
-      headerSeparatorPattern.split(headers)
-        .map(pair =>
-          (pair.indexOf(headerKeySeparator), ignoreError) match {
-            case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
-            case (-1, true) => (pair, null)
-            case (i, _) => (pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
-          })
+      headerSeparatorPattern.split(headers).map { pair =>
+        (pair.indexOf(headerKeySeparator), ignoreError) match {
+          case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
+          case (-1, true) => (pair, null)
+          case (i, _) => (pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
+        }
+      }
     }
 
     private def offset(segment: String) = {
