@@ -128,6 +128,7 @@ public final class QuorumController implements Controller {
      */
     static public class Builder {
         private final int nodeId;
+        private final String clusterId;
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
@@ -144,8 +145,9 @@ public final class QuorumController implements Controller {
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
 
-        public Builder(int nodeId) {
+        public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
+            this.clusterId = clusterId;
         }
 
         public Builder setTime(Time time) {
@@ -241,8 +243,8 @@ public final class QuorumController implements Controller {
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
-                return new QuorumController(logContext, nodeId, queue, time, configDefs,
-                    raftClient, supportedFeatures, defaultReplicationFactor,
+                return new QuorumController(logContext, nodeId, clusterId, queue, time,
+                    configDefs, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
                     alterConfigPolicy, configurationValidator);
@@ -1024,6 +1026,11 @@ public final class QuorumController implements Controller {
     private final int nodeId;
 
     /**
+     * The ID of this cluster.
+     */
+    private final String clusterId;
+
+    /**
      * The single-threaded queue that processes all of our events.
      * It also processes timeouts.
      */
@@ -1148,6 +1155,7 @@ public final class QuorumController implements Controller {
 
     private QuorumController(LogContext logContext,
                              int nodeId,
+                             String clusterId,
                              KafkaEventQueue queue,
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
@@ -1165,6 +1173,7 @@ public final class QuorumController implements Controller {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
+        this.clusterId = clusterId;
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
@@ -1174,7 +1183,7 @@ public final class QuorumController implements Controller {
         this.configurationControl = new ConfigurationControlManager(logContext,
             snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
-        this.clusterControl = new ClusterControlManager(logContext, time,
+        this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
             snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
@@ -1434,6 +1443,10 @@ public final class QuorumController implements Controller {
 
     public int nodeId() {
         return nodeId;
+    }
+
+    public String clusterId() {
+        return clusterId;
     }
 
     @Override

@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -92,6 +93,11 @@ public class ClusterControlManager {
     private final LogContext logContext;
 
     /**
+     * The ID of this cluster.
+     */
+    private final String clusterId;
+
+    /**
      * The SLF4J log object.
      */
     private final Logger log;
@@ -133,12 +139,14 @@ public class ClusterControlManager {
     private Optional<ReadyBrokersFuture> readyBrokersFuture;
 
     ClusterControlManager(LogContext logContext,
+                          String clusterId,
                           Time time,
                           SnapshotRegistry snapshotRegistry,
                           long sessionTimeoutNs,
                           ReplicaPlacer replicaPlacer,
                           ControllerMetrics metrics) {
         this.logContext = logContext;
+        this.clusterId = clusterId;
         this.log = logContext.logger(ClusterControlManager.class);
         this.time = time;
         this.sessionTimeoutNs = sessionTimeoutNs;
@@ -187,6 +195,10 @@ public class ClusterControlManager {
             FeatureMapAndEpoch finalizedFeatures) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
+        }
+        if (!clusterId.equals(request.clusterId())) {
+            throw new InconsistentClusterIdException("Expected cluster ID " + clusterId +
+                ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);

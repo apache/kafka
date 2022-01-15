@@ -1294,7 +1294,9 @@ public class KafkaStreams implements AutoCloseable {
                 globalStreamThread.start();
             }
 
-            processStreamThread(StreamThread::start);
+            final int numThreads = processStreamThread(StreamThread::start);
+
+            log.info("Started {} stream threads", numThreads);
 
             final Long cleanupDelay = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
             stateDirCleaner.scheduleAtFixedRate(() -> {
@@ -1339,20 +1341,31 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
-            processStreamThread(StreamThread::shutdown);
+            int numStreamThreads = processStreamThread(StreamThread::shutdown);
+
+            log.info("Shutting down {} stream threads", numStreamThreads);
+
             topologyMetadata.wakeupThreads();
 
-            processStreamThread(thread -> {
+            numStreamThreads = processStreamThread(thread -> {
                 try {
                     if (!thread.isRunning()) {
+                        log.debug("Shutdown {} complete", thread.getName());
+
                         thread.join();
                     }
                 } catch (final InterruptedException ex) {
+                    log.warn("Shutdown {} interrupted", thread.getName());
+
                     Thread.currentThread().interrupt();
                 }
             });
 
+            log.info("Shutdown {} stream threads complete", numStreamThreads);
+
             if (globalStreamThread != null) {
+                log.info("Shutting down the global stream threads");
+
                 globalStreamThread.shutdown();
             }
 
@@ -1360,9 +1373,13 @@ public class KafkaStreams implements AutoCloseable {
                 try {
                     globalStreamThread.join();
                 } catch (final InterruptedException e) {
+                    log.warn("Shutdown the global stream thread interrupted");
+
                     Thread.currentThread().interrupt();
                 }
                 globalStreamThread = null;
+
+                log.info("Shutdown global stream threads complete");
             }
 
             stateDirectory.close();
@@ -1375,7 +1392,7 @@ public class KafkaStreams implements AutoCloseable {
             } else {
                 setState(State.ERROR);
             }
-        }, "kafka-streams-close-thread");
+        }, clientId + "-CloseThread");
     }
 
     private boolean close(final long timeoutMs) {
@@ -1624,9 +1641,11 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
-    protected void processStreamThread(final Consumer<StreamThread> consumer) {
+    protected int processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
+
+        return copy.size();
     }
 
     /**

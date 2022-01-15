@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -228,7 +229,12 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         );
 
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, context.taskId().topologyName());
+        final String prefix = StreamsConfig.InternalConfig.getString(
+            context.appConfigs(),
+            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+            context.applicationId()
+        );
+        changelogTopic = ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition();

@@ -1725,6 +1725,10 @@ public class RequestResponseTest {
         if (version >= 5)
             data.setGroupInstanceId("groupInstanceId");
 
+        // v8 and above can set reason
+        if (version >= 8)
+            data.setReason("reason: test");
+
         return new JoinGroupRequest.Builder(data).build(version);
     }
 
@@ -1837,7 +1841,11 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupRequest createLeaveGroupRequest(short version) {
-        return new LeaveGroupRequest.Builder("group1", singletonList(new MemberIdentity().setMemberId("consumer1")))
+        MemberIdentity member = new MemberIdentity().setMemberId("consumer1");
+        if (version >= 5) {
+            member.setReason("reason: test");
+        }
+        return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member))
                 .build(version);
     }
 
