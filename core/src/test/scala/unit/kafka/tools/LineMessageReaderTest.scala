@@ -97,7 +97,7 @@ class LineMessageReaderTest {
   }
 
   @Test
-  def testMissingHeaderSeparator(): Unit = {
+  def testMissingKeySeparator(): Unit = {
     val lineReader = new LineMessageReader()
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
@@ -110,6 +110,20 @@ class LineMessageReaderTest {
 
     assertEquals(
       "No key separator found in 'key1[MISSING-DELIMITER]value1' on line number 2",
+      expectedException.getMessage
+    )
+  }
+
+  @Test
+  def testMissingHeaderKeySeparator(): Unit = {
+    val lineReader = new LineMessageReader()
+    val input = "key[MISSING-DELIMITER]val\tkey0\tvalue0\n"
+    lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
+
+    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+
+    assertEquals(
+      "No header key separator found in pair 'key[MISSING-DELIMITER]val' on line number 1",
       expectedException.getMessage
     )
   }
@@ -141,36 +155,38 @@ class LineMessageReaderTest {
   @Test
   def testIgnoreErrorInInput(): Unit = {
     val input =
-      "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1[MISSING-DELIMITER]key0\tvalue0\n" +
-      "headerKey1.0:headerValue1.0\tkey1\tvalue1"
+      "headerKey0.0:headerValue0.0\tkey0\tvalue0\n" +
+      "headerKey1.0:headerValue1.0,headerKey1.1:headerValue1.1[MISSING-HEADER-DELIMITER]key1\tvalue1\n" +
+      "headerKey2.0:headerValue2.0\tkey2[MISSING-KEY-DELIMITER]value2\n" +
+      "headerKey3.0:headerValue3.0[MISSING-HEADER-DELIMITER]key3[MISSING-KEY-DELIMITER]value3\n"
 
     val props = defaultTestProps
     props.put("ignore.error", "true")
 
-    val invalidRecord: ProducerRecord[String, String] =
+    val validRecord = record("key0", "value0", List("headerKey0.0" -> "headerValue0.0"))
+
+    val missingHeaderDelimiter: ProducerRecord[String, String] =
       record(
         null,
-        "value0",
-        List("headerKey0.0" -> "headerValue0.0", "headerKey0.1" -> "headerValue0.1[MISSING-DELIMITER]key0")
+        "value1",
+        List("headerKey1.0" -> "headerValue1.0", "headerKey1.1" -> "headerValue1.1[MISSING-HEADER-DELIMITER]key1")
       )
 
-    val validRecord = record("key1", "value1", List("headerKey1.0" -> "headerValue1.0"))
+    val missingKeyDelimiter: ProducerRecord[String, String] =
+      record(
+        null,
+        "key2[MISSING-KEY-DELIMITER]value2",
+        List("headerKey2.0" -> "headerValue2.0")
+      )
 
-    runTest(props, input, invalidRecord, validRecord)
-  }
+    val missingKeyHeaderDelimiter: ProducerRecord[String, String] =
+      record(
+        null,
+        "headerKey3.0:headerValue3.0[MISSING-HEADER-DELIMITER]key3[MISSING-KEY-DELIMITER]value3",
+        List()
+      )
 
-  @Test
-  def testMalformedHeader(): Unit = {
-    val lineReader = new LineMessageReader()
-    val input = "key-val\tkey0\tvalue0\n"
-    lineReader.init(new ByteArrayInputStream(input.getBytes), defaultTestProps)
-
-    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
-
-    assertEquals(
-      "No header key separator found in pair 'key-val' on line number 1",
-      expectedException.getMessage
-    )
+    runTest(props, input, validRecord, missingHeaderDelimiter, missingKeyDelimiter, missingKeyHeaderDelimiter)
   }
 
   @Test
