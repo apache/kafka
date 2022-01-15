@@ -35,8 +35,8 @@ Formatting /tmp/kraft-combined-logs
 
 If you are using multiple nodes, then you should run the format command on each node.  Be sure to use the same cluster ID for each one.
 
-In this example, the `server.properties` file is a `broker,controller` combined node. If you want to have a separate `broker` and `controller` node,
-Please find the example properties file [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker.properties) and [here](https://github.com/apache/kafka/blob/trunk/config/kraft/controller.properties).
+In this example, the `server.properties` file is a `broker,controller` combined node. If you want to separate `broker` and `controller` nodes,
+please find the example properties file [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker.properties) and [here](https://github.com/apache/kafka/blob/trunk/config/kraft/controller.properties).
 
 ## Start the Kafka Server
 Finally, you are ready to start the Kafka server on each node.
@@ -96,7 +96,7 @@ controller.quorum.voters=1@controller1.example.com:9093,2@controller2.example.co
 
 Each broker and each controller must set `controller.quorum.voters`.  Note that the node ID supplied in the `controller.quorum.voters` configuration must match that supplied to the server.
 So on controller1, node.id must be set to 1, and so forth.  Note that there is no requirement for controller IDs to start at 0 or 1.  However, the easiest and least confusing way to allocate
-node IDs is probably just to give each server a numeric ID, starting from 0.  Also note that the node ID is global and can not conflict with other node ID no matter what process role is.
+node IDs is probably just to give each server a numeric ID, starting from 0.  Also note that each node ID must be unique across all the nodes in a particular cluster; no two nodes can have the same node ID regardless of their `process.roles` values.
 
 Note that clients never need to configure `controller.quorum.voters`; only servers do.
 
