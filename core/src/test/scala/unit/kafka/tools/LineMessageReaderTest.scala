@@ -29,7 +29,7 @@ import java.util.Properties
 class LineMessageReaderTest {
 
   private def defaultTestProps = {
-    val props = new Properties()
+    val props = new Properties
     props.put("topic", "topic")
     props.put("parse.key", "true")
     props.put("parse.headers", "true")
@@ -98,7 +98,7 @@ class LineMessageReaderTest {
 
   @Test
   def testMissingKeySeparator(): Unit = {
-    val lineReader = new LineMessageReader()
+    val lineReader = new LineMessageReader
     val input =
       "headerKey0.0:headerValue0.0,headerKey0.1:headerValue0.1\tkey0\tvalue0\n" +
       "headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1"
@@ -202,21 +202,21 @@ class LineMessageReaderTest {
   }
 
   def runTest(props: Properties, input: String, expectedRecords: ProducerRecord[String, String]*): Unit = {
-    val lineReader = new LineMessageReader()
+    val lineReader = new LineMessageReader
     lineReader.init(new ByteArrayInputStream(input.getBytes), props)
     expectedRecords.foreach(r => assertEquality(r, lineReader.readMessage()))
   }
 
   //  The equality method of ProducerRecord compares memory references for the header iterator, this is why this custom equality check is used.
   private def assertEquality[K, V](expected: ProducerRecord[K, V], actual: ProducerRecord[Array[Byte], Array[Byte]]): Unit = {
-    assertEquals(expected.key(), if (actual.key() == null) null else new String(actual.key()))
-    assertEquals(expected.value(), if (actual.value() == null) null else new String(actual.value()))
-    assertEquals(expected.headers().toArray.toList, actual.headers().toArray.toList)
+    assertEquals(expected.key, if (actual.key == null) null else new String(actual.key))
+    assertEquals(expected.value, if (actual.value == null) null else new String(actual.value))
+    assertEquals(expected.headers.toArray.toList, actual.headers.toArray.toList)
   }
 
   private def record[K, V](key: K, value: V, headers: List[(String, String)]): ProducerRecord[K, V] = {
     val record = new ProducerRecord("topic", key, value)
-    headers.foreach(h => record.headers().add(h._1, if (h._2 != null) h._2.getBytes() else null))
+    headers.foreach(h => record.headers.add(h._1, if (h._2 != null) h._2.getBytes else null))
     record
   }
 
