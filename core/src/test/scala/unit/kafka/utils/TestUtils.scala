@@ -969,7 +969,6 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => {
         val nodes = client.describeCluster().nodes().get()
-        println("!!! nodes:" + nodes)
         nodes.size() == expectedNodesNum
       },
       s"Expected $expectedNodesNum brokers be on line"

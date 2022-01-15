@@ -34,8 +34,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
 
-import java.util.Properties
-
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
 @Tag("integration")
@@ -56,10 +54,10 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     clusterConfig.serverProperties().put(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
   }
 
-  def createAdminClient(): Admin = {
-    val prop = new Properties
-    prop.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, 5000)
-    cluster.createAdminClient(prop)
+  def waitForAdminClientHaveNumBrokers(numBrokers: Int): Admin = {
+    TestUtils.waitForNumNodesUp(cluster.createAdminClient(), numBrokers)
+
+    cluster.createAdminClient()
   }
 
   @ClusterTest
@@ -71,7 +69,7 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = createAdminClient()
+    val client = waitForAdminClientHaveNumBrokers(3)
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -105,7 +103,7 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = createAdminClient()
+    val client = waitForAdminClientHaveNumBrokers(3)
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -141,8 +139,8 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
+    val client = waitForAdminClientHaveNumBrokers(3)
 
-    val client = createAdminClient()
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -182,7 +180,7 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     val assignment = Seq(broker2, broker3)
 
     cluster.waitForReadyBrokers()
-    val client = createAdminClient()
+    val client = waitForAdminClientHaveNumBrokers(3)
     createTopic(client, topic, Map(partition -> assignment))
 
     val topicPartition = new TopicPartition(topic, partition)
@@ -228,7 +226,7 @@ final class LeaderElectionCommandTest9(cluster: ClusterInstance) {
     val assignment1 = Seq(broker3, broker2)
 
     cluster.waitForReadyBrokers()
-    val client = createAdminClient()
+    val client = waitForAdminClientHaveNumBrokers(3)
     createTopic(client, topic, Map(
       partition0 -> assignment0,
       partition1 -> assignment1
