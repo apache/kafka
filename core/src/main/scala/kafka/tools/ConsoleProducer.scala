@@ -26,7 +26,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
-
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.util.Properties
@@ -320,7 +319,6 @@ object ConsoleProducer {
       line match {
         case null => null
         case line =>
-
           val headers = parse(parseHeader, line, headersDelimiter, "headers delimiter")
           val key = parse(parseKey, line.substring(offset(headers)), keySeparator, "key separator")
           val value = line.substring(offset(headers) + offset(key))
@@ -331,7 +329,7 @@ object ConsoleProducer {
             if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
           )
 
-          if (headers != null){
+          if (headers != null) {
             splitHeaders(headers)
               .foreach(header => record.headers().add(header._1, header._2))
           }
@@ -360,10 +358,8 @@ object ConsoleProducer {
           })
     }
 
-    private def offset(headers: String) = {
-      if (headers == null) 0 else headers.length + 1
+    private def offset(segment: String) = {
+      if (segment == null) 0 else segment.length + 1
     }
   }
 }
-
-
