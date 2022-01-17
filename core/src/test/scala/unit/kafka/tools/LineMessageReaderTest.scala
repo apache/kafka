@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import kafka.tools.ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerRecord
