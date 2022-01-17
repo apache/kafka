@@ -130,7 +130,7 @@ class LineMessageReaderTest {
     val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
 
     assertEquals(
-      "No key separator found in 'key1[MISSING-DELIMITER]value1' on line number 2",
+      "No key separator found on line number 2: 'headerKey1.0:headerValue1.0\tkey1[MISSING-DELIMITER]value1'",
       expectedException.getMessage
     )
   }

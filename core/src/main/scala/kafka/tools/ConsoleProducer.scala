@@ -319,10 +319,10 @@ object ConsoleProducer {
       line match {
         case null => null
         case line =>
-          val headers = parse(parseHeader, line, headersDelimiter, "headers delimiter")
+          val headers = parse(parseHeader, line, 0, headersDelimiter, "headers delimiter")
           val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
 
-          val key = parse(parseKey, line.substring(headerOffset), keySeparator, "key separator")
+          val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
           val keyOffset = if (key == null) 0 else key.length + keySeparator.length
 
           val value = line.substring(headerOffset + keyOffset)
@@ -342,13 +342,13 @@ object ConsoleProducer {
       }
     }
 
-    private def parse(enabled: Boolean, toParse: String, demarcation: String, demarcationName: String): String = {
-      (enabled, toParse.indexOf(demarcation)) match {
+    private def parse(enabled: Boolean, line: String, startIndex: Int, demarcation: String, demarcationName: String): String = {
+      (enabled, line.indexOf(demarcation, startIndex)) match {
         case (false, _) => null
         case (_, -1) =>
           if (ignoreError) null
-          else throw new KafkaException(s"No $demarcationName found in '$toParse' on line number $lineNumber")
-        case (_, index) => toParse.substring(0, index)
+          else throw new KafkaException(s"No $demarcationName found on line number $lineNumber: '$line'")
+        case (_, index) => line.substring(startIndex, index)
       }
     }
 
