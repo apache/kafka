@@ -303,11 +303,11 @@ object ConsoleProducer {
         headerKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
-      if (headersDelimiter.equals(headersSeparator))
+      if (headersDelimiter == headersSeparator)
         throw new KafkaException("headers.delimiter and headers.separator may not be equal")
-      if (headersDelimiter.equals(headerKeySeparator))
+      if (headersDelimiter == headerKeySeparator)
         throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
-      if (headersSeparator.equals(headerKeySeparator))
+      if (headersSeparator == headerKeySeparator)
         throw new KafkaException("headers.separator and headers.key.separator may not be equal")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
@@ -331,7 +331,7 @@ object ConsoleProducer {
 
           if (headers != null) {
             splitHeaders(headers)
-              .foreach(header => record.headers().add(header._1, header._2))
+              .foreach(header => record.headers.add(header._1, header._2))
           }
 
           record

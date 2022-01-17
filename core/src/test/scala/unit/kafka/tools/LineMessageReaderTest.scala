@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.tools
+package kafka.tools
 
 import kafka.tools.ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -204,11 +204,11 @@ class LineMessageReaderTest {
   def runTest(props: Properties, input: String, expectedRecords: ProducerRecord[String, String]*): Unit = {
     val lineReader = new LineMessageReader
     lineReader.init(new ByteArrayInputStream(input.getBytes), props)
-    expectedRecords.foreach(r => assertEquality(r, lineReader.readMessage()))
+    expectedRecords.foreach(r => assertRecordEquals(r, lineReader.readMessage()))
   }
 
   //  The equality method of ProducerRecord compares memory references for the header iterator, this is why this custom equality check is used.
-  private def assertEquality[K, V](expected: ProducerRecord[K, V], actual: ProducerRecord[Array[Byte], Array[Byte]]): Unit = {
+  private def assertRecordEquals[K, V](expected: ProducerRecord[K, V], actual: ProducerRecord[Array[Byte], Array[Byte]]): Unit = {
     assertEquals(expected.key, if (actual.key == null) null else new String(actual.key))
     assertEquals(expected.value, if (actual.value == null) null else new String(actual.value))
     assertEquals(expected.headers.toArray.toList, actual.headers.toArray.toList)
