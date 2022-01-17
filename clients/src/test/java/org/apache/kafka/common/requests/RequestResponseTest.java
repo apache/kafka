@@ -1715,7 +1715,8 @@ public class RequestResponseTest {
             .setSessionTimeoutMs(30000)
             .setMemberId("consumer1")
             .setProtocolType("consumer")
-            .setProtocols(protocols);
+            .setProtocols(protocols)
+            .setReason("reason: test");
 
         // v1 and above contains rebalance timeout
         if (version >= 1)
@@ -1724,10 +1725,6 @@ public class RequestResponseTest {
         // v5 and above could set group instance id
         if (version >= 5)
             data.setGroupInstanceId("groupInstanceId");
-
-        // v8 and above can set reason
-        if (version >= 8)
-            data.setReason("reason: test");
 
         return new JoinGroupRequest.Builder(data).build(version);
     }
@@ -1841,10 +1838,7 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupRequest createLeaveGroupRequest(short version) {
-        MemberIdentity member = new MemberIdentity().setMemberId("consumer1");
-        if (version >= 5) {
-            member.setReason("reason: test");
-        }
+        MemberIdentity member = new MemberIdentity().setMemberId("consumer1").setReason("reason: test");
         return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member))
                 .build(version);
     }
