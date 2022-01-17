@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.tools
+package unit.kafka.tools
 
 import kafka.tools.ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -54,8 +54,30 @@ class LineMessageReaderTest {
   }
 
   @Test
-  def minimalValidInputWithHeaderKeyAndValue(): Unit = {
+  def testMinimalValidInputWithHeaderKeyAndValue(): Unit = {
     runTest(defaultTestProps, ":\t\t", record("", "", List("" -> "")))
+  }
+
+  @Test
+  def testKeyMissingValue(): Unit = {
+    val props = defaultTestProps
+    props.put("parse.headers", "false")
+    runTest(props, "key\t", record("key", ""))
+  }
+
+  @Test
+  def testDemarcationsLongerThanOne(): Unit = {
+    val props = defaultTestProps
+    props.put("key.separator", "\t\t")
+    props.put("headers.delimiter", "\t\t")
+    props.put("headers.separator", "---")
+    props.put("headers.key.separator", "::::")
+
+    runTest(
+      props,
+      "headerKey0.0::::headerValue0.0---headerKey1.0::::\t\tkey\t\tvalue",
+      record("key", "value", List("headerKey0.0" -> "headerValue0.0", "headerKey1.0"-> ""))
+    )
   }
 
   @Test
@@ -81,7 +103,6 @@ class LineMessageReaderTest {
   def testParseHeaderEnabledWithCustomDelimiterAndVaryingNumberOfKeyValueHeaderPairs(): Unit = {
     val props = defaultTestProps
     props.put("key.separator", "#")
-    props.put("parse.headers", "true")
     props.put("headers.delimiter", "!")
     props.put("headers.separator", "&")
     props.put("headers.key.separator", ":")

@@ -320,8 +320,12 @@ object ConsoleProducer {
         case null => null
         case line =>
           val headers = parse(parseHeader, line, headersDelimiter, "headers delimiter")
-          val key = parse(parseKey, line.substring(offset(headers)), keySeparator, "key separator")
-          val value = line.substring(offset(headers) + offset(key))
+          val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
+
+          val key = parse(parseKey, line.substring(headerOffset), keySeparator, "key separator")
+          val keyOffset = if (key == null) 0 else key.length + keySeparator.length
+
+          val value = line.substring(headerOffset + keyOffset)
 
           val record = new ProducerRecord[Array[Byte], Array[Byte]](
             topic,
@@ -353,13 +357,9 @@ object ConsoleProducer {
         (pair.indexOf(headerKeySeparator), ignoreError) match {
           case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
           case (-1, true) => (pair, null)
-          case (i, _) => (pair.substring(0, i), pair.substring(i + 1).getBytes(StandardCharsets.UTF_8))
+          case (i, _) => (pair.substring(0, i), pair.substring(i + headerKeySeparator.length).getBytes(StandardCharsets.UTF_8))
         }
       }
-    }
-
-    private def offset(segment: String) = {
-      if (segment == null) 0 else segment.length + 1
     }
   }
 }
