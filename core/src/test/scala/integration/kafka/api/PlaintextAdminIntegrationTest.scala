@@ -26,9 +26,10 @@ import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
 import integration.kafka.api.BaseAdminIntegrationTest
+import integration.kafka.tools.MaintenanceBrokerTestUtils
 import kafka.log.LogConfig
 import kafka.security.auth.Group
-import kafka.server.{Defaults, KafkaConfig, KafkaServer}
+import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -889,6 +890,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
 
     assertTrue(intercept[ExecutionException](describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
+  }
+
+  @Test
+  def testDescribeConfigsForMaintenanceBroker(): Unit = {
+    client = AdminClient.create(createConfig)
+    val maintenanceBrokerIds = Seq(0, 2)
+    MaintenanceBrokerTestUtils.setMaintenanceBrokers(adminZkClient, zkClient, servers, maintenanceBrokerIds)
+    servers.map(_.config.brokerId).foreach { brokerId =>
+      val describedMaintenanceBrokerConfigStr =
+        client.describeConfigs(Collections.singleton(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString)))
+          .all().get(5, TimeUnit.SECONDS)
+          .values().asScala.head.get(DynamicConfig.Broker.MaintenanceBrokerListProp)
+          .value()
+      assertNotNull(describedMaintenanceBrokerConfigStr)
+      val describedMaintenanceBrokerIds = describedMaintenanceBrokerConfigStr.split(",").map(_.toInt).toSet
+      assertEquals(describedMaintenanceBrokerIds, maintenanceBrokerIds.toSet)
+    }
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
