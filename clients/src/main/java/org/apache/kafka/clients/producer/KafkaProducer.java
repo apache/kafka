@@ -997,9 +997,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.debug("Exception occurred during message send:", e);
             // producer callback will make sure to call both 'callback' and interceptor callback
             if (tp == null) {
-                // This isn't the best option, but if we failed before we could create a TopicPartition, we need to give
-                // *something* to the callback, so at least let's provide the topic and the requested partition, if
-                // available, and if not, set it to a known invalid value.
+                // set topicPartition to -1 when null
                 tp = ProducerInterceptors.createTopicPartition(record);
             }
 
