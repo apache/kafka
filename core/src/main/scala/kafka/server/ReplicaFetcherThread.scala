@@ -271,14 +271,18 @@ class ReplicaFetcherThread(name: String,
             }
           }
 
-          val rlsMetadata = rlm.fetchRemoteLogSegmentMetadata(partition, targetEpoch, highestOffsetInRemoteFromLeader)
+          val maybeRlsm = rlm.fetchRemoteLogSegmentMetadata(partition, targetEpoch, highestOffsetInRemoteFromLeader)
 
-          if (rlsMetadata.isPresent) {
-            val epochStream = rlm.storageManager().fetchIndex(rlsMetadata.get(), RemoteStorageManager.IndexType.LEADER_EPOCH)
+          if (maybeRlsm.isPresent) {
+            val remoteLogSegmentMetadata = maybeRlsm.get()
+            // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
+            // segments from (remoteLogSegmentMetadata.endOffset() + 1)
+            val nextOffset = remoteLogSegmentMetadata.endOffset() + 1
+            val epochStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)
             val epochs = readLeaderEpochCheckpoint(epochStream)
 
             // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
-            truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
+            truncateFullyAndStartAt(partition, nextOffset)
 
             log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
             log.leaderEpochCache.foreach { cache =>
@@ -286,6 +290,7 @@ class ReplicaFetcherThread(name: String,
                 // Do not flush to file for each entry.
                 cache.assign(epochEntry.epoch, epochEntry.startOffset, flushToFile = false)
               )
+              // Flush the cache to the file.
               cache.flush()
             }
 
@@ -293,18 +298,19 @@ class ReplicaFetcherThread(name: String,
               s"with size: ${epochs.size} for $partition")
 
             // Restore producer snapshot
-            val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, leaderLocalLogStartOffset)
+            val snapshotFile = UnifiedLog.producerSnapshotFile(log.dir, nextOffset)
             val tmpSnapshotFile = new File(snapshotFile.getAbsolutePath + ".tmp");
             // Copy it to snapshot file in atomic manner.
-            Files.copy(rlm.storageManager().fetchIndex(rlsMetadata.get(), RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
+            Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
               tmpSnapshotFile.toPath, StandardCopyOption.REPLACE_EXISTING)
             Utils.atomicMoveWithFallback(tmpSnapshotFile.toPath, snapshotFile.toPath, false)
 
             // Reload producer snapshots.
             log.producerStateManager.reloadSnapshots()
-            log.loadProducerState(leaderLocalLogStartOffset, reloadFromCleanShutdown = false)
+            log.loadProducerState(nextOffset, reloadFromCleanShutdown = false)
             info(s"Built the leader epoch cache and producer snapshots from remote tier for $partition. " +
-              s"Active producers: ${log.producerStateManager.activeProducers.size}, LeaderLogStartOffset: $leaderLogStartOffset")
+              s"Active producers: ${log.producerStateManager.activeProducers.size}, " +
+              s"LeaderLogStartOffset: $leaderLogStartOffset, endOffset: $nextOffset")
           } else {
             throw new RemoteStorageException(s"Couldn't build the state from remote store for partition: $partition, " +
               s"currentLeaderEpoch: $currentLeaderEpoch, leaderLocalLogStartOffset: $leaderLocalLogStartOffset, " +
