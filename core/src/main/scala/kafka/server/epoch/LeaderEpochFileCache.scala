@@ -52,11 +52,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     * Assigns the supplied Leader Epoch to the supplied Offset
     * Once the epoch is assigned it cannot be reassigned
     */
-  def assign(epoch: Int, startOffset: Long): Unit = {
+  def assign(epoch: Int, startOffset: Long, flushToFile: Boolean = true): Unit = {
     val entry = EpochEntry(epoch, startOffset)
     if (assign(entry)) {
       debug(s"Appended new epoch entry $entry. Cache now contains ${epochs.size} entries.")
-      flush()
+      if(flushToFile) flush()
     }
   }
 
@@ -327,7 +327,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   // Visible for testing
   def epochEntries: Seq[EpochEntry] = epochs.values.asScala.toSeq
 
-  private def flush(): Unit = {
+  def flush(): Unit = {
     checkpoint.write(epochs.values.asScala)
   }
 

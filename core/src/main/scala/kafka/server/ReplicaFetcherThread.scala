@@ -254,17 +254,18 @@ class ReplicaFetcherThread(name: String,
               val earlierEpochEndOffset = fetchEarlierEpochEndOffset(epochForLeaderLocalLogStartOffset)
               // Check if the target offset lies with in the range of earlier epoch. Here, epoch's end-offset is exclusive.
               if (earlierEpochEndOffset.endOffset > highestOffsetInRemoteFromLeader) {
-                // Always use the leader epoch from returned earlierEpochEndOffset. This gives the respective leader
-                // epoch, that will handle any gaps in epochs.
-                // For ex:
-                //  0 		20
-                //  1 		85
+                // Always use the leader epoch from returned earlierEpochEndOffset.
+                // This gives the respective leader epoch, that will handle any gaps in epochs.
+                // For ex, leader epoch cache contains:
+                // leader-epoch   start-offset
+                //  0 		          20
+                //  1 		          85
                 //  <2> - gap no messages were appended in this leader epoch.
-                //  3 		90
-                //  4 		98
-                // There is a gap in leader epoch. For leaderLocalLogStartOffset as 85, leader-epoch is 3.
-                // fetchEarlierEpochEndOffset(3) will return leader-epoch as 1, end-offset as 85.
-                // So, we should use leader-epoch as 1, for offset 84.
+                //  3 		          90
+                //  4 		          98
+                // There is a gap in leader epoch. For leaderLocalLogStartOffset as 90, leader-epoch is 3.
+                // fetchEarlierEpochEndOffset(3) will return leader-epoch as 1, end-offset as 90.
+                // So, for offset 89, we should return leader epoch as 1 like below.
                 earlierEpochEndOffset.leaderEpoch()
               } else epochForLeaderLocalLogStartOffset
             }
@@ -280,9 +281,14 @@ class ReplicaFetcherThread(name: String,
             truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
 
             log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
-            epochs.foreach { epochEntry =>
-              log.leaderEpochCache.foreach(cache => cache.assign(epochEntry.epoch, epochEntry.startOffset))
+            log.leaderEpochCache.foreach { cache =>
+              epochs.foreach(epochEntry =>
+                // Do not flush to file for each entry.
+                cache.assign(epochEntry.epoch, epochEntry.startOffset, flushToFile = false)
+              )
+              cache.flush()
             }
+
             info(s"Updated the epoch cache from remote tier till offset: $leaderLocalLogStartOffset " +
               s"with size: ${epochs.size} for $partition")
 
