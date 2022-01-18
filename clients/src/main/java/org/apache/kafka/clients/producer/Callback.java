@@ -25,7 +25,7 @@ public interface Callback {
     /**
      * A callback method the user can implement to provide asynchronous handling of request completion. This method will
      * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
-     * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
+     * metadata will contain the special -1 value for all fields.
      *
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
      *                 with -1 value for all fields will be returned if an error occurred.
