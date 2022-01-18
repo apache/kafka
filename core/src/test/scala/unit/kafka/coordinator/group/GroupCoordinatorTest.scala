@@ -41,6 +41,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -141,12 +143,12 @@ class GroupCoordinatorTest {
 
     // Dynamic Member JoinGroup
     var joinGroupResponse: Option[JoinGroupResult] = None
-    groupCoordinator.handleJoinGroup(otherGroupId, memberId, None, true, "clientId", "clientHost", 60000, 10000, "consumer",
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, None, true, true, "clientId", "clientHost", 60000, 10000, "consumer",
       List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
     assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
 
     // Static Member JoinGroup
-    groupCoordinator.handleJoinGroup(otherGroupId, memberId, Some("groupInstanceId"), false, "clientId", "clientHost", 60000, 10000, "consumer",
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, Some("groupInstanceId"), false, true, "clientId", "clientHost", 60000, 10000, "consumer",
       List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
     assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
 
@@ -931,21 +933,24 @@ class GroupCoordinatorTest {
     assertTrue(getGroup(groupId).is(Stable))
   }
 
-  @Test
-  def staticMemberRejoinWithLeaderIdAndUnknownMemberId(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def staticMemberRejoinWithLeaderIdAndUnknownMemberId(supportSkippingAssignment: Boolean): Unit = {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
     // A static leader rejoin with unknown id will not trigger rebalance, and no assignment will be returned.
     val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-      leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
+      leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1, supportSkippingAssignment = supportSkippingAssignment)
 
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group should be at the same generation
-      Set.empty,
+      if (supportSkippingAssignment) Set(leaderInstanceId, followerInstanceId) else Set.empty,
       Stable,
       Some(protocolType),
-      rebalanceResult.leaderId)
+      if (supportSkippingAssignment) joinGroupResult.memberId else rebalanceResult.leaderId,
+      expectedSkipAssignment = supportSkippingAssignment
+    )
 
     EasyMock.reset(replicaManager)
     val oldLeaderJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
@@ -959,7 +964,7 @@ class GroupCoordinatorTest {
 
     // Calling sync on old leader.id will fail because that leader.id is no longer valid and replaced.
     EasyMock.reset(replicaManager)
-    val newLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, joinGroupResult.leaderId, Map.empty)
+    val newLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, newLeaderSyncGroupResult.error)
   }
 
@@ -1637,7 +1642,8 @@ class GroupCoordinatorTest {
                                    expectedGroupState: GroupState,
                                    expectedProtocolType: Option[String],
                                    expectedLeaderId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                                   expectedMemberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID): Unit = {
+                                   expectedMemberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                                   expectedSkipAssignment: Boolean = false): Unit = {
     assertEquals(expectedError, joinGroupResult.error)
     assertEquals(expectedGeneration, joinGroupResult.generationId)
     assertEquals(expectedGroupInstanceIds.size, joinGroupResult.members.size)
@@ -1645,6 +1651,7 @@ class GroupCoordinatorTest {
     assertEquals(expectedGroupInstanceIds, resultedGroupInstanceIds)
     assertGroupState(groupState = expectedGroupState)
     assertEquals(expectedProtocolType, joinGroupResult.protocolType)
+    assertEquals(expectedSkipAssignment, joinGroupResult.skipAssignment)
 
     if (!expectedLeaderId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID)) {
       assertEquals(expectedLeaderId, joinGroupResult.leaderId)
@@ -3969,14 +3976,15 @@ class GroupCoordinatorTest {
                             groupInstanceId: Option[String] = None,
                             sessionTimeout: Int = DefaultSessionTimeout,
                             rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                            requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
+                            requireKnownMemberId: Boolean = false,
+                            supportSkippingAssignment: Boolean = true): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId,
-      requireKnownMemberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
+    groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId, requireKnownMemberId, supportSkippingAssignment,
+      "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 
@@ -3988,7 +3996,8 @@ class GroupCoordinatorTest {
                                                  sessionTimeout: Int,
                                                  rebalanceTimeout: Int,
                                                  appendRecordError: Errors,
-                                                 requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
+                                                 requireKnownMemberId: Boolean = false,
+                                                 supportSkippingAssignment: Boolean): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
@@ -4011,8 +4020,8 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, Some(groupInstanceId),
-      requireKnownMemberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
+    groupCoordinator.handleJoinGroup(groupId, memberId, Some(groupInstanceId), requireKnownMemberId, supportSkippingAssignment,
+      "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 
@@ -4095,8 +4104,10 @@ class GroupCoordinatorTest {
                               protocols: List[(String, Array[Byte])],
                               clockAdvance: Int = GroupInitialRebalanceDelay + 1,
                               sessionTimeout: Int = DefaultSessionTimeout,
-                              rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
-    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, Some(groupInstanceId), sessionTimeout, rebalanceTimeout)
+                              rebalanceTimeout: Int = DefaultRebalanceTimeout,
+                              supportSkippingAssignment: Boolean = true): JoinGroupResult = {
+    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, Some(groupInstanceId), sessionTimeout, rebalanceTimeout,
+      supportSkippingAssignment = supportSkippingAssignment)
 
     timer.advanceClock(clockAdvance)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
@@ -4111,9 +4122,10 @@ class GroupCoordinatorTest {
                                              clockAdvance: Int,
                                              sessionTimeout: Int = DefaultSessionTimeout,
                                              rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                                             appendRecordError: Errors = Errors.NONE): JoinGroupResult = {
+                                             appendRecordError: Errors = Errors.NONE,
+                                             supportSkippingAssignment: Boolean = true): JoinGroupResult = {
     val responseFuture = sendStaticJoinGroupWithPersistence(groupId, memberId, protocolType, protocols,
-      groupInstanceId, sessionTimeout, rebalanceTimeout, appendRecordError)
+      groupInstanceId, sessionTimeout, rebalanceTimeout, appendRecordError, supportSkippingAssignment = supportSkippingAssignment)
 
     timer.advanceClock(clockAdvance)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay

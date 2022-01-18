@@ -2518,6 +2518,7 @@ class KafkaApisTest {
       EasyMock.eq(memberId),
       EasyMock.eq(None),
       EasyMock.eq(true),
+      EasyMock.eq(true),
       EasyMock.eq(clientId),
       EasyMock.eq(InetAddress.getLocalHost.toString),
       EasyMock.eq(rebalanceTimeoutMs),
@@ -2581,6 +2582,7 @@ class KafkaApisTest {
       EasyMock.eq(memberId),
       EasyMock.eq(None),
       EasyMock.eq(if (version >= 4) true else false),
+      EasyMock.eq(if (version >= 8) true else false),
       EasyMock.eq(clientId),
       EasyMock.eq(InetAddress.getLocalHost.toString),
       EasyMock.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
@@ -2653,6 +2655,7 @@ class KafkaApisTest {
       EasyMock.eq(memberId),
       EasyMock.eq(None),
       EasyMock.eq(if (version >= 4) true else false),
+      EasyMock.eq(if (version >= 8) true else false),
       EasyMock.eq(clientId),
       EasyMock.eq(InetAddress.getLocalHost.toString),
       EasyMock.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
@@ -2688,6 +2691,7 @@ class KafkaApisTest {
       protocolType = Some(protocolType),
       protocolName = Some(protocolName),
       leaderId = memberId,
+      skipAssignment = true,
       error = Errors.NONE
     ))
 
@@ -2700,6 +2704,7 @@ class KafkaApisTest {
     assertEquals(memberId, response.data.leader)
     assertEquals(protocolName, response.data.protocolName)
     assertEquals(protocolType, response.data.protocolType)
+    assertTrue(response.data.skipAssignment)
 
     EasyMock.verify(clientRequestQuotaManager, requestChannel)
   }
