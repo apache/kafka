@@ -917,8 +917,9 @@ public class StreamThread extends Thread {
 
             topologyMetadata.maybeWaitForNonEmptyTopology(() -> state);
 
+            // We don't need to manually trigger a rebalance to pick up tasks from the new topology, as
+            // a rebalance will always occur when the metadata is updated after a change in subscription
             subscribeConsumer();
-            mainConsumer.enforceRebalance();
         }
     }
 
@@ -1137,6 +1138,8 @@ public class StreamThread extends Thread {
 
         log.info("Shutting down");
 
+        topologyMetadata.unregisterThread(threadMetadata.threadName());
+
         try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
@@ -1164,8 +1167,6 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelMetrics(getName());
 
         setState(State.DEAD);
-
-        topologyMetadata.unregisterThread(threadMetadata.threadName());
 
         log.info("Shutdown complete");
     }
