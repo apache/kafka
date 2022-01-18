@@ -28,9 +28,6 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
-import org.apache.kafka.streams.errors.MissingSourceTopicException;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -51,10 +48,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -76,12 +69,9 @@ import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
-import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -113,6 +103,9 @@ public class NamedTopologyIntegrationTest {
 
     // topic that is not initially created during the test setup
     private final static String NEW_STREAM = "new-stream";
+
+    // existing topic that is pre-filled but cleared between tests
+    private final static String EXISTING_STREAM = "existing-stream";
 
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
     private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
@@ -592,31 +585,33 @@ public class NamedTopologyIntegrationTest {
 
     @Test
     public void shouldContinueProcessingOtherTopologiesWhenNewTopologyHasMissingInputTopics() throws Exception {
-        setupSecondKafkaStreams();
-        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-        topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-        
-        streams.start(topology1Builder.build());
-        streams2.start(topology1Builder2.build());
-        waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
-
-        topology2Builder.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
-        topology2Builder2.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
-
-        streams.addNamedTopology(topology2Builder.build());
-        streams2.addNamedTopology(topology2Builder2.build());
-
-        // make sure the original topology can continue processing while waiting on the new source topics
-        produceToInputTopics(INPUT_STREAM_1, singletonList(pair("A", 30L)));
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 1), equalTo(singletonList(pair("A", 3L))));
-
         try {
+            CLUSTER.createTopic(EXISTING_STREAM, 2, 1);
+            produceToInputTopics(EXISTING_STREAM, STANDARD_INPUT_DATA);
+            setupSecondKafkaStreams();
+            topology1Builder.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+            topology1Builder2.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+
+            streams.start(topology1Builder.build());
+            streams2.start(topology1Builder2.build());
+            waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+
+            topology2Builder.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+            topology2Builder2.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+
+            streams.addNamedTopology(topology2Builder.build());
+            streams2.addNamedTopology(topology2Builder2.build());
+
+            // make sure the original topology can continue processing while waiting on the new source topics
+            produceToInputTopics(EXISTING_STREAM, singletonList(pair("A", 30L)));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 1), equalTo(singletonList(pair("A", 3L))));
+
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
         } finally {
-            CLUSTER.deleteTopicsAndWait(NEW_STREAM);
+            CLUSTER.deleteTopicsAndWait(EXISTING_STREAM, NEW_STREAM);
         }
     }
 
