@@ -253,16 +253,18 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   private def createBrokers(startup: Boolean): Unit = {
     // Add each broker to `brokers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs) {
+    val potentiallyRegeneratedConfigs = configs
+    alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
+    Arrays.fill(alive, false)
+    for (config <- potentiallyRegeneratedConfigs) {
       val broker = createBrokerFromConfig(config)
       _brokers += broker
       if (startup) {
         broker.startup()
+        alive(_brokers.length - 1) = true
       }
     }
     brokerList = if (startup) TestUtils.bootstrapServers(_brokers, listenerName) else null
-    alive = new Array[Boolean](_brokers.length)
-    Arrays.fill(alive, startup)
   }
 
   private def createBrokerFromConfig(config: KafkaConfig) = {
