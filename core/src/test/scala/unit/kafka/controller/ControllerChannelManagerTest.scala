@@ -17,7 +17,7 @@
 package kafka.controller
 
 import java.util.Properties
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_3_IV2, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -161,9 +161,10 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_8_IV1) 5
-        else if (apiVersion >= KAFKA_2_4_IV1) 4
-        else if (apiVersion >= KAFKA_2_4_IV0) 3
+        if (apiVersion >= KAFKA_2_8_IV1) 6
+        else if (apiVersion >= KAFKA_2_4_IV1) 5
+        else if (apiVersion >= KAFKA_2_4_IV0) 4
+        else if (apiVersion >= KAFKA_2_3_IV2) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
         else if (apiVersion >= KAFKA_1_0_IV0) 1
         else 0
@@ -192,11 +193,11 @@ class ControllerChannelManagerTest {
     assertEquals(1, leaderAndIsrRequests.size)
     assertEquals(expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version,
       s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion")
-    
+
     val request = leaderAndIsrRequests.head
     val byteBuffer = request.serialize
     val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
-    
+
     if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
       assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
       assertFalse(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
@@ -362,8 +363,9 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_8_IV1) 7
-        else if (apiVersion >= KAFKA_2_4_IV1) 6
+        if (apiVersion >= KAFKA_2_8_IV1) 8
+        else if (apiVersion >= KAFKA_2_4_IV1) 7
+        else if (apiVersion >= KAFKA_2_3_IV2) 6
         else if (apiVersion >= KAFKA_2_2_IV0) 5
         else if (apiVersion >= KAFKA_1_0_IV0) 4
         else if (apiVersion >= KAFKA_0_10_2_IV0) 3
@@ -758,12 +760,14 @@ class ControllerChannelManagerTest {
     for (apiVersion <- ApiVersion.allVersions) {
       if (apiVersion < KAFKA_2_2_IV0)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 0.toShort)
-      else if (apiVersion < KAFKA_2_4_IV1)
+      else if (apiVersion < KAFKA_2_3_IV2)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 1.toShort)
-      else if (apiVersion < KAFKA_2_6_IV0)
+      else if (apiVersion < KAFKA_2_4_IV1)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 2.toShort)
-      else
+      else if (apiVersion < KAFKA_2_6_IV0)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 3.toShort)
+      else
+        testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 4.toShort)
     }
   }
 
@@ -809,7 +813,7 @@ class ControllerChannelManagerTest {
           .setPartitionIndex(topicPartition.partition)
           .setDeletePartition(deletePartition)
 
-        if (version >= 3) {
+        if (version >= 4) {
           partitionState.setLeaderEpoch(if (topicsQueuedForDeletion.contains(topicPartition.topic))
             LeaderAndIsr.EpochDuringDelete
           else

@@ -64,7 +64,7 @@ public class LeaderAndIsrResponseTest {
         Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());
 
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
-                15, 20, 0, partitionStates, topicIds, Collections.emptySet()).build();
+                15, 20, 0, 0, partitionStates, topicIds, Collections.emptySet()).build();
         LeaderAndIsrResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 3), response.errorCounts());
     }
@@ -73,7 +73,7 @@ public class LeaderAndIsrResponseTest {
     public void testErrorCountsWithTopLevelError() {
         for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
-            if (version < 5) {
+            if (version < 6) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
                         asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
@@ -84,7 +84,7 @@ public class LeaderAndIsrResponseTest {
                 LeaderAndIsrTopicErrorCollection topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
-                        .setTopics(topics), version); 
+                        .setTopics(topics), version);
             }
             assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 3), response.errorCounts());
         }
@@ -94,7 +94,7 @@ public class LeaderAndIsrResponseTest {
     public void testErrorCountsNoTopLevelError() {
         for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
-            if (version < 5) {
+            if (version < 6) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
                         asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
@@ -118,7 +118,7 @@ public class LeaderAndIsrResponseTest {
     public void testToString() {
         for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
-            if (version < 5) {
+            if (version < 6) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
                         asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
                 response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()

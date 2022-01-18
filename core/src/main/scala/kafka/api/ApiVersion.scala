@@ -100,6 +100,8 @@ object ApiVersion {
     KAFKA_2_3_IV0,
     // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
     KAFKA_2_3_IV1,
+    // Add cacheable broker epoch to UpdateMetadataRequest
+    KAFKA_2_3_IV2,
     // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
     KAFKA_2_4_IV0,
     // Flexible version support in inter-broker APIs
@@ -437,81 +439,88 @@ case object KAFKA_2_3_IV1 extends DefaultApiVersion {
   val id: Int = 23
 }
 
+case object KAFKA_2_3_IV2 extends DefaultApiVersion {
+  val shortVersion: String = "2.3"
+  val subVersion = "IV2"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 24
+}
+
 case object KAFKA_2_4_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.4"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 24
+  val id: Int = 25
 }
 
 case object KAFKA_2_4_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.4"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
-  val id: Int = 25
+  val id: Int = 26
 }
 
 case object KAFKA_2_5_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.5"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 26
+  val id: Int = 27
 }
 
 case object KAFKA_2_6_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.6"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 27
+  val id: Int = 28
 }
 
 case object KAFKA_2_7_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 28
+  val id: Int = 29
 }
 
 case object KAFKA_2_7_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
-  val id: Int = 29
+  val id: Int = 30
 }
 
 case object KAFKA_2_7_IV2 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
   val subVersion = "IV2"
   val recordVersion = RecordVersion.V2
-  val id: Int = 30
+  val id: Int = 31
 }
 
 case object KAFKA_2_8_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.8"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 31
+  val id: Int = 32
 }
 
 case object KAFKA_2_8_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.8"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
-  val id: Int = 32
+  val id: Int = 33
 }
 
 case object KAFKA_3_0_IV0 extends DefaultApiVersion {
   val shortVersion: String = "3.0"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
-  val id: Int = 33
+  val id: Int = 34
 }
 
 case object KAFKA_3_0_IV1 extends DefaultApiVersion {
   val shortVersion: String = "3.0"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
-  val id: Int = 34
+  val id: Int = 35
 }
 
 object ApiVersionValidator extends Validator {

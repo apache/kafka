@@ -27,12 +27,14 @@ public abstract class AbstractControlRequest extends AbstractRequest {
         protected final int controllerId;
         protected final int controllerEpoch;
         protected final long brokerEpoch;
+        protected final long maxBrokerEpoch;
 
-        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {
+        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch) {
             super(api, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.brokerEpoch = brokerEpoch;
+            this.maxBrokerEpoch = maxBrokerEpoch;
         }
 
     }
@@ -46,5 +48,7 @@ public abstract class AbstractControlRequest extends AbstractRequest {
     public abstract int controllerEpoch();
 
     public abstract long brokerEpoch();
+
+    public abstract long maxBrokerEpoch();
 
 }

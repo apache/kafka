@@ -244,7 +244,7 @@ class RequestQuotaTest extends BaseRequestTest {
             .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
-          new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+          new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue,
             Seq(new LeaderAndIsrPartitionState()
               .setTopicName(tp.topic)
               .setPartitionIndex(tp.partition)
@@ -268,7 +268,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 .setDeletePartition(true)).asJava)
           ).asJava
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
-            Int.MaxValue, Long.MaxValue, false, topicStates)
+            Int.MaxValue, Long.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
@@ -289,7 +289,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setSecurityProtocol(securityProtocol.id)
               .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
           new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            partitionState, brokers, Collections.emptyMap())
+            Long.MaxValue, partitionState, brokers, Collections.emptyMap())
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>
           new ControlledShutdownRequest.Builder(

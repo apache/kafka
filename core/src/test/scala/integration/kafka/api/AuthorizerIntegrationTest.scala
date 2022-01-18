@@ -419,7 +419,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setSecurityProtocol(securityProtocol.id)
         .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates,
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue, partitionStates,
       brokers, Collections.emptyMap()).build()
   }
 
@@ -509,7 +509,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   ).build()
 
   private def leaderAndIsrRequest: LeaderAndIsrRequest = {
-    new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+    new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, Long.MaxValue,
       Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp.topic)
         .setPartitionIndex(tp.partition)
@@ -534,7 +534,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .setDeletePartition(true)).asJava)
     ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,
-      Long.MaxValue, false, topicStates).build()
+      Long.MaxValue, Long.MaxValue, false, topicStates).build()
   }
 
   private def controlledShutdownRequest: ControlledShutdownRequest = {

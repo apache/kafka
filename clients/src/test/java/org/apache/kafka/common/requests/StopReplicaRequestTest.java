@@ -48,7 +48,7 @@ public class StopReplicaRequestTest {
     public void testUnsupportedVersion() {
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
                 (short) (STOP_REPLICA.latestVersion() + 1),
-                0, 0, 0L, false, Collections.emptyList());
+                0, 0, 0L, 0L, false, Collections.emptyList());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -68,7 +68,7 @@ public class StopReplicaRequestTest {
 
         for (short version : STOP_REPLICA.allVersions()) {
             StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
-                    0, 0, 0L, false, topicStates);
+                    0, 0, 0L, 0L, false, topicStates);
             StopReplicaRequest request = builder.build();
             StopReplicaResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -94,7 +94,7 @@ public class StopReplicaRequestTest {
             StopReplicaRequestTest.partitionStates(topicStates);
 
         for (short version : STOP_REPLICA.allVersions()) {
-            StopReplicaRequest request = new StopReplicaRequest.Builder(version, 0, 1, 0,
+            StopReplicaRequest request = new StopReplicaRequest.Builder(version, 0, 1, 0, 0,
                 deletePartitions, topicStates).build(version);
             StopReplicaRequestData data = request.data();
 
@@ -105,7 +105,7 @@ public class StopReplicaRequestTest {
                 }
                 assertEquals(expectedPartitionStates.keySet(), partitions);
                 assertEquals(deletePartitions, data.deletePartitions());
-            } else if (version < 3) {
+            } else if (version < 4) {
                 Set<TopicPartition> partitions = new HashSet<>();
                 for (StopReplicaTopicV1 topic : data.topics()) {
                     for (Integer partition : topic.partitionIndexes()) {
@@ -118,7 +118,7 @@ public class StopReplicaRequestTest {
                 Map<TopicPartition, StopReplicaPartitionState> partitionStates =
                     StopReplicaRequestTest.partitionStates(data.topicStates());
                 assertEquals(expectedPartitionStates, partitionStates);
-                // Always false from V3 on
+                // Always false from V4 on
                 assertFalse(data.deletePartitions());
             }
         }
@@ -130,7 +130,7 @@ public class StopReplicaRequestTest {
 
         for (short version : STOP_REPLICA.allVersions()) {
             // Create a request for version to get its serialized form
-            StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
+            StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0, 0,
                 true, topicStates).build(version);
 
             // Construct the request from the buffer
@@ -149,7 +149,7 @@ public class StopReplicaRequestTest {
                     assertEquals(expectedPartitionState.partitionIndex(), partitionState.partitionIndex());
                     assertTrue(partitionState.deletePartition());
 
-                    if (version >= 3) {
+                    if (version >= 4) {
                         assertEquals(expectedPartitionState.leaderEpoch(), partitionState.leaderEpoch());
                     } else {
                         assertEquals(-1, partitionState.leaderEpoch());
@@ -165,7 +165,7 @@ public class StopReplicaRequestTest {
 
         for (short version : STOP_REPLICA.allVersions()) {
             // Create a request for version to get its serialized form
-            StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
+            StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0, 0,
                 true, topicStates).build(version);
 
             // Construct the request from the buffer
@@ -183,7 +183,7 @@ public class StopReplicaRequestTest {
                     assertEquals(expectedPartitionState.partitionIndex(), partitionState.partitionIndex());
                     assertTrue(partitionState.deletePartition());
 
-                    if (version >= 3) {
+                    if (version >= 4) {
                         assertEquals(expectedPartitionState.leaderEpoch(), partitionState.leaderEpoch());
                     } else {
                         assertEquals(-1, partitionState.leaderEpoch());

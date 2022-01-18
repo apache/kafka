@@ -356,7 +356,7 @@ public class RequestResponseTest {
             checkErrorResponse(createLeaderAndIsrRequest(version), unknownServerException, false);
             checkResponse(createLeaderAndIsrResponse(version), version, true);
         }
-        
+
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), unknownServerException, true);
         checkResponse(createSaslHandshakeResponse(), 0, true);
@@ -1782,7 +1782,7 @@ public class RequestResponseTest {
                 .setDeletePartition(deletePartitions)));
         topicStates.add(topic2);
 
-        return new StopReplicaRequest.Builder((short) version, 0, 1, 0,
+        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, 0,
             deletePartitions, topicStates).build((short) version);
     }
 
@@ -1875,12 +1875,12 @@ public class RequestResponseTest {
         topicIds.put("topic5", Uuid.randomUuid());
         topicIds.put("topic20", Uuid.randomUuid());
 
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0,
+        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, 0,
                 partitionStates, topicIds, leaders).build();
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse(int version) {
-        if (version < 5) {
+        if (version < 6) {
             List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
             partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
                     .setTopicName("test")
@@ -1982,7 +1982,7 @@ public class RequestResponseTest {
                 .setEndpoints(endpoints2)
                 .setRack(rack)
         );
-        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
+        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, 0, partitionStates,
             liveBrokers, Collections.emptyMap()).build();
     }
 

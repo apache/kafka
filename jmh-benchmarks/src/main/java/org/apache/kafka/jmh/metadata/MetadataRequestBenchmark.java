@@ -156,7 +156,7 @@ public class MetadataRequestBenchmark {
 
         UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(
             ApiKeys.UPDATE_METADATA.latestVersion(),
-            1, 1, 1,
+            1, 1, 1, 1,
             partitionStates, liveBrokers, Collections.emptyMap()).build();
         metadataCache.updateMetadata(100, updateMetadataRequest);
     }

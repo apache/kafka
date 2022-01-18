@@ -54,7 +54,7 @@ public class UpdateMetadataRequestTest {
     @Test
     public void testUnsupportedVersion() {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                (short) (UPDATE_METADATA.latestVersion() + 1), 0, 0, 0,
+                (short) (UPDATE_METADATA.latestVersion() + 1), 0, 0, 0, 0,
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
@@ -63,7 +63,7 @@ public class UpdateMetadataRequestTest {
     public void testGetErrorResponse() {
         for (short version : UPDATE_METADATA.allVersions()) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                    version, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
+                    version, 0, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
             UpdateMetadataRequest request = builder.build();
             UpdateMetadataResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -156,7 +156,7 @@ public class UpdateMetadataRequestTest {
             topicIds.put(topic0, Uuid.randomUuid());
             topicIds.put(topic1, Uuid.randomUuid());
 
-            UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3,
+            UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3, 3,
                 partitionStates, liveBrokers, topicIds).build();
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(request.partitionStates()));
@@ -164,6 +164,7 @@ public class UpdateMetadataRequestTest {
             assertEquals(1, request.controllerId());
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
+            assertEquals(3, request.maxBrokerEpoch());
 
             ByteBuffer byteBuffer = request.serialize();
             UpdateMetadataRequest deserializedRequest = new UpdateMetadataRequest(new UpdateMetadataRequestData(
@@ -196,15 +197,20 @@ public class UpdateMetadataRequestTest {
             assertEquals(1, deserializedRequest.controllerId());
             assertEquals(2, deserializedRequest.controllerEpoch());
             // Broker epoch is only supported from version 5
-            if (version >= 5)
+            if (version == 5)
                 assertEquals(3, deserializedRequest.brokerEpoch());
             else
                 assertEquals(-1, deserializedRequest.brokerEpoch());
 
+            if (version >= 6)
+                assertEquals(3, deserializedRequest.maxBrokerEpoch());
+            else
+                assertEquals(-1, deserializedRequest.maxBrokerEpoch());
+
             long topicIdCount = deserializedRequest.data().topicStates().stream()
                     .map(UpdateMetadataRequestData.UpdateMetadataTopicState::topicId)
                     .filter(topicId -> topicId != Uuid.ZERO_UUID).count();
-            if (version >= 7)
+            if (version >= 8)
                 assertEquals(2, topicIdCount);
             else
                 assertEquals(0, topicIdCount);
@@ -220,7 +226,7 @@ public class UpdateMetadataRequestTest {
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
         }
-        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
+        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0, 0,
                 partitionStates, Collections.emptyList(), Collections.emptyMap());
 
         assertTrue(builder.build((short) 5).sizeInBytes() <  builder.build((short) 4).sizeInBytes());

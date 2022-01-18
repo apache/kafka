@@ -1798,6 +1798,7 @@ class KafkaApisTest {
       controllerId,
       controllerEpoch,
       brokerEpoch,
+      brokerEpoch,
       false,
       topicStates
     ).build()
@@ -2975,6 +2976,7 @@ class KafkaApisTest {
       controllerId,
       controllerEpoch,
       brokerEpochInRequest,
+      brokerEpochInRequest,
       partitionStates,
       Collections.singletonMap("topicW", Uuid.randomUuid()),
       asList(new Node(0, "host0", 9090), new Node(1, "host1", 9091))
@@ -3041,6 +3043,7 @@ class KafkaApisTest {
       ApiKeys.STOP_REPLICA.latestVersion,
       controllerId,
       controllerEpoch,
+      brokerEpochInRequest,
       brokerEpochInRequest,
       false,
       topicStates
@@ -3141,7 +3144,7 @@ class KafkaApisTest {
             .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
+      0, 0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
     MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
@@ -3195,7 +3198,7 @@ class KafkaApisTest {
             .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
+      0, 0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
     MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
@@ -3310,7 +3313,7 @@ class KafkaApisTest {
     val liveBrokers = (0 until numBrokers).map(
       brokerId => createMetadataBroker(brokerId, plaintextListener))
     new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, brokerEpoch, partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap()).build()
+      0, brokerEpoch, brokerEpoch, partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap()).build()
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1): Unit = {

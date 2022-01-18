@@ -235,7 +235,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, 0L, Seq.empty.asJava, Collections.singletonMap(topic, Uuid.randomUuid()),
+        controllerId, 1, 0L, 0L, Seq.empty.asJava, Collections.singletonMap(topic, Uuid.randomUuid()),
         brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
       controllerChannelManager.sendRequest(1, requestBuilder)
       receiveFuture.get(10, TimeUnit.SECONDS)

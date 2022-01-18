@@ -43,9 +43,9 @@ public class StopReplicaRequest extends AbstractControlRequest {
         private final boolean deletePartitions;
         private final List<StopReplicaTopicState> topicStates;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        boolean deletePartitions, List<StopReplicaTopicState> topicStates) {
-            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.deletePartitions = deletePartitions;
             this.topicStates = topicStates;
         }
@@ -54,9 +54,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
             StopReplicaRequestData data = new StopReplicaRequestData()
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
-                .setBrokerEpoch(brokerEpoch);
+                .setBrokerEpoch(brokerEpoch)
+                .setBrokerEpoch(brokerEpoch)
+                .setMaxBrokerEpoch(maxBrokerEpoch);
 
-            if (version >= 3) {
+            if (version >= 4) {
                 data.setTopicStates(topicStates);
             } else if (version >= 1) {
                 data.setDeletePartitions(deletePartitions);
@@ -89,6 +91,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
+                append(", maxBrokerEpoch=").append(maxBrokerEpoch).
                 append(", deletePartitions=").append(deletePartitions).
                 append(", topicStates=").append(Utils.join(topicStates, ",")).
                 append(")");
@@ -143,7 +146,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                     .setDeletePartition(data.deletePartitions()));
             }
             return topicStates.values();
-        } else if (version() < 3) {
+        } else if (version() < 4) {
             return () -> new MappedIterator<>(data.topics().iterator(), topic ->
                 new StopReplicaTopicState()
                     .setTopicName(topic.name())
@@ -168,7 +171,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                         .setPartitionIndex(partition.partitionIndex())
                         .setDeletePartition(data.deletePartitions()));
             }
-        } else if (version() < 3) {
+        } else if (version() < 4) {
             for (StopReplicaTopicV1 topic : data.topics()) {
                 for (Integer partitionIndex : topic.partitionIndexes()) {
                     partitionStates.put(
@@ -204,6 +207,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    @Override
+    public long maxBrokerEpoch() {
+        return data.maxBrokerEpoch();
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {

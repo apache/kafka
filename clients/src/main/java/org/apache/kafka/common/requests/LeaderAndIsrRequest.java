@@ -48,10 +48,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, long maxBrokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
@@ -69,6 +69,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
+                .setMaxBrokerEpoch(maxBrokerEpoch)
                 .setLiveLeaders(leaders);
 
             if (version >= 2) {
@@ -101,6 +102,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", controllerId=").append(controllerId)
                 .append(", controllerEpoch=").append(controllerEpoch)
                 .append(", brokerEpoch=").append(brokerEpoch)
+                .append(", maxBrokerEpoch=").append(maxBrokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", topicIds=").append(topicIds)
                 .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
@@ -136,7 +138,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         Errors error = Errors.forException(e);
         responseData.setErrorCode(error.code());
 
-        if (version() < 5) {
+        if (version() < 6) {
             List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
             for (LeaderAndIsrPartitionState partition : partitionStates()) {
                 partitions.add(new LeaderAndIsrPartitionError()
@@ -176,6 +178,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    @Override
+    public long maxBrokerEpoch() {
+        return data.maxBrokerEpoch();
     }
 
     public Iterable<LeaderAndIsrPartitionState> partitionStates() {
