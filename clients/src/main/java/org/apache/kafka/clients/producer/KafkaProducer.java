@@ -465,6 +465,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
+
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
@@ -511,14 +512,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private TransactionManager configureTransactionState(ProducerConfig config,
                                                          LogContext logContext) {
-
         TransactionManager transactionManager = null;
-
-        final boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-        final boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
-        if (userConfiguredTransactions && !userConfiguredIdempotence)
-            log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-                    ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
         if (config.idempotenceEnabled()) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
@@ -549,18 +543,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private static short configureAcks(ProducerConfig config, Logger log) {
+        System.out.println("!!! acks:" + config.getString(ProducerConfig.ACKS_CONFIG));
         boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
         short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
 
         if (config.idempotenceEnabled()) {
-            if (!userConfiguredAcks)
-                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-            else if (acks != -1)
-                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                        "producer. Otherwise we cannot guarantee idempotence.");
-        }
-        return acks;
-    }
+        if (!userConfiguredAcks)
+                                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
+                        else if (acks != -1)
+                                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                                            "producer. Otherwise we cannot guarantee idempotence.");
+                    }
+                return acks;
+            }
+
 
     /**
      * Needs to be called before any other methods when the transactional.id is set in the configuration.

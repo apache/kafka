@@ -72,6 +72,9 @@ import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -240,6 +243,7 @@ public class KafkaProducerTest {
         Properties invalidProps2 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.ACKS_CONFIG, "1");
+                // explicitly enable idempotence should still throw exception
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
@@ -250,12 +254,94 @@ public class KafkaProducerTest {
         Properties invalidProps3 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.ACKS_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
             "Must set acks to all in order to use the idempotent producer");
+    }
+
+    @Test
+    public void testRetriesAndIdempotenceForIdempotentProducers() {
+        Properties baseProps = new Properties() {{
+            setProperty(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            setProperty(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+            setProperty(
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        }};
+
+        Properties validProps = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+            setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        }};
+        ProducerConfig config = new ProducerConfig(validProps);
+        assertFalse(
+                config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
+                "idempotence should be overwritten");
+        assertEquals(
+                0,
+                config.getInt(ProducerConfig.RETRIES_CONFIG),
+                "retries should be overwritten");
+
+        Properties validProps2 = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+        }};
+        config = new ProducerConfig(validProps2);
+        assertTrue(
+                config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
+                "idempotence should be set with the default value");
+        assertEquals(
+                Integer.MAX_VALUE,
+                config.getInt(ProducerConfig.RETRIES_CONFIG),
+                "retries should be set with the default value");
+
+        Properties validProps3 = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+            setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        }};
+        config = new ProducerConfig(validProps3);
+        assertFalse(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
+                "idempotence should be overwritten");
+        assertEquals(
+                0,
+                config.getInt(ProducerConfig.RETRIES_CONFIG),
+                "retries should be overwritten");
+
+        Properties invalidProps = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+            setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+            setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+        }};
+        assertThrows(
+                ConfigException.class,
+                () -> new ProducerConfig(invalidProps),
+                "Cannot set a transactional.id without also enabling idempotence");
+
+        Properties invalidProps2 = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+        }};
+        assertThrows(
+                ConfigException.class,
+                () -> new ProducerConfig(invalidProps2),
+                "Must set retries to non-zero when using the idempotent producer.");
+
+        Properties invalidProps3 = new Properties() {{
+            putAll(baseProps);
+            setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+            // explicitly enable idempotence should still throw exception
+            setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        }};
+        assertThrows(
+                ConfigException.class,
+                () -> new ProducerConfig(invalidProps3),
+                "Must set retries to non-zero when using the idempotent producer.");
     }
 
     @Test
@@ -478,14 +564,22 @@ public class KafkaProducerTest {
         };
     }
 
-    @Test
-    public void testMetadataFetch() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetadataFetch(boolean isIdempotenceEnabled) throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
+
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
         // Return empty cluster 4 times and cluster from then on
-        when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
+        if (isIdempotenceEnabled) {
+            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
+            when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
+        } else {
+            when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
+        }
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -494,27 +588,29 @@ public class KafkaProducerTest {
         // One request update for each empty cluster returned
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(5)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
 
         // Should not request update for subsequent `send`
         producer.send(record, null);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(6)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 7 : 6)).fetch();
 
         // Should not request update for subsequent `partitionsFor`
         producer.partitionsFor(topic);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(7)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 8 : 7)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
 
-    @Test
-    public void testMetadataExpiry() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetadataExpiry(boolean isIdempotenceEnabled) throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
         Cluster emptyCluster = new Cluster(
@@ -523,7 +619,12 @@ public class KafkaProducerTest {
             Collections.emptySet(),
             Collections.emptySet(),
             Collections.emptySet());
-        when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
+        if (isIdempotenceEnabled) {
+            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
+            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, emptyCluster, onePartitionCluster);
+        } else {
+            when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
+        }
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -532,22 +633,24 @@ public class KafkaProducerTest {
         // Verify the topic's metadata isn't requested since it's already present.
         verify(metadata, times(0)).requestUpdateForTopic(topic);
         verify(metadata, times(0)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(1)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 2 : 1)).fetch();
 
         // The metadata has been expired. Verify the producer requests the topic's metadata.
         producer.send(record, null);
         verify(metadata, times(1)).requestUpdateForTopic(topic);
         verify(metadata, times(1)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(3)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 4 : 3)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
 
-    @Test
-    public void testMetadataTimeoutWithMissingTopic() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetadataTimeoutWithMissingTopic(boolean isIdempotenceEnabled) throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -568,10 +671,11 @@ public class KafkaProducerTest {
 
         // Four request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
+        // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
         Future<RecordMetadata> future = producer.send(record);
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(5)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).requestUpdateForTopic(topic);
+        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
         try {
             future.get();
         } catch (ExecutionException e) {
@@ -581,11 +685,13 @@ public class KafkaProducerTest {
         }
     }
 
-    @Test
-    public void testMetadataWithPartitionOutOfRange() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetadataWithPartitionOutOfRange(boolean isIdempotenceEnabled) throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -593,23 +699,30 @@ public class KafkaProducerTest {
 
         MockTime mockTime = new MockTime();
 
-        when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
+        if (isIdempotenceEnabled) {
+            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
+            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, onePartitionCluster, threePartitionCluster);
+        } else {
+            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
+        }
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
         // One request update if metadata is available but outdated for the given record
         producer.send(record);
         verify(metadata, times(2)).requestUpdateForTopic(topic);
         verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(3)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 4 : 3)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
 
-    @Test
-    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMetadataTimeoutWithPartitionOutOfRange(boolean isIdempotenceEnabled) throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
@@ -630,10 +743,12 @@ public class KafkaProducerTest {
 
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
+        // For idempotence enabled case, the first and last metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest,
+        // before the producer#send and after it finished
         Future<RecordMetadata> future = producer.send(record);
-        verify(metadata, times(4)).requestUpdateForTopic(topic);
-        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(5)).fetch();
+        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).requestUpdateForTopic(topic);
+        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
         try {
             future.get();
         } catch (ExecutionException e) {
@@ -795,6 +910,9 @@ public class KafkaProducerTest {
     public void testFlushCompleteSendOfInflightBatches() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        // only test in idempotence disabled producer for simplicity
+        // flush operation acts the same for idempotence enabled and disabled cases
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
         Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
@@ -810,6 +928,7 @@ public class KafkaProducerTest {
                 Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
                 futureResponses.add(response);
             }
+
             futureResponses.forEach(res -> assertFalse(res.isDone()));
             producer.flush();
             futureResponses.forEach(res -> assertTrue(res.isDone()));
