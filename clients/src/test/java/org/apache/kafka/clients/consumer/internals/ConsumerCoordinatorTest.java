@@ -290,7 +290,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionAssignor.prepare(Collections.singletonMap(consumerId, singletonList(t1p)));
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, mockSubscriptionState)) {
-            coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+            coordinator.performAssignment("1", partitionAssignor.name(), metadata, false);
 
             ArgumentCaptor<Collection<String>> topicsCaptor = ArgumentCaptor.forClass(Collection.class);
             // groupSubscribe should be only called 1 time, which is before assignment,
@@ -311,7 +311,7 @@ public abstract class ConsumerCoordinatorTest {
         partitionAssignor.prepare(Collections.singletonMap(consumerId, Arrays.asList(t1p, t2p)));
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false, mockSubscriptionState)) {
-            coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+            coordinator.performAssignment("1", partitionAssignor.name(), metadata, false);
 
             ArgumentCaptor<Collection<String>> topicsCaptor = ArgumentCaptor.forClass(Collection.class);
             // groupSubscribe should be called 2 times, once before assignment, once after assignment
@@ -386,11 +386,11 @@ public abstract class ConsumerCoordinatorTest {
             if (protocol == COOPERATIVE) {
                 // in cooperative protocol, we should throw exception when validating cooperative assignment
                 Exception e = assertThrows(IllegalStateException.class,
-                    () -> coordinator.performAssignment("1", partitionAssignor.name(), metadata));
+                    () -> coordinator.performAssignment("1", partitionAssignor.name(), metadata, false));
                 assertTrue(e.getMessage().contains("Assignor supporting the COOPERATIVE protocol violates its requirements"));
             } else {
                 // in eager protocol, we should not validate assignment
-                coordinator.performAssignment("1", partitionAssignor.name(), metadata);
+                coordinator.performAssignment("1", partitionAssignor.name(), metadata, false);
             }
         }
     }
@@ -418,7 +418,7 @@ public abstract class ConsumerCoordinatorTest {
 
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignorsWithCooperativeStickyAssignor, false, mockSubscriptionState)) {
             // should not validate assignment for built-in cooperative sticky assignor
-            coordinator.performAssignment("1", mockCooperativeStickyAssignor.name(), metadata);
+            coordinator.performAssignment("1", mockCooperativeStickyAssignor.name(), metadata, false);
         }
     }
 

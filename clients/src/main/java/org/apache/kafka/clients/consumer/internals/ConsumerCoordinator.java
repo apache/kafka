@@ -617,7 +617,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
-                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
+                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
+                                                        Boolean skipAssignment) {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -643,27 +644,33 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
-        log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
+        Map<String, ByteBuffer> groupAssignment = new HashMap<>();
 
-        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
+        if (!skipAssignment) {
+            log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName,
+                subscriptions);
 
-        // skip the validation for built-in cooperative sticky assignor since we've considered
-        // the "generation" of ownedPartition inside the assignor
-        if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
-            validateCooperativeAssignment(ownedPartitions, assignments);
+            Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions))
+                .groupAssignment();
+
+            // skip the validation for built-in cooperative sticky assignor since we've considered
+            // the "generation" of ownedPartition inside the assignor
+            if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
+                validateCooperativeAssignment(ownedPartitions, assignments);
+            }
+
+            maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
+
+            log.info("Finished assignment for group at generation {}: {}",
+                generation().generationId, assignments);
+
+            for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
+                ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
+                groupAssignment.put(assignmentEntry.getKey(), buffer);
+            }
         }
-
-        maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
 
         assignmentSnapshot = metadataSnapshot;
-
-        log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
-
-        Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-        for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
-            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
-            groupAssignment.put(assignmentEntry.getKey(), buffer);
-        }
 
         return groupAssignment;
     }
