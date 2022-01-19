@@ -215,6 +215,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                                                         String protocol,
                                                         List<JoinGroupResponseMember> allMemberMetadata,
                                                         Boolean skipAssignment) {
+        // Connect does not support static membership so skipping the
+        // assignment should never happen in practice.
         if (skipAssignment)
             return Collections.emptyMap();
 

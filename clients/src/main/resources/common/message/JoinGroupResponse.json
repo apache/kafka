@@ -32,7 +32,7 @@
   //
   // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-559).
   //
-  // Version 8 adds the SkipAssignment field. (TODO: Bump version?)
+  // Version 8 adds the SkipAssignment field.
   "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [

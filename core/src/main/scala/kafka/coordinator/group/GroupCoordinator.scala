@@ -1331,7 +1331,10 @@ class GroupCoordinator(val brokerId: Int,
               ))
             } else {
               if (supportSkippingAssignment) {
-                // TODO
+                // Starting from version 8 of the JoinGroup API, static members are able to
+                // skip running the assignor based on the `SkipAssignment` field. We leverage
+                // this to tell the leader that it is the leader of the group but by skipping
+                // running the assignor while the group is in stable state.
                 val isLeader = group.isLeader(newMemberId)
                 group.maybeInvokeJoinCallback(member, JoinGroupResult(
                   members = if (isLeader) {
@@ -1348,12 +1351,12 @@ class GroupCoordinator(val brokerId: Int,
                   error = Errors.NONE
                 ))
               } else {
-                // We want to avoid current leader performing trivial assignment while the group
-                // is in stable stage, because the new assignment in leader's next sync call
-                // won't be broadcast by a stable group. This could be guaranteed by
-                // always returning the old leader id so that the current leader won't assume itself
-                // as a leader based on the returned message, since the new member.id won't match
-                // returned leader id, therefore no assignment will be performed.
+                // Prior to version 8 of the JoinGroup API, we wanted to avoid current leader
+                // performing trivial assignment while the group is in stable stage, because
+                // the new assignment in leader's next sync call won't be broadcast by a stable group.
+                // This could be guaranteed by always returning the old leader id so that the current
+                // leader won't assume itself as a leader based on the returned message, since the new
+                // member.id won't match returned leader id, therefore no assignment will be performed.
                 group.maybeInvokeJoinCallback(member, JoinGroupResult(
                   members = List.empty,
                   memberId = newMemberId,
