@@ -70,10 +70,8 @@ public class SourceConnectorConfigTest {
     @Test
     public void shouldNotFailWithExplicitlySpecifiedDefaultTopicCreationGroup() {
         Map<String, String> props = defaultConnectorProps();
-        //Ensure default group is omitted even if its specified multiple times.
         props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", DEFAULT_TOPIC_CREATION_GROUP,
-            TOPIC_CREATION_GROUP_1, DEFAULT_TOPIC_CREATION_GROUP, TOPIC_CREATION_GROUP_2));
-        props.put(TOPIC_CREATION_GROUPS_CONFIG, DEFAULT_TOPIC_CREATION_GROUP);
+            TOPIC_CREATION_GROUP_1, TOPIC_CREATION_GROUP_2));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, "1");
         SourceConnectorConfig config = new SourceConnectorConfig(MOCK_PLUGINS, props, true);
