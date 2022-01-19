@@ -58,7 +58,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -1883,31 +1883,38 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def testIdempotentProducerNoIdempotentWriteAclInInitProducerId(): Unit = {
     createTopic(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
-    shouldIdempotentProducerFailInInitProducerId(true)
+    assertIdempotentSendAuthorizationFailure()
   }
 
-  def shouldIdempotentProducerFailInInitProducerId(expectAuthException: Boolean): Unit = {
+  private def assertIdempotentSendSuccess(): Unit = {
     val producer = buildIdempotentProducer()
-    try {
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
+  }
+
+  private def assertIdempotentSendAuthorizationFailure(): Unit = {
+    val producer = buildIdempotentProducer()
+
+    def assertClusterAuthFailure(): Unit = {
       // the InitProducerId is sent asynchronously, so we expect the error either in the callback
       // or raised from send itself
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      if (expectAuthException)
-        fail("Should have raised ClusterAuthorizationException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
+      val exception = assertThrows(classOf[Exception], () => {
+        val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+        future.get()
+      })
+
+      exception match {
+        case e@ (_: KafkaException | _: ExecutionException) =>
+          assertTrue(exception.getCause.isInstanceOf[ClusterAuthorizationException])
+        case _ =>
+          fail(s"Unexpected exception type raised from send: ${exception.getClass}")
+      }
     }
-    try {
-      // the second time, the call to send itself should fail (the producer becomes unusable
-      // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      if (expectAuthException)
-        fail("Should have raised ClusterAuthorizationException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
-    }
+
+    assertClusterAuthFailure()
+
+    // the second time, the call to send itself should fail (the producer becomes unusable
+    // if no producerId can be obtained)
+    assertClusterAuthFailure()
   }
 
   @Test
@@ -2119,14 +2126,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     for (_ <- 1 to 3) {
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
-      shouldIdempotentProducerFailInInitProducerId(true)
+      assertIdempotentSendAuthorizationFailure()
 
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
-      shouldIdempotentProducerFailInInitProducerId(false)
+      assertIdempotentSendSuccess()
 
       removeAllClientAcls()
       addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
-      shouldIdempotentProducerFailInInitProducerId(true)
+      assertIdempotentSendAuthorizationFailure()
     }
   }
 
@@ -2149,7 +2156,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(acl1, acl4, acl5), topicResource)
     addAndVerifyAcls(Set(acl2, acl3), unrelatedTopicResource)
     addAndVerifyAcls(Set(acl2, acl3), unrelatedGroupResource)
-    shouldIdempotentProducerFailInInitProducerId(false)
+    assertIdempotentSendSuccess()
   }
 
   @Test
@@ -2157,11 +2164,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createTopic(topic)
     val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
     addAndVerifyAcls(Set(allowWriteAce), topicResource)
-    shouldIdempotentProducerFailInInitProducerId(false)
+    assertIdempotentSendSuccess()
 
     val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
     addAndVerifyAcls(Set(denyWriteAce), topicResource)
-    shouldIdempotentProducerFailInInitProducerId(true)
+    assertIdempotentSendAuthorizationFailure()
   }
 
   @Test
@@ -2175,10 +2182,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     addAndVerifyAcls(Set(allowWriteAce), prefixed)
     addAndVerifyAcls(Set(allowWriteAce), literal)
-    shouldIdempotentProducerFailInInitProducerId(false)
+    assertIdempotentSendSuccess()
 
     addAndVerifyAcls(Set(denyWriteAce), wildcard)
-    shouldIdempotentProducerFailInInitProducerId(true)
+    assertIdempotentSendAuthorizationFailure()
   }
 
   @Test
@@ -2191,7 +2198,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     addAndVerifyAcls(Set(denyWriteAce), prefixed)
     addAndVerifyAcls(Set(allowWriteAce), literal)
-    shouldIdempotentProducerFailInInitProducerId(true)
+    assertIdempotentSendAuthorizationFailure()
   }
 
   @Test

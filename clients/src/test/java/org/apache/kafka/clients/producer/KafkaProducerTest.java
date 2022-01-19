@@ -904,6 +904,48 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testInitTransactionsResponseAfterTimeout() throws Exception {
+        int maxBlockMs = 500;
+
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+
+        Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, client, null, time);
+        try {
+            client.prepareResponse(
+                request -> request instanceof FindCoordinatorRequest &&
+                    ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
+
+            Future<?> future = executor.submit(producer::initTransactions);
+            TestUtils.waitForCondition(client::hasInFlightRequests,
+                "Timed out while waiting for expected `InitProducerId` request to be sent");
+
+            time.sleep(maxBlockMs);
+            TestUtils.assertFutureThrows(future, TimeoutException.class);
+
+            client.respond(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+            Thread.sleep(1000);
+            producer.initTransactions();
+        } finally {
+            producer.close(Duration.ZERO);
+        }
+    }
+
+    @Test
     public void testInitTransactionTimeout() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
@@ -1249,7 +1291,7 @@ public class KafkaProducerTest {
         assertThrows(TimeoutException.class, producer::initTransactions);
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
-            assertThrows(KafkaException.class, producer::beginTransaction);
+            assertThrows(IllegalStateException.class, producer::beginTransaction);
         } finally {
             producer.close(Duration.ofMillis(0));
         }
