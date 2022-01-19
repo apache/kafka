@@ -608,7 +608,7 @@ public class KafkaAdminClient extends AdminClient {
         int defaultApiTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
         if (defaultApiTimeoutMs < requestTimeoutMs) {
-            if (config.originals().containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
+            if (config.hasKeyInOriginals(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
                 throw new ConfigException("The specified value of " + AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG +
                         " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {

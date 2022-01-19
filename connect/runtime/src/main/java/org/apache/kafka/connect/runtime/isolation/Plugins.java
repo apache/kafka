@@ -230,7 +230,7 @@ public class Plugins {
      * @throws ConnectException if the {@link Converter} implementation class could not be found
      */
     public Converter newConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName)) {
+        if (!config.hasKeyInOriginals(classPropertyName)) {
             // This configuration does not define the converter via the specified property name
             return null;
         }
@@ -323,7 +323,7 @@ public class Plugins {
         Class<? extends HeaderConverter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
-                if (!config.originals().containsKey(classPropertyName)) {
+                if (!config.hasKeyInOriginals(classPropertyName)) {
                     // This connector configuration does not define the header converter via the specified property name
                     return null;
                 }

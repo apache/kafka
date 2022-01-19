@@ -442,7 +442,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     // visible for testing
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = configureInflightRequests(producerConfig);
+        int maxInflightRequests = producerConfig.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time, logContext);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
@@ -466,7 +466,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throttleTimeSensor,
                 logContext);
 
-        short acks = configureAcks(producerConfig, log);
+        short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
                 client,
                 metadata,
@@ -494,7 +494,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         int lingerAndRequestTimeoutMs = (int) Math.min((long) lingerMs + requestTimeoutMs, Integer.MAX_VALUE);
 
         if (deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
-            if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
+            if (config.hasKeyInOriginals(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
                 // throw an exception if the user explicitly set an inconsistent value
                 throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
                     + " should be equal to or larger than " + ProducerConfig.LINGER_MS_CONFIG
@@ -533,30 +533,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
         return transactionManager;
     }
-
-    private static int configureInflightRequests(ProducerConfig config) {
-        if (config.idempotenceEnabled() && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
-            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
-                    " to use the idempotent producer.");
-        }
-        return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-    }
-
-    private static short configureAcks(ProducerConfig config, Logger log) {
-        System.out.println("!!! acks:" + config.getString(ProducerConfig.ACKS_CONFIG));
-        boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
-        short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
-
-        if (config.idempotenceEnabled()) {
-        if (!userConfiguredAcks)
-                                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-                        else if (acks != -1)
-                                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                                            "producer. Otherwise we cannot guarantee idempotence.");
-                    }
-                return acks;
-            }
-
 
     /**
      * Needs to be called before any other methods when the transactional.id is set in the configuration.

@@ -437,15 +437,15 @@ public class ProducerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        validateAcksAndRetries(parsedValues);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        postProcessAndValidateIdempotenceConfigs(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);
         return refinedConfigs;
     }
 
     private void maybeOverrideClientId(final Map<String, Object> configs) {
         String refinedClientId;
-        boolean userConfiguredClientId = this.originals().containsKey(CLIENT_ID_CONFIG);
+        boolean userConfiguredClientId = this.hasKeyInOriginals(CLIENT_ID_CONFIG);
         if (userConfiguredClientId) {
             refinedClientId = this.getString(CLIENT_ID_CONFIG);
         } else {
@@ -455,22 +455,29 @@ public class ProducerConfig extends AbstractConfig {
         configs.put(CLIENT_ID_CONFIG, refinedClientId);
     }
 
-    private void validateAcksAndRetries(final Map<String, Object> configs) {
+    private void postProcessAndValidateIdempotenceConfigs(final Map<String, Object> configs) {
+        final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
+        configs.put(ACKS_CONFIG, acksStr);
+
         // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` need validation
         if (idempotenceEnabled()) {
-            boolean userConfiguredRetries = this.originals().containsKey(RETRIES_CONFIG);
+            boolean userConfiguredRetries = hasKeyInOriginals(RETRIES_CONFIG);
             if (userConfiguredRetries && this.getInt(RETRIES_CONFIG) == 0) {
                 throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
             }
 
-            boolean userConfiguredAcks = this.originals().containsKey(ACKS_CONFIG);
-            final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
-            final short acks = acksStr.equals("all") ? -1 : Short.valueOf(acksStr);
+            boolean userConfiguredAcks = hasKeyInOriginals(ACKS_CONFIG);
+            final short acks = Short.valueOf(acksStr);
             if (userConfiguredAcks && acks != (short) -1) {
                 throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
             }
-            configs.put(ACKS_CONFIG, acks);
+
+            boolean userConfiguredInflightRequests = hasKeyInOriginals(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            if (userConfiguredInflightRequests && 5 < this.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+                throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
+                        " to use the idempotent producer.");
+            }
         }
     }
 
@@ -502,8 +509,9 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     boolean idempotenceEnabled() {
-        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+
+        boolean userConfiguredIdempotence = this.hasKeyInOriginals(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.hasKeyInOriginals(TRANSACTIONAL_ID_CONFIG);
         boolean idempotenceEnabled = !userConfiguredIdempotence || this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
         // default value for enable.idempotence is true since v3.0, it must be wrong setting if transactionId set and idempotence disabled
         if (!idempotenceEnabled && userConfiguredTransactions)

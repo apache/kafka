@@ -24,14 +24,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Objects;
 import java.util.TreeMap;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -224,6 +225,11 @@ public class AbstractConfig {
         Set<String> keys = new HashSet<>(originals.keySet());
         keys.removeAll(used);
         return keys;
+    }
+
+    public boolean hasKeyInOriginals(String configKey) {
+        Objects.requireNonNull(configKey, "config key cannot be null");
+        return originals.containsKey(configKey);
     }
 
     public Map<String, Object> originals() {
