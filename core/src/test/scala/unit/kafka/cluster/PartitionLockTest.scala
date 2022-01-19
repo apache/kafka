@@ -287,7 +287,7 @@ class PartitionLockTest extends Logging {
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxProducerIdExpirationMs = 60 * 60 * 1000
         val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir, maxProducerIdExpirationMs)
-        val offsets = LogLoader.load(LoadLogParams(
+        val offsets = new LogLoader(
           log.dir,
           log.topicPartition,
           log.config,
@@ -300,7 +300,8 @@ class PartitionLockTest extends Logging {
           0L,
           maxProducerIdExpirationMs,
           leaderEpochCache,
-          producerStateManager))
+          producerStateManager
+        ).load()
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
           logDirFailureChannel)

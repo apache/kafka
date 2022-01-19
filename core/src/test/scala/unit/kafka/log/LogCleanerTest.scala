@@ -109,7 +109,7 @@ class LogCleanerTest {
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val offsets = new LogLoader(
       dir,
       topicPartition,
       config,
@@ -122,7 +122,8 @@ class LogCleanerTest {
       0L,
       maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
     val log = new UnifiedLog(offsets.logStartOffset,
