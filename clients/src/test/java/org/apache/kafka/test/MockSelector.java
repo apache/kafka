@@ -225,7 +225,7 @@ public class MockSelector implements Selectable {
     public void unmuteAll() {
     }
 
-    public void chanelNotReady(String id) {
+    public void channelNotReady(String id) {
         ready.remove(id);
     }
 

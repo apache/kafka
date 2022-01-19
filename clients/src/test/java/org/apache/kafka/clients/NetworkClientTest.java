@@ -1104,7 +1104,7 @@ public class NetworkClientTest {
 
         // Channel is ready by default so we mark it as not ready.
         client.ready(node, time.milliseconds());
-        selector.chanelNotReady(node.idString());
+        selector.channelNotReady(node.idString());
 
         // Channel should not be ready.
         client.poll(0, time.milliseconds());
