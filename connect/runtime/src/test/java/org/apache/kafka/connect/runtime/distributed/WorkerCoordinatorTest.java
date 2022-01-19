@@ -511,8 +511,37 @@ public class WorkerCoordinatorTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testLeaderSkipAssignment() {
+        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
+        // output. So we test it directly here.
+
+        EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
+
+        PowerMock.replayAll();
+
+        // Prime the current configuration state
+        coordinator.metadata();
+
+        // Mark everyone as in sync with configState1
+        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+            .setMemberId("leader")
+            .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+        );
+        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
+            .setMemberId("member")
+            .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+        );
+
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers, true);
+        assertEquals(Collections.emptyMap(), result);
+
+        PowerMock.verifyAll();
+    }
+
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
-                                           Map<String, Long> configOffsets, Errors error) {
+                                                      Map<String, Long> configOffsets, Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, Long> configStateEntry : configOffsets.entrySet()) {
             // We need a member URL, but it doesn't matter for the purposes of this test. Just set it to the member ID
