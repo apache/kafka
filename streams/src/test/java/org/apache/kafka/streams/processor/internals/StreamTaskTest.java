@@ -2241,9 +2241,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldUpdateOffsetIfAllRecordsAreCorrupted() {
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE,
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
             "0",
-            LogAndContinueExceptionHandler.class.getName()));
+            LogAndContinueExceptionHandler.class.getName()
+        ));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2258,16 +2260,19 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1,
-                new OffsetAndMetadata(offset + 1, encodeTimestamp(-1))))));
+        assertThat(
+            task.prepareCommit(),
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, encodeTimestamp(-1)))))
+        );
     }
 
     @Test
     public void shouldUpdateOffsetIfValidRecordFollowsCorrupted() {
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE,
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
             "0",
-            LogAndContinueExceptionHandler.class.getName()));
+            LogAndContinueExceptionHandler.class.getName()
+        ));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2283,14 +2288,16 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1,
-                new OffsetAndMetadata(offset + 1, encodeTimestamp(offset))))));
+        assertThat(
+            task.prepareCommit(),
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, encodeTimestamp(offset)))))
+        );
     }
 
     @Test
     public void shouldUpdateOffsetIfCorruptedRecordFollowsValid() {
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE,
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
             "0",
             LogAndContinueExceptionHandler.class.getName()));
         task.initializeIfNeeded();
@@ -2308,15 +2315,17 @@ public class StreamTaskTest {
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1,
-                new OffsetAndMetadata(1, encodeTimestamp(0))))));
+        assertThat(
+            task.prepareCommit(),
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, encodeTimestamp(0)))))
+        );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
-        assertThat(task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1,
-                new OffsetAndMetadata(2, encodeTimestamp(0))))));
+        assertThat(
+            task.prepareCommit(),
+            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, encodeTimestamp(0)))))
+        );
     }
 
     private List<MetricName> getTaskMetrics() {
