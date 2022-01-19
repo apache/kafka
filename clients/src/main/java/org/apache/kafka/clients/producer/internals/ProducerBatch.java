@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,6 +104,15 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+        return tryAppend(timestamp, Utils.wrapNullable(key), Utils.wrapNullable(value), headers, callback, now);
+    }
+
+    /**
+     * Append the record to the current record set and return the relative offset within that record set
+     *
+     * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
+     */
+    public FutureRecordMetadata tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Callback callback, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
@@ -112,8 +122,8 @@ public final class ProducerBatch {
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp,
-                                                                   key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length,
+                                                                   key == null ? -1 : key.remaining(),
+                                                                   value == null ? -1 : value.remaining(),
                                                                    Time.SYSTEM);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
