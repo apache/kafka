@@ -14,9 +14,8 @@ package kafka.api
 
 import java.nio.file.Files
 import java.time.Duration
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
-
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -78,7 +77,10 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Test
   def testProducerWithAuthenticationFailure(): Unit = {
-    val producer = createProducer()
+    val prop = new Properties()
+    // test with non-idempotence producer for simplicity
+    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer(configOverrides = prop)
     verifyAuthenticationException(sendOneRecord(producer, maxWaitMs = 10000))
     verifyAuthenticationException(producer.partitionsFor(topic))
 
@@ -219,6 +221,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   private def verifyAuthenticationException(action: => Unit): Unit = {
     val startMs = System.currentTimeMillis
+    System.out.println("!!! send 1")
     assertThrows(classOf[Exception], () => action)
     val elapsedMs = System.currentTimeMillis - startMs
     assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")

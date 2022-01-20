@@ -1674,6 +1674,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       producerProps.put(ProducerConfig.RETRIES_CONFIG, _retries.toString)
       producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, _deliveryTimeoutMs.toString)
       producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, _requestTimeoutMs.toString)
+      producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false.toString)
 
       val producer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
       producers += producer

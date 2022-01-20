@@ -20,7 +20,7 @@ package kafka.api
 import com.yammer.metrics.core.Gauge
 
 import java.io.File
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.admin.AclCommand
 import kafka.metrics.KafkaYammerMetrics
@@ -393,7 +393,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
     }
-    val producer = createProducer()
+
+    val prop = new Properties()
+    // idempotence producer doesn't support old version of messages
+//    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer(configOverrides = prop)
     val e = assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
     assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
