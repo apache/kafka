@@ -1530,19 +1530,9 @@ public class KafkaProducerTest {
                 assertNotNull(exception);
                 assertNotNull(recordMetadata);
 
-                try {
-                    assertNotNull(recordMetadata.topic());
-                } catch (NullPointerException e) {
-                    fail("Topic name should be valid even on send failure", e);
-                }
-
+                assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
                 assertEquals(invalidTopicName, recordMetadata.topic());
-
-                try {
-                    assertEquals(RecordMetadata.UNKNOWN_PARTITION, recordMetadata.partition());
-                } catch (NullPointerException e) {
-                    fail("Partition should be valid even on send failure", e);
-                }
+                assertNotNull(recordMetadata.partition(), "Partition should be valid even on send failure");
 
                 assertFalse(recordMetadata.hasOffset());
                 assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());

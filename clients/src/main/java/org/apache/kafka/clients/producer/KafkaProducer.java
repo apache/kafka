@@ -998,7 +998,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback will make sure to call both 'callback' and interceptor callback
             if (tp == null) {
                 // set topicPartition to -1 when null
-                tp = ProducerInterceptors.createTopicPartition(record);
+                tp = ProducerInterceptors.extractTopicPartition(record);
             }
 
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
