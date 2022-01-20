@@ -28,7 +28,8 @@ public interface Callback {
      * metadata will contain the special -1 value for all fields.
      *
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
-     *                 with -1 value for all fields will be returned if an error occurred.
+     *                 with -1 value for all fields will be returned if an error occurred.  If topicPartition cannot be
+     *                 choosen, a -1 value will be assigned.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      *                  Possible thrown exceptions include:
      *
