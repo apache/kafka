@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.header.Headers;
 
 /**
  * This class represents a version of a {@link StampedRecord} that failed to deserialize. We need
@@ -27,46 +26,14 @@ import org.apache.kafka.common.header.Headers;
  */
 public class CorruptedRecord extends StampedRecord {
 
-    private final ConsumerRecord<byte[], byte[]> rawRecord;
-
     CorruptedRecord(final ConsumerRecord<byte[], byte[]> rawRecord) {
-        super(null, ConsumerRecord.NO_TIMESTAMP);
-        this.rawRecord = rawRecord;
-    }
-
-    @Override
-    public String topic() {
-        return rawRecord.topic();
-    }
-
-    @Override
-    public int partition() {
-        return rawRecord.partition();
-    }
-
-    @Override
-    public byte[] key() {
-        return rawRecord.key();
-    }
-
-    @Override
-    public byte[] value() {
-        return rawRecord.value();
-    }
-
-    public long offset() {
-        return rawRecord.offset();
-    }
-
-    @Override
-    public Headers headers() {
-        return rawRecord.headers();
+        super(rawRecord, ConsumerRecord.NO_TIMESTAMP);
     }
 
     @Override
     public String toString() {
         return "CorruptedRecord(" +
-            "rawRecord = " + rawRecord +
+            "value = " + value +
             ")";
     }
 
@@ -82,11 +49,11 @@ public class CorruptedRecord extends StampedRecord {
             return false;
         }
         final CorruptedRecord that = (CorruptedRecord) o;
-        return Objects.equals(rawRecord, that.rawRecord);
+        return Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), rawRecord);
+        return Objects.hash(value);
     }
 }
