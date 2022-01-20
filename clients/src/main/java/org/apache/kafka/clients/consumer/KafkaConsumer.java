@@ -563,6 +563,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
+    private static final String DEFAULT_REASON = "rebalance enforced by user";
 
     // Visible for testing
     final Metrics metrics;
@@ -2310,19 +2311,29 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor ConsumerPartitionAssignor}, you should not
      * use this API.
      *
+     * @param reason The reason why the new rebalance is needed.
+     *
      * @throws java.lang.IllegalStateException if the consumer does not use group subscription
      */
     @Override
-    public void enforceRebalance() {
+    public void enforceRebalance(final String reason) {
         acquireAndEnsureOpen();
         try {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin("rebalance enforced by user");
+            coordinator.requestRejoin(reason == null ? DEFAULT_REASON : DEFAULT_REASON + ": " + reason);
         } finally {
             release();
         }
+    }
+
+    /**
+     * @see #enforceRebalance(String)
+     */
+    @Override
+    public void enforceRebalance() {
+        enforceRebalance(null);
     }
 
     /**

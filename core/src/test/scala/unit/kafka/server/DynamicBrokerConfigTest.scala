@@ -18,24 +18,26 @@
 package kafka.server
 
 import java.{lang, util}
-import java.util.Properties
+import java.util.{Map => JMap, Properties}
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicReference
 
 import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
-import kafka.network.SocketServer
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.{KafkaScheduler, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -130,6 +132,7 @@ class DynamicBrokerConfigTest {
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaBroker])
+    val acceptorMock = Mockito.mock(classOf[DataPlaneAcceptor])
     val handlerPoolMock = Mockito.mock(classOf[KafkaRequestHandlerPool])
     val socketServerMock = Mockito.mock(classOf[SocketServer])
     val replicaManagerMock = Mockito.mock(classOf[ReplicaManager])
@@ -138,13 +141,17 @@ class DynamicBrokerConfigTest {
 
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.dataPlaneRequestHandlerPool).thenReturn(handlerPoolMock)
+    Mockito.when(acceptorMock.listenerName()).thenReturn(new ListenerName("plaintext"))
+    Mockito.when(acceptorMock.reconfigurableConfigs()).thenCallRealMethod()
     Mockito.when(serverMock.socketServer).thenReturn(socketServerMock)
+    Mockito.when(socketServerMock.dataPlaneAcceptor(anyString())).thenReturn(Some(acceptorMock))
     Mockito.when(serverMock.replicaManager).thenReturn(replicaManagerMock)
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
     Mockito.when(serverMock.kafkaScheduler).thenReturn(schedulerMock)
 
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicThreadPool(serverMock))
+    config.dynamicConfig.addReconfigurable(acceptorMock)
 
     val props = new Properties()
 
@@ -156,7 +163,10 @@ class DynamicBrokerConfigTest {
     props.put(KafkaConfig.NumNetworkThreadsProp, "4")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(4, config.numNetworkThreads)
-    Mockito.verify(socketServerMock).resizeThreadPool(oldNumNetworkThreads = 2, newNumNetworkThreads = 4)
+    val captor: ArgumentCaptor[JMap[String, String]] = ArgumentCaptor.forClass(classOf[JMap[String, String]])
+    Mockito.verify(acceptorMock).reconfigure(captor.capture())
+    assertTrue(captor.getValue.containsKey(KafkaConfig.NumNetworkThreadsProp))
+    assertEquals(4, captor.getValue.get(KafkaConfig.NumNetworkThreadsProp))
 
     props.put(KafkaConfig.NumReplicaFetchersProp, "2")
     config.dynamicConfig.updateDefaultConfig(props)

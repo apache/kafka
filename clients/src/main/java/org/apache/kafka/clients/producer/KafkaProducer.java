@@ -961,9 +961,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
-            if (transactionManager != null && transactionManager.isTransactional()) {
-                transactionManager.failIfNotReadyForSend();
+            if (transactionManager != null) {
+                transactionManager.maybeAddPartition(tp);
             }
+
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
 
@@ -981,9 +982,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
             }
-
-            if (transactionManager != null && transactionManager.isTransactional())
-                transactionManager.maybeAddPartitionToTransaction(tp);
 
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);

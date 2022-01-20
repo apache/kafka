@@ -2525,6 +2525,7 @@ class KafkaApisTest {
       EasyMock.eq(protocolType),
       EasyMock.capture(capturedProtocols),
       anyObject(),
+      anyObject(),
       anyObject()
     ))
 
@@ -2587,6 +2588,7 @@ class KafkaApisTest {
       EasyMock.eq(protocolType),
       EasyMock.eq(List.empty),
       EasyMock.capture(capturedCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     ))
 
@@ -2658,6 +2660,7 @@ class KafkaApisTest {
       EasyMock.eq(protocolType),
       EasyMock.eq(List.empty),
       EasyMock.capture(capturedCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject()
     ))
 
