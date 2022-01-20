@@ -76,7 +76,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String sslEngineFactoryClass;
 
     private int retries = Integer.MAX_VALUE;
-    private int requiredNumAcks = -1;
+    private int requiredNumAcks = 1;
     private int deliveryTimeoutMs = 120000;
     private int lingerMs = 0;
     private int batchSize = 16384;

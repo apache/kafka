@@ -35,7 +35,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, GroupAuthorizationException, TopicAuthorizationException}
+import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
@@ -416,7 +416,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     if (isIdempotenceEnabled) {
       // in idempotent producer, it'll fail at InitProducerId request
-      assertThrows(classOf[ClusterAuthorizationException], () => sendRecords(producer, numRecords, tp))
+      assertThrows(classOf[KafkaException], () => sendRecords(producer, numRecords, tp))
     } else {
       val e = assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
       assertEquals(Set(topic).asJava, e.unauthorizedTopics())
