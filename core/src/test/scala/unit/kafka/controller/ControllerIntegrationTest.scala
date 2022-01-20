@@ -1232,10 +1232,10 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers = makeServers(1)
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon controller restart")
-    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic)
+    val (topicIdAfterUpgrade, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "expected same topic ID but it can not be found")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+    assertEquals(tp.topic, servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
       "correct topic name expected but cannot be found in the controller context")
 
     // Downgrade back to 2.7
@@ -1244,17 +1244,17 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
     waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicIdAfterDowngrade = zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic)
+    val (topicIdAfterDowngrade, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertTrue(topicIdAfterDowngrade.isDefined)
     assertEquals(topicIdAfterUpgrade, topicIdAfterDowngrade,
       "expected same topic ID but it can not be found after downgrade")
     assertEquals(topicIdAfterDowngrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "expected same topic ID in controller context but it is no longer found after downgrade")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+    assertEquals(tp.topic, servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
       "correct topic name expected but cannot be found in the controller context")
 
     // Reassign partitions
-    servers(0).kafkaController.eventManager.put(ApiPartitionReassignment(reassignment, _ => ()))
+    servers.head.kafkaController.eventManager.put(ApiPartitionReassignment(reassignment, _ => ()))
     waitForPartitionState(tp, 3, 0, 1,
       "failed to get expected partition state upon controller restart")
     val topicIdAfterReassignment = zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic)
@@ -1263,7 +1263,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       "expected same topic ID but it can not be found after reassignment")
     assertEquals(topicIdAfterUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
       "expected same topic ID in controller context but is no longer found after reassignment")
-    assertEquals(tp.topic(), servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
+    assertEquals(tp.topic, servers.head.kafkaController.controllerContext.topicNames(topicIdAfterUpgrade.get),
       "correct topic name expected but cannot be found in the controller context")
 
     // Upgrade back to 2.8
@@ -1272,7 +1272,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers = makeServers(1)
     waitForPartitionState(tp, 3, 0, 1,
       "failed to get expected partition state upon controller restart")
-    val topicIdAfterReUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic)
+    val (topicIdAfterReUpgrade, _) = TestUtils.computeUntilTrue(zkClient.getTopicIdsForTopics(Set(tp.topic)).get(tp.topic))(_.nonEmpty)
     assertEquals(topicIdAfterUpgrade, topicIdAfterReUpgrade,
       "expected same topic ID but it can not be found after re-upgrade")
     assertEquals(topicIdAfterReUpgrade, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
