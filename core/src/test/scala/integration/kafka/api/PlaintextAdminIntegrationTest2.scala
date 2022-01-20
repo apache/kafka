@@ -715,6 +715,7 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
 
   @Test
   def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
+    System.err.println("start")
     val leaders = createTopic(topic, replicationFactor = brokerCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
@@ -727,56 +728,49 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
         servers(followerIndex).replicaManager.localLog(topicPartition).get.logStartOffset == expectedStartOffset
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
-      var shouldFailed = false
-      try {
-        TestUtils.waitUntilTrue(() => {
-          val logEndOffset = servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset
-          System.err.print("leo:" + logEndOffset)
-          logEndOffset == expectedEndOffset
-        }, s"Expected follower to catch up to log end offset $expectedEndOffset")
-      } catch {
-        case _: Throwable => {
-          shouldFailed = true
-          System.err.println("failed 1st time")
-        }
-      }
-
       TestUtils.waitUntilTrue(() => {
         val logEndOffset = servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset
-        System.err.println("logEndOffset:" + logEndOffset)
+        System.err.print("leo:" + logEndOffset)
         logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
-
-      if (shouldFailed) {
-        fail("failed at 1st time")
-      }
     }
 
     // we will produce to topic and delete records while one follower is down
+    println("!!! kill")
     killBroker(followerIndex)
 
     client = Admin.create(createConfig)
+
     val producer = createProducer()
+    println("!!! send")
     sendRecords(producer, 100, topicPartition)
 
-    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
+    println("!!! delete")
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(6L)).asJava)
     result.all().get()
 
+    println("!!! restart")
     // start the stopped broker to verify that it will be able to fetch from new log start offset
     restartDeadBrokers()
 
-    waitForFollowerLog(expectedStartOffset=3L, expectedEndOffset=100L)
+    println("!!! wait")
+    waitForFollowerLog(expectedStartOffset=6L, expectedEndOffset=100L)
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until brokerCount)
-      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
+      assertEquals(6, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
+    System.err.println("kill2")
     killBroker(followerIndex)
+    println("!!! send2")
     sendRecords(producer, 100, topicPartition)
+    println("!!! delete2")
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
+    println("!!! restart2")
     restartDeadBrokers()
+    println("!!! wait2")
     waitForFollowerLog(expectedStartOffset=117L, expectedEndOffset=200L)
   }
 

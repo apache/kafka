@@ -715,6 +715,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
+    System.err.println("start")
     val leaders = createTopic(topic, replicationFactor = brokerCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
@@ -727,29 +728,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         servers(followerIndex).replicaManager.localLog(topicPartition).get.logStartOffset == expectedStartOffset
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
-      var shouldFailed = false
-      try {
-        TestUtils.waitUntilTrue(() => {
-          val logEndOffset = servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset
-          System.err.print("leo:" + logEndOffset)
-          logEndOffset == expectedEndOffset
-        }, s"Expected follower to catch up to log end offset $expectedEndOffset")
-      } catch {
-        case _: Throwable => {
-          shouldFailed = true
-          System.err.println("failed 1st time")
-        }
-      }
-
       TestUtils.waitUntilTrue(() => {
         val logEndOffset = servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset
-        System.err.println("logEndOffset:" + logEndOffset)
+        System.err.print("leo:" + logEndOffset)
         logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
-
-      if (shouldFailed) {
-        fail("failed at 1st time")
-      }
     }
 
     // we will produce to topic and delete records while one follower is down
@@ -778,7 +761,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(6, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
-    println("!!! kill2")
+    System.err.println("kill2")
     killBroker(followerIndex)
     println("!!! send2")
     sendRecords(producer, 100, topicPartition)

@@ -373,6 +373,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                        replicaAssignment: ReplicaAssignment,
                                        isNew: Boolean): Unit = {
 
+    System.err.println("addLe:" + leaderIsrAndControllerEpoch)
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
@@ -487,6 +488,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .toSet[String]
           .map(topic => (topic, controllerContext.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
+
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {

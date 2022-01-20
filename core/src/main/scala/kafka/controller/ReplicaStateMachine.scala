@@ -331,12 +331,17 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     replicaId: Int,
     partitions: Seq[TopicPartition]
   ): (Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]], Seq[TopicPartition]) = {
+
     val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk) = getTopicPartitionStatesFromZk(partitions)
+    System.err.println("doRe:" + replicaId + "," + partitions)
     val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, result) =>
       result.map { leaderAndIsr =>
         leaderAndIsr.isr.contains(replicaId)
       }.getOrElse(false)
     }
+
+    System.err.println("lisrsWithR:" + leaderAndIsrsWithReplica + ";;" + leaderAndIsrsWithoutReplica)
+
 
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>

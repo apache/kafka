@@ -1296,7 +1296,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
-    System.err.println("Sending metadata: %s ".format(brokers.mkString(",")))
+//    System.err.println("Sending metadata: %s ".format(brokers.mkString(",")))
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
