@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -59,6 +60,11 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         fillClientsTagStatistics(clients, tagEntryToClients, tagKeyToValues);
 
+        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
+            (client, t) -> !clients.get(client).hasAssignedTask(t),
+            client -> clients.get(client).assignedTaskLoad()
+        );
+
         for (final TaskId statefulTaskId : statefulTaskIds) {
             for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
                 final UUID clientId = entry.getKey();
@@ -66,6 +72,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
                 if (clientState.activeTasks().contains(statefulTaskId)) {
                     assignStandbyTasksForActiveTask(
+                        standbyTaskClientsByTaskLoad,
                         numStandbyReplicas,
                         statefulTaskId,
                         clientId,
@@ -111,7 +118,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         }
     }
 
-    private static void assignStandbyTasksForActiveTask(final int numStandbyReplicas,
+    private static void assignStandbyTasksForActiveTask(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                        final int numStandbyReplicas,
                                                         final TaskId activeTaskId,
                                                         final UUID activeTaskClient,
                                                         final Set<String> rackAwareAssignmentTags,
@@ -119,10 +127,6 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                                                         final Map<TaskId, Integer> tasksToRemainingStandbys,
                                                         final Map<String, Set<String>> tagKeyToValues,
                                                         final Map<TagEntry, Set<UUID>> tagEntryToClients) {
-        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = new ConstrainedPrioritySet(
-            (client, t) -> !clientStates.get(client).hasAssignedTask(t),
-            client -> clientStates.get(client).assignedTaskLoad()
-        );
 
         final Set<UUID> usedClients = new HashSet<>();
 
@@ -132,13 +136,17 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         usedClients.add(activeTaskClient);
 
+        final Set<UUID> clientsOnAlreadyUsedTagDimensions = new HashSet<>();
+
         while (numRemainingStandbys > 0) {
-            final Set<UUID> clientsOnAlreadyUsedTagDimensions = findClientsOnUsedTagDimensions(
-                usedClients,
-                rackAwareAssignmentTags,
-                clientStates,
-                tagEntryToClients,
-                tagKeyToValues
+            clientsOnAlreadyUsedTagDimensions.addAll(
+                findClientsOnUsedTagDimensions(
+                    usedClients,
+                    rackAwareAssignmentTags,
+                    clientStates,
+                    tagEntryToClients,
+                    tagKeyToValues
+                )
             );
 
             final UUID polledClient = standbyTaskClientsByTaskLoad.poll(
@@ -150,6 +158,13 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
 
             final ClientState standbyTaskClient = clientStates.get(polledClient);
+
+            if (standbyTaskClient.reachedCapacity()) {
+                log.warn("Capacity was reached when assigning standby task [{}] to client with tags [{}]. " +
+                         "In order to have more even distribution of standby tasks, " +
+                         "increase the number of application instances with [{}] tag dimensions.",
+                         activeTaskId, standbyTaskClient.clientTags(), standbyTaskClient.clientTags());
+            }
 
             standbyTaskClient.assignStandby(activeTaskId);
 
@@ -201,7 +216,11 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
         }
 
-        return filteredClients;
+        if (filteredClients.size() == clientStates.size()) {
+            return Collections.emptySet();
+        } else {
+            return filteredClients;
+        }
     }
 
     private static final class TagEntry {
