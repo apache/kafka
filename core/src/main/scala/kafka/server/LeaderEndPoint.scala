@@ -95,6 +95,16 @@ trait LeaderEndPoint {
   def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
   /**
+   * Fetch the leader's local-log-start-offset and the respective leader-epoch tuple from leader replica for the given
+   * topic partition and the current leader-epoch of leader in this replica.
+   *
+   * @param topicPartition
+   * @param currentLeaderEpoch
+   * @return
+   */
+  protected def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
+
+  /**
    * Builds a fetch request, given a partition map.
    *
    * @param partitions A map of topic partitions to their respective partition fetch state

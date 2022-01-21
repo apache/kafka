@@ -17,10 +17,6 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
-import java.util.Optional
-import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
@@ -28,7 +24,6 @@ import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException, UnknownTopicIdException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -38,15 +33,19 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.{BeforeEach, Test}
 
-import scala.jdk.CollectionConverters._
-import scala.collection.{Map, Set, mutable}
-import scala.util.Random
+import java.nio.ByteBuffer
+import java.util.Optional
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Map, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
+import scala.util.Random
 
 class AbstractFetcherThreadTest {
 
@@ -652,7 +651,7 @@ class AbstractFetcherThreadTest {
     assertEquals(5L, replicaState.logEndOffset)
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
-    for (_ <- 1 to 4) fetcher.doWork()
+    for (_ <- 1 to 5) fetcher.doWork()
     assertEquals(4, replicaState.log.size)
     assertEquals(0L, replicaState.logStartOffset)
     assertEquals(5L, replicaState.localLogStartOffset)
@@ -668,7 +667,7 @@ class AbstractFetcherThreadTest {
       override protected def buildRemoteLogAuxState(topicPartition: TopicPartition,
                                                     leaderEpoch: Int,
                                                     fetchOffset: Long,
-                                                    leaderLogStartOffset: Long): Unit = {
+                                                    leaderLogStartOffset: Long): Long = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
@@ -699,8 +698,13 @@ class AbstractFetcherThreadTest {
   def testFencedOffsetResetAfterOutOfRange(): Unit = {
     val partition = new TopicPartition("topic", 0)
     var fetchedEarliestOffset = false
+
     val fetcher = new MockFetcherThread(new MockLeaderEndPoint {
       override def fetchEarliestOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
+        fetchedEarliestOffset = true
+        throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
+      }
+      override protected def fetchEarliestLocalOffset(topicPartition: TopicPartition, leaderEpoch: Int): (Int, Long) = {
         fetchedEarliestOffset = true
         throw new FencedLeaderEpochException(s"Epoch $leaderEpoch is fenced")
       }
@@ -1476,10 +1480,11 @@ class AbstractFetcherThreadTest {
                                                   currentLeaderEpoch: Int,
                                                   fetchOffset: Long,
                                                   epochForFetchOffset: Int,
-                                                  leaderLogStartOffset: Long): Unit = {
+                                                  leaderLogStartOffset: Long): Long = {
       truncateFullyAndStartAt(topicPartition, fetchOffset)
       replicaPartitionState(topicPartition).logStartOffset = leaderLogStartOffset
       // skipped building leader epoch cache and producer snapshots as they are not verified.
+      leaderLogStartOffset
     }
 
   }
