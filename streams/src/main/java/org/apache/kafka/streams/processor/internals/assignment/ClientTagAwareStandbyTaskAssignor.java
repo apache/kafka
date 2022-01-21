@@ -119,7 +119,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             final TaskId activeTaskId = pendingStandbyTaskAssignmentEntry.getKey();
             final UUID clientId = pendingStandbyTaskToClientId.get(activeTaskId);
 
-            final int numberOfRemainingStandbys = DefaultStandbyTaskAssignor.assignStandbyTaskToLeastLoadedClient(
+            final int numberOfRemainingStandbys = DefaultStandbyTaskAssignor.pollAndAssignActiveTaskToRemainingStandbys(
                 clients,
                 pendingStandbyTaskToNumberRemainingStandbys,
                 standbyTaskClientsByTaskLoad,

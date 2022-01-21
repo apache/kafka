@@ -46,10 +46,10 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final TaskId task : statefulTaskIds) {
-            final int numRemainingStandbys = assignStandbyTaskToLeastLoadedClient(clients,
-                                                                                  tasksToRemainingStandbys,
-                                                                                  standbyTaskClientsByTaskLoad,
-                                                                                  task);
+            final int numRemainingStandbys = pollAndAssignActiveTaskToRemainingStandbys(clients,
+                                                                                        tasksToRemainingStandbys,
+                                                                                        standbyTaskClientsByTaskLoad,
+                                                                                        task);
 
             if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
@@ -64,17 +64,17 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         return false;
     }
 
-    static int assignStandbyTaskToLeastLoadedClient(final Map<UUID, ClientState> clients,
-                                                    final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                    final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                    final TaskId task) {
-        int numRemainingStandbys = tasksToRemainingStandbys.get(task);
+    static int pollAndAssignActiveTaskToRemainingStandbys(final Map<UUID, ClientState> clients,
+                                                          final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                          final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                          final TaskId activeTaskId) {
+        int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
         while (numRemainingStandbys > 0) {
-            final UUID client = standbyTaskClientsByTaskLoad.poll(task);
+            final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
             if (client == null) {
                 break;
             }
-            clients.get(client).assignStandby(task);
+            clients.get(client).assignStandby(activeTaskId);
             numRemainingStandbys--;
             standbyTaskClientsByTaskLoad.offer(client);
         }
