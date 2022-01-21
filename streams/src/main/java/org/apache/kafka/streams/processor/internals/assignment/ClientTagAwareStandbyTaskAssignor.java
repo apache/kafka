@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -35,8 +34,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.StandbyTas
 /**
  * Distributes standby tasks over different tag dimensions.
  * Only tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags} are taken into account.
- * Standby task distribution is on a best-effort basis. For example, if there are not enough clients available
- * on different tag dimensions compared to an active and corresponding standby task,
+ * Standby task distribution is on a best-effort basis. For example, if there's not enough capacity on the clients
+ * with different tag dimensions compared to an active and corresponding standby task,
  * in that case, the algorithm will fall back to distributing tasks on least-loaded clients.
  */
 class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
@@ -65,13 +64,16 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             client -> clients.get(client).assignedTaskLoad()
         );
 
+        final Map<TaskId, Integer> pendingStandbyTaskToNumberRemainingStandbys = new HashMap<>();
+        final Map<TaskId, UUID> pendingStandbyTaskToClientId = new HashMap<>();
+
         for (final TaskId statefulTaskId : statefulTaskIds) {
             for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
                 final UUID clientId = entry.getKey();
                 final ClientState clientState = entry.getValue();
 
                 if (clientState.activeTasks().contains(statefulTaskId)) {
-                    assignStandbyTasksForActiveTask(
+                    final int numberOfRemainingStandbys = assignStandbyTasksForActiveTask(
                         standbyTaskClientsByTaskLoad,
                         numStandbyReplicas,
                         statefulTaskId,
@@ -82,12 +84,59 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                         tagKeyToValues,
                         tagEntryToClients
                     );
+
+                    if (numberOfRemainingStandbys > 0) {
+                        pendingStandbyTaskToNumberRemainingStandbys.put(statefulTaskId, numberOfRemainingStandbys);
+                        pendingStandbyTaskToClientId.put(statefulTaskId, clientId);
+                    }
                 }
             }
         }
 
+        if (!pendingStandbyTaskToNumberRemainingStandbys.isEmpty()) {
+            assignPendingStandbyTasksToLeastLoadedClients(clients,
+                                                          numStandbyReplicas,
+                                                          rackAwareAssignmentTags,
+                                                          standbyTaskClientsByTaskLoad,
+                                                          pendingStandbyTaskToNumberRemainingStandbys,
+                                                          pendingStandbyTaskToClientId);
+        }
+
         // returning false, because standby task assignment will never require a follow-up probing rebalance.
         return false;
+    }
+
+    private static void assignPendingStandbyTasksToLeastLoadedClients(final Map<UUID, ClientState> clients,
+                                                                      final int numStandbyReplicas,
+                                                                      final Set<String> rackAwareAssignmentTags,
+                                                                      final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                                      final Map<TaskId, Integer> pendingStandbyTaskToNumberRemainingStandbys,
+                                                                      final Map<TaskId, UUID> pendingStandbyTaskToClientId) {
+        // We need to re offer all the clients to find the least loaded ones
+        standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
+
+        for (final Entry<TaskId, Integer> pendingStandbyTaskAssignmentEntry : pendingStandbyTaskToNumberRemainingStandbys.entrySet()) {
+            final TaskId activeTaskId = pendingStandbyTaskAssignmentEntry.getKey();
+            final UUID clientId = pendingStandbyTaskToClientId.get(activeTaskId);
+
+            final int numberOfRemainingStandbys = DefaultStandbyTaskAssignor.assignStandbyTaskToLeastLoadedClient(
+                clients,
+                pendingStandbyTaskToNumberRemainingStandbys,
+                standbyTaskClientsByTaskLoad,
+                activeTaskId
+            );
+
+            if (numberOfRemainingStandbys > 0) {
+                log.warn("Unable to assign {} of {} standby tasks for task [{}] with client tags [{}]. " +
+                         "There is not enough available capacity. You should " +
+                         "increase the number of application instances " +
+                         "on different client tag dimensions " +
+                         "to maintain the requested number of standby replicas. " +
+                         "Rack awareness is configured with [{}] tags.",
+                         numberOfRemainingStandbys, numStandbyReplicas, activeTaskId,
+                         clients.get(clientId).clientTags(), rackAwareAssignmentTags);
+            }
+        }
     }
 
     @Override
@@ -118,15 +167,15 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         }
     }
 
-    private static void assignStandbyTasksForActiveTask(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                        final int numStandbyReplicas,
-                                                        final TaskId activeTaskId,
-                                                        final UUID activeTaskClient,
-                                                        final Set<String> rackAwareAssignmentTags,
-                                                        final Map<UUID, ClientState> clientStates,
-                                                        final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                        final Map<String, Set<String>> tagKeyToValues,
-                                                        final Map<TagEntry, Set<UUID>> tagEntryToClients) {
+    private static int assignStandbyTasksForActiveTask(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                       final int numStandbyReplicas,
+                                                       final TaskId activeTaskId,
+                                                       final UUID activeTaskClient,
+                                                       final Set<String> rackAwareAssignmentTags,
+                                                       final Map<UUID, ClientState> clientStates,
+                                                       final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                       final Map<String, Set<String>> tagKeyToValues,
+                                                       final Map<TagEntry, Set<UUID>> tagEntryToClients) {
 
         final Set<UUID> usedClients = new HashSet<>();
 
@@ -160,10 +209,13 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             final ClientState standbyTaskClient = clientStates.get(polledClient);
 
             if (standbyTaskClient.reachedCapacity()) {
-                log.warn("Capacity was reached when assigning standby task [{}] to client with tags [{}]. " +
-                         "In order to have more even distribution of standby tasks, " +
+                final Map<String, String> standbyClientTags = standbyTaskClient.clientTags();
+                log.warn("Can't assign {} of {} standby task for task [{}]. " +
+                         "There is not enough capacity on client(s) with {} tag dimensions. " +
+                         "To have a proper distribution of standby tasks across different tag dimensions, " +
                          "increase the number of application instances with [{}] tag dimensions.",
-                         activeTaskId, standbyTaskClient.clientTags(), standbyTaskClient.clientTags());
+                         numRemainingStandbys, numStandbyReplicas, activeTaskId, standbyClientTags, standbyClientTags);
+                break;
             }
 
             standbyTaskClient.assignStandby(activeTaskId);
@@ -173,16 +225,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             numRemainingStandbys--;
         }
 
-        if (numRemainingStandbys > 0) {
-            log.warn("Unable to assign {} of {} standby tasks for task [{}] with client tags [{}]. " +
-                     "There is not enough available capacity. You should " +
-                     "increase the number of application instances " +
-                     "on different client tag dimensions " +
-                     "to maintain the requested number of standby replicas. " +
-                     "Rack awareness is configured with [{}] tags.",
-                     numRemainingStandbys, numStandbyReplicas, activeTaskId,
-                     clientStates.get(activeTaskClient).clientTags(), rackAwareAssignmentTags);
-        }
+        return numRemainingStandbys;
     }
 
     private static Set<UUID> findClientsOnUsedTagDimensions(final Set<UUID> usedClients,
@@ -216,11 +259,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             }
         }
 
-        if (filteredClients.size() == clientStates.size()) {
-            return Collections.emptySet();
-        } else {
-            return filteredClients;
-        }
+        return filteredClients;
     }
 
     private static final class TagEntry {

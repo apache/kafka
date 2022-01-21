@@ -46,16 +46,10 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final TaskId task : statefulTaskIds) {
-            int numRemainingStandbys = tasksToRemainingStandbys.get(task);
-            while (numRemainingStandbys > 0) {
-                final UUID client = standbyTaskClientsByTaskLoad.poll(task);
-                if (client == null) {
-                    break;
-                }
-                clients.get(client).assignStandby(task);
-                numRemainingStandbys--;
-                standbyTaskClientsByTaskLoad.offer(client);
-            }
+            final int numRemainingStandbys = assignStandbyTaskToLeastLoadedClient(clients,
+                                                                                  tasksToRemainingStandbys,
+                                                                                  standbyTaskClientsByTaskLoad,
+                                                                                  task);
 
             if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
@@ -68,5 +62,23 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
 
         // returning false, because standby task assignment will never require a follow-up probing rebalance.
         return false;
+    }
+
+    static int assignStandbyTaskToLeastLoadedClient(final Map<UUID, ClientState> clients,
+                                                    final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                    final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                    final TaskId task) {
+        int numRemainingStandbys = tasksToRemainingStandbys.get(task);
+        while (numRemainingStandbys > 0) {
+            final UUID client = standbyTaskClientsByTaskLoad.poll(task);
+            if (client == null) {
+                break;
+            }
+            clients.get(client).assignStandby(task);
+            numRemainingStandbys--;
+            standbyTaskClientsByTaskLoad.offer(client);
+        }
+
+        return numRemainingStandbys;
     }
 }
