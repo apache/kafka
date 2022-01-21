@@ -615,20 +615,20 @@ public class SubscriptionState {
 
 
     public synchronized void resetMissingPositions() {
-        final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
+        final Map<TopicPartition, FetchState> partitionsWithNoOffsetsAndStates = new HashMap<>();
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
             TopicPartitionState partitionState = state.value();
             if (!partitionState.hasPosition()) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
-                    partitionsWithNoOffsets.add(tp);
+                    partitionsWithNoOffsetsAndStates.put(tp, partitionState.getFetchState());
                 else
                     requestOffsetReset(tp);
             }
         });
 
-        if (!partitionsWithNoOffsets.isEmpty())
-            throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
+        if (!partitionsWithNoOffsetsAndStates.isEmpty())
+            throw new NoOffsetForPartitionException(partitionsWithNoOffsetsAndStates);
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingReset(long nowMs) {
@@ -714,6 +714,10 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+        public FetchState getFetchState() {
+            return fetchState;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -894,7 +898,7 @@ public class SubscriptionState {
      * The fetch state of a partition. This class is used to determine valid state transitions and expose the some of
      * the behavior of the current fetch state. Actual state variables are stored in the {@link TopicPartitionState}.
      */
-    interface FetchState {
+    public interface FetchState {
         default FetchState transitionTo(FetchState newState) {
             if (validTransitions().contains(newState)) {
                 return newState;
