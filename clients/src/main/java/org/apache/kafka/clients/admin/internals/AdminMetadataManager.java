@@ -233,7 +233,7 @@ public class AdminMetadataManager {
             this.authException = (AuthenticationException) exception;
         } else {
             log.info("Metadata update failed", exception);
-            System.err.println("md update failed:" + exception);
+//            System.err.println("md update failed:" + exception);
         }
     }
 

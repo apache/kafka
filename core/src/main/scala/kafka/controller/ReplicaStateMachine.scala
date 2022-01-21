@@ -340,7 +340,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       }.getOrElse(false)
     }
 
-    System.err.println("lisrsWithR:" + leaderAndIsrsWithReplica + ";;" + leaderAndIsrsWithoutReplica)
+//    System.err.println("lisrsWithR:" + leaderAndIsrsWithReplica + ";;" + leaderAndIsrsWithoutReplica)
 
 
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
