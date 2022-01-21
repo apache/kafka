@@ -26,19 +26,20 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
+
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
-import kafka.log.LogConfig
+import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.network.{Processor, RequestChannel}
 import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.{ConfigEntityChangeNotificationZNode}
+import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
@@ -477,14 +478,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
-    TestUtils.retry(60000) {
-      servers.foreach {
-        case server => if (server.logManager.cleaner == null) {
-          throw new RuntimeException("waiting for log cleaner to be initialized.")
-        }
-      }
-    }
-
     val props = new Properties
     props.put(KafkaConfig.LogCleanerThreadsProp, "2")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
@@ -493,12 +486,15 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(KafkaConfig.MessageMaxBytesProp, "40000")
     props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "50000000")
     props.put(KafkaConfig.LogCleanerBackoffMsProp, "6000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
 
     // Verify cleaner config was updated. Wait for one of the configs to be updated and verify
     // that all other others were updated at the same time since they are reconfigured together
-    val newCleanerConfig = servers.head.logManager.cleaner.currentConfig
-    TestUtils.waitUntilTrue(() => newCleanerConfig.numThreads == 2, "Log cleaner not reconfigured")
+    var newCleanerConfig: CleanerConfig = null
+    TestUtils.waitUntilTrue(() => {
+      reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
+      newCleanerConfig = servers.head.logManager.cleaner.currentConfig
+      newCleanerConfig.numThreads == 2
+    }, "Log cleaner not reconfigured", 60000)
     assertEquals(20000000, newCleanerConfig.dedupeBufferSize)
     assertEquals(0.8, newCleanerConfig.dedupeBufferLoadFactor, 0.001)
     assertEquals(300000, newCleanerConfig.ioBufferSize)

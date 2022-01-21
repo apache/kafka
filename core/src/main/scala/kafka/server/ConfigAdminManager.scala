@@ -200,7 +200,7 @@ class ConfigAdminManager(nodeId: Int,
       conf.dynamicConfig.validate(props, !configResource.name().isEmpty)
     } catch {
       case e: ApiException => throw e
-      // TODO: InvalidRequestException is not really the right exception here if the
+      //KAFKA-13609: InvalidRequestException is not really the right exception here if the
       // configuration fails validation. The configuration is still well-formed, but just
       // can't be applied. It should probably throw InvalidConfigurationException. However,
       // we should probably only change this in a KIP since it has compatibility implications.
@@ -276,7 +276,7 @@ class ConfigAdminManager(nodeId: Int,
   ): Unit = {
     val props = new Properties()
     resource.configs().forEach {
-      config => props.put(config.name(), config.value())
+      config => props.setProperty(config.name(), config.value())
     }
     validateBrokerConfigChange(props, configResource)
   }

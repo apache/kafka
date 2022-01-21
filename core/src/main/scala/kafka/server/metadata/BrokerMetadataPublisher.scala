@@ -272,11 +272,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
 
     // Make the LogCleaner available for reconfiguration. We can't do this prior to this
     // point because LogManager#startup creates the LogCleaner object, if
-    // log.cleaner.enable is true.
-    //
-    // TODO: it would probably be better to make log.cleaner.enable dynamically
-    // configurable as well. It would also be cleaner to unconditionally create the log
-    // cleaner object in the LogManager constructor even if we never start it.
+    // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
     Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
 
     // Start the replica manager.
