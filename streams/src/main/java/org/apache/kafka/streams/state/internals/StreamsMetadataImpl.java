@@ -25,8 +25,6 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
-
 /**
  * Represents the state of an instance (process) in a {@link KafkaStreams} application.
  * It contains the user supplied {@link HostInfo} that can be used by developers to build
