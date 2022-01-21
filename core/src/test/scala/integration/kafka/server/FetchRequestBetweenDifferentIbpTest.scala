@@ -73,7 +73,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     producer.send(record2)
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
-    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
   }
 
@@ -109,7 +109,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1)))
 
-    val count = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count)
 
     // Make controller version2
@@ -128,7 +128,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Assign this new topic in addition to the old topics.
     consumer.assign(asList(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic2, 0)))
 
-    val count2 = consumer.poll(Duration.ofMillis(1500)).count() + consumer.poll(Duration.ofMillis(1500)).count()
+    val count2 = consumer.poll(Duration.ofMillis(5000)).count() + consumer.poll(Duration.ofMillis(5000)).count()
     assertEquals(2, count2)
   }
 
