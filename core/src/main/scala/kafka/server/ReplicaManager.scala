@@ -1558,10 +1558,10 @@ class ReplicaManager(val config: KafkaConfig,
                           responseMap: mutable.Map[TopicPartition, Errors],
                           highWatermarkCheckpoints: OffsetCheckpoints,
                           topicIds: String => Option[Uuid]): Set[Partition] = {
-    val traceEnabled = stateChangeLogger.isTraceEnabled
+    val traceEnabled = stateChangeLogger.isDebugEnabled
     partitionStates.keys.foreach { partition =>
       if (traceEnabled)
-        stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from " +
+        stateChangeLogger.debug(s"Handling LeaderAndIsr request correlationId $correlationId from " +
           s"controller $controllerId epoch $controllerEpoch starting the become-leader transition for " +
           s"partition ${partition.topicPartition}")
       responseMap.put(partition.topicPartition, Errors.NONE)
@@ -1644,10 +1644,10 @@ class ReplicaManager(val config: KafkaConfig,
                             responseMap: mutable.Map[TopicPartition, Errors],
                             highWatermarkCheckpoints: OffsetCheckpoints,
                             topicIds: String => Option[Uuid]) : Set[Partition] = {
-    val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
+    val traceLoggingEnabled = stateChangeLogger.isDebugEnabled
     partitionStates.forKeyValue { (partition, partitionState) =>
       if (traceLoggingEnabled)
-        stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
+        stateChangeLogger.debug(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
           s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
           s"${partitionState.leader}")
       responseMap.put(partition.topicPartition, Errors.NONE)

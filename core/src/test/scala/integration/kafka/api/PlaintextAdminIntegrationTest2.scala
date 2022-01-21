@@ -77,6 +77,13 @@ class PlaintextAdminIntegrationTest2 extends BaseAdminIntegrationTest {
       ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
 
+  override def modifyConfigs(configs: Seq[Properties]): Unit = {
+    super.modifyConfigs(configs)
+    configs.foreach { config =>
+      config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, brokerCount.toString)
+    }
+  }
+
   @AfterEach
   override def tearDown(): Unit = {
     teardownBrokerLoggers()
