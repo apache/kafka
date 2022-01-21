@@ -104,6 +104,11 @@ public class StreamsMetadataState {
      */
     public synchronized Collection<StreamsMetadata> getAllMetadataForStore(final String storeName) {
         Objects.requireNonNull(storeName, "storeName cannot be null");
+        if (topologyMetadata.hasNamedTopologies()) {
+            throw new IllegalArgumentException("Cannot invoke the getAllMetadataForStore(storeName) method when"
+                                                   + "using named topologies, please use the overload that accepts"
+                                                   + "a topologyName parameter to identify the correct store");
+        }
 
         if (!isInitialized()) {
             return Collections.emptyList();
@@ -195,6 +200,11 @@ public class StreamsMetadataState {
                                                                        final K key,
                                                                        final Serializer<K> keySerializer) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
+        if (topologyMetadata.hasNamedTopologies()) {
+            throw new IllegalArgumentException("Cannot invoke the getKeyQueryMetadataForKey(storeName, key, keySerializer)"
+                                                   + "method when using named topologies, please use the overload that"
+                                                   + "accepts a topologyName parameter to identify the correct store");
+        }
         return getKeyQueryMetadataForKey(storeName,
                                          key,
                                          new DefaultStreamPartitioner<>(keySerializer, clusterMetadata));
@@ -233,6 +243,11 @@ public class StreamsMetadataState {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
+        if (topologyMetadata.hasNamedTopologies()) {
+            throw new IllegalArgumentException("Cannot invoke the getKeyQueryMetadataForKey(storeName, key, partitioner)"
+                                                   + "method when using named topologies, please use the overload that"
+                                                   + "accepts a topologyName parameter to identify the correct store");
+        }
 
         if (!isInitialized()) {
             return KeyQueryMetadata.NOT_AVAILABLE;
@@ -308,22 +323,6 @@ public class StreamsMetadataState {
         for (final Map.Entry<String, List<String>> storeTopicEntry : storeToSourceTopics.entrySet()) {
             final List<String> topicsForStore = storeTopicEntry.getValue();
             if (hasPartitionsForAnyTopics(topicsForStore, sourceTopicPartitions)) {
-                storesOnHost.add(storeTopicEntry.getKey());
-            }
-        }
-        return storesOnHost;
-    }
-
-    private Set<String> getStoresOnHost(final Map<String, List<String>> storeToSourceTopics,
-                                        final Set<TopicPartition> sourceTopicPartitions,
-                                        final String topologyName) {
-        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
-        final Collection<String> sourceTopicNames = builder.fullSourceTopicNames();
-
-        final Set<String> storesOnHost = new HashSet<>();
-        for (final Map.Entry<String, List<String>> storeTopicEntry : storeToSourceTopics.entrySet()) {
-            final List<String> topicsForStore = storeTopicEntry.getValue();
-            if (sourceTopicNames.containsAll(topicsForStore) && hasPartitionsForAnyTopics(topicsForStore, sourceTopicPartitions)) {
                 storesOnHost.add(storeTopicEntry.getKey());
             }
         }
