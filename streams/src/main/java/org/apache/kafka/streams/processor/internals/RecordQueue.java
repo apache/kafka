@@ -171,12 +171,15 @@ public class RecordQueue {
     }
 
     private void updateHead() {
+        ConsumerRecord<byte[], byte[]> lastCorruptedRecord = null;
+
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
             final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, raw);
 
             if (deserialized == null) {
                 // this only happens if the deserializer decides to skip. It has already logged the reason.
+                lastCorruptedRecord = raw;
                 continue;
             }
 
@@ -202,6 +205,12 @@ public class RecordQueue {
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
+        }
+
+        // if all records in the FIFO queue are corrupted, make the last one the headRecord
+        // This record is used to update the offsets. See KAFKA-6502 for more details.
+        if (headRecord == null && lastCorruptedRecord != null) {
+            headRecord = new CorruptedRecord(lastCorruptedRecord);
         }
     }
 
