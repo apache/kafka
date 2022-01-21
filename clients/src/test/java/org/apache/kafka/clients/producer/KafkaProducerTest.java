@@ -787,6 +787,8 @@ public class KafkaProducerTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        // test under normal producer for simplicity
+        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
         long metadataIdleMs = 60000L;
