@@ -941,6 +941,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
@@ -969,6 +970,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);

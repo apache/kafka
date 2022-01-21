@@ -1253,6 +1253,7 @@ public class StreamsConfigTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
@@ -1261,6 +1262,7 @@ public class StreamsConfigTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);

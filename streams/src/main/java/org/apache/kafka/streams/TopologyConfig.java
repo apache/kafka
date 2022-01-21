@@ -55,6 +55,7 @@ import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
  * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder()} method.
  */
+@SuppressWarnings("deprecation")
 public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
