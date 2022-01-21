@@ -45,6 +45,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -138,7 +139,8 @@ public class PartitionCreationBench {
                 brokerTopicStats,
                 failureChannel,
                 Time.SYSTEM,
-                true);
+                true,
+                createRemoteLogManagerConfig());
         scheduler.startup();
         final MetadataCache metadataCache =
                 new ZkMetadataCache(this.brokerProperties.brokerId());
@@ -161,6 +163,7 @@ public class PartitionCreationBench {
                 Option.apply(zkClient),
                 this.scheduler,
                 this.logManager,
+                Option.empty(),
                 new AtomicBoolean(false),
                 this.quotaManagers,
                 brokerTopicStats,
@@ -197,6 +200,10 @@ public class PartitionCreationBench {
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
+    }
+
+    private static RemoteLogManagerConfig createRemoteLogManagerConfig() {
+        return new RemoteLogManagerConfig(new Properties());
     }
 
     @Benchmark

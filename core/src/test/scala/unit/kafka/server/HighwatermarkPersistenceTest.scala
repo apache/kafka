@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.server
 
 import kafka.log._
@@ -64,7 +64,7 @@ class HighwatermarkPersistenceTest {
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler,
-      logManagers.head, new AtomicBoolean(false), quotaManager,
+      logManagers.head, None, new AtomicBoolean(false), quotaManager,
       new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {
@@ -113,7 +113,7 @@ class HighwatermarkPersistenceTest {
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, None,
-      scheduler, logManagers.head, new AtomicBoolean(false), quotaManager,
+      scheduler, logManagers.head, None, new AtomicBoolean(false), quotaManager,
       new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {

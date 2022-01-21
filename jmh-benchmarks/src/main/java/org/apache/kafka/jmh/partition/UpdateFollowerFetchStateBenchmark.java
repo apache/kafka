@@ -38,6 +38,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -85,6 +86,7 @@ public class UpdateFollowerFetchStateBenchmark {
     public void setUp() {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
+        RemoteLogManagerConfig rlmConfig = createRemoteLogManagerConfig();
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
@@ -102,7 +104,8 @@ public class UpdateFollowerFetchStateBenchmark {
                 brokerTopicStats,
                 logDirFailureChannel,
                 Time.SYSTEM,
-                true);
+                true,
+                rlmConfig);
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
@@ -160,6 +163,10 @@ public class UpdateFollowerFetchStateBenchmark {
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
+    }
+
+    private static RemoteLogManagerConfig createRemoteLogManagerConfig() {
+        return new RemoteLogManagerConfig(new Properties());
     }
 
     @Benchmark

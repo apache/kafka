@@ -83,7 +83,8 @@ object LogTestUtils {
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true): Log = {
+                keepPartitionMetadataFile: Boolean = true,
+                remoteLogEnable: Boolean = false): Log = {
     Log(dir = dir,
       config = config,
       logStartOffset = logStartOffset,
@@ -96,7 +97,8 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      remoteLogEnable = remoteLogEnable)
   }
 
   /**

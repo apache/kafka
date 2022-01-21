@@ -504,6 +504,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   // completed transactions whose markers are at offsets above the high watermark
   private val unreplicatedTxns = new util.TreeMap[Long, TxnMetadata]
 
+  def reloadSegments(): Unit = {
+    info("Reloading the producer state snapshots")
+    truncateFullyAndStartAt(0L)
+    snapshots = loadSnapshots()
+  }
+
   /**
    * Load producer state snapshots by scanning the _logDir.
    */
@@ -727,6 +733,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // Update the last snap offset according to the serialized map
       lastSnapOffset = lastMapOffset
     }
+  }
+
+  def fetchSnapshot(offset:Long): Option[File] = {
+    Option(snapshots.get(offset)).map(_.file)
   }
 
   /**

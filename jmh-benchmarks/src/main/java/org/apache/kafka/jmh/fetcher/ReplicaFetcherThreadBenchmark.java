@@ -58,6 +58,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -118,6 +119,7 @@ public class ReplicaFetcherThreadBenchmark {
         props.put("zookeeper.connect", "127.0.0.1:9999");
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
+        RemoteLogManagerConfig rlmConfig = createRemoteLogManagerConfig();
 
         List<File> logDirs = Collections.singletonList(logDir);
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
@@ -138,7 +140,8 @@ public class ReplicaFetcherThreadBenchmark {
                 brokerTopicStats,
                 logDirFailureChannel,
                 Time.SYSTEM,
-                true);
+                true,
+                rlmConfig);
 
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
@@ -235,6 +238,9 @@ public class ReplicaFetcherThreadBenchmark {
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }
 
+    private static RemoteLogManagerConfig createRemoteLogManagerConfig() {
+        return new RemoteLogManagerConfig(new Properties());
+    }
 
     static class ReplicaFetcherBenchThread extends ReplicaFetcherThread {
         private final Pool<TopicPartition, Partition> pool;

@@ -860,6 +860,7 @@ project(':core') {
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
+    implementation project(':storage:api')
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -2224,6 +2225,7 @@ project(':jmh-benchmarks') {
     implementation project(':metadata')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':storage')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
 

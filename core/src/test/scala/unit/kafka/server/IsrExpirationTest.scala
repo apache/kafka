@@ -65,9 +65,10 @@ class IsrExpirationTest {
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, None,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
+      MetadataCache.zkMetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size),
+      alterIsrManager)
   }
 
   @AfterEach

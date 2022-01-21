@@ -38,6 +38,16 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 public class ListOffsetsRequest extends AbstractRequest {
+    /**
+     * It is used to represent the earliest message stored in the local log which is also called the local-log-start-offset
+     */
+    /*
+    We named this LI_EARLIEST_LOCAL_TIMESTAMP and used -104 as the value, because Kafka trunk will eventually have a
+    EARLIEST_LOCAL_TIMESTAMP, and we are not sure about the timestamp code for that yet. We want to be able to run with
+    both of them enabled for some time before removing LI_EARLIEST_LOCAL_TIMESTAMP and fully moving
+    to EARLIEST_LOCAL_TIMESTAMP.
+     */
+    public static final long LI_EARLIEST_LOCAL_TIMESTAMP = -104L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
     public static final long MAX_TIMESTAMP = -3L;

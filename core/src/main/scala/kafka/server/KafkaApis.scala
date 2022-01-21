@@ -72,6 +72,7 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -658,7 +659,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"${Observer.describeRequestAndResponse(request, null)}", e)
       }
 
-      val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
+      val clientId = request.header.clientId
+      val internalTopicsAllowed = (clientId == AdminUtils.AdminClientId
+        || (clientId != null && clientId.startsWith(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CLIENT_PREFIX)))
 
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
@@ -1203,7 +1206,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
           val authorizedForCreateTopics = authHelper.filterByAuthorized(request.context, CREATE, TOPIC,
-            nonExistingTopics)(identity)
+            nonExistingTopics)(x => x)
           unauthorizedForCreateTopics = nonExistingTopics.diff(authorizedForCreateTopics)
           authorizedTopics = authorizedTopics.diff(unauthorizedForCreateTopics)
         }

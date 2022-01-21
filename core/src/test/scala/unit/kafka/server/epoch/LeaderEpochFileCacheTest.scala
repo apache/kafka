@@ -578,4 +578,19 @@ class LeaderEpochFileCacheTest {
     //Then
     cache.truncateFromEnd(7)
   }
+
+  @Test
+  def shouldFetchEpochForGivenOffset(): Unit = {
+    cache.assign(0, 10L)
+    cache.assign(1, 20L)
+    cache.assign(5, 30L)
+
+    assertEquals(1, cache.epochForOffset(25L).get)
+    assertEquals(1, cache.epochForOffset(20L).get)
+    assertEquals(5, cache.epochForOffset(30L).get)
+    assertEquals(5, cache.epochForOffset(50L).get)
+    assertEquals(0, cache.epochForOffset(5L).get)
+    cache.clearAndFlush()
+  }
+
 }

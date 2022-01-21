@@ -22,9 +22,12 @@ import java.util.Optional
 
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
+import kafka.log.remote.RemoteIndexCache.TmpFileSuffix
+import kafka.log.{LeaderOffsetIncremented, Log, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
+import kafka.server.epoch.EpochEntry
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
@@ -38,7 +41,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 
+import java.io.{File, InputStream}
+import java.nio.file.Files
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 import scala.compat.java8.OptionConverters._
@@ -230,7 +236,10 @@ class ReplicaFetcherThread(name: String,
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
-    fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_3_0_IV1)
+      fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LI_EARLIEST_LOCAL_TIMESTAMP)
+    else
+      fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }
 
   override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
@@ -384,4 +393,47 @@ class ReplicaFetcherThread(name: String,
     !fetchState.isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
+  override protected def buildRemoteLogAuxState(partition: TopicPartition,
+                                                currentLeaderEpoch: Int,
+                                                offset: Long,
+                                                leaderLogStartOffset: Long): Unit = {
+    replicaMgr.localLog(partition).foreach(log =>
+      if (log.rlmEnabled) {
+        val epoch = log.leaderEpochCache.flatMap(cache => cache.epochForOffset(offset)).getOrElse(0)
+        replicaMgr.remoteLogManager.foreach(rlm => {
+          val rlsMetadata = rlm.fetchRemoteLogSegmentMetadata(partition, offset, epoch)
+          val epochStream = rlm.storageManager().fetchIndex(rlsMetadata, IndexType.LEADER_EPOCH)
+          val epochs = readLeaderEpochCheckpoint(epochStream, log.dir)
+
+          // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
+          truncateFullyAndStartAt(partition, offset)
+
+          log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
+          epochs.foreach(epochEntry => {
+            log.leaderEpochCache.map(cache => cache.assign(epochEntry.epoch, epochEntry.startOffset))
+          })
+          info(s"Updated the epoch cache from remote tier till offset: $offset with size: ${epochs.size} for $partition")
+
+          // restore producer snapshot
+          val snapshotFile = Log.producerSnapshotFile(log.dir, offset)
+          Files.copy(rlm.storageManager().fetchIndex(rlsMetadata, IndexType.PRODUCER_SNAPSHOT), snapshotFile.toPath)
+          log.producerStateManager.reloadSegments()
+          log.loadProducerState(offset)
+          info(s"Built the leader epoch cache and producer snapshots from remote tier for $partition. " +
+            s"Active producers: ${log.producerStateManager.activeProducers.size}, LeaderLogStartOffset: $leaderLogStartOffset")
+        })
+      }
+    )
+  }
+
+  private def readLeaderEpochCheckpoint(stream: InputStream,
+                                        dir: File): List[EpochEntry] = {
+    val tmpFile = new File(dir, "leader-epoch-checkpoint" + TmpFileSuffix)
+    Files.copy(stream, tmpFile.toPath)
+    val epochEntries = new LeaderEpochCheckpointFile(tmpFile).checkpoint.read().toList
+    if (!tmpFile.delete()) {
+      logger.warn("Unable to delete the temporary leader epoch checkpoint file: {}", tmpFile.getAbsolutePath)
+    }
+    epochEntries
+  }
 }
