@@ -770,6 +770,7 @@ public class KafkaProducerTest {
         // For idempotence enabled case, the first and last metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest,
         // before the producer#send and after it finished
         Future<RecordMetadata> future = producer.send(record);
+
         verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).requestUpdateForTopic(topic);
         verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
