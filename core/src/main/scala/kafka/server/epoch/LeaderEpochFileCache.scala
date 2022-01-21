@@ -16,15 +16,14 @@
   */
 package kafka.server.epoch
 
-import java.util
-import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
+import java.util
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -56,7 +55,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     val entry = EpochEntry(epoch, startOffset)
     if (assign(entry)) {
       debug(s"Appended new epoch entry $entry. Cache now contains ${epochs.size} entries.")
-      if(flushToFile) flush()
+      if (flushToFile) flush()
     }
   }
 
@@ -171,13 +170,13 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 
   def findPreviousEpoch(epoch: Int): Option[Int] = {
     inReadLock(lock) {
-      Option(epochs.lowerEntry(epoch)).map(_.getKey)
+      Option(epochs.lowerKey(epoch))
     }
   }
 
   def findNextEpoch(epoch: Int): Option[Int] = {
     inReadLock(lock) {
-      Option(epochs.higherEntry(epoch)).map(_.getKey)
+      Option(epochs.higherKey(epoch))
     }
   }
 
