@@ -477,6 +477,14 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
+    TestUtils.retry(60000) {
+      servers.foreach {
+        case server => if (server.logManager.cleaner == null) {
+          throw new RuntimeException("waiting for log cleaner to be initialized.")
+        }
+      }
+    }
+
     val props = new Properties
     props.put(KafkaConfig.LogCleanerThreadsProp, "2")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
