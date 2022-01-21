@@ -67,6 +67,7 @@ object RequestChannel extends Logging {
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
     (enabledApis.map(_.name) ++
+      Seq(RequestMetrics.MetadataAllTopics) ++
       Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
@@ -94,6 +95,7 @@ object RequestChannel extends Logging {
     @volatile var messageConversionsTimeNanos = 0L
     @volatile var apiThrottleTimeMs = 0L
     @volatile var temporaryMemoryBytes = 0L
+    @volatile var responseBytes = 0L
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
@@ -234,7 +236,11 @@ object RequestChannel extends Logging {
           )
         }
         else Seq.empty
-      val metricNames = fetchMetricNames :+ header.apiKey.name
+      val metadataMetricNames =
+        if (header.apiKey() == ApiKeys.METADATA && body[MetadataRequest].isAllTopics) {
+          Seq(RequestMetrics.MetadataAllTopics)
+        } else Seq.empty
+      val metricNames =  (fetchMetricNames ++ metadataMetricNames) :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
@@ -246,6 +252,7 @@ object RequestChannel extends Logging {
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
         m.requestBytesHist.update(sizeOfBodyInBytes)
+        m.responseBytesHist.update(responseBytes)
         m.messageConversionsTimeHist.foreach(_.update(Math.round(messageConversionsTimeMs)))
         m.tempMemoryBytesHist.foreach(_.update(temporaryMemoryBytes))
       }
@@ -395,9 +402,11 @@ class RequestChannel(val queueSize: Int,
   ): Unit = {
     updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala)
     observeRequestResponse(request, response)
+    val responseSend = request.buildResponseSend(response)
+    request.responseBytes = responseSend.size()
     sendResponse(new RequestChannel.SendResponse(
       request,
-      request.buildResponseSend(response),
+      responseSend,
       request.responseNode(response),
       onComplete
     ))
@@ -501,6 +510,7 @@ class RequestChannel(val queueSize: Int,
 object RequestMetrics {
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
+  val MetadataAllTopics = ApiKeys.METADATA.name + "AllTopics"
 
   val RequestsPerSec = "RequestsPerSec"
   val RequestQueueTimeMs = "RequestQueueTimeMs"
@@ -511,6 +521,7 @@ object RequestMetrics {
   val ResponseSendTimeMs = "ResponseSendTimeMs"
   val TotalTimeMs = "TotalTimeMs"
   val RequestBytes = "RequestBytes"
+  val ResponseBytes = "ResponseBytes"
   val MessageConversionsTimeMs = "MessageConversionsTimeMs"
   val TemporaryMemoryBytes = "TemporaryMemoryBytes"
   val ErrorsPerSec = "ErrorsPerSec"
@@ -538,6 +549,8 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val totalTimeHist = newHistogram(TotalTimeMs, biased = true, tags)
   // request size in bytes
   val requestBytesHist = newHistogram(RequestBytes, biased = true, tags)
+  // response size in bytes
+  val responseBytesHist = newHistogram(ResponseBytes, biased = true, tags)
   // time for message conversions (only relevant to fetch and produce requests)
   val messageConversionsTimeHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
@@ -601,6 +614,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     removeMetric(TotalTimeMs, tags)
     removeMetric(ResponseSendTimeMs, tags)
     removeMetric(RequestBytes, tags)
+    removeMetric(ResponseBytes, tags)
     removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
       removeMetric(MessageConversionsTimeMs, tags)
