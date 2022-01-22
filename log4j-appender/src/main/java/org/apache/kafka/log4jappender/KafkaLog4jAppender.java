@@ -333,6 +333,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         this.producer = getKafkaProducer(props);
+        LogLog.warn("log4j-appender is deprecated and will be removed in a future release. For migration, please refer to the latest documentation.");
         LogLog.debug("Kafka producer connected to " + brokerList);
         LogLog.debug("Logging for topic: " + topic);
     }
