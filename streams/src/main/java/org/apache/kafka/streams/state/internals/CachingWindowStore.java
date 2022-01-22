@@ -74,16 +74,14 @@ class CachingWindowStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }

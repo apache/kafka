@@ -200,14 +200,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
         init(root);
     }
 
