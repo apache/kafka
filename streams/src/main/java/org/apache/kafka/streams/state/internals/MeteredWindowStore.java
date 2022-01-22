@@ -156,15 +156,8 @@ public class MeteredWindowStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }
@@ -172,15 +165,8 @@ public class MeteredWindowStore<K, V>
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
         serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
+            changelogTopic,
             prepareKeySerde(keySerde, new SerdeGetter(context)),
             prepareValueSerde(valueSerde, new SerdeGetter(context)));
     }

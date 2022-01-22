@@ -202,12 +202,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         init(root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         init(root);
     }
 
@@ -228,13 +230,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             streamsMetrics
         );
 
-        context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition();
