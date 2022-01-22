@@ -750,7 +750,7 @@ class PlaintextAdminIntegrationTest10 extends BaseAdminIntegrationTest {
 //    val producer = createProducer()
     println("!!! send")
     val props = new Properties()
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true)
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true: Boolean)
     val producer = createProducer(configOverrides = props)
     sendRecords(producer, 100, topicPartition)
 
