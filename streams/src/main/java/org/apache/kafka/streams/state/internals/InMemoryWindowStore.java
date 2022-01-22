@@ -361,7 +361,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             collectExecutionInfo,
             this,
             position,
-            context.taskId().partition()
+            stateStoreContext
         );
     }
 

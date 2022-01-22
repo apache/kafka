@@ -139,7 +139,7 @@ public class RocksDBWindowStore
             collectExecutionInfo,
             this,
             position,
-            stateStoreContext.taskId().partition()
+            stateStoreContext
         );
     }
 

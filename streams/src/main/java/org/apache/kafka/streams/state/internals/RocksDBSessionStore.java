@@ -61,7 +61,7 @@ public class RocksDBSessionStore
             collectExecutionInfo,
             this,
             position,
-            stateStoreContext.taskId().partition()
+            stateStoreContext
         );
     }
 
