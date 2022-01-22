@@ -193,8 +193,6 @@ class ControllerContext {
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
     liveBrokers = liveBrokers.filter(broker => !brokerIds.contains(broker.id))
     liveBrokerEpochs = liveBrokerEpochs.filter { case (id, _) => !brokerIds.contains(id) }
-
-    shuttingDownBrokerIds = shuttingDownBrokerIds.filterKeys(brokerIds.contains)
   }
 
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
