@@ -81,14 +81,19 @@ public class StreamsBuilder {
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected StreamsBuilder(final TopologyConfig topologyConfigs) {
+    /**
+     * Create a {@code StreamsBuilder} instance.
+     *
+     * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
+     */
+    public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = getNewTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
     protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
-        return new Topology();
+        return new Topology(topologyConfigs);
     }
 
     /**

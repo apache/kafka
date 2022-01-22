@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Properties;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
@@ -42,6 +43,10 @@ import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
+import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
+import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -53,36 +58,42 @@ public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()
-             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                     Type.INT,
-                     null,
-                     Importance.LOW,
-                     BUFFERED_RECORDS_PER_PARTITION_DOC)
-            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+            .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                Type.INT,
+                null,
+                Importance.LOW,
+                BUFFERED_RECORDS_PER_PARTITION_DOC)
+                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     null,
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
-             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                     Type.CLASS,
-                     null,
-                     Importance.MEDIUM,
-                     DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
-             .define(MAX_TASK_IDLE_MS_CONFIG,
-                     Type.LONG,
-                     null,
-                     Importance.MEDIUM,
-                     MAX_TASK_IDLE_MS_DOC)
-             .define(TASK_TIMEOUT_MS_CONFIG,
-                     Type.LONG,
-                     null,
-                     Importance.MEDIUM,
-                     TASK_TIMEOUT_MS_DOC);
+                .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                .define(MAX_TASK_IDLE_MS_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.MEDIUM,
+                    MAX_TASK_IDLE_MS_DOC)
+                .define(TASK_TIMEOUT_MS_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.MEDIUM,
+                    TASK_TIMEOUT_MS_DOC)
+                .define(DEFAULT_DSL_STORE_CONFIG,
+                    Type.STRING,
+                    ROCKS_DB,
+                    in(ROCKS_DB, IN_MEMORY),
+                    Importance.LOW,
+                    DEFAULT_DSL_STORE_DOC);
     }
     private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 

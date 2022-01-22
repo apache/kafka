@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
@@ -58,6 +59,10 @@ public class Topology {
 
     public Topology() {
         this(new InternalTopologyBuilder());
+    }
+
+    public Topology(final TopologyConfig topologyConfigs) {
+        this(new InternalTopologyBuilder(topologyConfigs));
     }
 
     protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {

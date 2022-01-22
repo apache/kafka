@@ -64,6 +64,13 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    protected StoreType storeType = StoreType.ROCKS_DB;
+
+    // the built-in state store types
+    public enum StoreType {
+        ROCKS_DB,
+        IN_MEMORY
+    }
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -71,6 +78,10 @@ public class Materialized<K, V, S extends StateStore> {
 
     private Materialized(final String storeName) {
         this.storeName = storeName;
+    }
+
+    private Materialized(final StoreType storeType) {
+        this.storeType = storeType;
     }
 
     /**
@@ -86,6 +97,20 @@ public class Materialized<K, V, S extends StateStore> {
         this.cachingEnabled = materialized.cachingEnabled;
         this.topicConfig = materialized.topicConfig;
         this.retention = materialized.retention;
+        this.storeType = materialized.storeType;
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the given {@link StoreType}.
+     *
+     * @param storeType  the type of the state store
+     * @param <K>       key type of the store
+     * @param <V>       value type of the store
+     * @param <S>       type of the {@link StateStore}
+     * @return a new {@link Materialized} instance with the given storeName
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final StoreType storeType) {
+        return new Materialized<>(storeType);
     }
 
     /**
@@ -257,6 +282,18 @@ public class Materialized<K, V, S extends StateStore> {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;
+        return this;
+    }
+
+    /**
+     * Set the type of the materialized {@link StateStore}.
+     *
+     * @param storeType  the store type {@link StoreType} to use.
+     * @return itself
+     */
+    public Materialized<K, V, S> withStoreType(final StoreType storeType) throws IllegalArgumentException {
+        Objects.requireNonNull(storeType)
+        this.storeType = storeType;
         return this;
     }
 }
