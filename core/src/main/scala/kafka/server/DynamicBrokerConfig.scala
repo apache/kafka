@@ -252,8 +252,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 
     addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
-    if (kafkaServer.logManager.cleaner != null)
-      addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
