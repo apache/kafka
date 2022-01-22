@@ -76,7 +76,8 @@ class ControllerContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
   var preferredReplicaImbalanceCount = 0
-  val shuttingDownBrokerIds = mutable.Set.empty[Int]
+  val shuttingDownBrokerIds = mutable.Map.empty[Int, Long]
+  val skipShutdownSafetyCheck = mutable.Map.empty[Int, Long]
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
   var epoch: Int = KafkaController.InitialControllerEpoch
@@ -91,6 +92,9 @@ class ControllerContext {
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
   val replicasOnOfflineDirs = mutable.Map.empty[Int, Set[TopicPartition]]
+
+  // A map to indicate the explicitly configured value of min.insync.replicas config per corresponding topic.
+  val topicMinIsrConfig = mutable.Map.empty[String, Int]
 
   val topicsToBeDeleted = mutable.Set.empty[String]
 
@@ -201,6 +205,9 @@ class ControllerContext {
   def addLiveBrokers(brokerAndEpochs: Map[Broker, Long]): Unit = {
     liveBrokers ++= brokerAndEpochs.keySet
     liveBrokerEpochs ++= brokerAndEpochs.map { case (broker, brokerEpoch) => (broker.id, brokerEpoch) }
+
+    shuttingDownBrokerIds.retain((brokerId, epoch) =>
+      liveBrokerEpochs.contains(brokerId) && epoch < liveBrokerEpochs(brokerId))
   }
 
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
@@ -214,7 +221,7 @@ class ControllerContext {
   }
 
   // getter
-  def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
+  def liveBrokerIds: Set[Int] = liveBrokerEpochs.filter(b => b._2 > shuttingDownBrokerIds.getOrElse(b._1, -1L)).keySet
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs

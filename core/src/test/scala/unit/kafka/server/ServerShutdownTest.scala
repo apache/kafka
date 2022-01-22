@@ -40,7 +40,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test, Timeout}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -149,6 +149,8 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  @Disabled
+  // This test will not work because of PR #241 and hang indefinitely. We rely on ZK to do controlled shutdown.
   def testCleanShutdownWithZkUnavailable(): Unit = {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()

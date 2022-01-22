@@ -341,6 +341,30 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Get entity configs for a given sequence of entities
+   * @param rootEntityType entity type
+   * @param sanitizedEntityNames The names of all of the entities
+   * @return The sucesssfully gathered configurations. Any which are not found or cannot be decoded will be omitted.
+   */
+  def getMultipleEntityConfigs(rootEntityType: String, sanitizedEntityNames: Seq[String]): Map[String, Properties] = {
+    val getDataRequests = sanitizedEntityNames.map(entityName =>
+      GetDataRequest(ConfigEntityZNode.path(rootEntityType, entityName), ctx = Some(entityName)))
+    retryRequestsUntilConnected(getDataRequests)
+      .flatMap { getDataResponse =>
+        val entityName = getDataResponse.ctx.get.asInstanceOf[String]
+        getDataResponse.resultCode match {
+          case Code.OK =>
+            Some(entityName, ConfigEntityZNode.decode(getDataResponse.data))
+          case Code.NONODE => None
+          case _ => {
+            error(s"Unable to deserialize $rootEntityType entity config ${ConfigEntityZNode.path(rootEntityType, entityName)}")
+            throw getDataResponse.resultException.get
+          }
+        }
+      }.toMap
+  }
+
+  /**
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
    *
@@ -457,6 +481,48 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets the list of sorted broker Ids
    */
   def getSortedBrokerList: Seq[Int] = getChildren(BrokerIdsZNode.path).map(_.toInt).sorted
+
+  /**
+   * Get the map of brokerId -> brokerEpoch. This is the last known controlled shutdown performed for each broker.
+   */
+  def getBrokerShutdownEntries: Map[Int, Long] = {
+    val brokerIds = getChildren(BrokerShutdownNode.path).map(_.toInt).sorted;
+
+    val getDataRequests = brokerIds.map(brokerId => GetDataRequest(
+      BrokerShutdownIdZNode.path(brokerId),
+      ctx = Some(brokerId)))
+
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+      getDataResponse.resultCode match {
+        case Code.OK =>
+          Some(brokerId, BrokerShutdownIdZNode.decode(getDataResponse.data))
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }.toMap
+  }
+
+  /*
+   * Record that @brokerId has started the controlled shutdown process at @brokerEpoch.
+   */
+  def recordBrokerShutdown(brokerId: Int, brokerEpoch: Long, expectedControllerEpochZkVersion: Int): Unit = {
+    val zNodePath = BrokerShutdownIdZNode.path(brokerId)
+    val encodedZNodeValue = BrokerShutdownIdZNode.encode(brokerEpoch)
+
+    val setDataRequest = SetDataRequest(zNodePath, encodedZNodeValue, ZkVersion.MatchAnyVersion)
+    val response = retryRequestUntilConnected(setDataRequest, expectedControllerEpochZkVersion)
+    if (response.resultCode == KeeperException.Code.NONODE) {
+      createRecursive(zNodePath, encodedZNodeValue)
+    }
+  }
+
+  def removeBrokerShutdown(brokerIds: Seq[Int], expectedControllerEpochZkVersion: Int): Unit = {
+    val deleteRequests = brokerIds.map(brokerId =>
+      DeleteRequest(BrokerShutdownIdZNode.path(brokerId), ZkVersion.MatchAnyVersion))
+    retryRequestsUntilConnected(deleteRequests, expectedControllerEpochZkVersion)
+  }
 
   /**
    * Gets all topics in the cluster.

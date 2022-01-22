@@ -697,6 +697,8 @@ class KafkaConfigTest {
         case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.ControlledShutdownSafetyCheckEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
+        case KafkaConfig.ControlledShutdownSafetyCheckRedundancyFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")

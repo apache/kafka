@@ -114,6 +114,14 @@ object ControllerState {
     def value = 17
   }
 
+  case object TopicMinInSyncReplicasConfigChange extends ControllerState {
+    def value = 18
+  }
+
+  case object SkipControlledShutdownSafetyCheck extends ControllerState {
+    def value = 19
+  }
+
   case object TopicDeletionFlagChange extends ControllerState {
     def value = 100
   }
@@ -122,5 +130,5 @@ object ControllerState {
     AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
     LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
     TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived,
-    UpdateFeatures, TopicDeletionFlagChange)
+    UpdateFeatures, TopicMinInSyncReplicasConfigChange, SkipControlledShutdownSafetyCheck, TopicDeletionFlagChange)
 }

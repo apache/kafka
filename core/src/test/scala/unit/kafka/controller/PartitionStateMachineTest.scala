@@ -191,7 +191,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(
       TestUtils.createBrokerAndEpoch(brokerId, "host", 0),
       TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
-    controllerContext.shuttingDownBrokerIds.add(brokerId)
+    controllerContext.shuttingDownBrokerIds += (brokerId -> 0)
     controllerContext.updatePartitionFullReplicaAssignment(
       partition,
       ReplicaAssignment(Seq(brokerId, otherBrokerId))

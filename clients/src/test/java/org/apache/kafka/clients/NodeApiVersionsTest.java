@@ -53,7 +53,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testUnknownApiVersionsToString() {
         NodeApiVersions versions = NodeApiVersions.create((short) 337, (short) 0, (short) 1);
-        assertTrue(versions.toString().endsWith("UNKNOWN(337): 0 to 1)"));
+        assertTrue(versions.toString().contains("UNKNOWN(337): 0 to 1"));
     }
 
     @Test

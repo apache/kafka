@@ -37,7 +37,7 @@ import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChange
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, PolicyViolationException, StaleBrokerEpochException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, NotEnoughReplicasException, PolicyViolationException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterIsrRequestData, AlterIsrResponseData, UpdateFeaturesRequestData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.metrics.Metrics
@@ -245,6 +245,11 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(controlledShutdownEvent)
   }
 
+  def skipControlledShutdownSafetyCheck(id: Int, brokerEpoch: Long, skipControlledShutdownSafetyCheckCallback: Try[Unit] => Unit): Unit = {
+    val skipControlledShutdownEvent = SkipControlledShutdownSafetyCheck(id, brokerEpoch, skipControlledShutdownSafetyCheckCallback)
+    eventManager.put(skipControlledShutdownEvent)
+  }
+
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
     zkClient.updateBrokerInfo(newBrokerInfo)
@@ -258,6 +263,10 @@ class KafkaController(val config: KafkaConfig,
     if (isActive) {
       eventManager.put(TopicUncleanLeaderElectionEnable(topic))
     }
+  }
+
+  private[kafka] def setMinInSyncReplicas(topicName: String, minInSyncReplicas: Int): Unit = {
+    eventManager.put(TopicMinInSyncReplicasConfigChange(topicName, minInSyncReplicas))
   }
 
   private def state: ControllerState = eventManager.state
@@ -595,6 +604,9 @@ class KafkaController(val config: KafkaConfig,
       topicDeletionManager.resumeDeletionForTopics(replicasForTopicsToBeDeleted.map(_.topic))
     }
     registerBrokerModificationsHandler(newBrokers)
+
+    // Clean up any shutdown znodes that may be left behind from when these brokers had shut down before.
+    zkClient.removeBrokerShutdown(newBrokers, controllerContext.epochZkVersion)
   }
 
   private def maybeResumeReassignments(shouldResume: (TopicPartition, ReplicaAssignment) => Boolean): Unit = {
@@ -629,7 +641,11 @@ class KafkaController(val config: KafkaConfig,
     info(s"Broker failure callback for ${deadBrokers.mkString(",")}")
     deadBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)
     val deadBrokersThatWereShuttingDown =
-      deadBrokers.filter(id => controllerContext.shuttingDownBrokerIds.remove(id))
+      deadBrokers.filter(id => {
+        val wasShuttingDown = controllerContext.shuttingDownBrokerIds.contains(id)
+        controllerContext.shuttingDownBrokerIds -= id
+        wasShuttingDown
+      })
     if (deadBrokersThatWereShuttingDown.nonEmpty)
       info(s"Removed ${deadBrokersThatWereShuttingDown.mkString(",")} from list of shutting down brokers.")
     val allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokers.toSet)
@@ -952,6 +968,21 @@ class KafkaController(val config: KafkaConfig,
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
 
     controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
+
+    // Load the min.insync.replicas config for each topic. This updates the controllerContext.topicMinIsrConfig map.
+    //
+    // The goal is to keep this map up to date with all existing topics. Unfortunately it has to be updated in three
+    // differnt places to make that possible.
+    //
+    // 1. DynamicConfigManager and its TopicConfigHandler calls kafka.controller.KafkaController.setMinInSyncReplicas
+    //    for all existing topics on broker startup, and also any time the configuration of a topic changes. It does
+    //    not, however, notify the controller of newly created topics.
+    // 2. kafka.controller.KafkaController.processTopicChange is called by a ZooKeeper watch on /topics any time a new
+    //    topic is created. This handles newly created topics, but this handler *only* works in the active controller.
+    // 3. Right here when the controller is initialized after failover. This handles any topics which were created
+    //    between the moment this broker started and right now when it becomes controller again.
+    loadMinIsrForTopics(controllerContext.allTopics)
+
     rearrangePartitionReplicaAssignmentForNewTopics(controllerContext.allTopics.toSet)
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     val replicaAssignmentAndTopicIds: Set[TopicIdReplicaAssignment] = getReplicaAssignmentPolicyCompliant(controllerContext.allTopics.toSet)
@@ -966,6 +997,7 @@ class KafkaController(val config: KafkaConfig,
     }
     controllerContext.clearPartitionLeadershipInfo()
     controllerContext.shuttingDownBrokerIds.clear()
+    controllerContext.shuttingDownBrokerIds ++= zkClient.getBrokerShutdownEntries
     // register broker modifications handlers
     registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
     // update the leader and isr cache for all existing partitions from Zookeeper
@@ -1380,9 +1412,83 @@ class KafkaController(val config: KafkaConfig,
     partitionStateMachine.triggerOnlinePartitionStateChange(topic)
   }
 
+  private def processTopicMinInSyncReplicasConfigChange(topic: String, minInSyncReplicas: Int): Unit = {
+    if (minInSyncReplicas != Defaults.MissingPerTopicConfig.toInt) {
+      // Add the explicitly configured value of min.insync.replicas config for the corresponding topic.
+      controllerContext.topicMinIsrConfig += topic -> minInSyncReplicas
+    } else {
+      // Remove the topic-level config value of min.insync.replicas to ensure that the topic config uses the default value.
+      // Note that we remove the topic from the map rather than setting its config value to the default value. This
+      // keeps the map no larger than the number of topics with explicitly configured values of min.insync.replicas.
+      controllerContext.topicMinIsrConfig -= topic
+    }
+  }
+
   private def processControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
     val controlledShutdownResult = Try { doControlledShutdown(id, brokerEpoch) }
     controlledShutdownCallback(controlledShutdownResult)
+  }
+
+  private def processSkipControlledShutdownSafetyCheck(id: Int, brokerEpoch: Long, skipControlledShutdownSafetyCheckCallback: Try[Unit] => Unit): Unit = {
+    val controlledShutdownResult = Try { doSkipControlledShutdownSafetyCheck(id, brokerEpoch) }
+    skipControlledShutdownSafetyCheckCallback(controlledShutdownResult)
+  }
+
+  private def doSkipControlledShutdownSafetyCheck(id: Int, brokerEpoch: Long): Unit = {
+    if (!isActive) {
+      throw new ControllerMovedException("Controller moved to another broker. Aborting skip shutdown safety check operation.")
+    }
+
+    val cachedBrokerEpoch = controllerContext.liveBrokerIdAndEpochs(id)
+    if (brokerEpoch < cachedBrokerEpoch) {
+      val stateBrokerEpochErrorMessage = "Received skip shutdown safety check request for an old broker epoch " +
+        s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch."
+      info(stateBrokerEpochErrorMessage)
+      throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
+    }
+
+    if (!controllerContext.liveOrShuttingDownBrokerIds.contains(id))
+      throw new BrokerNotAvailableException(s"Broker id $id does not exist.")
+
+    controllerContext.skipShutdownSafetyCheck += (id -> brokerEpoch)
+  }
+
+  private def safeToShutdown(id: Int, brokerEpoch: Long): Boolean = {
+    // First, check whether or not the broker requesting shutdown has already been told that it is OK to shut down
+    // at this epoch.
+    if (controllerContext.shuttingDownBrokerIds.contains(id)
+      && controllerContext.shuttingDownBrokerIds(id) >= brokerEpoch) {
+      return true
+    }
+
+    // If a topic doesn't have min.insync.replicas configured, default to 1
+    val defaultMinISRPropertyValue = 1
+
+    val atRiskPartitions = controllerContext.partitionsOnBroker(id).filter { partition =>
+      if (topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic())) {
+        // if a topic is being deleted, then it should not block the shutdown
+        false
+      } else {
+        // Look up minISR for this topic, or use the default if not configured.
+        val minISR: Int = controllerContext.topicMinIsrConfig.getOrElse(partition.topic(), defaultMinISRPropertyValue)
+
+        // See which replicas are known alive and not pending shutdown for this partition
+        val liveBrokerIds = controllerContext.liveBrokerIds
+        val isr = controllerContext.partitionLeadershipInfo(partition).map(_.leaderAndIsr.isr).getOrElse(List.empty)
+        val remainingLiveReplicasInIsr = isr.filter(replicaId => replicaId != id).count({ replicaBrokerId =>
+          liveBrokerIds.contains(replicaBrokerId)
+        })
+
+        val atRisk = remainingLiveReplicasInIsr < (minISR + config.controlledShutdownSafetyCheckRedundancyFactor)
+        if (atRisk) {
+          // Consider this topic-partition at-risk if removing one broker will result in the ISR shrinking below minISR
+          info(s"$partition has min.insync.replicas=$minISR and a redundancy factor of ${config.controlledShutdownSafetyCheckRedundancyFactor}. Removing broker $id will leave $remainingLiveReplicasInIsr live replicas in the ISR.")
+        }
+        atRisk
+      }
+    }
+
+    atRiskPartitions.isEmpty
   }
 
   private def doControlledShutdown(id: Int, brokerEpoch: Long): Set[TopicPartition] = {
@@ -1402,12 +1508,31 @@ class KafkaController(val config: KafkaConfig,
       }
     }
 
-    info(s"Shutting down broker $id")
-
     if (!controllerContext.liveOrShuttingDownBrokerIds.contains(id))
       throw new BrokerNotAvailableException(s"Broker id $id does not exist.")
 
-    controllerContext.shuttingDownBrokerIds.add(id)
+    val actualBrokerEpoch: Long =
+      if (brokerEpoch == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+        val knownBrokerEpoch = controllerContext.liveBrokerIdAndEpochs.getOrElse(id, -1L)
+        info(s"Received ControlledShutdown request for broker id $id without a brokerEpoch. Using last known epoch of $knownBrokerEpoch")
+        knownBrokerEpoch
+      }
+      else brokerEpoch
+
+    if (config.controlledShutdownSafetyCheckEnable && !safeToShutdown(id, actualBrokerEpoch)) {
+      if (controllerContext.skipShutdownSafetyCheck.getOrElse(id, -1L) >= actualBrokerEpoch) {
+        info(s"Controlled shutdown safety check has been skipped for broker $id (broker epoch $actualBrokerEpoch). Allowing shutdown even though it is not safe to do so.")
+      } else {
+        info(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
+        throw new NotEnoughReplicasException(
+          s"Broker id $id cannot initiate shutdown without an impact on topic availability.")
+      }
+    }
+
+    zkClient.recordBrokerShutdown(id, brokerEpoch, controllerContext.epochZkVersion)
+    controllerContext.shuttingDownBrokerIds += (id -> brokerEpoch)
+    info(s"Shutting down broker $id")
+
     debug(s"All shutting down brokers: ${controllerContext.shuttingDownBrokerIds.mkString(",")}")
     debug(s"Live brokers: ${controllerContext.liveBrokerIds.mkString(",")}")
 
@@ -1736,6 +1861,21 @@ class KafkaController(val config: KafkaConfig,
         .reduce((s1, s2) => s1.union(s2))
       onNewPartitionCreation(partitionAssignments)
     }
+
+    // Load the min.insync.replicas config for each topic. This updates the controllerContext.topicMinIsrConfig map.
+    //
+    // The goal is to keep this map up to date with all existing topics. Unfortunately it has to be updated in three
+    // differnt places to make that possible.
+    //
+    // 1. DynamicConfigManager and its TopicConfigHandler calls kafka.controller.KafkaController.setMinInSyncReplicas
+    //    for all existing topics on broker startup, and also any time the configuration of a topic changes. It does
+    //    not, however, notify the controller of newly created topics.
+    // 2. This handler is called by a ZooKeeper watch on /topics any time a new topic is created. This handles newly
+    //    created topics, but this handler *only* works in the active controller.
+    // 3. kafka.controller.KafkaController.initializeControllerContext when the controller is initialized after
+    //    failover. This handles any topics which were created between the moment this broker started and right now when
+    //    it becomes controller again.
+    loadMinIsrForTopics(newTopics)
   }
 
   private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
@@ -2596,6 +2736,15 @@ class KafkaController(val config: KafkaConfig,
     retTopicAssignment
   }
 
+  private def loadMinIsrForTopics(topicNames: Set[String]): Unit = {
+    zkClient.getMultipleEntityConfigs(ConfigType.Topic, topicNames.toSeq).foreach(entity => {
+      Try(entity._2.getProperty(KafkaConfig.MinInSyncReplicasProp).toInt) match {
+        case Success(minInSyncReplicas) => controllerContext.topicMinIsrConfig += entity._1 -> minInSyncReplicas
+        case _ =>
+      }
+    })
+  }
+
   override def process(event: ControllerEvent): Unit = {
     try {
       event match {
@@ -2612,6 +2761,8 @@ class KafkaController(val config: KafkaConfig,
           processUncleanLeaderElectionEnable()
         case TopicUncleanLeaderElectionEnable(topic) =>
           processTopicUncleanLeaderElectionEnable(topic)
+        case TopicMinInSyncReplicasConfigChange(topic, minInSyncReplicas) =>
+          processTopicMinInSyncReplicasConfigChange(topic, minInSyncReplicas)
         case ControlledShutdown(id, brokerEpoch, callback) =>
           processControlledShutdown(id, brokerEpoch, callback)
         case LeaderAndIsrResponseReceived(response, brokerId) =>
@@ -2660,6 +2811,8 @@ class KafkaController(val config: KafkaConfig,
           processAllocateProducerIds(brokerId, brokerEpoch, callback)
         case Startup =>
           processStartup()
+        case SkipControlledShutdownSafetyCheck(id, brokerEpoch, callback) =>
+          processSkipControlledShutdownSafetyCheck(id, brokerEpoch, callback)
       }
     } catch {
       case e: ControllerMovedException =>
@@ -2850,9 +3003,19 @@ case class TopicUncleanLeaderElectionEnable(topic: String) extends ControllerEve
   override def preempt(): Unit = {}
 }
 
+case class TopicMinInSyncReplicasConfigChange(topic: String, minInSyncReplicas: Int) extends ControllerEvent {
+  def state: ControllerState.TopicMinInSyncReplicasConfigChange.type = ControllerState.TopicMinInSyncReplicasConfigChange
+  override def preempt(): Unit = {}
+}
+
 case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ControlledShutdown
   override def preempt(): Unit = controlledShutdownCallback(Failure(new ControllerMovedException("Controller moved to another broker")))
+}
+
+case class SkipControlledShutdownSafetyCheck(id: Int, brokerEpoch: Long, skipControlledShutdownSafetyCheckCallback: Try[Unit] => Unit) extends ControllerEvent {
+  def state: ControllerState.SkipControlledShutdownSafetyCheck.type = ControllerState.SkipControlledShutdownSafetyCheck
+  override def preempt(): Unit = {}
 }
 
 case class LeaderAndIsrResponseReceived(leaderAndIsrResponse: LeaderAndIsrResponse, brokerId: Int) extends ControllerEvent {

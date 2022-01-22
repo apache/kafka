@@ -128,7 +128,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
-    context.shuttingDownBrokerIds.add(2)
+    context.shuttingDownBrokerIds += (2 -> 0)
     context.removeLiveBrokers(Set(3))
 
     val partition = new TopicPartition("foo", 0)
@@ -337,7 +337,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
-    context.shuttingDownBrokerIds.add(2)
+    context.shuttingDownBrokerIds += (2 -> 0)
     context.removeLiveBrokers(Set(3))
 
     batch.newBatch()
@@ -723,7 +723,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
-    context.shuttingDownBrokerIds.add(2)
+    context.shuttingDownBrokerIds += (2 -> 0)
     context.removeLiveBrokers(Set(3))
 
     val partitions = Map(

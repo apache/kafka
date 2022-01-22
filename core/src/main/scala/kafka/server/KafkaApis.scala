@@ -229,6 +229,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
+
+        // LinkedIn internal request types
+        case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3426,6 +3429,29 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs =>
           new AllocateProducerIdsResponse(producerIdsResponse.setThrottleTimeMs(throttleTimeMs)))
       )
+  }
+
+  def handleLiControlledShutdownSkipSafetyCheck(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val skipSafetyCheckRequest = request.body[LiControlledShutdownSkipSafetyCheckRequest]
+
+    def callback(result: Try[Unit]): Unit = {
+      val response = result match {
+        case Success(partitionsRemaining) =>
+          LiControlledShutdownSkipSafetyCheckResponse.prepareResponse(Errors.NONE)
+
+        case Failure(throwable) =>
+          skipSafetyCheckRequest.getErrorResponse(throwable)
+      }
+      requestHelper.sendResponseExemptThrottle(request, response)
+    }
+
+    zkSupport.controller.skipControlledShutdownSafetyCheck(
+      skipSafetyCheckRequest.data.brokerId,
+      skipSafetyCheckRequest.data.brokerEpoch,
+      callback)
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

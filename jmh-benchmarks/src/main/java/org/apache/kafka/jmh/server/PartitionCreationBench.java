@@ -108,7 +108,7 @@ public class PartitionCreationBench {
 
         this.scheduler = new KafkaScheduler(1, "scheduler-thread", true);
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
+                0, TestUtils.MockZkConnect(), true, true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1));
         this.metrics = new Metrics();

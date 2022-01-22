@@ -644,6 +644,14 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALLOCATE_PRODUCER_IDS =>
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
+
+        case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK =>
+          new LiControlledShutdownSkipSafetyCheckRequest.Builder(
+            new LiControlledShutdownSkipSafetyCheckRequestData()
+              .setBrokerId(112)
+              .setBrokerEpoch(6431),
+            ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK.latestVersion)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

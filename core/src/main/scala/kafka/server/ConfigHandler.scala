@@ -39,7 +39,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.util.Try
+import scala.util.{Success, Try}
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -92,6 +92,13 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
+    }
+
+    // If the new topic config does not have min.insync.replicas configured, i.e. the topic shall use the default value,
+    // ensure that the controller knows about it.
+    Try(topicConfig.getProperty(KafkaConfig.MinInSyncReplicasProp, Defaults.MissingPerTopicConfig).toInt) match {
+      case Success(minInSyncReplicas) => kafkaController.foreach(_.setMinInSyncReplicas(topic, minInSyncReplicas))
+      case _ =>
     }
   }
 

@@ -978,6 +978,11 @@ public class MockAdminClient extends AdminClient {
         return mockMetrics;
     }
 
+    @Override
+    public SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options) {
+        return null;
+    }
+
     synchronized public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
         TopicMetadata metadata = allTopics.get(topicName);
         if (metadata == null) {
