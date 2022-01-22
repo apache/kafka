@@ -58,9 +58,9 @@ public final class ProcessorContextUtils {
 
     public static String changelogFor(final ProcessorContext context, final String storeName) {
         final String prefix = getPrefix(context.appConfigs(), context.applicationId());
-        if(context instanceof InternalProcessorContext) {
+        if (context instanceof InternalProcessorContext) {
             final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
-            if(changelogTopic != null)
+            if (changelogTopic != null)
                 return changelogTopic;
 
         }
@@ -69,9 +69,9 @@ public final class ProcessorContextUtils {
 
     public static String changelogFor(final StateStoreContext context, final String storeName) {
         final String prefix = getPrefix(context.appConfigs(), context.applicationId());
-        if(context instanceof InternalProcessorContext) {
+        if (context instanceof InternalProcessorContext) {
             final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
-            if(changelogTopic != null)
+            if (changelogTopic != null)
                 return changelogTopic;
 
         }
