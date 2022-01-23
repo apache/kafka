@@ -195,7 +195,7 @@ public class MetricsIntegrationTest {
     private static final String THREAD_START_TIME = "thread-start-time";
     private static final String ACTIVE_PROCESS_RATIO = "active-process-ratio";
     private static final String ACTIVE_BUFFER_COUNT = "active-buffer-count";
-    private static final String TOTAL_BYTES = "total-bytes";
+    private static final String INPUT_BUFFER_BYTES_TOTAL = "input-buffer-bytes-total";
     private static final String SKIPPED_RECORDS_RATE = "skipped-records-rate";
     private static final String SKIPPED_RECORDS_TOTAL = "skipped-records-total";
     private static final String RECORD_LATENESS_AVG = "record-lateness-avg";
@@ -528,7 +528,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricTask, PUNCTUATE_TOTAL, 4);
         checkMetricByName(listMetricTask, PROCESS_RATE, 4);
         checkMetricByName(listMetricTask, PROCESS_TOTAL, 4);
-        checkMetricByName(listMetricTask, TOTAL_BYTES, 4);
+        checkMetricByName(listMetricTask, INPUT_BUFFER_BYTES_TOTAL, 4);
     }
 
     private void checkProcessorNodeLevelMetrics() {
