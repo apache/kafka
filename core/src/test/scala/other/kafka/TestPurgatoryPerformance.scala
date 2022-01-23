@@ -130,7 +130,7 @@ object TestPurgatoryPerformance {
     val generatorThread = new Thread(generator)
 
     generatorThread.start()
-    generatorThread.join()
+    generatorThread.join(60 * 1000L)
     latch.await()
     val done = System.currentTimeMillis
     queue.shutdown()

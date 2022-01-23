@@ -402,7 +402,7 @@ public class StreamsMetricsImplTest {
         final Thread otherThread =
             new Thread(() -> streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL));
         otherThread.start();
-        otherThread.join();
+        otherThread.join(60 * 1000L);
 
         assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
     }

@@ -141,7 +141,7 @@ public class SmokeTestDriverIntegrationTest {
 
         try {
             // wait for verification to finish
-            driver.join();
+            driver.join(60 * 1000L);
         } finally {
             // whether or not the assertions failed, tell all the streams instances to stop
             for (final SmokeTestClient client : clients) {

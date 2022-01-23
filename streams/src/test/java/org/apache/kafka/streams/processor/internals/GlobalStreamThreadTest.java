@@ -142,7 +142,7 @@ public class GlobalStreamThreadTest {
         } catch (final StreamsException e) {
             // ok
         }
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
     }
@@ -176,7 +176,7 @@ public class GlobalStreamThreadTest {
             assertThat(e.getCause(), instanceOf(RuntimeException.class));
             assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
     }
@@ -188,7 +188,7 @@ public class GlobalStreamThreadTest {
         assertTrue(globalStreamThread.stillRunning());
 
         globalStreamThread.shutdown();
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
     }
 
     @Test(timeout = 30000)
@@ -196,7 +196,7 @@ public class GlobalStreamThreadTest {
         initializeConsumer();
         startAndSwallowError();
         globalStreamThread.shutdown();
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
@@ -207,7 +207,7 @@ public class GlobalStreamThreadTest {
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         assertTrue(globalStore.isOpen());
         globalStreamThread.shutdown();
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         assertFalse(globalStore.isOpen());
     }
 
@@ -216,7 +216,7 @@ public class GlobalStreamThreadTest {
         initializeConsumer();
         startAndSwallowError();
         globalStreamThread.shutdown();
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         globalStreamThread.shutdown();
 
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
@@ -253,7 +253,7 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "GlobalStreamThread should have died."
         );
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
 
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
@@ -290,7 +290,7 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "GlobalStreamThread should have died."
         );
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
 
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());

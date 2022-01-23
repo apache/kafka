@@ -80,8 +80,8 @@ public class ProducerMetadataTest {
             }
             Thread.sleep(1);
         }
-        t1.join();
-        t2.join();
+        t1.join(60 * 1000L);
+        t2.join(60 * 1000L);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         time += metadataExpireMs;
         assertEquals(0, metadata.timeToNextUpdate(time), "Update needed due to stale metadata.");
@@ -99,7 +99,7 @@ public class ProducerMetadataTest {
         String topic = "my-topic";
         metadata.close();
         Thread t1 = asyncFetch(topic, 500);
-        t1.join();
+        t1.join(60 * 1000L);
         assertEquals(KafkaException.class, backgroundError.get().getClass());
         assertTrue(backgroundError.get().toString().contains("Requested metadata update after close"));
         clearBackgroundError();

@@ -224,7 +224,7 @@ public class WorkerTaskTest {
         workerTask.stop();
         workerTask.cancel();
         stopped.countDown();
-        thread.join();
+        thread.join(60 * 1000L);
 
         verify(workerTask);
     }

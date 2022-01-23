@@ -347,7 +347,7 @@ public class NioEchoServer extends Thread {
         this.serverSocketChannel.close();
         closeSocketChannels();
         acceptorThread.interrupt();
-        acceptorThread.join();
+        acceptorThread.join(60 * 1000L);
         interrupt();
         join();
     }

@@ -140,7 +140,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     verifyConcurrentOperations(createTransactions, allOperations)
     keepRunning.set(false)
-    t.join()
+    t.join(60 * 1000L)
   }
 
   @Test

@@ -199,7 +199,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.loadingPartitions.contains(partitionAndLeaderEpoch))
 
     latch.countDown()
-    loadingThread.join()
+    loadingThread.join(60 * 1000L)
 
     // Verify that transaction state was not loaded
     assertEquals(Left(Errors.NOT_COORDINATOR), transactionManager.getTransactionState(txnMetadata1.transactionalId))

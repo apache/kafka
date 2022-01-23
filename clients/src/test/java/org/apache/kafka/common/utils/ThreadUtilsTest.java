@@ -45,7 +45,7 @@ public class ThreadUtilsTest {
             assertTrue(daemonThread.isDaemon());
         } finally {
             try {
-                daemonThread.join();
+                daemonThread.join(60 * 1000L);
             } catch (InterruptedException e) {
                 // can be ignored
             }
@@ -70,7 +70,7 @@ public class ThreadUtilsTest {
             assertTrue(daemonThread1.isDaemon());
         } finally {
             try {
-                daemonThread1.join();
+                daemonThread1.join(60 * 1000L);
             } catch (InterruptedException e) {
                 // can be ignored
             }
@@ -80,7 +80,7 @@ public class ThreadUtilsTest {
             assertTrue(daemonThread2.isDaemon());
         } finally {
             try {
-                daemonThread2.join();
+                daemonThread2.join(60 * 1000L);
             } catch (InterruptedException e) {
                 // can be ignored
             }

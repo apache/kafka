@@ -673,7 +673,7 @@ public class KafkaProducerTest {
             t.start();
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             running.set(false);
-            t.join();
+            t.join(60 * 1000L);
         }
     }
 
@@ -721,7 +721,7 @@ public class KafkaProducerTest {
             exchanger.exchange(null);  // 2
             exchanger.exchange(null);  // 3
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
-            t.join();
+            t.join(60 * 1000L);
         }
     }
 

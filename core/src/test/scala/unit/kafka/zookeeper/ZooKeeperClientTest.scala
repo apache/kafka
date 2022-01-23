@@ -372,8 +372,8 @@ class ZooKeeperClientTest extends QuorumTestHarness {
     Thread.sleep(100)
     requestThread.start()
 
-    reinitializeThread.join()
-    requestThread.join()
+    reinitializeThread.join(60 * 1000L)
+    requestThread.join(60 * 1000L)
   }
 
   @Test

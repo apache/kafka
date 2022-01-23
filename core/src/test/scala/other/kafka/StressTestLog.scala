@@ -61,8 +61,8 @@ object StressTestLog {
 
     Exit.addShutdownHook("stress-test-shutdown-hook", {
         running.set(false)
-        writer.join()
-        reader.join()
+        writer.join(60 * 1000L)
+        reader.join(60 * 1000L)
         Utils.delete(dir)
     })
 

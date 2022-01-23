@@ -184,8 +184,8 @@ class PartitionTest extends AbstractPartitionTest {
     thread2.start()
 
     latch.countDown()
-    thread1.join()
-    thread2.join()
+    thread1.join(60 * 1000L)
+    thread2.join(60 * 1000L)
     assertEquals(None, partition.futureLog)
   }
 
@@ -259,7 +259,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue(partition.makeFollower(partitionState, offsetCheckpoints, None))
 
     appendSemaphore.release()
-    appendThread.join()
+    appendThread.join(60 * 1000L)
 
     assertEquals(2L, partition.localLogOrException.logEndOffset)
     assertEquals(2L, partition.leaderReplicaIdOpt.get)

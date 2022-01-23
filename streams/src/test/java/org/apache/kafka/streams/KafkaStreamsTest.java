@@ -282,7 +282,7 @@ public class KafkaStreamsTest {
             return null;
         }).anyTimes();
         EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
-        globalStreamThread.join();
+        globalStreamThread.join(60 * 1000L);
         EasyMock.expectLastCall().anyTimes();
 
         PowerMock.replay(
@@ -358,7 +358,7 @@ public class KafkaStreamsTest {
             return null;
         }).anyTimes();
         EasyMock.expect(thread.isRunning()).andReturn(state.get() == StreamThread.State.RUNNING).anyTimes();
-        thread.join();
+        thread.join(60 * 1000L);
         if (terminable) {
             EasyMock.expectLastCall().anyTimes();
         } else {
@@ -494,7 +494,7 @@ public class KafkaStreamsTest {
                 tmpThread.shutdown();
                 waitForCondition(() -> tmpThread.state() == StreamThread.State.DEAD,
                     "Thread never stopped.");
-                streams.threads.get(i).join();
+                streams.threads.get(i).join(60 * 1000L);
             }
             waitForCondition(
                 () -> streams.metadataForLocalThreads().stream().allMatch(t -> t.threadState().equals("DEAD")),
@@ -527,7 +527,7 @@ public class KafkaStreamsTest {
             waitForCondition(
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
-            globalStreamThread.join();
+            globalStreamThread.join(60 * 1000L);
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
                 "Thread never stopped."

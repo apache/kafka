@@ -236,8 +236,8 @@ public class BufferPoolTest {
         Condition c2 = waiters.getLast();
         t2.interrupt();
         assertNotEquals(c1, c2);
-        t1.join();
-        t2.join();
+        t1.join(60 * 1000L);
+        t2.join(60 * 1000L);
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(pool.queued(), 0);
     }
@@ -300,7 +300,7 @@ public class BufferPoolTest {
         for (StressTestThread thread : threads)
             thread.start();
         for (StressTestThread thread : threads)
-            thread.join();
+            thread.join(60 * 1000L);
         for (StressTestThread thread : threads)
             assertTrue(thread.success.get(), "Thread should have completed all iterations successfully.");
         assertEquals(totalMemory, pool.availableMemory());

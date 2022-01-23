@@ -2214,7 +2214,7 @@ public abstract class ConsumerCoordinatorTest {
         respondToOffsetCommitRequest(singletonMap(t1p, firstOffset.offset()), Errors.NONE);
         respondToOffsetCommitRequest(singletonMap(t1p, secondOffset.offset()), Errors.NONE);
 
-        thread.join();
+        thread.join(60 * 1000L);
 
         assertEquals(Arrays.asList(firstOffset, secondOffset), committedOffsets);
     }
@@ -2791,7 +2791,7 @@ public abstract class ConsumerCoordinatorTest {
             exceptionHolder.get() != null, "Failed to observe expected assignment change");
 
         doStop.set(true);
-        poller.join();
+        poller.join(60 * 1000L);
 
         assertNull(exceptionHolder.get(), "Failed fetching the metric at least once");
     }

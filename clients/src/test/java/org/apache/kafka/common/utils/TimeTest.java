@@ -47,7 +47,7 @@ public abstract class TimeTest {
 
         t.start();
         time.sleep(timeoutMs);
-        t.join();
+        t.join(60 * 1000L);
 
         assertEquals(TimeoutException.class, caughtException.get().getClass());
     }
@@ -75,7 +75,7 @@ public abstract class TimeTest {
             obj.notify();
         }
 
-        t.join();
+        t.join(60 * 1000L);
 
         assertTrue(time.milliseconds() < deadlineMs);
         assertNull(caughtException.get());

@@ -198,7 +198,7 @@ public class KafkaFutureTest {
         myThread.start();
         awaitAndAssertResult(future, "You must construct additional pylons.", "I am ready");
         assertIsSuccessful(future);
-        myThread.join();
+        myThread.join(60 * 1000L);
         assertNull(myThread.testException);
     }
 
@@ -212,7 +212,7 @@ public class KafkaFutureTest {
         myThread.start();
         awaitAndAssertFailure(future, RuntimeException.class, "Ultimate efficiency achieved.");
         assertIsFailed(future);
-        myThread.join();
+        myThread.join(60 * 1000L);
         assertNull(myThread.testException);
     }
 
@@ -226,7 +226,7 @@ public class KafkaFutureTest {
         myThread.start();
         awaitAndAssertCancelled(future, "Ultimate efficiency achieved.");
         assertIsCancelled(future);
-        myThread.join();
+        myThread.join(60 * 1000L);
         assertNull(myThread.testException);
     }
 
@@ -521,8 +521,8 @@ public class KafkaFutureTest {
             assertEquals(Integer.valueOf(i), futures.get(i).get());
         }
         for (int i = 0; i < numThreads; i++) {
-            completerThreads.get(i).join();
-            waiterThreads.get(i).join();
+            completerThreads.get(i).join(60 * 1000L);
+            waiterThreads.get(i).join(60 * 1000L);
             assertNull(completerThreads.get(i).testException);
             assertNull(waiterThreads.get(i).testException);
         }
@@ -561,8 +561,8 @@ public class KafkaFutureTest {
         }
         assertIsFailed(futures.get(lastIndex));
         for (int i = 0; i < numThreads; i++) {
-            completerThreads.get(i).join();
-            waiterThreads.get(i).join();
+            completerThreads.get(i).join(60 * 1000L);
+            waiterThreads.get(i).join(60 * 1000L);
             assertNull(completerThreads.get(i).testException);
             if (i == lastIndex) {
                 assertEquals(ExecutionException.class, waiterThreads.get(i).testException.getClass());

@@ -1203,7 +1203,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumerThreads.foreach {
           case consumerThread =>
             consumerThread.interrupt()
-            consumerThread.join()
+            consumerThread.join(60 * 1000L)
         }
       }
       } finally {

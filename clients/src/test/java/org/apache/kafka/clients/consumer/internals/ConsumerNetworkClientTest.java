@@ -230,7 +230,7 @@ public class ConsumerNetworkClientTest {
         t.start();
 
         consumerClient.disconnectAsync(node);
-        t.join();
+        t.join(60 * 1000L);
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
     }
@@ -311,8 +311,8 @@ public class ConsumerNetworkClientTest {
         client.wakeup();
 
         // Both threads should complete since t1 should wakeup t2
-        t1.join();
-        t2.join();
+        t1.join(60 * 1000L);
+        t2.join(60 * 1000L);
         assertTrue(future.succeeded());
     }
 

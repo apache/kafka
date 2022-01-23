@@ -288,7 +288,7 @@ public class RecordAccumulatorTest {
         }
 
         for (Thread t : threads)
-            t.join();
+            t.join(60 * 1000L);
     }
 
 

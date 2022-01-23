@@ -91,7 +91,7 @@ class KafkaNetworkChannelTest {
     ioThread.start()
     val request = sendTestRequest(ApiKeys.FETCH, destinationId)
 
-    ioThread.join()
+    ioThread.join(60 * 1000L)
     assertResponseCompleted(request, Errors.INVALID_REQUEST)
   }
 

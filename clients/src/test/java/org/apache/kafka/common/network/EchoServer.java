@@ -130,7 +130,7 @@ class EchoServer extends Thread {
         this.serverSocket.close();
         closeConnections();
         for (Thread t : threads)
-            t.join();
+            t.join(60 * 1000L);
         join();
     }
 }

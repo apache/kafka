@@ -478,7 +478,7 @@ class BatchAccumulatorTest {
 
         // Now let the append thread complete and verify that we can finish the drain
         releaseLockLatch.countDown();
-        appendThread.join();
+        appendThread.join(60 * 1000L);
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
