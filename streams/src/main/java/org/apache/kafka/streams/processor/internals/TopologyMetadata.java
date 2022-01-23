@@ -444,11 +444,11 @@ public class TopologyMetadata {
      * @param topologiesToExclude the names of any topologies to exclude from the returned topic groups,
      *                            eg because they have missing source topics and can't be processed yet
      */
-    public Map<Subtopology, TopicsInfo> topicGroups(final Set<String> topologiesToExclude) {
+    public Map<Subtopology, TopicsInfo> subtopologyTopicsInfoMapExcluding(final Set<String> topologiesToExclude) {
         final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
         for (final InternalTopologyBuilder builder : builders.values()) {
             if (!topologiesToExclude.contains(builder.topologyName())) {
-                topicGroups.putAll(builder.topicGroups());
+                topicGroups.putAll(builder.subtopologyToTopicsInfo());
             }
         }
         return topicGroups;
@@ -461,7 +461,7 @@ public class TopologyMetadata {
     public Map<String, Collection<TopicsInfo>> topicGroupsByTopology() {
         final Map<String, Collection<TopicsInfo>> topicGroups = new HashMap<>();
         applyToEachBuilder(
-            b -> topicGroups.put(getTopologyNameOrElseUnnamed(b.topologyName()), b.topicGroups().values())
+            b -> topicGroups.put(getTopologyNameOrElseUnnamed(b.topologyName()), b.subtopologyToTopicsInfo().values())
         );
         return topicGroups;
     }
