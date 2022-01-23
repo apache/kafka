@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -107,14 +108,17 @@ public class RecordQueue {
         long headerSizeInBytes = 0L;
 
         for (final Header header: record.headers().toArray()) {
-            headerSizeInBytes += header.key().getBytes().length + header.value().length;
+            headerSizeInBytes += Utils.utf8(header.key()).length;
+            if (header.value() != null) {
+                headerSizeInBytes += header.value().length;
+            }
         }
 
         return record.serializedKeySize() +
                 record.serializedValueSize() +
                 8L + // timestamp
                 8L + // offset
-                record.topic().getBytes().length +
+                Utils.utf8(record.topic()).length +
                 4L + // partition
                 headerSizeInBytes;
     }
