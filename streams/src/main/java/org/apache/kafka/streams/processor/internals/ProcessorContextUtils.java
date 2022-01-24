@@ -78,7 +78,7 @@ public final class ProcessorContextUtils {
         return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
-    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+    public static String getPrefix(final Map<String, Object> configs, final String applicationId) {
         if (configs == null) {
             return applicationId;
         } else {
