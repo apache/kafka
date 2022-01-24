@@ -75,7 +75,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     @Test
-    public void shouldDeclineTaskMovementWhenClientTagsMatch() {
+    public void shouldDeclineTaskMovementWhenClientTagsDoNotMatch() {
         final ClientTagAwareStandbyTaskAssignor standbyTaskAssignor = new ClientTagAwareStandbyTaskAssignor();
         final ClientState source = createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
         final ClientState destination = createClientStateWithCapacity(1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)));
