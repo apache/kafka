@@ -24,7 +24,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.processor.*;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
@@ -1057,7 +1060,7 @@ public class InternalTopologyBuilder {
                                 applicationId :
                                 ProcessorContextUtils.getPrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
                         final String changelogTopic =
-                            ProcessorStateManager.storeChangelogTopic( prefix, stateStoreName, topologyName);
+                            ProcessorStateManager.storeChangelogTopic(prefix, stateStoreName, topologyName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                         changelogTopicToStore.put(changelogTopic, stateStoreName);
                     }
