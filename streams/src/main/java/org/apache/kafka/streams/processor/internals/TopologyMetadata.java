@@ -351,12 +351,8 @@ public class TopologyMetadata {
         return null;
     }
 
-    /**
-     * NOTE: this should not be invoked until all topologies have been built via
-     * {@link #buildAndVerifyTopology(InternalTopologyBuilder)}, otherwise the
-     * {@link InternalTopologyBuilder#fullSourceTopicNames()}
-     */
-    public Set<String> sourceTopicCollection() {
+
+    public Set<String> allFullSourceTopicNames() {
         final Set<String> sourceTopics = new HashSet<>();
         applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;
@@ -496,15 +492,15 @@ public class TopologyMetadata {
 
             updateAndVerifyNewInputTopics(newTopicsByTopology);
             for (final Map.Entry<String, Set<String>> topology : newTopicsByTopology.entrySet()) {
-                lookupBuilderForNamedTopology(topology.getKey())
+                lookupBuilderForTopology(topology.getKey())
                     .addSubscribedTopicsFromMetadata(topology.getValue(), logPrefix);
             }
         } else {
-            if (!topics.equals(sourceTopicCollection())) {
+            if (!topics.equals(allFullSourceTopicNames())) {
                 log.error("{}Consumer's subscription does not match the known source topics.\n" +
                         "consumer subscription: {}\n" +
                         "topics in topology metadata: {}",
-                    logPrefix, topics, sourceTopicCollection());
+                    logPrefix, topics, allFullSourceTopicNames());
                 throw new IllegalStateException("Consumer subscribed topics and topology's known topics do not match.");
             }
         }
@@ -525,7 +521,7 @@ public class TopologyMetadata {
         }
         for (final Map.Entry<String, Set<String>> assignedTopics : assignedTopicsByTopology.entrySet()) {
             final Set<String> newTopics =
-                lookupBuilderForNamedTopology(assignedTopics.getKey())
+                lookupBuilderForTopology(assignedTopics.getKey())
                     .addSubscribedTopicsFromAssignment(assignedTopics.getValue(), logPrefix);
             assignedTopics.getValue().retainAll(newTopics);
         }
@@ -570,10 +566,16 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the InternalTopologyBuilder for a Topology, or null if no such Topology exists
+     * @return the InternalTopologyBuilder for the NamedTopology with the given {@code topologyName}
+     *         or the builder for a regular Topology if {@code topologyName} is {@code null},
+     *         else returns {@code null} if {@code topologyName} is non-null but no such NamedTopology exists
      */
-    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
-        return builders.get(name);
+    public InternalTopologyBuilder lookupBuilderForTopology(final String topologyName) {
+        if (topologyName == null) {
+            return builders.get(UNNAMED_TOPOLOGY);
+        } else {
+            return builders.get(topologyName);
+        }
     }
 
     private boolean anyBuildersMatch(final Function<InternalTopologyBuilder, Boolean> condition) {

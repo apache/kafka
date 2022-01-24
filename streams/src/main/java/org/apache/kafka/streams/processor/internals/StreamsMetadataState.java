@@ -297,7 +297,7 @@ public class StreamsMetadataState {
 
     private Set<String> getStoresOnHost(final Map<String, List<String>> storeToSourceTopics,
         final Set<TopicPartition> sourceTopicPartitions, final String topologyName) {
-        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
+        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForTopology(topologyName);
         final Set<String> sourceTopicNames = builder.sourceTopicNames();
 
         final Set<String> storesOnHost = new HashSet<>();
@@ -458,7 +458,7 @@ public class StreamsMetadataState {
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName, final String topologyName) {
-        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
+        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForTopology(topologyName);
         final List<String> sourceTopics = new ArrayList<>(builder.sourceTopicsForStore(storeName));
 
         if (sourceTopics.isEmpty()) {

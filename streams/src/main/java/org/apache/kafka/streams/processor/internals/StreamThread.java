@@ -724,7 +724,7 @@ public class StreamThread extends Thread {
         if (topologyMetadata.usesPatternSubscription()) {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
-            mainConsumer.subscribe(topologyMetadata.sourceTopicCollection(), rebalanceListener);
+            mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
         }
     }
 

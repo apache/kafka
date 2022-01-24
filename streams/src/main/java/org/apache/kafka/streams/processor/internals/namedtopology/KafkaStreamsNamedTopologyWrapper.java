@@ -139,7 +139,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @return the NamedTopology for the specific name, or Optional.empty() if the application has no NamedTopology of that name
      */
     public Optional<NamedTopology> getTopologyByName(final String name) {
-        return Optional.ofNullable(topologyMetadata.lookupBuilderForNamedTopology(name)).map(InternalTopologyBuilder::namedTopology);
+        return Optional.ofNullable(topologyMetadata.lookupBuilderForTopology(name)).map(InternalTopologyBuilder::namedTopology);
     }
 
     /**
@@ -280,7 +280,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     private void verifyTopologyStateStore(final String topologyName, final String storeName) {
-        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
+        final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForTopology(topologyName);
         if (builder == null) {
             throw new UnknownStateStoreException(
                 "Cannot get state store " + storeName + " from NamedTopology " + topologyName +
