@@ -682,9 +682,9 @@ class TopicCommandIntegrationTest extends KafkaServerTestHarness with Logging wi
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
+      assertEquals(2, rows.length)
       assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
       assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
-      assertEquals(2, rows.length)
     } finally {
       restartDeadBrokers()
     }
