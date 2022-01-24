@@ -422,7 +422,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners,
-                        Time.SYSTEM);
+                        Time.SYSTEM,
+                        config.getBoolean(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG));
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
