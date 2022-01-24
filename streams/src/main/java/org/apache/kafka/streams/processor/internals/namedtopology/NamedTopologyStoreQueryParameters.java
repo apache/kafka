@@ -44,14 +44,14 @@ public class NamedTopologyStoreQueryParameters<T> extends StoreQueryParameters<T
      * See {@link StoreQueryParameters#withPartition(Integer)}
      */
     public NamedTopologyStoreQueryParameters<T> withPartition(final Integer partition) {
-        return new NamedTopologyStoreQueryParameters<>(topologyName, this.storeName(), this.queryableStoreType(), partition, this.staleStoresEnabled());
+        return new NamedTopologyStoreQueryParameters<>(this.topologyName(), this.storeName(), this.queryableStoreType(), partition, this.staleStoresEnabled());
     }
 
     /**
      * See {@link StoreQueryParameters#enableStaleStores()}
      */
     public NamedTopologyStoreQueryParameters<T> enableStaleStores() {
-        return new NamedTopologyStoreQueryParameters<>(topologyName, this.storeName(), this.queryableStoreType(), this.partition(), true);
+        return new NamedTopologyStoreQueryParameters<>(this.topologyName(), this.storeName(), this.queryableStoreType(), this.partition(), true);
     }
 
     public String topologyName() {
