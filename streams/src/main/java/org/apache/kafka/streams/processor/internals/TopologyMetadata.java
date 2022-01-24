@@ -498,13 +498,15 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
+     * @return the InternalTopologyBuilder for the NamedTopology with the given {@code topologyName}
+     *         or the builder for a regular Topology if {@code topologyName} is {@code null},
+     *         else returns {@code null} if {@code topologyName} is non-null but no such NamedTopology exists
      */
-    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
-        if (name == null) {
+    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String topologyName) {
+        if (topologyName == null) {
             return builders.get(UNNAMED_TOPOLOGY);
         } else {
-            return builders.get(name);
+            return builders.get(topologyName);
         }
     }
 
