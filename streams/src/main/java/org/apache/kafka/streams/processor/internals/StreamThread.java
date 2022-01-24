@@ -1138,8 +1138,6 @@ public class StreamThread extends Thread {
 
         log.info("Shutting down");
 
-        topologyMetadata.unregisterThread(threadMetadata.threadName());
-
         try {
             topologyMetadata.unregisterThread(threadMetadata.threadName());
         } catch (final Throwable e) {

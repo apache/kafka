@@ -216,8 +216,8 @@ public class TopologyMetadata {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         try {
             lock();
+            log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            log.info("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
             version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
@@ -225,7 +225,7 @@ public class TopologyMetadata {
         } finally {
             unlock();
         }
-        log.info("Removed NamedTopology {} and updated topology version to {}", topologyName, version.topologyVersion.get());
+        log.info("Finished removing NamedTopology {}, topology version was updated to {}", topologyName, version.topologyVersion.get());
         return future;
     }
 
