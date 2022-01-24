@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
 
 class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);
@@ -46,10 +47,10 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final TaskId task : statefulTaskIds) {
-            final int numRemainingStandbys = pollAndAssignActiveTaskToRemainingStandbys(clients,
-                                                                                        tasksToRemainingStandbys,
-                                                                                        standbyTaskClientsByTaskLoad,
-                                                                                        task);
+            final int numRemainingStandbys = pollClientAndMaybeAssignRemainingStandbyTasks(clients,
+                                                                                           tasksToRemainingStandbys,
+                                                                                           standbyTaskClientsByTaskLoad,
+                                                                                           task);
 
             if (numRemainingStandbys > 0) {
                 log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
@@ -62,23 +63,5 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
 
         // returning false, because standby task assignment will never require a follow-up probing rebalance.
         return false;
-    }
-
-    static int pollAndAssignActiveTaskToRemainingStandbys(final Map<UUID, ClientState> clients,
-                                                          final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                          final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                          final TaskId activeTaskId) {
-        int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
-        while (numRemainingStandbys > 0) {
-            final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
-            if (client == null) {
-                break;
-            }
-            clients.get(client).assignStandby(activeTaskId);
-            numRemainingStandbys--;
-            standbyTaskClientsByTaskLoad.offer(client);
-        }
-
-        return numRemainingStandbys;
     }
 }

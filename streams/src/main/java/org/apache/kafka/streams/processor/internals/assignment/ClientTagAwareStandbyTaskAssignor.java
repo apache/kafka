@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
 
 /**
  * Distributes standby tasks over different tag dimensions.
@@ -119,7 +120,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             final TaskId activeTaskId = pendingStandbyTaskAssignmentEntry.getKey();
             final UUID clientId = pendingStandbyTaskToClientId.get(activeTaskId);
 
-            final int numberOfRemainingStandbys = DefaultStandbyTaskAssignor.pollAndAssignActiveTaskToRemainingStandbys(
+            final int numberOfRemainingStandbys = pollClientAndMaybeAssignRemainingStandbyTasks(
                 clients,
                 pendingStandbyTaskToNumberRemainingStandbys,
                 standbyTaskClientsByTaskLoad,

@@ -20,12 +20,31 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
     private StandbyTaskAssignmentUtils() {
+    }
+
+    static int pollClientAndMaybeAssignRemainingStandbyTasks(final Map<UUID, ClientState> clients,
+                                                             final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                             final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                             final TaskId activeTaskId) {
+        int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
+        while (numRemainingStandbys > 0) {
+            final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
+            if (client == null) {
+                break;
+            }
+            clients.get(client).assignStandby(activeTaskId);
+            numRemainingStandbys--;
+            standbyTaskClientsByTaskLoad.offer(client);
+        }
+
+        return numRemainingStandbys;
     }
 
     static Map<TaskId, Integer> computeTasksToRemainingStandbys(final int numStandbyReplicas,
