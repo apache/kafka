@@ -403,7 +403,7 @@ public class NamedTopologyIntegrationTest {
             final Collection<StreamsMetadata> streams2MetadataTopology2 = streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2);
 
             // similarly, since topology-2 also has only one subtopology, we should find exactly one host with it
-            assertThat(streamsMetadataTopology1.size(), equalTo(1));
+            assertThat(streamsMetadataTopology2.size(), equalTo(1));
             assertThat(streams2MetadataTopology2.size(), equalTo(1));
 
             assertThat(streamsMetadataTopology1.size(), equalTo(2));
