@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
@@ -63,37 +64,37 @@ public class TopologyConfig extends AbstractConfig {
                 null,
                 Importance.LOW,
                 BUFFERED_RECORDS_PER_PARTITION_DOC)
-                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    CACHE_MAX_BYTES_BUFFERING_DOC)
-                .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-                .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                    Type.CLASS,
-                    null,
-                    Importance.MEDIUM,
-                    DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
-                .define(MAX_TASK_IDLE_MS_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    MAX_TASK_IDLE_MS_DOC)
-                .define(TASK_TIMEOUT_MS_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    TASK_TIMEOUT_MS_DOC)
-                .define(DEFAULT_DSL_STORE_CONFIG,
-                    Type.STRING,
-                    ROCKS_DB,
-                    in(ROCKS_DB, IN_MEMORY),
-                    Importance.LOW,
-                    DEFAULT_DSL_STORE_DOC);
+            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                Type.LONG,
+                null,
+                Importance.MEDIUM,
+                CACHE_MAX_BYTES_BUFFERING_DOC)
+            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                Type.CLASS,
+                null,
+                Importance.MEDIUM,
+                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                Type.CLASS,
+                null,
+                Importance.MEDIUM,
+                DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(MAX_TASK_IDLE_MS_CONFIG,
+                Type.LONG,
+                null,
+                Importance.MEDIUM,
+                MAX_TASK_IDLE_MS_DOC)
+            .define(TASK_TIMEOUT_MS_CONFIG,
+                Type.LONG,
+                null,
+                Importance.MEDIUM,
+                TASK_TIMEOUT_MS_DOC)
+            .define(DEFAULT_DSL_STORE_CONFIG,
+                Type.STRING,
+                ROCKS_DB,
+                in(ROCKS_DB, IN_MEMORY),
+                Importance.LOW,
+                DEFAULT_DSL_STORE_DOC);
     }
     private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
@@ -107,6 +108,7 @@ public class TopologyConfig extends AbstractConfig {
     public final long cacheSize;
     public final long maxTaskIdleMs;
     public final long taskTimeoutMs;
+    public final String storeType;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
 
@@ -164,6 +166,20 @@ public class TopologyConfig extends AbstractConfig {
         } else {
             deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
         }
+
+        if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {
+            storeType = getString(DEFAULT_DSL_STORE_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, storeType);
+        } else {
+            storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
+        }
+    }
+
+    public Materialized.StoreType parseStoreType() {
+        if (storeType.equals(IN_MEMORY)) {
+            return Materialized.StoreType.IN_MEMORY;
+        }
+        return Materialized.StoreType.ROCKS_DB;
     }
 
     public boolean isNamedTopology() {

@@ -107,25 +107,8 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     }
 
     private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
+        SessionBytesStoreSupplier supplier = getSupplier(materialized);
 
-            if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the session store "
-                    + materialized.storeName()
-                    + " must be no smaller than the session inactivity gap plus the"
-                    + " grace period."
-                    + " Got gap=[" + sessionWindows.inactivityGap() + "],"
-                    + " grace=[" + sessionWindows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
-            }
-            supplier = Stores.persistentSessionStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod)
-            );
-        }
         final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
             supplier,
             materialized.keySerde(),
@@ -144,4 +127,25 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
         return builder;
     }
 
+    private SessionBytesStoreSupplier getSupplier(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
+        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
+        if (supplier == null) {
+            final long retentionPeriod = materialized.retention() != null ?
+                materialized.retention().toMillis() : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
+
+            if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the session store "
+                    + materialized.storeName()
+                    + " must be no smaller than the session inactivity gap plus the"
+                    + " grace period."
+                    + " Got gap=[" + sessionWindows.inactivityGap() + "],"
+                    + " grace=[" + sessionWindows.gracePeriodMs() + "],"
+                    + " retention=[" + retentionPeriod + "]");
+            }
+
+            supplier = Stores.sessionStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(), retentionPeriod);
+        }
+
+        return supplier;
+    }
 }

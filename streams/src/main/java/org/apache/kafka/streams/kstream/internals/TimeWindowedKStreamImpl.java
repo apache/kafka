@@ -206,31 +206,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                 materializedInternal.valueSerde());
-
-
     }
 
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : windows.size() + windows.gracePeriodMs();
-
-            if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the window store "
-                        + name + " must be no smaller than its window size plus the grace period."
-                        + " Got size=[" + windows.size() + "],"
-                        + " grace=[" + windows.gracePeriodMs() + "],"
-                        + " retention=[" + retentionPeriod + "]");
-            }
-
-            supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
-            );
-        }
+        WindowBytesStoreSupplier supplier = getSupplier(materialized);
 
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
             supplier,
@@ -248,6 +227,27 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             builder.withCachingEnabled();
         }
         return builder;
+    }
+
+    private <VR> WindowBytesStoreSupplier getSupplier(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
+        if (supplier == null) {
+            final long retentionPeriod = materialized.retention() != null ?
+                materialized.retention().toMillis() : windows.size() + windows.gracePeriodMs();
+
+            if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the window store "
+                    + name + " must be no smaller than its window size plus the grace period."
+                    + " Got size=[" + windows.size() + "],"
+                    + " grace=[" + windows.gracePeriodMs() + "],"
+                    + " retention=[" + retentionPeriod + "]");
+            }
+
+            supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),
+                retentionPeriod, windows.size());
+        }
+
+        return supplier;
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {

@@ -292,7 +292,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return itself
      */
     public Materialized<K, V, S> withStoreType(final StoreType storeType) throws IllegalArgumentException {
-        Objects.requireNonNull(storeType)
+        Objects.requireNonNull(storeType);
         this.storeType = storeType;
         return this;
     }

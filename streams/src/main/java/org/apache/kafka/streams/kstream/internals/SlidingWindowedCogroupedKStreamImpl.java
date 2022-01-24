@@ -98,29 +98,8 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     }
 
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
+        WindowBytesStoreSupplier supplier = getSupplier(materialized);
 
-            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the window store "
-                    + name
-                    + " must be no smaller than 2 * time difference plus the grace period."
-                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                    + " grace=[" + windows.gracePeriodMs()
-                    + "],"
-                    + " retention=[" + retentionPeriod
-                    + "]");
-            }
-
-            supplier = Stores.persistentTimestampedWindowStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod),
-                Duration.ofMillis(windows.timeDifferenceMs()),
-                false
-            );
-
-        }
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
             .timestampedWindowStoreBuilder(
                 supplier,
@@ -139,6 +118,32 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             builder.withCachingDisabled();
         }
         return builder;
+    }
+
+    private WindowBytesStoreSupplier getSupplier(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
+        if (supplier == null) {
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
+
+            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the window store "
+                    + name
+                    + " must be no smaller than 2 * time difference plus the grace period."
+                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
+                    + " grace=[" + windows.gracePeriodMs()
+                    + "],"
+                    + " retention=[" + retentionPeriod
+                    + "]");
+            }
+
+            supplier = Stores.windowStoreSupplierByStoreType(
+                materialized.storeType(),
+                materialized.storeName(),
+                retentionPeriod,
+                windows.timeDifferenceMs());
+        }
+
+        return supplier;
     }
 
 }

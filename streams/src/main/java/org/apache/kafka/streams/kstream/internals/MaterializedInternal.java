@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.time.Duration;
@@ -43,6 +44,14 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         if (!queryable && nameProvider != null) {
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         }
+
+        // downcast to InternalStreamsBuilder to get the topologyConfigs
+        if (nameProvider instanceof InternalStreamsBuilder) {
+            TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
+            if (topologyConfig != null) {
+                this.storeType = topologyConfig.parseStoreType();
+            }
+        }
     }
 
     public String queryableStoreName() {
@@ -54,6 +63,10 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
             return storeSupplier.name();
         }
         return storeName;
+    }
+
+    public StoreType storeType() {
+        return storeType;
     }
 
     public StoreSupplier<S> storeSupplier() {

@@ -191,26 +191,8 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
+        WindowBytesStoreSupplier supplier = getSupplier(materialized);
 
-            // large retention time to ensure that all existing windows needed to create new sliding windows can be accessed
-            // earliest window start time we could need to create corresponding right window would be recordTime - 2 * timeDifference
-            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the window store "
-                        + name + " must be no smaller than 2 * time difference plus the grace period."
-                        + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                        + " grace=[" + windows.gracePeriodMs() + "],"
-                        + " retention=[" + retentionPeriod + "]");
-            }
-            supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifferenceMs()),
-                    false
-            );
-        }
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
                 supplier,
                 materialized.keySerde(),
@@ -228,6 +210,28 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             builder.withCachingDisabled();
         }
         return builder;
+    }
+
+    private <VR> WindowBytesStoreSupplier getSupplier(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
+        if (supplier == null) {
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
+
+            // large retention time to ensure that all existing windows needed to create new sliding windows can be accessed
+            // earliest window start time we could need to create corresponding right window would be recordTime - 2 * timeDifference
+            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the window store "
+                    + name + " must be no smaller than 2 * time difference plus the grace period."
+                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
+                    + " grace=[" + windows.gracePeriodMs() + "],"
+                    + " retention=[" + retentionPeriod + "]");
+            }
+
+            supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),
+                retentionPeriod, windows.timeDifferenceMs());
+        }
+
+        return supplier;
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
