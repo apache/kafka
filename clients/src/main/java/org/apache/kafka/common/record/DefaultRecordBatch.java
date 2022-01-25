@@ -83,17 +83,14 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * is expired from lack of activity.
  *
  * There is no similar need to preserve the timestamp from the original batch after compaction. The BaseTimestamp
- * field therefore always reflects the timestamp of the first record in the batch. If the batch is empty, the
- * BaseTimestamp will be set to -1 (NO_TIMESTAMP).
+ * field therefore reflects the timestamp of the first record in the batch in most cases. If the batch is empty, the
+ * BaseTimestamp will be set to -1 (NO_TIMESTAMP). If the delete horizon flag is set to 1, the BaseTimestamp
+ * will be set to the time at which tombstone records and aborted transaction markers in the batch should be removed.
  *
  * Similarly, the MaxTimestamp field reflects the maximum timestamp of the current records if the timestamp type
  * is CREATE_TIME. For LOG_APPEND_TIME, on the other hand, the MaxTimestamp field reflects the timestamp set
  * by the broker and is preserved after compaction. Additionally, the MaxTimestamp of an empty batch always retains
  * the previous value prior to becoming empty.
- *
- * The delete horizon flag for the sixth bit is used to determine if the first timestamp of the batch had been set to
- * the time for which tombstones / transaction markers need to be removed. If it is true, then the first timestamp is
- * the delete horizon, otherwise, it is merely the first timestamp of the record batch.
  *
  * The current attributes are given below:
  *
