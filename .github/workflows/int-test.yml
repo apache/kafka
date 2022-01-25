@@ -25,11 +25,23 @@ on:
       - 3.0-li
 
 jobs:
-  clients:
+  test:
     # Name the Job
-    name: clients
+    name: ${{ matrix.module }}
     # Set the type of machine to run on
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # We still want to see all jobs' build result to the end
+      matrix:
+        module: # Maintain lexicographical order
+          - clients
+          - generator
+          - metadata
+          - raft
+          - server-common
+          - shell
+          - storage
+          - storage:api
     steps:
       # Checks out a copy of your repository on the ubuntu-latest machine
       - name: Checkout code
@@ -43,7 +55,9 @@ jobs:
         with:
           java-version: '11'
       - name: Run tests
-        run: ./gradlew -PmaxTestRetries=3 cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        env:
+          MODULE: ${{ matrix.module }}
+        run: ./gradlew -PmaxTestRetries=3 cleanTest "$MODULE:integrationTest" --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   core:
     # Name the Job
     name: core (${{ matrix.prefixes }})
