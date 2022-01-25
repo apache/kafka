@@ -359,7 +359,7 @@ public class StreamsMetadataState {
         Stream.concat(activePartitionHostMap.keySet().stream(), standbyPartitionHostMap.keySet().stream())
             .distinct()
             .sorted(Comparator.comparing(HostInfo::host).thenComparingInt(HostInfo::port))
-            .forEach((hostInfo) -> {
+            .forEach(hostInfo -> {
                 for (final String topologyName : topologyMetadata.namedTopologiesView()) {
                     final Map<String, List<String>> storeToSourceTopics =
                         topologyMetadata.stateStoreNameToSourceTopicsForTopology(topologyName);

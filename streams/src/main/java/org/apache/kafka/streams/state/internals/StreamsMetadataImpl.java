@@ -172,13 +172,13 @@ public class StreamsMetadataImpl implements StreamsMetadata {
                 ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +
                 ", standbyStateStoreNames=" + standbyStateStoreNames +
-                ", standbyTopicPartitions=" + standbyTopicPartitions +
-            '}';
+                ", standbyTopicPartitions=" + standbyTopicPartitions;
         if (topologyName == null) {
-            return str;
+            return str + '}';
         } else {
             return str +
-                "topologyName=" + topologyName;
+                ", topologyName=" + topologyName +
+                '}';
         }
     }
 }

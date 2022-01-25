@@ -93,35 +93,35 @@ public class NamedTopologyIntegrationTest {
     private static final String TOPOLOGY_3 = "topology-3";
 
     // "standard" input topics which are pre-filled with the STANDARD_INPUT_DATA
-    private final static String INPUT_STREAM_1 = "input-stream-1";
-    private final static String INPUT_STREAM_2 = "input-stream-2";
-    private final static String INPUT_STREAM_3 = "input-stream-3";
+    private static final String INPUT_STREAM_1 = "input-stream-1";
+    private static final String INPUT_STREAM_2 = "input-stream-2";
+    private static final String INPUT_STREAM_3 = "input-stream-3";
 
-    private final static String OUTPUT_STREAM_1 = "output-stream-1";
-    private final static String OUTPUT_STREAM_2 = "output-stream-2";
-    private final static String OUTPUT_STREAM_3 = "output-stream-3";
+    private static final String OUTPUT_STREAM_1 = "output-stream-1";
+    private static final String OUTPUT_STREAM_2 = "output-stream-2";
+    private static final String OUTPUT_STREAM_3 = "output-stream-3";
 
-    private final static String SUM_OUTPUT = "sum";
-    private final static String COUNT_OUTPUT = "count";
+    private static final String SUM_OUTPUT = "sum";
+    private static final String COUNT_OUTPUT = "count";
 
     // "delayed" input topics which are empty at start to allow control over when input data appears
-    private final static String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
-    private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
-    private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
-    private final static String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
+    private static final String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
+    private static final String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
+    private static final String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
+    private static final String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
 
     // topic that is not initially created during the test setup
-    private final static String NEW_STREAM = "new-stream";
+    private static final String NEW_STREAM = "new-stream";
 
     // existing topic that is pre-filled but cleared between tests
-    private final static String EXISTING_STREAM = "existing-stream";
+    private static final String EXISTING_STREAM = "existing-stream";
 
     // topic created with just one partition
-    private final String SINGLE_PARTITION_INPUT_STREAM = "single-partition-input-stream";
-    private final String SINGLE_PARTITION_OUTPUT_STREAM = "single-partition-output-stream";
+    private static final String SINGLE_PARTITION_INPUT_STREAM = "single-partition-input-stream";
+    private static final String SINGLE_PARTITION_OUTPUT_STREAM = "single-partition-output-stream";
 
-    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
-    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
+    private static final Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
+    private static final Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
 
     private static Properties producerConfig;
     private static Properties consumerConfig;
@@ -158,13 +158,13 @@ public class NamedTopologyIntegrationTest {
     private String changelog2;
     private String changelog3;
 
-    private final static List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
+    private static final List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
         asList(pair("A", 100L), pair("B", 200L), pair("A", 300L), pair("C", 400L), pair("C", -50L));
-    private final static List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
+    private static final List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
         asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
-    private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
+    private static final List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
         asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
-    private final static String TOPIC_PREFIX = "unique_topic_prefix";
+    private static final String TOPIC_PREFIX = "unique_topic_prefix";
 
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
@@ -759,9 +759,10 @@ public class NamedTopologyIntegrationTest {
     }
 
     /**
-     * @return  true iff all fields except {@code topologyName} match between the two StreamsMetadata objects
+     * @return  true iff all fields other than {@link StreamsMetadataImpl#topologyName()}
+     *          match between the two StreamsMetadata objects
      */
-    private static boolean verifyEquivalentMetadataForHost(final StreamsMetadata left, final StreamsMetadata right) {
+    private static boolean verifyEquivalentMetadataForHost(final StreamsMetadataImpl left, final StreamsMetadataImpl right) {
         return left.hostInfo().equals(right.hostInfo())
             && left.stateStoreNames().equals(right.stateStoreNames())
             && left.topicPartitions().equals(right.topicPartitions())
