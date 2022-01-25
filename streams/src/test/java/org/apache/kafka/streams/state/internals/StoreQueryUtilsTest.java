@@ -16,17 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -37,10 +34,12 @@ public class StoreQueryUtilsTest {
 
     @Test
     public void shouldReturnErrorOnNullContext() {
-        final Query query = Mockito.mock(KeyQuery.class);
-        final StateStore store = Mockito.mock(KeyValueStore.class);
+        @SuppressWarnings("unchecked") final KeyQuery<String, Integer> query =
+            Mockito.mock(KeyQuery.class);
+        @SuppressWarnings("unchecked") final KeyValueStore<String, Integer> store =
+            Mockito.mock(KeyValueStore.class);
         final Position position = Position.emptyPosition().withComponent("topic", 0, 1);
-        final QueryResult queryResult = StoreQueryUtils.handleBasicQueries(
+        final QueryResult<Integer> queryResult = StoreQueryUtils.handleBasicQueries(
             query,
             PositionBound.at(position),
             false,
@@ -59,11 +58,13 @@ public class StoreQueryUtilsTest {
 
     @Test
     public void shouldReturnErrorOnBoundViolation() {
-        final Query query = Mockito.mock(KeyQuery.class);
-        final StateStore store = Mockito.mock(KeyValueStore.class);
+        @SuppressWarnings("unchecked") final KeyQuery<String, Integer> query =
+            Mockito.mock(KeyQuery.class);
+        @SuppressWarnings("unchecked") final KeyValueStore<String, Integer> store =
+            Mockito.mock(KeyValueStore.class);
         final StateStoreContext context = Mockito.mock(StateStoreContext.class);
         Mockito.when(context.taskId()).thenReturn(new TaskId(0, 0));
-        final QueryResult queryResult = StoreQueryUtils.handleBasicQueries(
+        final QueryResult<Integer> queryResult = StoreQueryUtils.handleBasicQueries(
             query,
             PositionBound.at(Position.emptyPosition().withComponent("topic", 0, 1)),
             false,
