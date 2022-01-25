@@ -123,7 +123,7 @@ public class CachingKeyValueStore
         mergedPosition.merge(wrapped().getPosition());
         return mergedPosition;
     }
-    
+
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
