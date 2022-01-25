@@ -23,36 +23,36 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 public class TopicPartitionComparatorTest {
-  private final static TopicPartition tp1 = new TopicPartition("t1", 0);
-  private final static TopicPartition tp1_copy = new TopicPartition("t1", 0);
-  private final static TopicPartition tp2 = new TopicPartition("t1", 1);
-  private final static TopicPartition tp3 = new TopicPartition("t11", 1);
+    private final static TopicPartition TP1 = new TopicPartition("t1", 0);
+    private final static TopicPartition TP1_COPY = new TopicPartition("t1", 0);
+    private final static TopicPartition TP2 = new TopicPartition("t1", 1);
+    private final static TopicPartition TP3 = new TopicPartition("t11", 1);
 
-  private final ConsumerCoordinator.TopicPartitionComparator comparator = new ConsumerCoordinator.TopicPartitionComparator();
+    private final ConsumerCoordinator.TopicPartitionComparator comparator = new ConsumerCoordinator.TopicPartitionComparator();
 
-  @Test
-  public void shouldBeEqual() {
-    assertEquals(0, comparator.compare(tp1, tp1_copy));
-  }
+    @Test
+    public void shouldBeEqual() {
+        assertEquals(0, comparator.compare(TP1, TP1_COPY));
+    }
 
-  @Test
-  public void shouldBeSmallerSameTopic() {
-    assertTrue(comparator.compare(tp1, tp2) < 0);
-  }
+    @Test
+    public void shouldBeSmallerSameTopic() {
+        assertTrue(comparator.compare(TP1, TP2) < 0);
+    }
 
-  @Test
-  public void shouldBeLargerSameTopic() {
-    assertTrue(comparator.compare(tp2, tp1) > 0);
-  }
+    @Test
+    public void shouldBeLargerSameTopic() {
+        assertTrue(comparator.compare(TP2, TP1) > 0);
+    }
 
-  @Test
-  public void shouldBeSmallerSamePartitionNumber() {
-    assertTrue(comparator.compare(tp1, tp3) < 0);
-  }
+    @Test
+    public void shouldBeSmallerSamePartitionNumber() {
+        assertTrue(comparator.compare(TP1, TP3) < 0);
+    }
 
-  @Test
-  public void shouldBeLargerSamePartitionNumber() {
-    assertTrue(comparator.compare(tp3, tp1) > 0);
-  }
+    @Test
+    public void shouldBeLargerSamePartitionNumber() {
+        assertTrue(comparator.compare(TP3, TP1) > 0);
+    }
 
 }

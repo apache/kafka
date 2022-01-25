@@ -91,7 +91,7 @@ import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPER
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
-    private final static TopicPartitionComparator comparator = new TopicPartitionComparator();
+    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
@@ -375,7 +375,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Give the assignor a chance to update internal state based on the received assignment
         groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
 
-        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(comparator);
+        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
 
         // should at least encode the short version
@@ -387,7 +387,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(comparator);
+        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
         assignedPartitions.addAll(assignment.partitions());
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
@@ -400,12 +400,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
-        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(comparator);
+        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
         addedPartitions.addAll(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
         if (protocol == RebalanceProtocol.COOPERATIVE) {
-            SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(comparator);
+            SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
             revokedPartitions.addAll(ownedPartitions);
             revokedPartitions.removeAll(assignedPartitions);
 
@@ -688,7 +688,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void validateCooperativeAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
                                                final Map<String, Assignment> assignments) {
         Set<TopicPartition> totalRevokedPartitions = new HashSet<>();
-        SortedSet<TopicPartition> totalAddedPartitions = new TreeSet<>(comparator);
+        SortedSet<TopicPartition> totalAddedPartitions = new TreeSet<>(COMPARATOR);
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
@@ -725,7 +725,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // and in that case we should only change the assignment AFTER the revoke callback is triggered
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
-        final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(comparator);
+        final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
         if (generation == Generation.NO_GENERATION.generationId ||
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions.addAll(subscriptions.assignedPartitions());
@@ -782,7 +782,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Executing onLeavePrepare with generation {}", currentGeneration);
 
         // we should reset assignment and trigger the callback before leaving group
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(comparator);
+        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
@@ -1530,16 +1530,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
 
     final static class TopicPartitionComparator implements Comparator<TopicPartition> {
-      @Override
-      public int compare(TopicPartition topicPartition1, TopicPartition topicPartition2) {
-        String topic1 = topicPartition1.topic();
-        String topic2 = topicPartition2.topic();
+        @Override
+        public int compare(TopicPartition topicPartition1, TopicPartition topicPartition2) {
+            String topic1 = topicPartition1.topic();
+            String topic2 = topicPartition2.topic();
 
-        if (topic1.equals(topic2)) {
-          return topicPartition1.partition() - topicPartition2.partition();
-        } else {
-          return topicPartition1.topic().compareTo(topicPartition2.topic());
+            if (topic1.equals(topic2)) {
+                return topicPartition1.partition() - topicPartition2.partition();
+            } else {
+                return topicPartition1.topic().compareTo(topicPartition2.topic());
+            }
         }
-      }
     }
 }
