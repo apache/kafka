@@ -47,6 +47,9 @@ import org.apache.kafka.streams.processor.internals.assignment.ReferenceContaine
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
+import java.util.Queue;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -298,12 +301,15 @@ public class StreamThread extends Thread {
     private final TopologyMetadata topologyMetadata;
     private final java.util.function.Consumer<Long> cacheResizer;
 
-    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Runnable shutdownErrorHook;
 
     // These must be Atomic references as they are shared and used to signal between the assignor and the stream thread
     private final AtomicInteger assignmentErrorCode;
     private final AtomicLong nextProbingRebalanceMs;
+    // recoverable errors (don't require killing thread) that we need to invoke the exception
+    // handler for, eg MissingSourceTopicException with named topologies
+    private final Queue<StreamsException> nonFatalExceptionsToHandle;
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
@@ -324,7 +330,7 @@ public class StreamThread extends Thread {
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
-                                      final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+                                      final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -419,6 +425,7 @@ public class StreamThread extends Thread {
             logContext,
             referenceContainer.assignmentErrorCode,
             referenceContainer.nextScheduledRebalanceMs,
+            referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
             cache::resize
@@ -479,8 +486,9 @@ public class StreamThread extends Thread {
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
+                        final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
-                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
+                        final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
@@ -538,6 +546,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.nonFatalExceptionsToHandle = nonFatalExceptionsToHandle;
         this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -575,7 +584,7 @@ public class StreamThread extends Thread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            this.streamsUncaughtExceptionHandler.accept(e);
+            this.streamsUncaughtExceptionHandler.accept(e, false);
         } finally {
             completeShutdown(cleanRun);
         }
@@ -641,7 +650,7 @@ public class StreamThread extends Thread {
                           StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
                 }
                 failedStreamThreadSensor.record();
-                this.streamsUncaughtExceptionHandler.accept(new StreamsException(e));
+                this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
                 return false;
             } catch (final StreamsException e) {
                 throw e;
@@ -657,7 +666,7 @@ public class StreamThread extends Thread {
      *
      * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
      */
-    public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+    public void setStreamsUncaughtExceptionHandler(final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
@@ -968,6 +977,10 @@ public class StreamThread extends Thread {
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
+        }
+
+        while (!nonFatalExceptionsToHandle.isEmpty()) {
+            streamsUncaughtExceptionHandler.accept(nonFatalExceptionsToHandle.poll(), true);
         }
         return pollLatency;
     }

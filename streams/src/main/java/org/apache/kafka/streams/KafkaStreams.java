@@ -73,11 +73,13 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.function.BiConsumer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -182,7 +184,7 @@ public class KafkaStreams implements AutoCloseable {
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
-    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
 
     // container states
@@ -452,19 +454,22 @@ public class KafkaStreams implements AutoCloseable {
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
      *
-     * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
+     * @param userStreamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
      * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
-     * @throws NullPointerException if streamsUncaughtExceptionHandler is null.
+     * @throws NullPointerException if userStreamsUncaughtExceptionHandler is null.
      */
-    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final Consumer<Throwable> handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler userStreamsUncaughtExceptionHandler) {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
-                this.streamsUncaughtExceptionHandler = handler;
-                Objects.requireNonNull(streamsUncaughtExceptionHandler);
-                processStreamThread(thread -> thread.setStreamsUncaughtExceptionHandler(handler));
+                Objects.requireNonNull(userStreamsUncaughtExceptionHandler);
+                streamsUncaughtExceptionHandler =
+                    (exception, skipThreadReplacement) ->
+                        handleStreamsUncaughtException(exception, userStreamsUncaughtExceptionHandler, skipThreadReplacement);
+                processStreamThread(thread -> thread.setStreamsUncaughtExceptionHandler(streamsUncaughtExceptionHandler));
                 if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler(handler);
+                    globalStreamThread.setUncaughtExceptionHandler(
+                        exception -> handleStreamsUncaughtException(exception, userStreamsUncaughtExceptionHandler, false)
+                    );
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
@@ -473,7 +478,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable) {
+    private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable, final boolean skipThreadReplacement) {
         if (oldHandler) {
             threads.remove(Thread.currentThread());
             if (throwable instanceof RuntimeException) {
@@ -484,7 +489,7 @@ public class KafkaStreams implements AutoCloseable {
                 throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
             }
         } else {
-            handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT);
+            handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
         }
     }
 
@@ -523,7 +528,8 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void handleStreamsUncaughtException(final Throwable throwable,
-                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
+                                                final boolean skipThreadReplacement) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = getActionForThrowable(throwable, streamsUncaughtExceptionHandler);
         if (oldHandler) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
@@ -531,8 +537,12 @@ public class KafkaStreams implements AutoCloseable {
         }
         switch (action) {
             case REPLACE_THREAD:
-                log.error("Replacing thread in the streams uncaught exception handler", throwable);
-                replaceStreamThread(throwable);
+                if (!skipThreadReplacement) {
+                    log.error("Replacing thread in the streams uncaught exception handler", throwable);
+                    replaceStreamThread(throwable);
+                } else {
+                    log.debug("Skipping thread replacement for recoverable error");
+                }
                 break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
@@ -940,7 +950,7 @@ public class KafkaStreams implements AutoCloseable {
                 time,
                 globalThreadId,
                 delegatingStateRestoreListener,
-                streamsUncaughtExceptionHandler
+                exception -> defaultStreamsUncaughtExceptionHandler(exception, false)
             );
             globalThreadState = globalStreamThread.state();
         }

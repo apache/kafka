@@ -450,34 +450,33 @@ public class TopologyMetadata {
         return lookupBuilderForNamedTopology(topologyName).sourceTopicsForStore(storeName);
     }
 
-    private String getTopologyNameOrElseUnnamed(final String topologyName) {
+    public static String getTopologyNameOrElseUnnamed(final String topologyName) {
         return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
     }
 
     /**
      * @param topologiesToExclude the names of any topologies to exclude from the returned topic groups,
      *                            eg because they have missing source topics and can't be processed yet
+     *
+     * @return                    flattened map of all subtopologies (from all topologies) to topics info
      */
     public Map<Subtopology, TopicsInfo> subtopologyTopicsInfoMapExcluding(final Set<String> topologiesToExclude) {
-        final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
-        for (final InternalTopologyBuilder builder : builders.values()) {
-            if (!topologiesToExclude.contains(builder.topologyName())) {
-                topicGroups.putAll(builder.subtopologyToTopicsInfo());
+        final Map<Subtopology, TopicsInfo> subtopologyTopicsInfo = new HashMap<>();
+        applyToEachBuilder(b -> {
+            if (!topologiesToExclude.contains(b.topologyName())) {
+                subtopologyTopicsInfo.putAll(b.subtopologyToTopicsInfo());
             }
-        }
-        return topicGroups;
+        });
+        return subtopologyTopicsInfo;
     }
 
     /**
-     * @return    map from topologies with missing external source topics to the set of missing topic names,
-     *            keyed by topology name or
+     * @return    map from topology to its subtopologies and their topics info
      */
-    public Map<String, Collection<TopicsInfo>> topicGroupsByTopology() {
-        final Map<String, Collection<TopicsInfo>> topicGroups = new HashMap<>();
-        applyToEachBuilder(
-            b -> topicGroups.put(getTopologyNameOrElseUnnamed(b.topologyName()), b.subtopologyToTopicsInfo().values())
-        );
-        return topicGroups;
+    public Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap() {
+        final Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap = new HashMap<>();
+        applyToEachBuilder(b -> topologyToSubtopologyTopicsInfoMap.put(b.topologyName(), b.subtopologyToTopicsInfo()));
+        return  topologyToSubtopologyTopicsInfoMap;
     }
 
     public Map<String, List<String>> nodeToSourceTopics(final TaskId task) {
