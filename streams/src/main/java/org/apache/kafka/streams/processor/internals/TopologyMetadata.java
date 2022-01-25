@@ -476,7 +476,7 @@ public class TopologyMetadata {
     public Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap() {
         final Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap = new HashMap<>();
         applyToEachBuilder(b -> topologyToSubtopologyTopicsInfoMap.put(b.topologyName(), b.subtopologyToTopicsInfo()));
-        return  topologyToSubtopologyTopicsInfoMap
+        return  topologyToSubtopologyTopicsInfoMap;
     }
 
     public Map<String, List<String>> nodeToSourceTopics(final TaskId task) {
