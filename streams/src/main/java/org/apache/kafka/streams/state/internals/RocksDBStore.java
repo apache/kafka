@@ -338,7 +338,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             collectExecutionInfo,
             this,
             position,
-            context.taskId().partition()
+            context
         );
     }
 

@@ -325,7 +325,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             collectExecutionInfo,
             this,
             position,
-            context.taskId().partition()
+            context
         );
     }
 

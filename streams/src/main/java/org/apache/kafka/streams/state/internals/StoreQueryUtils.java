@@ -97,7 +97,7 @@ public final class StoreQueryUtils {
         final boolean collectExecutionInfo,
         final StateStore store,
         final Position position,
-        final int partition
+        final StateStoreContext context
     ) {
 
         final long start = collectExecutionInfo ? System.nanoTime() : -1L;
@@ -106,8 +106,12 @@ public final class StoreQueryUtils {
         final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
         if (handler == null) {
             result = QueryResult.forUnknownQueryType(query, store);
-        } else if (!isPermitted(position, positionBound, partition)) {
-            result = QueryResult.notUpToBound(position, positionBound, partition);
+        } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+            result = QueryResult.notUpToBound(
+                position,
+                positionBound,
+                context == null ? null : context.taskId().partition()
+            );
         } else {
             result = (QueryResult<R>) handler.apply(
                 query,

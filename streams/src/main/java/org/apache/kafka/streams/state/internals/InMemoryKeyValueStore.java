@@ -102,7 +102,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             collectExecutionInfo,
             this,
             position,
-            context.taskId().partition()
+            context
         );
     }
 

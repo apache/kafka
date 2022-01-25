@@ -133,7 +133,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
             collectExecutionInfo,
             this,
             position,
-            context.taskId().partition()
+            context
         );
     }
 
