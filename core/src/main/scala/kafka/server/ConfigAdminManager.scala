@@ -495,10 +495,7 @@ object ConfigAdminManager {
         case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry.name, configKeys))
             throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
-            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
-            .getOrElse("")
-            .split(",").toList
+          val oldValueList = getConfigPropertyAsList(configProps, configKeys, configPropName)
           val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
         }
@@ -514,5 +511,17 @@ object ConfigAdminManager {
         }
       }
     }
+  }
+
+  def getConfigPropertyAsList(
+    configProps: Properties,
+    configKeys: Map[String, ConfigKey],
+    configPropName: String
+  ): List[String] = {
+    Option(configProps.getProperty(configPropName))
+      .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
+      .filter(_.trim.nonEmpty)
+      .map(_.split(",").toList)
+      .getOrElse(List.empty)
   }
 }

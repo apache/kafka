@@ -18,11 +18,14 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Properties}
 
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.{Log4jController, TestUtils}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.config.ConfigDef.{ConfigKey, Importance, Width}
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
 import org.apache.kafka.common.config.LogLevelConfig.VALID_LOG_LEVELS
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
@@ -44,6 +47,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
 import org.slf4j.LoggerFactory
 
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ConfigAdminManagerTest {
@@ -462,5 +466,31 @@ class ConfigAdminManagerTest {
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "foo")))
     assertFalse(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz")))
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz", "foo")))
+  }
+
+  @Test
+  def testPrepareIncrementalConfigsWithAppend(): Unit = {
+    val props = new Properties()
+    props.setProperty("foo.bar", " ")
+    props.setProperty("quux", "")
+    props.setProperty("quuux", "first,second")
+    val configKeys = new util.HashMap[String, ConfigKey]
+    Seq("foo.bar", "baz", "quux", "quuux").foreach {
+      case key => configKeys.put(key, new ConfigKey(key, ConfigDef.Type.LIST, null, null,
+        Importance.HIGH, "", "", -1, Width.NONE, key, Collections.emptyList(), null, false))
+    }
+    ConfigAdminManager.prepareIncrementalConfigs(Seq(
+      new AlterConfigOp(new ConfigEntry("foo.bar", "first"), OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry("baz", "first"), OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry("quux", "first"), OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry("quuux", "third"), OpType.APPEND)),
+      props, configKeys.asScala)
+
+    val expectedProps = new Properties()
+    expectedProps.setProperty("foo.bar", "first")
+    expectedProps.setProperty("baz", "first")
+    expectedProps.setProperty("quux", "first")
+    expectedProps.setProperty("quuux", "first,second,third")
+    assertEquals(expectedProps, props)
   }
 }
