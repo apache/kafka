@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -83,6 +84,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -92,7 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class TopologyTestDriverTest {
 
-    TopologyTestDriverTest(final Map<String, String> overrides) {
+    protected TopologyTestDriverTest(final Map<String, String> overrides) {
         config = mkProperties(mkMap(
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
@@ -385,7 +387,6 @@ public abstract class TopologyTestDriverTest {
                 () -> new Processor<Object, Object, Void, Void>() {
                     KeyValueStore<Object, Object> store;
 
-                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
                         store = context.getStateStore(sourceTopicName + "-globalStore");
@@ -440,7 +441,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldThrowForUnknownTopic() {
-        testDriver = new TopologyTestDriver(new Topology());
+        testDriver = new TopologyTestDriver(new Topology(), Instant.now());
         assertThrows(
             IllegalArgumentException.class,
             () -> testDriver.pipeRecord(
@@ -454,7 +455,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldThrowForMissingTime() {
-        testDriver = new TopologyTestDriver(new Topology());
+        testDriver = new TopologyTestDriver(new Topology(), (Time) null);
         assertThrows(
             IllegalStateException.class,
             () -> testDriver.pipeRecord(
@@ -565,7 +566,7 @@ public abstract class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
-    private void pipeRecord(final String topic, final TestRecord<byte[], byte[]> record) {
+    protected void pipeRecord(final String topic, final TestRecord<byte[], byte[]> record) {
         testDriver.pipeRecord(topic, record, new ByteArraySerializer(), new ByteArraySerializer(), null);
     }
 
@@ -1208,11 +1209,19 @@ public abstract class TopologyTestDriverTest {
         assertThat(testDriver.getAllStateStores().keySet(), equalTo(expectedStoreNames));
     }
 
-    private void setup() {
+    protected void setup() {
         setup(Stores.inMemoryKeyValueStore("aggStore"));
     }
 
-    private void setup(final KeyValueBytesStoreSupplier storeSupplier) {
+    protected void setup(final Time wallClockTime) {
+        setup(Stores.inMemoryKeyValueStore("aggStore"), wallClockTime);
+    }
+
+    protected void setup(final KeyValueBytesStoreSupplier storeSupplier) {
+        setup(storeSupplier, new TopologyTestDriver.MockTime(System.currentTimeMillis()));
+    }
+
+    protected void setup(final KeyValueBytesStoreSupplier storeSupplier, final Time wallClockTime) {
         final Topology topology = new Topology();
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
@@ -1225,18 +1234,18 @@ public abstract class TopologyTestDriverTest {
 
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
-        testDriver = new TopologyTestDriver(topology, config);
+        testDriver = new TopologyTestDriver(topology, config, wallClockTime);
 
         store = testDriver.getKeyValueStore("aggStore");
         store.put("a", 21L);
     }
 
-    private void pipeInput(final String topic, final String key, final Long value, final Long time) {
+    protected void pipeInput(final String topic, final String key, final Long value, final Long time) {
         testDriver.pipeRecord(topic, new TestRecord<>(key, value, null, time),
                 new StringSerializer(), new LongSerializer(), null);
     }
 
-    private void compareKeyValue(final TestRecord<String, Long> record, final String key, final Long value) {
+    protected void compareKeyValue(final TestRecord<String, Long> record, final String key, final Long value) {
         assertThat(record.getKey(), equalTo(key));
         assertThat(record.getValue(), equalTo(value));
     }
@@ -1293,10 +1302,21 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldPunctuateIfWallClockTimeAdvances() {
-        setup();
-        testDriver.advanceWallClockTime(Duration.ofMillis(60000));
+        setup((Time) null);
+        assertThat(System.currentTimeMillis() - testDriver.getWallClockTime().hiResClockMs(), lessThanOrEqualTo(100L));
+        testDriver.advanceWallClockTime(60000);
         compareKeyValue(testDriver.readRecord("result-topic", stringDeserializer, longDeserializer), "a", 21L);
         assertTrue(testDriver.isEmpty("result-topic"));
+    }
+
+    @Test
+    public void shouldPunctuateIfExternalWallClockTimeAdvanced() {
+        setup(new TopologyTestDriver.MockTime(System.currentTimeMillis()));
+        testDriver.getWallClockTime().sleep(60000);
+        testDriver.advancedWallClockTime();
+        compareKeyValue(testDriver.readRecord("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        assertTrue(testDriver.isEmpty("result-topic"));
+        assertThat(testDriver.metrics().size(), equalTo(60));
     }
 
     private static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long, String, Long> {
