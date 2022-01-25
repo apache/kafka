@@ -1539,7 +1539,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (topic1.equals(topic2)) {
                 return topicPartition1.partition() - topicPartition2.partition();
             } else {
-                return topicPartition1.topic().compareTo(topicPartition2.topic());
+                return topic1.compareTo(topic2);
             }
         }
     }
