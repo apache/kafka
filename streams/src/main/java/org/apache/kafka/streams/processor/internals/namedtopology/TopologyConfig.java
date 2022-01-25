@@ -167,12 +167,9 @@ public class TopologyConfig extends AbstractConfig {
             deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
         }
 
-        if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {
-            storeType = getString(DEFAULT_DSL_STORE_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, storeType);
-        } else {
-            storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
-        }
+        // Override the default store type config no matter it's a named topology or not since it should apply to all topologies
+        storeType = getString(DEFAULT_DSL_STORE_CONFIG);
+        log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, storeType);
     }
 
     public Materialized.StoreType parseStoreType() {

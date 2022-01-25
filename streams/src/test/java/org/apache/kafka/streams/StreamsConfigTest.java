@@ -48,6 +48,7 @@ import java.util.Properties;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
@@ -1007,7 +1008,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
+    public void shouldSpecifyOptimizationWhenExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
@@ -1018,6 +1019,28 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
+        final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
+        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
+    }
+
+    @Test
+    public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
+        final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
+        props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
+        assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
+        props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

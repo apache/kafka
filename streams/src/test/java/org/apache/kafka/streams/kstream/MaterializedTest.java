@@ -65,6 +65,14 @@ public class MaterializedTest {
     }
 
     @Test
+    public void shouldThrowNullPointerIfStoreTypeIsNull() {
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((Materialized.StoreType) null));
+
+        assertEquals(e.getMessage(), "store type can't be null");
+    }
+
+    @Test
     public void shouldThrowNullPointerIfSessionBytesStoreSupplierIsNull() {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((SessionBytesStoreSupplier) null));

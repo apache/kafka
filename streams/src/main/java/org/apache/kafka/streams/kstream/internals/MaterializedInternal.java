@@ -45,12 +45,14 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         }
 
-        // downcast to InternalStreamsBuilder to get the topologyConfigs
-        if (nameProvider instanceof InternalStreamsBuilder) {
-            TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
+        // if store type is not configured during creating Materialized, then try to get the topologyConfigs from nameProvider
+        if (this.storeType == null && nameProvider instanceof InternalStreamsBuilder) {
+            final TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
             if (topologyConfig != null) {
                 this.storeType = topologyConfig.parseStoreType();
             }
+        } else {
+            this.storeType = StoreType.ROCKS_DB;
         }
     }
 

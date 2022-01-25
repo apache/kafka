@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -513,7 +512,7 @@ public final class Stores {
     }
 
     /**
-     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * Create a persistent {@link KeyValueBytesStoreSupplier} by the provided {@code storeType}..
      *
      * @param storeType             {@link org.apache.kafka.streams.kstream.Materialized.StoreType} of the store
      * @param storeName             name of the store (cannot be {@code null})

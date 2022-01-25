@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
-import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -223,7 +222,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = getSupplier(materialized);
+        final SessionBytesStoreSupplier supplier = getSupplier(materialized);
 
         final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
             supplier,

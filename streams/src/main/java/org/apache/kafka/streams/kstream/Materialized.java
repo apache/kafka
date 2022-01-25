@@ -64,7 +64,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
-    protected StoreType storeType = StoreType.ROCKS_DB;
+    protected StoreType storeType;
 
     // the built-in state store types
     public enum StoreType {
@@ -110,6 +110,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given storeName
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> as(final StoreType storeType) {
+        Objects.requireNonNull(storeType, "store type can't be null");
         return new Materialized<>(storeType);
     }
 
@@ -292,7 +293,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return itself
      */
     public Materialized<K, V, S> withStoreType(final StoreType storeType) throws IllegalArgumentException {
-        Objects.requireNonNull(storeType);
+        Objects.requireNonNull(storeType, "store type can't be null");
         this.storeType = storeType;
         return this;
     }

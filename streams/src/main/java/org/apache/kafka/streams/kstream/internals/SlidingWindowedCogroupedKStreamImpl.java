@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -98,7 +97,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     }
 
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = getSupplier(materialized);
+        final WindowBytesStoreSupplier supplier = getSupplier(materialized);
 
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
             .timestampedWindowStoreBuilder(
