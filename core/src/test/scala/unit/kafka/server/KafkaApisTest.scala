@@ -34,7 +34,7 @@ import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.{Log4jController, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
@@ -43,9 +43,20 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => LAlterableConfigCollection}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => LAlterableConfig}
+import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResourceCollection => IAlterConfigsResourceCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfig => IAlterableConfig}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfigCollection => IAlterableConfigCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
@@ -84,7 +95,6 @@ import scala.jdk.CollectionConverters._
 import java.util.Arrays
 
 class KafkaApisTest {
-
   private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
   private val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
@@ -466,12 +476,6 @@ class KafkaApisTest {
   }
 
   @Test
-  def testAlterConfigsWithForwarding(): Unit = {
-    val requestBuilder = new AlterConfigsRequest.Builder(Collections.emptyMap(), false)
-    testForwardableApi(ApiKeys.ALTER_CONFIGS, requestBuilder)
-  }
-
-  @Test
   def testElectLeadersForwarding(): Unit = {
     val requestBuilder = new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 30000)
     testKraftForwarding(ApiKeys.ELECT_LEADERS, requestBuilder)
@@ -641,13 +645,6 @@ class KafkaApisTest {
     ))
 
     verify(authorizer, adminManager)
-  }
-
-  @Test
-  def testIncrementalAlterConfigsWithForwarding(): Unit = {
-    val requestBuilder = new IncrementalAlterConfigsRequest.Builder(
-      new IncrementalAlterConfigsRequestData())
-    testForwardableApi(ApiKeys.INCREMENTAL_ALTER_CONFIGS, requestBuilder)
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
@@ -4154,9 +4151,38 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
+  def testEmptyLegacyAlterConfigsRequestWithKRaft(): Unit = {
+    val request = buildRequest(new AlterConfigsRequest(new AlterConfigsRequestData(), 1.toShort));
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+    createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    assertEquals(new AlterConfigsResponseData(),
+      capturedResponse.getValue.asInstanceOf[AlterConfigsResponse].data())
+  }
+
+  @Test
+  def testInvalidLegacyAlterConfigsRequestWithKRaft(): Unit = {
+    val request = buildRequest(new AlterConfigsRequest(new AlterConfigsRequestData().
+      setValidateOnly(true).
+      setResources(new LAlterConfigsResourceCollection(Arrays.asList(
+        new LAlterConfigsResource().
+          setResourceName(brokerId.toString).
+          setResourceType(BROKER.id()).
+          setConfigs(new LAlterableConfigCollection(Arrays.asList(new LAlterableConfig().
+            setName("foo").
+            setValue(null)).iterator()))).iterator())), 1.toShort))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+    createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    assertEquals(new AlterConfigsResponseData().setResponses(Arrays.asList(
+      new LAlterConfigsResourceResponse().
+        setErrorCode(Errors.INVALID_REQUEST.code()).
+        setErrorMessage("Null value not supported for : foo").
+        setResourceName(brokerId.toString).
+        setResourceType(BROKER.id()))),
+      capturedResponse.getValue.asInstanceOf[AlterConfigsResponse].data())
   }
 
   @Test
@@ -4166,9 +4192,38 @@ class KafkaApisTest {
   }
 
   @Test
-  def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
+  def testEmptyIncrementalAlterConfigsRequestWithKRaft(): Unit = {
+    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort));
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+    createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    assertEquals(new IncrementalAlterConfigsResponseData(),
+      capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse].data())
+  }
+
+  @Test
+  def testLog4jIncrementalAlterConfigsRequestWithKRaft(): Unit = {
+    val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData().
+      setValidateOnly(true).
+      setResources(new IAlterConfigsResourceCollection(Arrays.asList(new IAlterConfigsResource().
+        setResourceName(brokerId.toString).
+        setResourceType(BROKER_LOGGER.id()).
+        setConfigs(new IAlterableConfigCollection(Arrays.asList(new IAlterableConfig().
+          setName(Log4jController.ROOT_LOGGER).
+          setValue("TRACE")).iterator()))).iterator())),
+        1.toShort))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+    createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    assertEquals(new IncrementalAlterConfigsResponseData().setResponses(Arrays.asList(
+      new IAlterConfigsResourceResponse().
+        setErrorCode(0.toShort).
+        setErrorMessage(null).
+        setResourceName(brokerId.toString).
+        setResourceType(BROKER_LOGGER.id()))),
+      capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse].data())
   }
 
   @Test

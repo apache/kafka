@@ -59,6 +59,8 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.sourceBroker)
+      .andReturn(new BrokerEndPoint(0, "localhost", 9092)).anyTimes()
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
         .andReturn(Set(tp))
     EasyMock.expect(fetcher.fetchState(tp))
@@ -120,6 +122,8 @@ class AbstractFetcherManagerTest {
       initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.sourceBroker)
+      .andReturn(new BrokerEndPoint(0, "localhost", 9092)).anyTimes()
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
         .andReturn(Set(tp))
     EasyMock.expect(fetcher.isThreadFailed).andReturn(true)
@@ -172,6 +176,8 @@ class AbstractFetcherManagerTest {
     // Simulate calls to different fetchers due to different leaders
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.sourceBroker)
+      .andReturn(new BrokerEndPoint(0, "localhost", 9092)).anyTimes()
 
     EasyMock.expect(fetcher.addPartitions(Map(tp1 -> initialFetchState1)))
       .andReturn(Set(tp1))

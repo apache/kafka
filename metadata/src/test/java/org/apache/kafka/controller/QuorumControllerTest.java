@@ -35,6 +35,8 @@ import java.util.stream.StreamSupport;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -69,6 +71,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
+import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -86,6 +89,8 @@ import org.junit.jupiter.api.Timeout;
 
 import static java.util.concurrent.TimeUnit.HOURS;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
@@ -870,4 +875,38 @@ public class QuorumControllerTest {
         }
     }
 
+    @Test
+    public void testConfigResourceExistenceChecker() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                QuorumController active = controlEnv.activeController();
+                registerBrokers(active, 5);
+                active.createTopics(new CreateTopicsRequestData().
+                    setTopics(new CreatableTopicCollection(Collections.singleton(
+                        new CreatableTopic().setName("foo").
+                            setReplicationFactor((short) 3).
+                            setNumPartitions(1)).iterator()))).get();
+                ConfigResourceExistenceChecker checker =
+                    active.new ConfigResourceExistenceChecker();
+                // A ConfigResource with type=BROKER and name=(empty string) represents
+                // the default broker resource. It is used to set cluster configs.
+                checker.accept(new ConfigResource(BROKER, ""));
+
+                // Broker 3 exists, so we can set a configuration for it.
+                checker.accept(new ConfigResource(BROKER, "3"));
+
+                // Broker 10 does not exist, so this should throw an exception.
+                assertThrows(BrokerIdNotRegisteredException.class,
+                    () -> checker.accept(new ConfigResource(BROKER, "10")));
+
+                // Topic foo exists, so we can set a configuration for it.
+                checker.accept(new ConfigResource(TOPIC, "foo"));
+
+                // Topic bar does not exist, so this should throw an exception.
+                assertThrows(UnknownTopicOrPartitionException.class,
+                    () -> checker.accept(new ConfigResource(TOPIC, "bar")));
+            }
+        }
+    }
 }

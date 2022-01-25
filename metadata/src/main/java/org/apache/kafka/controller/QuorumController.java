@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -267,11 +268,16 @@ public final class QuorumController implements Controller {
                 case BROKER_LOGGER:
                     break;
                 case BROKER:
+                    // Cluster configs are always allowed.
+                    if (configResource.name().isEmpty()) break;
+
+                    // Otherwise, check that the broker ID is valid.
                     int brokerId;
                     try {
                         brokerId = Integer.parseInt(configResource.name());
                     } catch (NumberFormatException e) {
-                        brokerId = -1;
+                        throw new InvalidRequestException("Invalid broker name " +
+                            configResource.name());
                     }
                     if (!clusterControl.brokerRegistrations().containsKey(brokerId)) {
                         throw new BrokerIdNotRegisteredException("No broker with id " +
