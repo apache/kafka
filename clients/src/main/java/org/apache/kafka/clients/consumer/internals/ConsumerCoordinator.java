@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -1529,7 +1530,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
 
 
-    final static class TopicPartitionComparator implements Comparator<TopicPartition> {
+    final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
         @Override
         public int compare(TopicPartition topicPartition1, TopicPartition topicPartition2) {
             String topic1 = topicPartition1.topic();
