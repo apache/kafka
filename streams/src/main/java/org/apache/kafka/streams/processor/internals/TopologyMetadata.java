@@ -352,7 +352,12 @@ public class TopologyMetadata {
         return null;
     }
 
-    public Collection<String> sourceTopicCollection() {
+    public Collection<String> fullSourceTopicNamesForTopology(final String topologyName) {
+        Objects.requireNonNull(topologyName, "topology name must not be null");
+        return lookupBuilderForNamedTopology(topologyName).fullSourceTopicNames();
+    }
+
+    public Collection<String> allFullSourceTopicNames() {
         final List<String> sourceTopics = new ArrayList<>();
         applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;

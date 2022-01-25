@@ -915,7 +915,9 @@ public class KafkaStreams implements AutoCloseable {
 
         streamsMetadataState = new StreamsMetadataState(
             this.topologyMetadata,
-            parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
+            parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
+            logContext
+        );
 
         oldHandler = false;
         streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;

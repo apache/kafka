@@ -171,7 +171,11 @@ public class StreamThreadTest {
     public void setUp() {
         Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
         internalTopologyBuilder.setApplicationId(APPLICATION_ID);
-        streamsMetadataState = new StreamsMetadataState(new TopologyMetadata(internalTopologyBuilder, config), StreamsMetadataState.UNKNOWN_HOST);
+        streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
     }
 
     private final String topic1 = "topic1";

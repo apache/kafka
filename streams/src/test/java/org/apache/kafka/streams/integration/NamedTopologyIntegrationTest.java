@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -47,6 +48,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 
@@ -59,6 +61,7 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -338,8 +341,11 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.createTopic(SINGLE_PARTITION_OUTPUT_STREAM, 1, 1);
             produceToInputTopics(SINGLE_PARTITION_INPUT_STREAM, STANDARD_INPUT_DATA);
 
-            topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-            topology2Builder.stream(SINGLE_PARTITION_INPUT_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
+            final String topology1Store = "store-" + TOPOLOGY_1;
+            final String topology2Store = "store-" + TOPOLOGY_2;
+
+            topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
+            topology2Builder.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
             streams.addNamedTopology(topology1Builder.build());
             streams.addNamedTopology(topology2Builder.build());
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
@@ -350,19 +356,18 @@ public class NamedTopologyIntegrationTest {
             final ReadOnlyKeyValueStore<String, Long> store =
                 streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
                     TOPOLOGY_1,
-                    "store",
+                    topology1Store,
                     QueryableStoreTypes.keyValueStore())
                 );
             assertThat(store.get("A"), equalTo(2L));
 
-            final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", TOPOLOGY_1);
-            final Collection<StreamsMetadata> streamsMetadata2 = streams.streamsMetadataForStore("store", TOPOLOGY_2);
+            final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore(topology1Store, TOPOLOGY_1);
+            final Collection<StreamsMetadata> streamsMetadata2 = streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2);
             assertThat(streamsMetadata.size(), equalTo(1));
             assertThat(streamsMetadata2.size(), equalTo(1));
-            assertThat(metadataIsEqual(streamsMetadata.iterator().next(), streamsMetadata2.iterator().next()), is(true));
 
-            final KeyQueryMetadata keyMetadata = streams.queryMetadataForKey("store", "A", new StringSerializer(), TOPOLOGY_1);
-            final KeyQueryMetadata keyMetadata2 = streams.queryMetadataForKey("store", "A", new StringSerializer(), TOPOLOGY_2);
+            final KeyQueryMetadata keyMetadata = streams.queryMetadataForKey(topology1Store, "A", new StringSerializer(), TOPOLOGY_1);
+            final KeyQueryMetadata keyMetadata2 = streams.queryMetadataForKey(topology2Store, "A", new StringSerializer(), TOPOLOGY_2);
 
             assertThat(keyMetadata, not(NOT_AVAILABLE));
             assertThat(keyMetadata, equalTo(keyMetadata2));
@@ -370,44 +375,38 @@ public class NamedTopologyIntegrationTest {
             final Map<String, Map<Integer, LagInfo>> partitionLags1 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_1);
             final Map<String, Map<Integer, LagInfo>> partitionLags2 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_2);
 
-            assertThat(partitionLags1.keySet(), equalTo(singleton("store")));
-            assertThat(partitionLags1.get("store").keySet(), equalTo(mkSet(0, 1)));
-            assertThat(partitionLags2.keySet(), equalTo(singleton("store")));
-            assertThat(partitionLags2.get("store").keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
+            assertThat(partitionLags1.keySet(), equalTo(singleton(topology1Store)));
+            assertThat(partitionLags1.get(topology1Store).keySet(), equalTo(mkSet(0, 1)));
+            assertThat(partitionLags2.keySet(), equalTo(singleton(topology2Store)));
+            assertThat(partitionLags2.get(topology2Store).keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
 
             // Start up a second node with both topologies
             setupSecondKafkaStreams();
 
-            topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-            topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
+            topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
+            topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
 
             streams2.start(asList(topology1Builder2.build(), topology2Builder2.build()));
             waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
 
-            final Collection<StreamsMetadata> streamsMetadataForStoreTopology1 = streams.streamsMetadataForStore("store", TOPOLOGY_1);
-            final Collection<StreamsMetadata> streamsMetadataForStoreTopology2 = streams.streamsMetadataForStore("store", TOPOLOGY_2);
-            final Collection<StreamsMetadata> streams2MetadataForStoreTopology1 = streams2.streamsMetadataForStore("store", TOPOLOGY_1);
-            final Collection<StreamsMetadata> streams2MetadataForStoreTopology2 = streams2.streamsMetadataForStore("store", TOPOLOGY_2);
+            verifyMetadataForTopology(
+                TOPOLOGY_1,
+                streams.streamsMetadataForStore(topology1Store, TOPOLOGY_1),
+                streams2.streamsMetadataForStore(topology1Store, TOPOLOGY_1));
+            verifyMetadataForTopology(
+                TOPOLOGY_2,
+                streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2),
+                streams2.streamsMetadataForStore(topology2Store, TOPOLOGY_2));
 
-            // we don't know which host was actually assigned the task  containing the state
-            // tore in topology-2, only that there should be exactly one such host
-            assertThat(streamsMetadataForStoreTopology2.size(), equalTo(1));
-            assertThat(streams2MetadataForStoreTopology2.size(), equalTo(1));
+            verifyMetadataForTopology(
+                TOPOLOGY_1,
+                streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
+                streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1));
+            verifyMetadataForTopology(
+                TOPOLOGY_2,
+                streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2),
+                streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2));
 
-            assertThat(streamsMetadataForStoreTopology1.size(), equalTo(2));
-            assertThat(streams2MetadataForStoreTopology1.size(), equalTo(2));
-
-            final Collection<StreamsMetadata> streamsMetadataTopology1 = streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1);
-            final Collection<StreamsMetadata> streamsMetadataTopology2 = streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2);
-            final Collection<StreamsMetadata> streams2MetadataTopology1 = streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1);
-            final Collection<StreamsMetadata> streams2MetadataTopology2 = streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2);
-
-            // similarly, since topology-2 also has only one subtopology, we should find exactly one host with it
-            assertThat(streamsMetadataTopology2.size(), equalTo(1));
-            assertThat(streams2MetadataTopology2.size(), equalTo(1));
-
-            assertThat(streamsMetadataTopology1.size(), equalTo(2));
-            assertThat(streams2MetadataTopology1.size(), equalTo(2));
         } finally {
             CLUSTER.deleteTopics(SINGLE_PARTITION_INPUT_STREAM, SINGLE_PARTITION_OUTPUT_STREAM);
         }
@@ -711,16 +710,63 @@ public class NamedTopologyIntegrationTest {
     }
 
     /**
-     * @return  true iff the metadata contents of each StreamsMetadata object are equal, ie all fields except
-     *          for the topologyName
+     * Validates that each metadata object has only partitions & state stores for its specific topology name and
+     * asserts that {@code left} and {@code right} differ only by {@link StreamsMetadata#hostInfo()}
      */
-    private static boolean metadataIsEqual(final StreamsMetadata left, final StreamsMetadata right) {
+    private void verifyMetadataForTopology(final String topologyName,
+                                           final Collection<StreamsMetadata> left,
+                                           final Collection<StreamsMetadata> right) {
+        assertThat(left.size(), equalTo(right.size()));
+        final Iterator<StreamsMetadata> leftIter = left.iterator();
+        final Iterator<StreamsMetadata> rightIter = right.iterator();
+
+        while (leftIter.hasNext()) {
+            final StreamsMetadataImpl leftMetadata = (StreamsMetadataImpl) leftIter.next();
+            final StreamsMetadataImpl rightMetadata = (StreamsMetadataImpl) rightIter.next();
+
+            verifyPartitionsAndStoresForTopology(topologyName, leftMetadata);
+            verifyPartitionsAndStoresForTopology(topologyName, rightMetadata);
+
+            assertThat(verifyEquivalentMetadataForHost(leftMetadata, rightMetadata), is(true));
+        }
+    }
+
+    private void verifyPartitionsAndStoresForTopology(final String topologyName, final StreamsMetadataImpl metadata) {
+        assertThat(metadata.topologyName(), equalTo(topologyName));
+        assertThat(streams.getTopologyByName(topologyName).isPresent(), is(true));
+        assertThat(streams2.getTopologyByName(topologyName).isPresent(), is(true));
+        final List<String> streams1SourceTopicsForTopology = streams.getTopologyByName(topologyName).get().sourceTopics();
+        final List<String> streams2SourceTopicsForTopology = streams2.getTopologyByName(topologyName).get().sourceTopics();
+
+        // first check that all partitions in the metadata correspond to the given named topology
+        assertThat(
+            streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                            .map(TopicPartition::topic)
+                                                            .collect(Collectors.toList())),
+            is(true));
+        assertThat(
+            streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                            .map(TopicPartition::topic)
+                                                            .collect(Collectors.toList())),
+            is(true));
+
+        // then verify that only this topology's one store appears
+        assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+
+        // finally make sure the standby fields are empty since they are not enabled for this test
+        assertThat(metadata.standbyTopicPartitions().isEmpty(), is(true));
+        assertThat(metadata.standbyStateStoreNames().isEmpty(), is(true));
+    }
+
+    /**
+     * @return  true iff all fields except {@code topologyName} match between the two StreamsMetadata objects
+     */
+    private static boolean verifyEquivalentMetadataForHost(final StreamsMetadata left, final StreamsMetadata right) {
         return left.hostInfo().equals(right.hostInfo())
             && left.stateStoreNames().equals(right.stateStoreNames())
             && left.topicPartitions().equals(right.topicPartitions())
             && left.standbyStateStoreNames().equals(right.standbyStateStoreNames())
             && left.standbyTopicPartitions().equals(right.standbyTopicPartitions());
-
     }
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
