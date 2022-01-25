@@ -44,7 +44,17 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-    
+
+
+    private final static MetricName GEN_SNAPSHOT_LATENCY_MS = getMetricName(
+            "KafkaController", "GenSnapshotLatencyMs");
+    private final static MetricName LOAD_SNAPSHOT_LATENCY_MS = getMetricName(
+            "KafkaController", "LoadSnapshotLatencyMs");
+    private final static MetricName SNAPSHOT_LAG = getMetricName(
+            "KafkaController", "SnapshotLag");
+    private final static MetricName SNAPSHOT_SIZE_BYTES = getMetricName(
+            "KafkaController", "SnapshotSizeBytes");
+
     private final MetricsRegistry registry;
     private volatile boolean active;
     private volatile int fencedBrokerCount;
@@ -53,6 +63,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
+    private volatile long snapshotLagSize;
+    private volatile long snapshotSizeBytesSize;
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> fencedBrokerCountGauge;
     private final Gauge<Integer> activeBrokerCountGauge;
@@ -62,6 +74,8 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Integer> preferredReplicaImbalanceCountGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
+    private final Histogram genSnapshotLatencyTime;
+    private final Histogram loadSnapshotLatencyTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.registry = Objects.requireNonNull(registry);
@@ -114,6 +128,23 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return preferredReplicaImbalanceCount;
+            }
+        });
+
+        this.genSnapshotLatencyTime = registry.newHistogram(GEN_SNAPSHOT_LATENCY_MS, true);
+        this.loadSnapshotLatencyTime = registry.newHistogram(LOAD_SNAPSHOT_LATENCY_MS, true);
+
+        registry.newGauge(SNAPSHOT_LAG, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return snapshotLagSize;
+            }
+        });
+
+        registry.newGauge(SNAPSHOT_SIZE_BYTES, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return snapshotSizeBytesSize;
             }
         });
     }
@@ -198,6 +229,26 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
+    public void updateGenSnapshotLatencyMs(long genSnapshotLatencyMs) {
+        this.genSnapshotLatencyTime.update(genSnapshotLatencyMs);
+    }
+
+    @Override
+    public void updateLoadSnapshotLatencyMs(long loadSnapshotLatencyMs) {
+        this.loadSnapshotLatencyTime.update(loadSnapshotLatencyMs);
+    }
+
+    @Override
+    public void setSnapshotLagSize(long snapshotLagSize) {
+        this.snapshotLagSize = snapshotLagSize;
+    }
+
+    @Override
+    public void setSnapshotSizeBytesSize(long snapshotSizeBytesSize) {
+        this.snapshotSizeBytesSize = snapshotSizeBytesSize;
+    }
+
+    @Override
     public void close() {
         Arrays.asList(
             ACTIVE_CONTROLLER_COUNT,
@@ -206,7 +257,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
-            PREFERRED_REPLICA_IMBALANCE_COUNT).forEach(this.registry::removeMetric);
+            PREFERRED_REPLICA_IMBALANCE_COUNT,
+            GEN_SNAPSHOT_LATENCY_MS,
+            LOAD_SNAPSHOT_LATENCY_MS,
+            SNAPSHOT_LAG,
+            SNAPSHOT_SIZE_BYTES).forEach(this.registry::removeMetric);
     }
 
     private static MetricName getMetricName(String type, String name) {
