@@ -171,7 +171,11 @@ public class StreamThreadTest {
     public void setUp() {
         Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
         internalTopologyBuilder.setApplicationId(APPLICATION_ID);
-        streamsMetadataState = new StreamsMetadataState(new TopologyMetadata(internalTopologyBuilder, config), StreamsMetadataState.UNKNOWN_HOST);
+        streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
     }
 
     private final String topic1 = "topic1";
@@ -1178,7 +1182,7 @@ public class StreamThreadTest {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
         final InternalTopologyBuilder internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
-        expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
+        expect(internalTopologyBuilder.fullSourceTopicNames()).andReturn(Collections.singletonList(topic1)).times(2);
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 

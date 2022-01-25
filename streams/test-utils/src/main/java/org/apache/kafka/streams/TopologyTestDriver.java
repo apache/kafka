@@ -641,7 +641,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
+        for (final String sourceTopicName : internalTopologyBuilder.fullSourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                                                 " cannot contain regex pattern for input record topic: " + inputRecordTopic +
@@ -651,7 +651,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
-        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
+        if (!internalTopologyBuilder.fullSourceTopicNames().isEmpty()) {
             validateSourceTopicNameRegexPattern(topicName);
         }
 
