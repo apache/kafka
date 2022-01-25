@@ -80,7 +80,7 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
     private final IncrementalAlterConfigsRequestData data;
     private final short version;
 
-    private IncrementalAlterConfigsRequest(IncrementalAlterConfigsRequestData data, short version) {
+    public IncrementalAlterConfigsRequest(IncrementalAlterConfigsRequestData data, short version) {
         super(ApiKeys.INCREMENTAL_ALTER_CONFIGS, version);
         this.data = data;
         this.version = version;

@@ -1108,7 +1108,7 @@ public class InternalTopologyBuilder {
      *
      * @return groups of topic names
      */
-    public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
+    public synchronized Map<Subtopology, TopicsInfo> subtopologyToTopicsInfo() {
         final Map<Subtopology, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null) {

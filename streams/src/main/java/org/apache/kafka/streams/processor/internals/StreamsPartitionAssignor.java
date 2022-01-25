@@ -392,7 +392,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // construct the assignment of tasks to clients
 
             final Map<Subtopology, TopicsInfo> topicGroups =
-                taskManager.topologyMetadata().topicGroups(missingUserInputTopicsPerTopology.keySet());
+                taskManager.topologyMetadata().subtopologyTopicsInfoMapExcluding(missingUserInputTopicsPerTopology.keySet());
 
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
