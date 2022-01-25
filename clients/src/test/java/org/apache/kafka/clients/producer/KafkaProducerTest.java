@@ -1038,7 +1038,7 @@ public class KafkaProducerTest {
 
         when(metadata.fetch()).thenReturn(onePartitionCluster);
 
-        String largeString = IntStream.range(0, 1000).mapToObj(i -> "**********").collect(Collectors.joining());
+        String largeString = IntStream.range(0, 1000).mapToObj(i -> "*").collect(Collectors.joining());
         ProducerRecord<String, String> largeRecord = new ProducerRecord<>(topic, "large string", largeString);
 
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1060,7 +1060,7 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
 
         // Create a record for a not-yet-created topic
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
         MockTime mockTime = new MockTime();
