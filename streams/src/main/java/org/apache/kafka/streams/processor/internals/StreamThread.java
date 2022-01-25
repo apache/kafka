@@ -643,8 +643,11 @@ public class StreamThread extends Thread {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e));
                 return false;
-            } catch (final StreamsException e) {
-                throw e;
+            } catch (final StreamsException streamsException) {
+                if (streamsException.taskId().isPresent() && taskManager.topologyMetadata().hasNamedTopologies()) {
+                    taskManager.moveActiveTasksToTailFor(streamsException.taskId().get().topologyName());
+                }
+                throw streamsException;
             } catch (final Exception e) {
                 throw new StreamsException(e);
             }

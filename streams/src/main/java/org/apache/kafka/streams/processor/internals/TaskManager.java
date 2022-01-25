@@ -1033,6 +1033,10 @@ public class TaskManager {
         return tasks.allTasks().stream().filter(Task::isActive);
     }
 
+    void moveActiveTasksToTailFor(final String topologyName) {
+        tasks.moveActiveTasksToTailFor(topologyName);
+    }
+
     Map<TaskId, Task> standbyTaskMap() {
         return standbyTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }
@@ -1289,7 +1293,7 @@ public class TaskManager {
         int totalProcessed = 0;
 
         long now = time.milliseconds();
-        for (final Task task : activeTaskIterable()) {
+        for (final Task task : tasks.orderedActiveTasks()) {
             int processed = 0;
             final long then = now;
             try {

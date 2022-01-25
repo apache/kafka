@@ -24,12 +24,15 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
-import java.util.HashSet;
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -43,6 +46,7 @@ class Tasks {
     private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
+    private final List<Task> orderedActiveTasks = new LinkedList<>();
 
     // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
@@ -128,6 +132,7 @@ class Tasks {
             // TODO: change type to `StreamTask`
             for (final Task activeTask : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
                 activeTasksPerId.put(activeTask.id(), activeTask);
+                orderedActiveTasks.add(activeTask);
                 allTasksPerId.put(activeTask.id(), activeTask);
                 for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
                     activeTasksPerPartition.put(topicPartition, activeTask);
@@ -171,6 +176,7 @@ class Tasks {
 
         final StreamTask activeTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
         activeTasksPerId.put(activeTask.id(), activeTask);
+        orderedActiveTasks.add(activeTask);
         for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
             activeTasksPerPartition.put(topicPartition, activeTask);
         }
@@ -226,12 +232,14 @@ class Tasks {
             .map(Map.Entry::getKey)
             .collect(Collectors.toSet());
         toBeRemoved.forEach(activeTasksPerPartition::remove);
+        orderedActiveTasks.removeIf(task -> task.id().equals(taskId));
         standbyTasksPerId.remove(taskId);
         allTasksPerId.remove(taskId);
     }
 
     void clear() {
         activeTasksPerId.clear();
+        orderedActiveTasks.clear();
         activeTasksPerPartition.clear();
         standbyTasksPerId.clear();
         allTasksPerId.clear();
@@ -268,6 +276,23 @@ class Tasks {
     // TODO: change return type to `StreamTask`
     Collection<Task> activeTasks() {
         return readOnlyActiveTasks;
+    }
+
+    List<Task> orderedActiveTasks() {
+        return Collections.unmodifiableList(orderedActiveTasks);
+    }
+
+    void moveActiveTasksToTailFor(final String topologyName) {
+        final List<Task> tasksToMove = new LinkedList<>();
+        final Iterator<Task> iterator = orderedActiveTasks.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (task.id().topologyName().equals(topologyName)) {
+                iterator.remove();
+                tasksToMove.add(task);
+            }
+        }
+        orderedActiveTasks.addAll(tasksToMove);
     }
 
     Collection<Task> allTasks() {
@@ -320,6 +345,7 @@ class Tasks {
     void addTask(final Task task) {
         if (task.isActive()) {
             activeTasksPerId.put(task.id(), task);
+            orderedActiveTasks.add(task);
         } else {
             standbyTasksPerId.put(task.id(), task);
         }
