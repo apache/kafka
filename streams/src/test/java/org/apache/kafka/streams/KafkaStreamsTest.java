@@ -529,6 +529,8 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
+
+            // shutting down the global thread from "external" will yield an error in KafkaStreams
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
                 "Thread never stopped."
