@@ -53,6 +53,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -92,7 +93,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
@@ -103,7 +103,9 @@ import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.capture;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -273,12 +275,12 @@ public class KafkaStreamsTest {
             for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
-            globalThreadState.set(DEAD);
+            globalThreadState.set(GlobalStreamThread.State.DEAD);
             threadStatelistenerCapture.getValue().onChange(globalStreamThread,
                 GlobalStreamThread.State.PENDING_SHUTDOWN,
                 GlobalStreamThread.State.RUNNING);
             threadStatelistenerCapture.getValue().onChange(globalStreamThread,
-                DEAD,
+                GlobalStreamThread.State.DEAD,
                 GlobalStreamThread.State.PENDING_SHUTDOWN);
             return null;
         }).anyTimes();
@@ -460,12 +462,15 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.close();
 
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
+
+            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -517,7 +522,8 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -526,7 +532,7 @@ public class KafkaStreamsTest {
             final GlobalStreamThread globalStreamThread = streams.globalStreamThread;
             globalStreamThread.shutdown();
             waitForCondition(
-                () -> globalStreamThread.state() == DEAD,
+                () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
 
@@ -541,6 +547,8 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.ERROR,
                 "Thread never stopped."
             );
+
+            assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
         }
     }
 
@@ -605,13 +613,11 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldNotAddThreadWhenError() throws Exception {
+    public void shouldNotAddThreadWhenError() {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             final int oldSize = streams.threads.size();
-            streams.globalStreamThread = globalStreamThread;
             streams.start();
             globalStreamThread.shutdown();
-            //waitForCondition(() -> streams.state == State.ERROR, "");
             assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(oldSize));
         }
