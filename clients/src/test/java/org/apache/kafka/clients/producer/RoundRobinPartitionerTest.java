@@ -36,6 +36,20 @@ public class RoundRobinPartitionerTest {
         new Node(2, "localhost", 101)
     };
 
+    private final static String TOPIC_A = "topicA";
+    private final static String TOPIC_B = "topicB";
+
+    private static Cluster createTestCluster() {
+        final String topicA = "topicA";
+        final String topicB = "topicB";
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+            new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
+        Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
+        return cluster;
+    }
+
     @Test
     public void testRoundRobinWithUnavailablePartitions() {
         // Intentionally make the partition list not in partition order to test the edge
@@ -65,28 +79,21 @@ public class RoundRobinPartitionerTest {
 
     @Test
     public void testRoundRobinWithKeyBytes() throws InterruptedException {
-        final String topicA = "topicA";
-        final String topicB = "topicB";
-
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
-                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
-        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster testCluster = createTestCluster();
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
         final byte[] keyBytes = "key".getBytes();
         Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, keyBytes, null, null, testCluster);
+            int partition = partitioner.partition(TOPIC_A, null, keyBytes, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(topicB, null, keyBytes, null, null, testCluster);
+                partitioner.partition(TOPIC_B, null, keyBytes, null, null, testCluster);
             }
         }
 
@@ -97,32 +104,48 @@ public class RoundRobinPartitionerTest {
     
     @Test
     public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
-        final String topicA = "topicA";
-        final String topicB = "topicB";
-
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
-                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
-        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster testCluster = createTestCluster();
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
         Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
+            int partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(topicB, null, null, null, null, testCluster);
+                partitioner.partition(TOPIC_B, null, null, null, null, testCluster);
             }
         }
 
         assertEquals(10, partitionCount.get(0).intValue());
         assertEquals(10, partitionCount.get(1).intValue());
         assertEquals(10, partitionCount.get(2).intValue());
-    }    
+    }
+
+    @Test
+    public void testOnNewBatchRewinds() throws InterruptedException {
+        Cluster testCluster = createTestCluster();
+        final Map<Integer, Integer> partitionCount = new HashMap<>();
+
+        Partitioner partitioner = new RoundRobinPartitioner();
+        for (int i = 0; i < 30; ++i) {
+            int partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
+            if ((i % 2) == 0) {
+                partitioner.onNewBatch(TOPIC_A, testCluster, partition);
+            } else {
+                Integer count = partitionCount.get(partition);
+                if (null == count)
+                    count = 0;
+                partitionCount.put(partition, count + 1);
+            }
+        }
+
+        assertEquals(5, partitionCount.get(0).intValue());
+        assertEquals(5, partitionCount.get(1).intValue());
+        assertEquals(5, partitionCount.get(2).intValue());
+    }
 }
