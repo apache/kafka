@@ -18,17 +18,17 @@ package kafka.server
 
 import java.io.File
 import java.util.{Collections, Optional, Properties}
-
 import kafka.cluster.Partition
-import kafka.log.{UnifiedLog, LogManager, LogOffsetSnapshot}
+import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
-import org.apache.kafka.common.{TopicPartition, TopicIdPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchRequest
 import org.easymock.EasyMock
-import EasyMock._
-import kafka.server.QuotaFactory.QuotaManagers
+import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -154,6 +154,32 @@ class ReplicaManagerQuotasTest {
   }
 
   @Test
+  def shouldIncludeThrottledReplicasForConsumerFetch(): Unit = {
+    setUpMocks(fetchInfo)
+
+    val quota = mockQuota(1000000)
+    expect(quota.isQuotaExceeded).andReturn(true).once()
+    expect(quota.isQuotaExceeded).andReturn(true).once()
+    replay(quota)
+
+    val fetch = replicaManager.readFromLocalLog(
+      replicaId = FetchRequest.CONSUMER_REPLICA_ID,
+      fetchOnlyFromLeader = true,
+      fetchIsolation = FetchHighWatermark,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      readPartitionInfo = fetchInfo,
+      quota = quota,
+      clientMetadata = None).toMap
+
+    assertEquals(1, fetch(topicIdPartition1).info.records.batches.asScala.size,
+      "Replication throttled partitions should return data for consumer fetch")
+
+    assertEquals(1, fetch(topicIdPartition2).info.records.batches.asScala.size,
+      "Replication throttled partitions should return data for consumer fetch")
+  }
+
+  @Test
   def testCompleteInDelayedFetchWithReplicaThrottling(): Unit = {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
@@ -197,6 +223,52 @@ class ReplicaManagerQuotasTest {
 
     assertTrue(setupDelayedFetch(isReplicaInSync = true).tryComplete(), "In sync replica should complete")
     assertFalse(setupDelayedFetch(isReplicaInSync = false).tryComplete(), "Out of sync replica should not complete")
+  }
+
+  @Test
+  def testCompleteInDelayedFetchConsumerFetch(): Unit = {
+    // Set up DelayedFetch where there is data to return to a consumer, either for the current segment or an older segment
+    def setupDelayedFetch(isFetchFromOlderSegment: Boolean): DelayedFetch = {
+      val endOffsetMetadata = if (isFetchFromOlderSegment)
+        LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+      else
+        LogOffsetMetadata(messageOffset = 150L, segmentBaseOffset = 50L, relativePositionInSegment = 500)
+      val partition: Partition = EasyMock.createMock(classOf[Partition])
+
+      val offsetSnapshot = LogOffsetSnapshot(
+        logStartOffset = 0L,
+        logEndOffset = endOffsetMetadata,
+        highWatermark = endOffsetMetadata,
+        lastStableOffset = endOffsetMetadata)
+      EasyMock.expect(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
+        .andReturn(offsetSnapshot)
+
+      val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
+      EasyMock.expect(replicaManager.getPartitionOrException(EasyMock.anyObject[TopicPartition]))
+        .andReturn(partition).anyTimes()
+
+      EasyMock.replay(replicaManager, partition)
+
+      val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
+      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
+        relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
+      val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
+        fetchMaxBytes = 1000,
+        hardMaxBytesLimit = true,
+        fetchOnlyLeader = true,
+        fetchIsolation = FetchLogEnd,
+        isFromFollower = false,
+        replicaId = FetchRequest.CONSUMER_REPLICA_ID,
+        fetchPartitionStatus = List((tidp, fetchPartitionStatus))
+      )
+      new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
+        quota = null, clientMetadata = None, responseCallback = null) {
+        override def forceComplete(): Boolean = true
+      }
+    }
+
+    assertTrue(setupDelayedFetch(isFetchFromOlderSegment = false).tryComplete(), "Consumer fetch replica should complete if reading from current segment")
+    assertTrue(setupDelayedFetch(isFetchFromOlderSegment = true).tryComplete(), "Consumer fetch replica should complete if reading from older segment")
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicIdPartition, PartitionData)], record: SimpleRecord = this.record,
