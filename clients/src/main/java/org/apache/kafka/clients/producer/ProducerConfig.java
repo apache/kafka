@@ -445,7 +445,7 @@ public class ProducerConfig extends AbstractConfig {
 
     private void maybeOverrideClientId(final Map<String, Object> configs) {
         String refinedClientId;
-        boolean userConfiguredClientId = this.hasKeyInOriginals(CLIENT_ID_CONFIG);
+        boolean userConfiguredClientId = this.originalsContainsKey(CLIENT_ID_CONFIG);
         if (userConfiguredClientId) {
             refinedClientId = this.getString(CLIENT_ID_CONFIG);
         } else {
@@ -461,19 +461,19 @@ public class ProducerConfig extends AbstractConfig {
 
         // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` need validation
         if (idempotenceEnabled()) {
-            boolean userConfiguredRetries = hasKeyInOriginals(RETRIES_CONFIG);
+            boolean userConfiguredRetries = originalsContainsKey(RETRIES_CONFIG);
             if (userConfiguredRetries && this.getInt(RETRIES_CONFIG) == 0) {
                 throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
             }
 
-            boolean userConfiguredAcks = hasKeyInOriginals(ACKS_CONFIG);
+            boolean userConfiguredAcks = originalsContainsKey(ACKS_CONFIG);
             final short acks = Short.valueOf(acksStr);
             if (userConfiguredAcks && acks != (short) -1) {
                 throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
             }
 
-            boolean userConfiguredInflightRequests = hasKeyInOriginals(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            boolean userConfiguredInflightRequests = originalsContainsKey(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             if (userConfiguredInflightRequests && 5 < this.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
                 throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                         " to use the idempotent producer.");
@@ -510,8 +510,8 @@ public class ProducerConfig extends AbstractConfig {
 
     boolean idempotenceEnabled() {
 
-        boolean userConfiguredIdempotence = this.hasKeyInOriginals(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.hasKeyInOriginals(TRANSACTIONAL_ID_CONFIG);
+        boolean userConfiguredIdempotence = this.originalsContainsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.originalsContainsKey(TRANSACTIONAL_ID_CONFIG);
         boolean idempotenceEnabled = !userConfiguredIdempotence || this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
         // default value for enable.idempotence is true since v3.0, it must be wrong setting if transactionId set and idempotence disabled
         if (!idempotenceEnabled && userConfiguredTransactions)

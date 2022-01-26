@@ -362,6 +362,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     setReadAndWriteAcls(tp2)
     // in idempotence producer, we need to create another producer because the previous one is in FATEL_ERROR state (due to authorization error)
+    // If the transaction state in FATEL_ERROR, it'll never transit to other state. check TransactionManager#isTransitionValid for detail
     val producer2 = if (isIdempotenceEnabled)
       createProducer(configOverrides = prop)
     else

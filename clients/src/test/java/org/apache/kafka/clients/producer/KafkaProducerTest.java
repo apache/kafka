@@ -242,7 +242,7 @@ public class KafkaProducerTest {
         Properties invalidProps2 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.ACKS_CONFIG, "1");
-                // explicitly enable idempotence should still throw exception
+                // explicitly enabling idempotence should still throw exception
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
@@ -305,7 +305,7 @@ public class KafkaProducerTest {
         Properties invalidProps3 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                // explicitly enable idempotence should still throw exception
+                // explicitly enabling idempotence should still throw exception
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
@@ -359,7 +359,7 @@ public class KafkaProducerTest {
         Properties invalidProps3 = new Properties() {{
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
-                // explicitly enable idempotence should still throw exception
+                // explicitly enabling idempotence should still throw exception
                 setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
             }};
         assertThrows(
@@ -597,11 +597,12 @@ public class KafkaProducerTest {
 
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
-        // Return empty cluster 4 times and cluster from then on
         if (isIdempotenceEnabled) {
             // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
+            // and rest 4 fetch will be called during KafkaProducer#waitOnMetadata
             when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
         } else {
+            // Return empty cluster 4 times and cluster from then on
             when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
         }
 
