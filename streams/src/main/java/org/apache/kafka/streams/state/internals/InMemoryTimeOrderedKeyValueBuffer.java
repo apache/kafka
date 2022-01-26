@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -63,7 +62,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV0;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV1;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV3;
@@ -97,8 +95,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private Sensor bufferCountSensor;
     private StreamsMetricsImpl streamsMetrics;
     private String taskId;
-    private Position position = Position.emptyPosition();
-    private boolean consistencyEnabled = false;
 
     private volatile boolean open;
 
@@ -243,10 +239,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition();
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
-            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-            false);
     }
 
     @Override
@@ -256,7 +248,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     @Override
     public Position getPosition() {
-        return position;
+        throw new UnsupportedOperationException("This store does not keep track of the position.");
     }
 
     @Override
@@ -334,8 +326,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     )
                 );
             }
-            position = ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                record, consistencyEnabled, position);
             final Bytes key = Bytes.wrap(record.key());
             if (record.value() == null) {
                 // This was a tombstone. Delete the record.
@@ -513,7 +503,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         );
         dirtyKeys.add(serializedKey);
         updateBufferMetrics();
-        StoreQueryUtils.updatePosition(position, context);
     }
 
     private BufferValue getBuffered(final Bytes key) {
