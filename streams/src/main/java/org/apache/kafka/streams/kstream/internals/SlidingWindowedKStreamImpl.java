@@ -198,10 +198,10 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             // earliest window start time we could need to create corresponding right window would be recordTime - 2 * timeDifference
             if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
-                    + name + " must be no smaller than 2 * time difference plus the grace period."
-                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                    + " grace=[" + windows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
+                        + name + " must be no smaller than 2 * time difference plus the grace period."
+                        + " Got time difference=[" + windows.timeDifferenceMs() + "],"
+                        + " grace=[" + windows.gracePeriodMs() + "],"
+                        + " retention=[" + retentionPeriod + "]");
             }
 
             supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),

@@ -138,4 +138,5 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
         }
         return builder;
     }
+
 }

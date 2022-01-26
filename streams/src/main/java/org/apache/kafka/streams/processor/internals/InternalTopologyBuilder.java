@@ -1043,6 +1043,7 @@ public class InternalTopologyBuilder {
                                     final Map<String, StateStore> stateStoreMap,
                                     final ProcessorNodeFactory<?, ?, ?, ?> factory,
                                     final ProcessorNode<Object, Object, Object, Object> node) {
+
         for (final String predecessor : factory.predecessors) {
             final ProcessorNode<Object, Object, Object, Object> predecessorNode = getProcessor(processorMap, predecessor);
             predecessorNode.addChild(node);

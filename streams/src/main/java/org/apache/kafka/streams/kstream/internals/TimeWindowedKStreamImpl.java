@@ -215,10 +215,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
             if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
-                    + name + " must be no smaller than its window size plus the grace period."
-                    + " Got size=[" + windows.size() + "],"
-                    + " grace=[" + windows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
+                        + name + " must be no smaller than its window size plus the grace period."
+                        + " Got size=[" + windows.size() + "],"
+                        + " grace=[" + windows.gracePeriodMs() + "],"
+                        + " retention=[" + retentionPeriod + "]");
             }
 
             supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),

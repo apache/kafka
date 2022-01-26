@@ -229,12 +229,12 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
             if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the session store "
-                    + materialized.storeName()
-                    + " must be no smaller than the session inactivity gap plus the"
-                    + " grace period."
-                    + " Got gap=[" + windows.inactivityGap() + "],"
-                    + " grace=[" + windows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
+                                                       + materialized.storeName()
+                                                       + " must be no smaller than the session inactivity gap plus the"
+                                                       + " grace period."
+                                                       + " Got gap=[" + windows.inactivityGap() + "],"
+                                                       + " grace=[" + windows.gracePeriodMs() + "],"
+                                                       + " retention=[" + retentionPeriod + "]");
             }
 
             supplier = Stores.sessionStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(), retentionPeriod);
