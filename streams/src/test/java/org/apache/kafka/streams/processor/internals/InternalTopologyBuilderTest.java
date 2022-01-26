@@ -77,7 +77,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-    public class InternalTopologyBuilderTest {
+public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();

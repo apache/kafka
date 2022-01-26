@@ -463,7 +463,7 @@ public final class Stores {
     public static SessionBytesStoreSupplier sessionStoreSupplierByStoreType(final Materialized.StoreType storeType,
                                                                             final String storeName,
                                                                             final long retentionPeriod) {
-        if (storeType.equals(Materialized.StoreType.IN_MEMORY)) {
+        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
             return Stores.inMemorySessionStore(
                 storeName,
                 Duration.ofMillis(retentionPeriod)
@@ -494,7 +494,7 @@ public final class Stores {
                                                                           final String storeName,
                                                                           final long retentionPeriod,
                                                                           final long windowSize) {
-        if (storeType.equals(Materialized.StoreType.IN_MEMORY)) {
+        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
             return Stores.inMemoryWindowStore(
                 storeName,
                 Duration.ofMillis(retentionPeriod),
@@ -521,7 +521,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier keyValueStoreSupplierByStoreType(final Materialized.StoreType storeType,
                                                                               final String storeName) {
-        if (storeType.equals(Materialized.StoreType.IN_MEMORY)) {
+        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
             return Stores.inMemoryKeyValueStore(storeName);
         }
 

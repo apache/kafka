@@ -103,28 +103,6 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
-        final WindowBytesStoreSupplier supplier = getSupplier(materialized);
-
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-            .timestampedWindowStoreBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde()
-            );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
-    }
-
-    private WindowBytesStoreSupplier getSupplier(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -145,6 +123,22 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                 materialized.storeType(), materialized.storeName(), retentionPeriod, windows.size());
         }
 
-        return supplier;
+        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
+            .timestampedWindowStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+
+        if (materialized.loggingEnabled()) {
+            builder.withLoggingEnabled(materialized.logConfig());
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        if (materialized.cachingEnabled()) {
+            builder.withCachingEnabled();
+        }
+        return builder;
     }
 }

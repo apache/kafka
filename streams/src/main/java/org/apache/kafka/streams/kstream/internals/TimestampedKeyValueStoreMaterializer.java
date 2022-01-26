@@ -34,7 +34,10 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
      * @return  StoreBuilder
      */
     public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
-        final KeyValueBytesStoreSupplier supplier = getSupplier();
+        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
+        if (supplier == null) {
+            supplier = Stores.keyValueStoreSupplierByStoreType(materialized.storeType(), materialized.storeName());
+        }
 
         final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
             supplier,
@@ -51,14 +54,5 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
             builder.withCachingEnabled();
         }
         return builder;
-    }
-
-    private KeyValueBytesStoreSupplier getSupplier() {
-        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            supplier = Stores.keyValueStoreSupplierByStoreType(materialized.storeType(), materialized.storeName());
-        }
-
-        return supplier;
     }
 }

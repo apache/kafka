@@ -106,27 +106,6 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     }
 
     private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
-        final SessionBytesStoreSupplier supplier = getSupplier(materialized);
-
-        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
-    }
-
-    private SessionBytesStoreSupplier getSupplier(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -145,6 +124,21 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             supplier = Stores.sessionStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(), retentionPeriod);
         }
 
-        return supplier;
+        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde()
+        );
+
+        if (materialized.loggingEnabled()) {
+            builder.withLoggingEnabled(materialized.logConfig());
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        if (materialized.cachingEnabled()) {
+            builder.withCachingEnabled();
+        }
+        return builder;
     }
 }

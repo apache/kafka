@@ -222,27 +222,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
-        final SessionBytesStoreSupplier supplier = getSupplier(materialized);
-
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
-    }
-
-    private <VR> SessionBytesStoreSupplier getSupplier(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -261,7 +240,22 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             supplier = Stores.sessionStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(), retentionPeriod);
         }
 
-        return supplier;
+        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde()
+        );
+
+        if (materialized.loggingEnabled()) {
+            builder.withLoggingEnabled(materialized.logConfig());
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        if (materialized.cachingEnabled()) {
+            builder.withCachingEnabled();
+        }
+        return builder;
     }
 
     private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {

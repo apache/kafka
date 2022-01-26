@@ -64,7 +64,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
-    protected StoreType storeType;
+    public StoreType storeType;
 
     // the built-in state store types
     public enum StoreType {

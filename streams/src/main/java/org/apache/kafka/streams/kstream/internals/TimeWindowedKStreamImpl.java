@@ -208,27 +208,6 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     }
 
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
-        final WindowBytesStoreSupplier supplier = getSupplier(materialized);
-
-        final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
-    }
-
-    private <VR> WindowBytesStoreSupplier getSupplier(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ?
@@ -246,7 +225,22 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 retentionPeriod, windows.size());
         }
 
-        return supplier;
+        final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde()
+        );
+
+        if (materialized.loggingEnabled()) {
+            builder.withLoggingEnabled(materialized.logConfig());
+        } else {
+            builder.withLoggingDisabled();
+        }
+
+        if (materialized.cachingEnabled()) {
+            builder.withCachingEnabled();
+        }
+        return builder;
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
