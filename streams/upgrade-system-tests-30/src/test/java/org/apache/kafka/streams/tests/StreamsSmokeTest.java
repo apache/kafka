@@ -59,10 +59,10 @@ public class StreamsSmokeTest {
 
         if ("process".equals(command)) {
             if (!StreamsConfig.AT_LEAST_ONCE.equals(processingGuarantee) &&
-                !StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee)) {
+                !StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)) {
 
                 System.err.println("processingGuarantee must be either " + StreamsConfig.AT_LEAST_ONCE + " or " +
-                    StreamsConfig.EXACTLY_ONCE);
+                    StreamsConfig.EXACTLY_ONCE_V2);
 
                 Exit.exit(1);
             }

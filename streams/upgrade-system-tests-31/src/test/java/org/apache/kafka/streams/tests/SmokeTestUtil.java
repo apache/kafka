@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -42,7 +42,7 @@ public class SmokeTestUtil {
         return new ProcessorSupplier<Object, Object>() {
             @Override
             public Processor<Object, Object> get() {
-                return new AbstractProcessor<Object, Object>() {
+                return new ContextualProcessor<Object, Object, Object, Object>() {
                     private int numRecordsProcessed = 0;
                     private long smallestOffset = Long.MAX_VALUE;
                     private long largestOffset = Long.MIN_VALUE;
