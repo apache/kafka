@@ -566,10 +566,12 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         }
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
 
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-          brokerEpoch, maxBrokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
-        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, broker)))
-
+        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
+          controllerEpoch, brokerEpoch, maxBrokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
+        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
+          val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
+          sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))
+        })
     }
     leaderAndIsrRequestMap.clear()
   }
@@ -625,18 +627,22 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         AbstractControlRequest.UNKNOWN_BROKER_EPOCH, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava)
 
       updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
-        sendRequest(broker, updateMetadataRequest)
+        sendRequest(broker, updateMetadataRequest, (r: AbstractResponse) => {
+          val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
+          sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
+        })
       }
     } else {
       updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
           brokerEpoch, AbstractControlRequest.UNKNOWN_BROKER_EPOCH, partitionStates.asJava, liveBrokers.asJava)
-        sendRequest(broker, updateMetadataRequest)
+        sendRequest(broker, updateMetadataRequest, (r: AbstractResponse) => {
+          val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
+          sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
+        })
       }
     }
-
-
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
   }
