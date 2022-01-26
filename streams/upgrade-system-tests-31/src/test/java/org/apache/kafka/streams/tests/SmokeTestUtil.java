@@ -55,7 +55,7 @@ public class SmokeTestUtil {
             }
 
             @Override
-            public void process(Record<Object, Object> record) {
+            public void process(final Record<Object, Object> record) {
                 numRecordsProcessed++;
                 if (numRecordsProcessed % 100 == 0) {
                     System.out.printf("%s: %s%n", name, Instant.now());

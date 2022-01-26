@@ -74,7 +74,7 @@ public class StreamsUpgradeTest {
             }
 
             @Override
-            public void process(Record<KIn, VIn> record) {
+            public void process(final Record<KIn, VIn> record) {
                 numRecordsProcessed++;
                 if (numRecordsProcessed % 100 == 0) {
                     System.out.println("processed " + numRecordsProcessed + " records from topic=data");
