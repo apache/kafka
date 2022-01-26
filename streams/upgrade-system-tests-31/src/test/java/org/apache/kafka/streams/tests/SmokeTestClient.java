@@ -179,7 +179,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         final KGroupedStream<String, Integer> groupedData = data.groupByKey(Grouped.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> minAggregation = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(1)).grace(Duration.ofMinutes(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofMinutes(1)))
             .aggregate(
                 () -> Integer.MAX_VALUE,
                 (aggKey, value, aggregate) -> (value < aggregate) ? value : aggregate,
@@ -199,8 +199,8 @@ public class SmokeTestClient extends SmokeTestUtil {
             .to("min", Produced.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(2)).advanceBy(Duration.ofSeconds(1)).grace(Duration.ofSeconds(30)))
-            .reduce((l, r) -> l + r);
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
+            .reduce(Integer::sum);
 
         streamify(smallWindowSum, "sws-raw");
         streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");
@@ -214,7 +214,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .aggregate(
                 () -> Integer.MIN_VALUE,
                 (aggKey, value, aggregate) -> (value > aggregate) ? value : aggregate,
@@ -231,7 +231,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .aggregate(
                 () -> 0L,
                 (aggKey, value, aggregate) -> (long) value + aggregate,
@@ -246,7 +246,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // cnt
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(2)))
             .count(Materialized.as("uwin-cnt"))
             .toStream(new Unwindow<>())
             .filterNot((k, v) -> k.equals("flush"))

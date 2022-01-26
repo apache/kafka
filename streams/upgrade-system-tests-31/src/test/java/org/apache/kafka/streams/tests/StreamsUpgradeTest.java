@@ -21,11 +21,13 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Properties;
+
 
 public class StreamsUpgradeTest {
 
@@ -61,18 +63,18 @@ public class StreamsUpgradeTest {
         }));
     }
 
-    private static <K, V> ProcessorSupplier<K, V> printProcessorSupplier() {
-        return () -> new AbstractProcessor<K, V>() {
+    private static <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> printProcessorSupplier() {
+        return () -> new ContextualProcessor<KIn, VIn, KOut, VOut>() {
             private int numRecordsProcessed = 0;
 
             @Override
-            public void init(final ProcessorContext context) {
+            public void init(final ProcessorContext<KOut, VOut> context) {
                 System.out.println("[3.1] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 
             @Override
-            public void process(final K key, final V value) {
+            public void process(Record<KIn, VIn> record) {
                 numRecordsProcessed++;
                 if (numRecordsProcessed % 100 == 0) {
                     System.out.println("processed " + numRecordsProcessed + " records from topic=data");
