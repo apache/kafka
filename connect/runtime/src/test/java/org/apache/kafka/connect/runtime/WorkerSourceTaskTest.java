@@ -42,6 +42,7 @@ import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -219,25 +220,32 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
     private void createWorkerTaskWithErrorToleration() {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter,
-                transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
-                offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                RetryWithToleranceOperatorTest.ALL_OPERATOR, statusBackingStore, Runnable::run);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
-    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
             transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
+                retryWithToleranceOperator, statusBackingStore, Runnable::run);
     }
 
     @Test
@@ -837,7 +845,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         expectSendRecordOnce();
         expectSendRecordProducerCallbackFail();
-        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.anyObject(RecordMetadata.class));
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.isNull());
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();

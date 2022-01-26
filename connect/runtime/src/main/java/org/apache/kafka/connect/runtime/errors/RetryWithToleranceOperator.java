@@ -123,7 +123,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         Future<Void> errantRecordFuture = context.report();
         if (!withinToleranceLimits()) {
             errorHandlingMetrics.recordError();
-            throw new ConnectException("Tolerance exceeded in error handler", error);
+            throw new ConnectException("Tolerance exceeded in Source Worker error handler", error);
         }
         return errantRecordFuture;
     }
@@ -249,7 +249,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     // For source connectors that want to skip kafka producer errors.
     // They cannot use withinToleranceLimits() as no failure may have actually occurred prior to the producer failing
     // to write to kafka.
-    public synchronized ToleranceType getErrorToleranceType() {
+    public ToleranceType getErrorToleranceType() {
         return errorToleranceType;
     }
 
