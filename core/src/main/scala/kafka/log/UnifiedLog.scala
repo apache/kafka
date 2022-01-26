@@ -1769,7 +1769,7 @@ object UnifiedLog extends Logging {
       config.recordVersion,
       s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    val offsets = LogLoader.load(LoadLogParams(
+    val offsets = new LogLoader(
       dir,
       topicPartition,
       config,
@@ -1782,7 +1782,8 @@ object UnifiedLog extends Logging {
       recoveryPoint,
       maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
     new UnifiedLog(offsets.logStartOffset,
