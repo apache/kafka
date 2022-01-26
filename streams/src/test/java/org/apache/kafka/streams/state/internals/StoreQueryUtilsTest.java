@@ -22,6 +22,7 @@ import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.Test;
@@ -42,7 +43,7 @@ public class StoreQueryUtilsTest {
         final QueryResult<Integer> queryResult = StoreQueryUtils.handleBasicQueries(
             query,
             PositionBound.at(position),
-            false,
+            new QueryConfig(false),
             store,
             position,
             null
@@ -67,7 +68,7 @@ public class StoreQueryUtilsTest {
         final QueryResult<Integer> queryResult = StoreQueryUtils.handleBasicQueries(
             query,
             PositionBound.at(Position.emptyPosition().withComponent("topic", 0, 1)),
-            false,
+            new QueryConfig(false),
             store,
             Position.emptyPosition().withComponent("topic", 0, 0),
             context

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapt
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -87,19 +88,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return open;
     }
 
-    Position getPosition() {
+    public Position getPosition() {
         return position;
     }
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
-            collectExecutionInfo,
+            config,
             this,
             position,
             context

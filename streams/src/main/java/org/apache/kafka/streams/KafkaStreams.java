@@ -66,6 +66,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
@@ -1842,7 +1843,7 @@ public class KafkaStreams implements AutoCloseable {
                                     request.isRequireActive()
                                         ? PositionBound.unbounded()
                                         : request.getPositionBound(),
-                                    request.executionInfoEnabled()
+                                    new QueryConfig(request.executionInfoEnabled())
                                 );
                                 result.addResult(partition, r);
                             }

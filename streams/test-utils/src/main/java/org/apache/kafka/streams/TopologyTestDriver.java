@@ -71,6 +71,7 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -1237,6 +1238,11 @@ public class TopologyTestDriver implements Closeable {
         public boolean isOpen() {
             return inner.isOpen();
         }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
     }
 
     static class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
@@ -1330,6 +1336,11 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public boolean isOpen() {
             return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
         }
     }
 
