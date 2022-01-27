@@ -58,6 +58,8 @@ public class ChangeLoggingSessionBytesStoreTest {
     private final Bytes bytesKey = Bytes.wrap(value1);
     private final Windowed<Bytes> key1 = new Windowed<>(bytesKey, new SessionWindow(0, 0));
 
+    private final static Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+
     @Before
     public void setUp() {
         store = new ChangeLoggingSessionBytesStore(inner);
@@ -94,6 +96,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldLogPuts() {
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.put(key1, value1);
         EasyMock.expectLastCall();
 
@@ -113,6 +116,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldLogPutsWithPosition() {
+        EasyMock.expect(inner.getPosition()).andReturn(POSITION).anyTimes();
         inner.put(key1, value1);
         EasyMock.expectLastCall();
 
@@ -124,8 +128,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         final RecordMetadata recordContext = new ProcessorRecordContext(0L, 1L, 0, "", new RecordHeaders());
         EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(recordContext));
         EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        final Position position = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
-        context.logChange(store.name(), binaryKey, value1, 0L, position);
+        context.logChange(store.name(), binaryKey, value1, 0L, POSITION);
 
         EasyMock.replay(context);
         store.put(key1, value1);
@@ -135,6 +138,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldLogRemoves() {
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.remove(key1);
         EasyMock.expectLastCall();
 

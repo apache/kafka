@@ -35,6 +35,7 @@ import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.errors.UnknownTopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -58,7 +59,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 
-
 /**
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
  * your own risk.
@@ -67,7 +67,6 @@ import java.util.stream.Collectors;
  *
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
- *       - interactive queries (IQ)
  *       - TopologyTestDriver (TTD)
  */
 @Unstable
@@ -154,7 +153,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public AddNamedTopologyResult addNamedTopology(final NamedTopology newTopology) {
-        log.info("Adding topology: {}", newTopology.name());
+        log.info("Adding new NamedTopology: {}", newTopology.name());
         if (hasStartedOrFinishedShuttingDown()) {
             throw new IllegalStateException("Cannot add a NamedTopology while the state is " + super.state);
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
@@ -180,11 +179,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @throws TopologyException        if this topology subscribes to any input topics or pattern already in use
      */
     public RemoveNamedTopologyResult removeNamedTopology(final String topologyToRemove, final boolean resetOffsets) {
-        log.info("Removing topology: {}", topologyToRemove);
+        log.info("Removing existing NamedTopology: {}", topologyToRemove);
         if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state);
         } else if (!getTopologyByName(topologyToRemove).isPresent()) {
-            throw new IllegalArgumentException("Unable to locate for removal a NamedTopology called " + topologyToRemove);
+            throw new UnknownTopologyException("Unable to remove topology", topologyToRemove);
         }
         final Set<TopicPartition> partitionsToReset = metadataForLocalThreads()
             .stream()
@@ -288,10 +287,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     private void verifyTopologyStateStore(final String topologyName, final String storeName) {
         final InternalTopologyBuilder builder = topologyMetadata.lookupBuilderForNamedTopology(topologyName);
         if (builder == null) {
-            throw new UnknownStateStoreException(
-                "Cannot get state store " + storeName + " from NamedTopology " + topologyName +
-                    " because no such topology exists."
-            );
+            throw new UnknownTopologyException("Cannot get state store " + storeName, topologyName);
         } else if (!builder.hasStore(storeName)) {
             throw new UnknownStateStoreException(
                 "Cannot get state store " + storeName + " from NamedTopology " + topologyName +
@@ -320,6 +316,14 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
+     * See {@link KafkaStreams#metadataForAllStreamsClients()}
+     */
+    public Collection<StreamsMetadata> allStreamsClientsMetadataForTopology(final String topologyName) {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.getAllMetadataForTopology(topologyName);
+    }
+
+    /**
      * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
@@ -335,6 +339,11 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * See {@link KafkaStreams#allLocalStorePartitionLags()}
      */
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLagsForTopology(final String topologyName) {
+        if (!getTopologyByName(topologyName).isPresent()) {
+            log.error("Can't get local store partition lags since topology {} does not exist in this application",
+                      topologyName);
+            throw new UnknownTopologyException("Can't get local store partition lags", topologyName);
+        }
         final List<Task> allTopologyTasks = new ArrayList<>();
         processStreamThread(thread -> allTopologyTasks.addAll(
             thread.allTasks().values().stream()

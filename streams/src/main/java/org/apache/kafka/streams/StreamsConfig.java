@@ -951,6 +951,8 @@ public class StreamsConfig extends AbstractConfig {
         public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"
             + ".vector.enabled__";
 
+        // Private API used to control the prefix of the auto created topics
+        public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
@@ -972,6 +974,16 @@ public class StreamsConfig extends AbstractConfig {
                 return Long.parseLong((String) value);
             } else {
                 log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                return defaultValue;
+            }
+        }
+
+        public static String getString(final Map<String, Object> configs, final String key, final String defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof String) {
+                return (String) value;
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
                 return defaultValue;
             }
         }

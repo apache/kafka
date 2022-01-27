@@ -75,7 +75,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
-        store = new CachingKeyValueStore(underlyingStore);
+        store = new CachingKeyValueStore(underlyingStore, false);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
@@ -106,7 +106,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldDelegateDeprecatedInit() {
         final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         EasyMock.expect(inner.name()).andStubReturn("store");
         inner.init((ProcessorContext) context, outer);
         EasyMock.expectLastCall();
@@ -118,7 +118,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         EasyMock.expect(inner.name()).andStubReturn("store");
         inner.init((StateStoreContext) context, outer);
         EasyMock.expectLastCall();
@@ -202,7 +202,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
         EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
         EasyMock.replay(underlyingStore);
-        store = new CachingKeyValueStore(underlyingStore);
+        store = new CachingKeyValueStore(underlyingStore, false);
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));

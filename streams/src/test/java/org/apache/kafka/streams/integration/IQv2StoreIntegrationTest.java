@@ -36,6 +36,10 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
@@ -52,8 +56,11 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -68,6 +75,8 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -80,8 +89,10 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -90,6 +101,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -105,6 +118,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @RunWith(value = Parameterized.class)
 public class IQv2StoreIntegrationTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(IQv2StoreIntegrationTest.class);
+
+    private static final long SEED = new Random().nextLong();
+    private static final Random RANDOM = new Random(SEED);
+
     private static final int NUM_BROKERS = 1;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
     private static int port = 0;
@@ -113,12 +131,19 @@ public class IQv2StoreIntegrationTest {
     private static final String STORE_NAME = "kv-store";
 
     private static final long RECORD_TIME = System.currentTimeMillis();
+    private static final long WINDOW_START =
+        (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final Position POSITION_0 =
+        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L)))));
+    private static final Position POSITION_BOTH =
+        Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 1L), mkEntry(1, 1L)))));
 
     public static class UnknownQuery implements Query<Void> { }
 
     private final StoresToTest storeToTest;
+    private final String kind;
     private final boolean cache;
     private final boolean log;
 
@@ -247,7 +272,8 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                    false);
+                                                  false
+                );
             }
 
             @Override
@@ -259,7 +285,8 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                    false);
+                                                    false
+                );
             }
 
             @Override
@@ -276,7 +303,8 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
-                    WINDOW_SIZE, false);
+                                                               WINDOW_SIZE, false
+                );
             }
 
             @Override
@@ -330,31 +358,42 @@ public class IQv2StoreIntegrationTest {
         }
     }
 
-    @Parameterized.Parameters(name = "cache={0}, log={1}, supplier={2}")
+    @Parameterized.Parameters(name = "cache={0}, log={1}, supplier={2}, kind={3}")
     public static Collection<Object[]> data() {
+        LOG.info("Generating test cases according to random seed: {}", SEED);
         final List<Object[]> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
-                    values.add(new Object[]{cacheEnabled, logEnabled, toTest.name()});
+                    for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                        values.add(new Object[]{cacheEnabled, logEnabled, toTest.name(), kind});
+                    }
                 }
             }
         }
+        // Randomizing the test cases in case some orderings interfere with each other.
+        // If you wish to reproduce a randomized order, copy the logged SEED and substitute
+        // it for the constant at the top of the file. This will cause exactly the same sequence
+        // of pseudorandom values to be generated.
+        Collections.shuffle(values, RANDOM);
         return values;
     }
 
     public IQv2StoreIntegrationTest(
         final boolean cache,
         final boolean log,
-        final String storeToTest) {
+        final String storeToTest,
+        final String kind) {
         this.cache = cache;
         this.log = log;
         this.storeToTest = StoresToTest.valueOf(storeToTest);
+        this.kind = kind;
     }
 
     @BeforeClass
     public static void before()
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
+
         CLUSTER.start();
         CLUSTER.deleteAllTopicsAndWait(60 * 1000L);
         final int partitions = 2;
@@ -408,90 +447,23 @@ public class IQv2StoreIntegrationTest {
         final Properties streamsConfig = streamsConfiguration(
             cache,
             log,
-            storeToTest.name()
+            storeToTest.name(),
+            kind
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
-        if (supplier instanceof KeyValueBytesStoreSupplier) {
-            final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
-                Materialized.as((KeyValueBytesStoreSupplier) supplier);
-
-            if (cache) {
-                materialized.withCachingEnabled();
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            if (log) {
-                materialized.withLoggingEnabled(Collections.emptyMap());
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            if (storeToTest.global()) {
-                builder.globalTable(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    materialized
-                );
-            } else {
-                builder.table(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    materialized
-                );
-            }
-        } else if (supplier instanceof WindowBytesStoreSupplier) {
-            final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
-                Materialized.as((WindowBytesStoreSupplier) supplier);
-
-            if (cache) {
-                materialized.withCachingEnabled();
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            if (log) {
-                materialized.withLoggingEnabled(Collections.emptyMap());
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            builder
-                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                .groupByKey()
-                .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    materialized
-                );
-        } else if (supplier instanceof SessionBytesStoreSupplier) {
-            final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
-                Materialized.as((SessionBytesStoreSupplier) supplier);
-
-            if (cache) {
-                materialized.withCachingEnabled();
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            if (log) {
-                materialized.withLoggingEnabled(Collections.emptyMap());
-            } else {
-                materialized.withCachingDisabled();
-            }
-
-            builder
-                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                .groupByKey()
-                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
-                .aggregate(
-                    () -> 0,
-                    (key, value, aggregate) -> aggregate + value,
-                    (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                    materialized
-                );
+        if (Objects.equals(kind, "DSL") && supplier instanceof KeyValueBytesStoreSupplier) {
+            setUpKeyValueDSLTopology((KeyValueBytesStoreSupplier) supplier, builder);
+        } else if (Objects.equals(kind, "PAPI") && supplier instanceof KeyValueBytesStoreSupplier) {
+            setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder);
+        } else if (Objects.equals(kind, "DSL") && supplier instanceof WindowBytesStoreSupplier) {
+            setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder);
+        } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
+            setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder);
+        } else if (Objects.equals(kind, "DSL") && supplier instanceof SessionBytesStoreSupplier) {
+            setUpSessionDSLTopology((SessionBytesStoreSupplier) supplier, builder);
+        } else if (Objects.equals(kind, "PAPI") && supplier instanceof SessionBytesStoreSupplier) {
+            setUpSessionPAPITopology((SessionBytesStoreSupplier) supplier, builder);
         } else {
             throw new AssertionError("Store supplier is an unrecognized type.");
         }
@@ -507,10 +479,280 @@ public class IQv2StoreIntegrationTest {
             );
     }
 
+    private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
+                                         final StreamsBuilder builder) {
+        final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
+            Materialized.as(supplier);
+
+        if (cache) {
+            materialized.withCachingEnabled();
+        } else {
+            materialized.withCachingDisabled();
+        }
+
+        if (log) {
+            materialized.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            materialized.withLoggingDisabled();
+        }
+
+        builder
+            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .groupByKey()
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(WINDOW_SIZE))
+            .aggregate(
+                () -> 0,
+                (key, value, aggregate) -> aggregate + value,
+                (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                materialized
+            );
+    }
+
+    private void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
+                                        final StreamsBuilder builder) {
+        final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
+            Materialized.as(supplier);
+
+        if (cache) {
+            materialized.withCachingEnabled();
+        } else {
+            materialized.withCachingDisabled();
+        }
+
+        if (log) {
+            materialized.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            materialized.withLoggingDisabled();
+        }
+
+        builder
+            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
+            .aggregate(
+                () -> 0,
+                (key, value, aggregate) -> aggregate + value,
+                materialized
+            );
+    }
+
+    private void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
+                                          final StreamsBuilder builder) {
+        final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
+            Materialized.as(supplier);
+
+        if (cache) {
+            materialized.withCachingEnabled();
+        } else {
+            materialized.withCachingDisabled();
+        }
+
+        if (log) {
+            materialized.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            materialized.withLoggingDisabled();
+        }
+
+        if (storeToTest.global()) {
+            builder.globalTable(
+                INPUT_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                materialized
+            );
+        } else {
+            builder.table(
+                INPUT_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                materialized
+            );
+        }
+    }
+
+    private void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
+                                           final StreamsBuilder builder) {
+        final StoreBuilder<?> keyValueStoreStoreBuilder;
+        final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
+        if (storeToTest.timestamped()) {
+            keyValueStoreStoreBuilder = Stores.timestampedKeyValueStoreBuilder(
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
+            );
+            processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                @Override
+                public void process(final Record<Integer, Integer> record) {
+                    final TimestampedKeyValueStore<Integer, Integer> stateStore =
+                        context().getStateStore(keyValueStoreStoreBuilder.name());
+                    stateStore.put(
+                        record.key(),
+                        ValueAndTimestamp.make(
+                            record.value(), record.timestamp()
+                        )
+                    );
+                }
+            };
+        } else {
+            keyValueStoreStoreBuilder = Stores.keyValueStoreBuilder(
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
+            );
+            processorSupplier =
+                () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                    @Override
+                    public void process(final Record<Integer, Integer> record) {
+                        final KeyValueStore<Integer, Integer> stateStore =
+                            context().getStateStore(keyValueStoreStoreBuilder.name());
+                        stateStore.put(record.key(), record.value());
+                    }
+                };
+        }
+        if (cache) {
+            keyValueStoreStoreBuilder.withCachingEnabled();
+        } else {
+            keyValueStoreStoreBuilder.withCachingDisabled();
+        }
+        if (log) {
+            keyValueStoreStoreBuilder.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            keyValueStoreStoreBuilder.withLoggingDisabled();
+        }
+        if (storeToTest.global()) {
+            builder.addGlobalStore(
+                keyValueStoreStoreBuilder,
+                INPUT_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                processorSupplier
+            );
+        } else {
+            builder.addStateStore(keyValueStoreStoreBuilder);
+            builder
+                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+                .process(processorSupplier, keyValueStoreStoreBuilder.name());
+        }
+
+    }
+
+    private void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
+                                         final StreamsBuilder builder) {
+        final StoreBuilder<?> windowStoreStoreBuilder;
+        final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
+        if (storeToTest.timestamped()) {
+            windowStoreStoreBuilder = Stores.timestampedWindowStoreBuilder(
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
+            );
+            processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                @Override
+                public void process(final Record<Integer, Integer> record) {
+                    final TimestampedWindowStore<Integer, Integer> stateStore =
+                        context().getStateStore(windowStoreStoreBuilder.name());
+                    stateStore.put(
+                        record.key(),
+                        ValueAndTimestamp.make(
+                            record.value(), record.timestamp()
+                        ),
+                        WINDOW_START
+                    );
+                }
+            };
+        } else {
+            windowStoreStoreBuilder = Stores.windowStoreBuilder(
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
+            );
+            processorSupplier =
+                () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                    @Override
+                    public void process(final Record<Integer, Integer> record) {
+                        final WindowStore<Integer, Integer> stateStore =
+                            context().getStateStore(windowStoreStoreBuilder.name());
+                        stateStore.put(record.key(), record.value(), WINDOW_START);
+                    }
+                };
+        }
+        if (cache) {
+            windowStoreStoreBuilder.withCachingEnabled();
+        } else {
+            windowStoreStoreBuilder.withCachingDisabled();
+        }
+        if (log) {
+            windowStoreStoreBuilder.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            windowStoreStoreBuilder.withLoggingDisabled();
+        }
+        if (storeToTest.global()) {
+            builder.addGlobalStore(
+                windowStoreStoreBuilder,
+                INPUT_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                processorSupplier
+            );
+        } else {
+            builder.addStateStore(windowStoreStoreBuilder);
+            builder
+                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+                .process(processorSupplier, windowStoreStoreBuilder.name());
+        }
+
+    }
+
+    private void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
+                                          final StreamsBuilder builder) {
+        final StoreBuilder<?> sessionStoreStoreBuilder;
+        final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
+        sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
+            supplier,
+            Serdes.Integer(),
+            Serdes.Integer()
+        );
+        processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                final SessionStore<Integer, Integer> stateStore =
+                    context().getStateStore(sessionStoreStoreBuilder.name());
+                stateStore.put(
+                    new Windowed<>(record.key(), new SessionWindow(WINDOW_START, WINDOW_START)),
+                    record.value()
+                );
+            }
+        };
+        if (cache) {
+            sessionStoreStoreBuilder.withCachingEnabled();
+        } else {
+            sessionStoreStoreBuilder.withCachingDisabled();
+        }
+        if (log) {
+            sessionStoreStoreBuilder.withLoggingEnabled(Collections.emptyMap());
+        } else {
+            sessionStoreStoreBuilder.withLoggingDisabled();
+        }
+        if (storeToTest.global()) {
+            builder.addGlobalStore(
+                sessionStoreStoreBuilder,
+                INPUT_TOPIC_NAME,
+                Consumed.with(Serdes.Integer(), Serdes.Integer()),
+                processorSupplier
+            );
+        } else {
+            builder.addStateStore(sessionStoreStoreBuilder);
+            builder
+                .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+                .process(processorSupplier, sessionStoreStoreBuilder.name());
+        }
+
+    }
+
+
     @After
     public void afterTest() {
-        kafkaStreams.close();
-        kafkaStreams.cleanUp();
+        // only needed because some of the PAPI cases aren't added yet.
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+            kafkaStreams.cleanUp();
+        }
     }
 
     @AfterClass
@@ -596,14 +838,11 @@ public class IQv2StoreIntegrationTest {
 
     private <T> void shouldHandleWindowKeyQueries(final Function<T, Integer> extractor) {
 
-        final long windowSize = WINDOW_SIZE.toMillis();
-        final long windowStart = (RECORD_TIME / windowSize) * windowSize;
-
         // tightest possible start range
         shouldHandleWindowKeyQuery(
             2,
-            Instant.ofEpochMilli(windowStart),
-            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
             extractor,
             mkSet(2)
         );
@@ -611,8 +850,8 @@ public class IQv2StoreIntegrationTest {
         // miss the window start range
         shouldHandleWindowKeyQuery(
             2,
-            Instant.ofEpochMilli(windowStart - 1),
-            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
             extractor,
             mkSet()
         );
@@ -620,8 +859,8 @@ public class IQv2StoreIntegrationTest {
         // miss the key
         shouldHandleWindowKeyQuery(
             999,
-            Instant.ofEpochMilli(windowStart),
-            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
             extractor,
             mkSet()
         );
@@ -629,8 +868,8 @@ public class IQv2StoreIntegrationTest {
         // miss both
         shouldHandleWindowKeyQuery(
             999,
-            Instant.ofEpochMilli(windowStart - 1),
-            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
             extractor,
             mkSet()
         );
@@ -680,13 +919,13 @@ public class IQv2StoreIntegrationTest {
                     throw new AssertionError(queryResult.toString());
                 }
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), is(
+                assertThat(partitionResult.getFailureMessage(), matchesPattern(
                     "This store"
-                        + " (class org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStore)"
+                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
                         + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional[2], timeFrom=Optional.empty, timeTo=Optional.empty})"
-                        + " because WindowStores only supports WindowRangeQuery.withWindowStartRange."
-                        + " Contact the store maintainer if you need support for a new query type."
+                        + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
+                        + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."
+                        + " Contact the store maintainer if you need support for a new query type\\."
                 ));
             }
         }
@@ -755,11 +994,15 @@ public class IQv2StoreIntegrationTest {
         final StateQueryResult<ValueAndTimestamp<Integer>> result = kafkaStreams.query(request);
 
         assertThat(result.getGlobalResult().isFailure(), is(true));
-        assertThat(result.getGlobalResult().getFailureReason(),
-            is(FailureReason.UNKNOWN_QUERY_TYPE));
-        assertThat(result.getGlobalResult().getFailureMessage(),
+        assertThat(
+            result.getGlobalResult().getFailureReason(),
+            is(FailureReason.UNKNOWN_QUERY_TYPE)
+        );
+        assertThat(
+            result.getGlobalResult().getFailureMessage(),
             is("Global stores do not yet support the KafkaStreams#query API."
-                + " Use KafkaStreams#store instead."));
+                   + " Use KafkaStreams#store instead.")
+        );
     }
 
     public void shouldRejectUnknownQuery() {
@@ -777,9 +1020,12 @@ public class IQv2StoreIntegrationTest {
             queryResult -> {
                 assertThat(queryResult.isFailure(), is(true));
                 assertThat(queryResult.isSuccess(), is(false));
-                assertThat(queryResult.getFailureReason(),
-                    is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(queryResult.getFailureMessage(),
+                assertThat(
+                    queryResult.getFailureReason(),
+                    is(FailureReason.UNKNOWN_QUERY_TYPE)
+                );
+                assertThat(
+                    queryResult.getFailureMessage(),
                     matchesPattern(
                         "This store (.*)"
                             + " doesn't know how to execute the given query"
@@ -825,9 +1071,9 @@ public class IQv2StoreIntegrationTest {
         final V result1 = queryResult.getResult();
         final Integer integer = valueExtactor.apply(result1);
         assertThat(integer, is(expectedValue));
-
         assertThat(queryResult.getExecutionInfo(), is(empty()));
-    }
+        assertThat(queryResult.getPosition(), is(POSITION_0));
+    }   
 
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
@@ -883,6 +1129,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -937,6 +1184,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -986,6 +1234,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -1032,6 +1281,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
             assertThat(actualValue, is(expectedValue));
+            assertThat(result.getPosition(), is(POSITION_BOTH));
         }
     }
 
@@ -1099,9 +1349,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-        final String supplier) {
+                                                   final String supplier, final String kind) {
         final String safeTestName =
-            IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier;
+            IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
+                + "-" + kind;
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

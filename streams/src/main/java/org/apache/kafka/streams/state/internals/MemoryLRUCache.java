@@ -37,7 +37,7 @@ import java.util.Objects;
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     protected StateStoreContext context;
-    protected Position position = Position.emptyPosition();
+    private Position position = Position.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -110,6 +110,11 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public Position getPosition() {
+        return position;
     }
 
     @Override

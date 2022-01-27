@@ -41,7 +41,7 @@ trait KafkaMetricsGroup extends Logging {
   }
 
 
-  protected def explicitMetricName(group: String, typeName: String, name: String,
+  def explicitMetricName(group: String, typeName: String, name: String,
                                    tags: scala.collection.Map[String, String]): MetricName = {
 
     val nameBuilder: StringBuilder = new StringBuilder
@@ -69,6 +69,9 @@ trait KafkaMetricsGroup extends Logging {
 
   def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty): Meter =
     KafkaYammerMetrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit)
+
+  def newMeter(metricName: MetricName, eventType: String, timeUnit: TimeUnit): Meter =
+    KafkaYammerMetrics.defaultRegistry().newMeter(metricName, eventType, timeUnit)
 
   def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty): Histogram =
     KafkaYammerMetrics.defaultRegistry().newHistogram(metricName(name, tags), biased)

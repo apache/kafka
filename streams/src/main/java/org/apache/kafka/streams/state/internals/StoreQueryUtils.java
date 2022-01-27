@@ -28,6 +28,7 @@ import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
@@ -60,7 +61,7 @@ public final class StoreQueryUtils {
         QueryResult<?> apply(
             final Query<?> query,
             final PositionBound positionBound,
-            final boolean collectExecutionInfo,
+            final QueryConfig config,
             final StateStore store
         );
     }
@@ -94,29 +95,33 @@ public final class StoreQueryUtils {
     public static <R> QueryResult<R> handleBasicQueries(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo,
+        final QueryConfig config,
         final StateStore store,
         final Position position,
-        final int partition
+        final StateStoreContext context
     ) {
 
-        final long start = collectExecutionInfo ? System.nanoTime() : -1L;
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
         final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
         if (handler == null) {
             result = QueryResult.forUnknownQueryType(query, store);
-        } else if (!isPermitted(position, positionBound, partition)) {
-            result = QueryResult.notUpToBound(position, positionBound, partition);
+        } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+            result = QueryResult.notUpToBound(
+                position,
+                positionBound,
+                context == null ? null : context.taskId().partition()
+            );
         } else {
             result = (QueryResult<R>) handler.apply(
                 query,
                 positionBound,
-                collectExecutionInfo,
+                config,
                 store
             );
         }
-        if (collectExecutionInfo) {
+        if (config.isCollectExecutionInfo()) {
             result.addExecutionInfo(
                 "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
             );
@@ -163,7 +168,7 @@ public final class StoreQueryUtils {
     private static <R> QueryResult<R> runRangeQuery(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo,
+        final QueryConfig config,
         final StateStore store
     ) {
         if (!(store instanceof KeyValueStore)) {
@@ -194,7 +199,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
                                                   final PositionBound positionBound,
-                                                  final boolean collectExecutionInfo,
+                                                  final QueryConfig config,
                                                   final StateStore store) {
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
@@ -218,7 +223,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
                                                         final PositionBound positionBound,
-                                                        final boolean collectExecutionInfo,
+                                                        final QueryConfig config,
                                                         final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
@@ -254,7 +259,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
                                                           final PositionBound positionBound,
-                                                          final boolean collectExecutionInfo,
+                                                          final QueryConfig config,
                                                           final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
