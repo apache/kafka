@@ -1533,7 +1533,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset " +
       s"($includingOffsetStr) and recovery point $newRecoveryPoint") {
       if (flushOffset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset ($includingOffsetStr)" +
+        debug(s"Flushing log up to offset $offset ($includingOffsetStr)" +
           s"with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}," +
           s"unflushed: ${localLog.unflushedMessages}")
         localLog.flush(flushOffset)
