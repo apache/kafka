@@ -50,7 +50,7 @@ jobs:
       - name: Run tests
         env:
           SCALA_VERSION: ${{ matrix.scalaVersion }}
-        run: ./gradlew -Pversion=${{ env.RELEASE_VERSION }} cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
+        run: ./gradlew -PmaxTestRetries=3 -Pversion=${{ env.RELEASE_VERSION }} cleanTest clients:integrationTest --no-daemon -PtestLoggingEvents=started,passed,skipped,failed
   core:
     # Name the Job
     name: core_${{ matrix.scalaVersion }} (${{ matrix.prefix }})
@@ -89,6 +89,6 @@ jobs:
         # Use set -f to disable shell expansion on *
         run: >
           set -f
-          && ./gradlew -PscalaVersion="$SCALA_VERSION" -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
+          && ./gradlew -PmaxTestRetries=3 -PscalaVersion="$SCALA_VERSION" -PtestLoggingEvents=started,passed,skipped,failed --no-daemon cleanTest core:integrationTest `for i in $PREFIX; do printf ' --tests %s*' $i; done`
           && set +f
 
