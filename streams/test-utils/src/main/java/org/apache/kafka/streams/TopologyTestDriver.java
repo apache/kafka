@@ -309,6 +309,7 @@ public class TopologyTestDriver implements Closeable {
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
+    @SuppressWarnings({"unchecked", "deprecation"})
     private TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
