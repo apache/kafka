@@ -43,9 +43,9 @@ object Log4jController {
    */
 
   /**
-    * Returns a map of the log4j loggers and their assigned log level.
-    * If a logger does not have a log level assigned, we return the log level of the first ancestor with a level configured.
-    */
+   * Returns a map of the log4j loggers and their assigned log level.
+   * If a logger does not have a log level assigned, we return the log level of the first ancestor with a level configured.
+   */
   def loggers: Map[String, String] = {
     val logContext = LogManager.getContext(false).asInstanceOf[LoggerContext]
     val rootLoggerLevel = logContext.getRootLogger.getLevel.toString
@@ -69,10 +69,13 @@ object Log4jController {
   }
 
   /**
-    * Sets the log level of a particular logger
-    */
+   * Sets the log level of a particular logger. If the given logLevel is not an available log4j level
+   * (i.e., one of OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL) it falls back to DEBUG.
+   *
+   * @see [[Level.toLevel]]
+   */
   def logLevel(loggerName: String, logLevel: String): Boolean = {
-    val level = Level.toLevel(logLevel.toUpperCase(Locale.ROOT), null)
+    val level = Level.toLevel(logLevel.toUpperCase(Locale.ROOT))
 
     if (loggerName == ROOT_LOGGER) {
       Configurator.setAllLevels(LogManager.ROOT_LOGGER_NAME, level)
