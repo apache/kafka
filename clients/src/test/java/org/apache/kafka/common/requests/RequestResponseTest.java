@@ -938,6 +938,7 @@ public class RequestResponseTest {
         assertEquals(1, createDescribeClientQuotasResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createDescribeConfigsResponse(DESCRIBE_CONFIGS.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(2, createDescribeLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createElectLeadersResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createEndTxnResponse().errorCounts().get(Errors.NONE));
