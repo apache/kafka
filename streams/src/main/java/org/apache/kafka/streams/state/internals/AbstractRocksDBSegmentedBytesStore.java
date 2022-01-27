@@ -71,7 +71,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.metricScope = metricScope;
         this.keySchema = keySchema;
         this.segments = segments;
-        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -345,8 +344,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             final long segmentId = segments.segmentId(timestamp);
             final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
-                position = ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                        record, consistencyEnabled, position);
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);

@@ -99,8 +99,9 @@ import static org.hamcrest.Matchers.is;
 
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
-public class PositionCheckpointIntegrationTest {
-    private static final Logger LOG = LoggerFactory.getLogger(PositionCheckpointIntegrationTest.class);
+public class PositionRestartIntegrationTest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PositionRestartIntegrationTest.class);
     private static final long SEED = new Random().nextLong();
     private static final int NUM_BROKERS = 1;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
@@ -120,6 +121,28 @@ public class PositionCheckpointIntegrationTest {
     private final Properties streamsConfig;
 
     public enum StoresToTest {
+        IN_MEMORY_KV {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.inMemoryKeyValueStore(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
+        },
+        IN_MEMORY_LRU {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.lruMap(STORE_NAME, 100);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
+        },
         ROCKS_KV {
             @Override
             public StoreSupplier<?> supplier() {
@@ -144,6 +167,19 @@ public class PositionCheckpointIntegrationTest {
 
             @Override
             public boolean keyValue() {
+                return true;
+            }
+        },
+        IN_MEMORY_WINDOW {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
+                                                  false
+                );
+            }
+
+            @Override
+            public boolean isWindowed() {
                 return true;
             }
         },
@@ -178,6 +214,17 @@ public class PositionCheckpointIntegrationTest {
                 return true;
             }
         },
+        IN_MEMORY_SESSION {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.inMemorySessionStore(STORE_NAME, Duration.ofDays(1));
+            }
+
+            @Override
+            public boolean isSession() {
+                return true;
+            }
+        },
         ROCKS_SESSION {
             @Override
             public StoreSupplier<?> supplier() {
@@ -194,10 +241,6 @@ public class PositionCheckpointIntegrationTest {
 
         public boolean timestamped() {
             return true; // most stores are timestamped
-        }
-
-        public boolean global() {
-            return false;
         }
 
         public boolean keyValue() {
@@ -220,8 +263,12 @@ public class PositionCheckpointIntegrationTest {
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
-                    for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                        values.add(new Object[]{cacheEnabled, logEnabled, toTest.name(), kind});
+                    // We don't need to test if non-persistent stores without logging
+                    // survive restarts, since those are by definition not durable.
+                    if (logEnabled || toTest.supplier().get().persistent()) {
+                        for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                            values.add(new Object[]{cacheEnabled, logEnabled, toTest.name(), kind});
+                        }
                     }
                 }
             }
@@ -229,7 +276,7 @@ public class PositionCheckpointIntegrationTest {
         return values;
     }
 
-    public PositionCheckpointIntegrationTest(
+    public PositionRestartIntegrationTest(
         final boolean cache,
         final boolean log,
         final String storeToTest,
@@ -239,10 +286,10 @@ public class PositionCheckpointIntegrationTest {
         this.storeToTest = StoresToTest.valueOf(storeToTest);
         this.kind = kind;
         this.streamsConfig = streamsConfiguration(
-                cache,
-                log,
-                storeToTest,
-                kind
+            cache,
+            log,
+            storeToTest,
+            kind
         );
     }
 
@@ -323,11 +370,11 @@ public class PositionCheckpointIntegrationTest {
         }
 
         kafkaStreams =
-                IntegrationTestUtils.getStartedStreams(
-                        streamsConfig,
-                        builder,
-                        cleanup
-                );
+            IntegrationTestUtils.getStartedStreams(
+                streamsConfig,
+                builder,
+                cleanup
+            );
     }
 
     @After
@@ -336,7 +383,6 @@ public class PositionCheckpointIntegrationTest {
     }
 
     public void afterTest(final boolean cleanup) {
-        // only needed because some PAPI cases aren't added yet.
         if (kafkaStreams != null) {
             kafkaStreams.close();
             if (cleanup) {
@@ -394,7 +440,7 @@ public class PositionCheckpointIntegrationTest {
     private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
                                          final StreamsBuilder builder) {
         final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
-                Materialized.as(supplier);
+            Materialized.as(supplier);
 
         if (cache) {
             materialized.withCachingEnabled();
@@ -423,7 +469,7 @@ public class PositionCheckpointIntegrationTest {
     private void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
                                         final StreamsBuilder builder) {
         final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
-                Materialized.as(supplier);
+            Materialized.as(supplier);
 
         if (cache) {
             materialized.withCachingEnabled();
@@ -451,7 +497,7 @@ public class PositionCheckpointIntegrationTest {
     private void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
                                           final StreamsBuilder builder) {
         final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
-                Materialized.as(supplier);
+            Materialized.as(supplier);
 
         if (cache) {
             materialized.withCachingEnabled();
@@ -465,19 +511,11 @@ public class PositionCheckpointIntegrationTest {
             materialized.withLoggingDisabled();
         }
 
-        if (storeToTest.global()) {
-            builder.globalTable(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    materialized
-            );
-        } else {
-            builder.table(
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    materialized
-            );
-        }
+        builder.table(
+            INPUT_TOPIC_NAME,
+            Consumed.with(Serdes.Integer(), Serdes.Integer()),
+            materialized
+        );
     }
 
     private void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
@@ -486,38 +524,38 @@ public class PositionCheckpointIntegrationTest {
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
             keyValueStoreStoreBuilder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    Serdes.Integer(),
-                    Serdes.Integer()
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
             );
             processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
                 @Override
                 public void process(final Record<Integer, Integer> record) {
                     final TimestampedKeyValueStore<Integer, Integer> stateStore =
-                            context().getStateStore(keyValueStoreStoreBuilder.name());
+                        context().getStateStore(keyValueStoreStoreBuilder.name());
                     stateStore.put(
-                            record.key(),
-                            ValueAndTimestamp.make(
-                                    record.value(), record.timestamp()
-                            )
+                        record.key(),
+                        ValueAndTimestamp.make(
+                            record.value(), record.timestamp()
+                        )
                     );
                 }
             };
         } else {
             keyValueStoreStoreBuilder = Stores.keyValueStoreBuilder(
-                    supplier,
-                    Serdes.Integer(),
-                    Serdes.Integer()
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
             );
             processorSupplier =
-                    () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
-                        @Override
-                        public void process(final Record<Integer, Integer> record) {
-                            final KeyValueStore<Integer, Integer> stateStore =
-                                    context().getStateStore(keyValueStoreStoreBuilder.name());
-                            stateStore.put(record.key(), record.value());
-                        }
-                    };
+                () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                    @Override
+                    public void process(final Record<Integer, Integer> record) {
+                        final KeyValueStore<Integer, Integer> stateStore =
+                            context().getStateStore(keyValueStoreStoreBuilder.name());
+                        stateStore.put(record.key(), record.value());
+                    }
+                };
         }
         if (cache) {
             keyValueStoreStoreBuilder.withCachingEnabled();
@@ -529,19 +567,10 @@ public class PositionCheckpointIntegrationTest {
         } else {
             keyValueStoreStoreBuilder.withLoggingDisabled();
         }
-        if (storeToTest.global()) {
-            builder.addGlobalStore(
-                    keyValueStoreStoreBuilder,
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    processorSupplier
-            );
-        } else {
-            builder.addStateStore(keyValueStoreStoreBuilder);
-            builder
-                    .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                    .process(processorSupplier, keyValueStoreStoreBuilder.name());
-        }
+        builder.addStateStore(keyValueStoreStoreBuilder);
+        builder
+            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .process(processorSupplier, keyValueStoreStoreBuilder.name());
 
     }
 
@@ -551,39 +580,39 @@ public class PositionCheckpointIntegrationTest {
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
             windowStoreStoreBuilder = Stores.timestampedWindowStoreBuilder(
-                    supplier,
-                    Serdes.Integer(),
-                    Serdes.Integer()
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
             );
             processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
                 @Override
                 public void process(final Record<Integer, Integer> record) {
                     final TimestampedWindowStore<Integer, Integer> stateStore =
-                            context().getStateStore(windowStoreStoreBuilder.name());
+                        context().getStateStore(windowStoreStoreBuilder.name());
                     stateStore.put(
-                            record.key(),
-                            ValueAndTimestamp.make(
-                                    record.value(), record.timestamp()
-                            ),
-                            WINDOW_START
+                        record.key(),
+                        ValueAndTimestamp.make(
+                            record.value(), record.timestamp()
+                        ),
+                        WINDOW_START
                     );
                 }
             };
         } else {
             windowStoreStoreBuilder = Stores.windowStoreBuilder(
-                    supplier,
-                    Serdes.Integer(),
-                    Serdes.Integer()
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
             );
             processorSupplier =
-                    () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
-                        @Override
-                        public void process(final Record<Integer, Integer> record) {
-                            final WindowStore<Integer, Integer> stateStore =
-                                    context().getStateStore(windowStoreStoreBuilder.name());
-                            stateStore.put(record.key(), record.value(), WINDOW_START);
-                        }
-                    };
+                () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                    @Override
+                    public void process(final Record<Integer, Integer> record) {
+                        final WindowStore<Integer, Integer> stateStore =
+                            context().getStateStore(windowStoreStoreBuilder.name());
+                        stateStore.put(record.key(), record.value(), WINDOW_START);
+                    }
+                };
         }
         if (cache) {
             windowStoreStoreBuilder.withCachingEnabled();
@@ -595,19 +624,10 @@ public class PositionCheckpointIntegrationTest {
         } else {
             windowStoreStoreBuilder.withLoggingDisabled();
         }
-        if (storeToTest.global()) {
-            builder.addGlobalStore(
-                    windowStoreStoreBuilder,
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    processorSupplier
-            );
-        } else {
-            builder.addStateStore(windowStoreStoreBuilder);
-            builder
-                    .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                    .process(processorSupplier, windowStoreStoreBuilder.name());
-        }
+        builder.addStateStore(windowStoreStoreBuilder);
+        builder
+            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .process(processorSupplier, windowStoreStoreBuilder.name());
 
     }
 
@@ -616,18 +636,18 @@ public class PositionCheckpointIntegrationTest {
         final StoreBuilder<?> sessionStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
-                supplier,
-                Serdes.Integer(),
-                Serdes.Integer()
+            supplier,
+            Serdes.Integer(),
+            Serdes.Integer()
         );
         processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
             @Override
             public void process(final Record<Integer, Integer> record) {
                 final SessionStore<Integer, Integer> stateStore =
-                        context().getStateStore(sessionStoreStoreBuilder.name());
+                    context().getStateStore(sessionStoreStoreBuilder.name());
                 stateStore.put(
-                        new Windowed<>(record.key(), new SessionWindow(WINDOW_START, WINDOW_START)),
-                        record.value()
+                    new Windowed<>(record.key(), new SessionWindow(WINDOW_START, WINDOW_START)),
+                    record.value()
                 );
             }
         };
@@ -641,27 +661,17 @@ public class PositionCheckpointIntegrationTest {
         } else {
             sessionStoreStoreBuilder.withLoggingDisabled();
         }
-        if (storeToTest.global()) {
-            builder.addGlobalStore(
-                    sessionStoreStoreBuilder,
-                    INPUT_TOPIC_NAME,
-                    Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                    processorSupplier
-            );
-        } else {
-            builder.addStateStore(sessionStoreStoreBuilder);
-            builder
-                    .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
-                    .process(processorSupplier, sessionStoreStoreBuilder.name());
-        }
-
+        builder.addStateStore(sessionStoreStoreBuilder);
+        builder
+            .stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .process(processorSupplier, sessionStoreStoreBuilder.name());
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
                                                    final String supplier, final String kind) {
         final String safeTestName =
-            PositionCheckpointIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind;
+            PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
+                + supplier + "-" + kind;
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

@@ -131,7 +131,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.name = name;
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
-        this.position = Position.emptyPosition();
     }
 
     @Deprecated
@@ -730,8 +729,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         try (final WriteBatch batch = new WriteBatch()) {
             final List<KeyValue<byte[], byte[]>> keyValues = new ArrayList<>();
             for (final ConsumerRecord<byte[], byte[]> record : records) {
-                position = ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                        record, consistencyEnabled, position);
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                    record,
+                    consistencyEnabled,
+                    position
+                );
                 // If version headers are not present or version is V0
                 keyValues.add(new KeyValue<>(record.key(), record.value()));
             }
