@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -38,7 +37,6 @@ public class RocksDBWindowStore
 
     private int seqnum = 0;
 
-    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -47,18 +45,12 @@ public class RocksDBWindowStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.windowSize = windowSize;
-        this.position = Position.emptyPosition();
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        super.init(context, root);
+        wrapped().init(context, root);
         this.stateStoreContext = context;
-    }
-
-    @Override
-    public Position getPosition() {
-        return position;
     }
 
     @Override
@@ -67,7 +59,6 @@ public class RocksDBWindowStore
         if (!(value == null && retainDuplicates)) {
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 
@@ -140,7 +131,7 @@ public class RocksDBWindowStore
             positionBound,
             config,
             this,
-            position,
+            getPosition(),
             stateStoreContext
         );
     }

@@ -63,7 +63,7 @@ public class CachingKeyValueStore
     private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private Position position;
+    private final Position position;
     private final boolean timestampedSchema;
 
     @FunctionalInterface
@@ -94,6 +94,7 @@ public class CachingKeyValueStore
         this.timestampedSchema = timestampedSchema;
     }
 
+    @SuppressWarnings("deprecation") // This can be removed when it's removed from the interface.
     @Deprecated
     @Override
     public void init(final ProcessorContext context,

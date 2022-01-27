@@ -42,7 +42,7 @@ import org.apache.kafka.streams.query.QueryResult;
  * Furthermore, Kafka Streams relies on using the store name as store directory name to perform internal cleanup tasks.
  * <p>
  * This interface does not specify any query capabilities, which, of course,
- * would be query engine specific. Instead it just specifies the minimum
+ * would be query engine specific. Instead, it just specifies the minimum
  * functionality required to reload a storage engine from its changelog as well
  * as basic lifecycle management.
  */
@@ -83,7 +83,7 @@ public interface StateStore {
      * Initializes this state store.
      * <p>
      * The implementation of this function must register the root store in the context via the
-     * {@link StateStoreContext#register(StateStore, StateRestoreCallback)} function, where the
+     * {@link StateStoreContext#register(StateStore, StateRestoreCallback, CommitCallback)} function, where the
      * first {@link StateStore} parameter should always be the passed-in {@code root} object, and
      * the second parameter should be an object of user's implementation
      * of the {@link StateRestoreCallback} interface used for restoring the state store from the changelog.
@@ -149,16 +149,20 @@ public interface StateStore {
      */
     @Evolving
     default <R> QueryResult<R> query(
-        Query<R> query,
-        PositionBound positionBound,
-        QueryConfig config) {
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         // If a store doesn't implement a query handler, then all queries are unknown.
         return QueryResult.forUnknownQueryType(query, this);
     }
 
     /**
-     * Returns the position the state store is at
-     * @return
+     * Returns the position the state store is at with respect to the input topic/partitions
      */
-    Position getPosition();
+    @Evolving
+    default Position getPosition() {
+        throw new UnsupportedOperationException(
+            "getPosition is not implemented by this StateStore (" + getClass() + ")"
+        );
+    }
 }
