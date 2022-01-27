@@ -41,16 +41,15 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
@@ -62,7 +61,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -83,29 +81,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.fail;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
@@ -127,7 +117,7 @@ public class PositionCheckpointIntegrationTest {
     private final boolean cache;
     private final boolean log;
     private KafkaStreams kafkaStreams;
-    private Properties streamsConfig;
+    private final Properties streamsConfig;
 
     public enum StoresToTest {
         ROCKS_KV {
@@ -346,7 +336,7 @@ public class PositionCheckpointIntegrationTest {
     }
 
     public void afterTest(final boolean cleanup) {
-        // only needed because some of the PAPI cases aren't added yet.
+        // only needed because some PAPI cases aren't added yet.
         if (kafkaStreams != null) {
             kafkaStreams.close();
             if (cleanup) {
@@ -366,207 +356,39 @@ public class PositionCheckpointIntegrationTest {
     }
 
     @Test
-    public void verifyStore() throws Exception {
+    public void verifyStore() {
+        final Query<?> query;
         if (storeToTest.keyValue()) {
-            if (storeToTest.timestamped()) {
-                final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                        ValueAndTimestamp::value;
-                shouldCheckpointKeyValueStore(2, valueExtractor, 2);
-            } else {
-                final Function<Integer, Integer> valueExtractor = Function.identity();
-                shouldCheckpointKeyValueStore(2, valueExtractor, 2);
-            }
-        }
-
-        if (storeToTest.isWindowed()) {
-            if (storeToTest.timestamped()) {
-                final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                        ValueAndTimestamp::value;
-                shouldHandleWindowKeyQueries(valueExtractor);
-            } else {
-                final Function<Integer, Integer> valueExtractor = Function.identity();
-                shouldHandleWindowKeyQueries(valueExtractor);
-            }
-
-
-        }
-
-        if (storeToTest.isSession()) {
-            shouldHandleSessionKeyQueries();
-        }
-    }
-    public <V> void shouldCheckpointKeyValueStore(
-            final Integer key,
-            final Function<V, Integer> valueExtactor,
-            final Integer expectedValue) throws Exception {
-        shouldHandleKeyQuery(key, valueExtactor, expectedValue);
-        reboot();
-        shouldHandleKeyQuery(key, valueExtactor, expectedValue);
-    }
-
-    private <T> void shouldHandleWindowKeyQueries(final Function<T, Integer> extractor) {
-        shouldHandleWindowKeyQuery(
-            2,
-            Instant.ofEpochMilli(WINDOW_START),
-            Instant.ofEpochMilli(WINDOW_START),
-            extractor,
-            mkSet(2)
-        );
-        reboot();
-        shouldHandleWindowKeyQuery(
+            query = RangeQuery.withNoBounds();
+        } else if (storeToTest.isWindowed()) {
+            query = WindowKeyQuery.withKeyAndWindowStartRange(
                 2,
                 Instant.ofEpochMilli(WINDOW_START),
-                Instant.ofEpochMilli(WINDOW_START),
-                extractor,
-                mkSet(2)
-        );
-    }
-
-    private <T> void shouldHandleSessionKeyQueries() {
-        shouldHandleSessionRangeQuery(
-            2,
-            mkSet(2)
-        );
-        reboot();
-        shouldHandleSessionRangeQuery(
-                2,
-                mkSet(2)
-        );
-    }
-
-    public <V> void shouldHandleKeyQuery(
-            final Integer key,
-            final Function<V, Integer> valueExtactor,
-            final Integer expectedValue) {
-
-        final KeyQuery<Integer, V> query = KeyQuery.withKey(key);
-        final StateQueryRequest<V> request =
-                inStore(STORE_NAME)
-                        .withQuery(query)
-                        .withPartitions(mkSet(0, 1))
-                        .withPositionBound(PositionBound.at(INPUT_POSITION));
-
-        final StateQueryResult<V> result =
-                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
-        assertThat(result.getPosition(), is(INPUT_POSITION));
-
-        final QueryResult<V> queryResult = result.getOnlyPartitionResult();
-        final boolean failure = queryResult.isFailure();
-        if (failure) {
-            throw new AssertionError(queryResult.toString());
+                Instant.ofEpochMilli(WINDOW_START)
+            );
+        } else if (storeToTest.isSession()) {
+            query = WindowRangeQuery.withKey(2);
+        } else {
+            throw new AssertionError("Unhandled store type: " + storeToTest);
         }
-        assertThat(queryResult.isSuccess(), is(true));
+        shouldReachExpectedPosition(query);
 
-        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-        assertThrows(
-                IllegalArgumentException.class,
-                queryResult::getFailureMessage
-        );
+        reboot();
 
-        final V result1 = queryResult.getResult();
-        final Integer integer = valueExtactor.apply(result1);
-        assertThat(integer, is(expectedValue));
-        assertThat(queryResult.getExecutionInfo(), is(empty()));
+        shouldReachExpectedPosition(query);
     }
 
-    public <V> void shouldHandleWindowKeyQuery(
-        final Integer key,
-        final Instant timeFrom,
-        final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
-        final Set<Integer> expectedValue) {
-
-        final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
-            key,
-            timeFrom,
-            timeTo
-        );
-
-        final StateQueryRequest<WindowStoreIterator<V>> request =
+    private void shouldReachExpectedPosition(final Query<?> query) {
+        final StateQueryRequest<?> request =
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(mkSet(0, 1))
                 .withPositionBound(PositionBound.at(INPUT_POSITION));
 
-        final StateQueryResult<WindowStoreIterator<V>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final StateQueryResult<?> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        if (result.getGlobalResult() != null) {
-            fail("global tables aren't implemented");
-        } else {
-            final Set<Integer> actualValue = new HashSet<>();
-            final Map<Integer, QueryResult<WindowStoreIterator<V>>> queryResult = result.getPartitionResults();
-            for (final int partition : queryResult.keySet()) {
-                final boolean failure = queryResult.get(partition).isFailure();
-                if (failure) {
-                    throw new AssertionError(queryResult.toString());
-                }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
-
-                assertThrows(
-                        IllegalArgumentException.class,
-                        queryResult.get(partition)::getFailureReason
-                );
-                assertThrows(
-                        IllegalArgumentException.class,
-                        queryResult.get(partition)::getFailureMessage
-                );
-
-                try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
-                    while (iterator.hasNext()) {
-                        actualValue.add(valueExtactor.apply(iterator.next().value));
-                    }
-                }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
-            }
-            assertThat(actualValue, is(expectedValue));
-        }
-    }
-
-    public <V> void shouldHandleSessionRangeQuery(
-            final Integer key,
-            final Set<Integer> expectedValue) {
-
-        final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withKey(key);
-
-        final StateQueryRequest<KeyValueIterator<Windowed<Integer>, V>> request =
-                inStore(STORE_NAME)
-                        .withQuery(query)
-                        .withPartitions(mkSet(0, 1))
-                        .withPositionBound(PositionBound.at(INPUT_POSITION));
-
-        final StateQueryResult<KeyValueIterator<Windowed<Integer>, V>> result =
-                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
-
-        if (result.getGlobalResult() != null) {
-            fail("global tables aren't implemented");
-        } else {
-            final Set<Integer> actualValue = new HashSet<>();
-            final Map<Integer, QueryResult<KeyValueIterator<Windowed<Integer>, V>>> queryResult = result.getPartitionResults();
-            for (final int partition : queryResult.keySet()) {
-                final boolean failure = queryResult.get(partition).isFailure();
-                if (failure) {
-                    throw new AssertionError(queryResult.toString());
-                }
-                assertThat(queryResult.get(partition).isSuccess(), is(true));
-
-                assertThrows(
-                        IllegalArgumentException.class,
-                        queryResult.get(partition)::getFailureReason
-                );
-                assertThrows(
-                        IllegalArgumentException.class,
-                        queryResult.get(partition)::getFailureMessage
-                );
-
-                try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
-                    while (iterator.hasNext()) {
-                        actualValue.add((Integer) iterator.next().value);
-                    }
-                }
-                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
-            }
-            assertThat(actualValue, is(expectedValue));
-        }
+        assertThat(result.getPosition(), is(INPUT_POSITION));
     }
 
     private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
@@ -833,21 +655,6 @@ public class PositionCheckpointIntegrationTest {
                     .process(processorSupplier, sessionStoreStoreBuilder.name());
         }
 
-    }
-
-    private <R> void makeAssertions(
-        final Set<Integer> partitions,
-        final StateQueryResult<R> result,
-        final Consumer<QueryResult<R>> assertion) {
-
-        if (result.getGlobalResult() != null) {
-            assertion.accept(result.getGlobalResult());
-        } else {
-            assertThat(result.getPartitionResults().keySet(), is(partitions));
-            for (final Integer partition : partitions) {
-                assertion.accept(result.getPartitionResults().get(partition));
-            }
-        }
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,

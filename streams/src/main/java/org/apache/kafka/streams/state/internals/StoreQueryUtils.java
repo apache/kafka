@@ -50,13 +50,13 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class StoreQueryUtils {
+
     /**
      * a utility interface to facilitate stores' query dispatch logic,
      * allowing them to generically store query execution logic as the values
@@ -344,10 +344,10 @@ public final class StoreQueryUtils {
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
     }
 
-    public static void checkpointPosition(final OffsetCheckpoint checkpointFile, final Position position) throws IOException {
+    public static void checkpointPosition(final OffsetCheckpoint checkpointFile,
+                                          final Position position) {
         try {
-            final Map<TopicPartition, Long> topicPartitions = StoreQueryUtils.positionToTopicPartitionMap(position);
-            checkpointFile.write(topicPartitions);
+            checkpointFile.write(positionToTopicPartitionMap(position));
         } catch (final IOException e) {
             throw new ProcessorStateException("Error writing checkpoint file", e);
         }
@@ -355,8 +355,7 @@ public final class StoreQueryUtils {
 
     public static Position readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
         try {
-            final Map<TopicPartition, Long> topicPartitions = checkpointFile.read();
-            return StoreQueryUtils.topicPartitionMapToPosition(topicPartitions);
+            return topicPartitionMapToPosition(checkpointFile.read());
         } catch (final IOException e) {
             throw new ProcessorStateException("Error reading checkpoint file", e);
         }
@@ -376,10 +375,11 @@ public final class StoreQueryUtils {
     }
 
     private static Position topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
-        final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> pos = new ConcurrentHashMap<>();
-        for (final Entry<TopicPartition, Long> e: topicPartitions.entrySet()) {
-            pos.putIfAbsent(e.getKey().topic(), new ConcurrentHashMap<>());
-            pos.get(e.getKey().topic()).put(e.getKey().partition(), e.getValue());
+        final Map<String, Map<Integer, Long>> pos = new HashMap<>();
+        for (final Entry<TopicPartition, Long> e : topicPartitions.entrySet()) {
+            pos
+                .computeIfAbsent(e.getKey().topic(), t -> new HashMap<>())
+                .put(e.getKey().partition(), e.getValue());
         }
         return Position.fromMap(pos);
     }

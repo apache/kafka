@@ -51,7 +51,7 @@ public class WordCountTransformerTest {
                 // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
                 .build();
             store.init(context.getStateStoreContext(), store);
-            context.getStateStoreContext().register(store, null, null);
+            context.getStateStoreContext().register(store, null);
         }
         final Transformer<String, String, KeyValue<String, String>> transformer = supplier.get();
         transformer.init(new org.apache.kafka.streams.processor.MockProcessorContext() {

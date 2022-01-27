@@ -17,11 +17,15 @@
 
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+
 import java.io.IOException;
 
 /**
- * Callback for checkpointing position information in state stores.
+ * Stores can register this callback to be notified upon successful commit.
  */
-public interface CheckpointCallback {
-    void checkpoint() throws IOException;
+@Evolving
+@FunctionalInterface
+public interface CommitCallback {
+    void onCommit() throws IOException;
 }

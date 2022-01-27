@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  */
 public abstract class WrappedStateStore<S extends StateStore, K, V> implements StateStore, CachedStateStore<K, V> {
 
-    @SuppressWarnings("rawtypes")
     public static boolean isTimestamped(final StateStore stateStore) {
         if (stateStore instanceof TimestampedBytesStore) {
             return true;
@@ -71,7 +70,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         return false;
     }
 
-    @SuppressWarnings("rawtypes")
     @Override
     public void flushCache() {
         if (wrapped instanceof CachedStateStore) {

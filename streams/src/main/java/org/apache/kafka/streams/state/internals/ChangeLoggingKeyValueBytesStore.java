@@ -46,7 +46,6 @@ public class ChangeLoggingKeyValueBytesStore
                      final StateStore root) {
         this.context = asInternalProcessorContext(context);
         super.init(context, root);
-        this.position = super.getPosition();
         maybeSetEvictionListener();
     }
 
@@ -55,7 +54,6 @@ public class ChangeLoggingKeyValueBytesStore
                      final StateStore root) {
         this.context = asInternalProcessorContext(context);
         super.init(context, root);
-        this.position = super.getPosition();
         maybeSetEvictionListener();
     }
 

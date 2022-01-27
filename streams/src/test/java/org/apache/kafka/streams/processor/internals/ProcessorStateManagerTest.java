@@ -26,7 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
-import org.apache.kafka.streams.processor.CheckpointCallback;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -70,9 +70,12 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -120,11 +123,6 @@ public class ProcessorStateManagerTest {
     private OffsetCheckpoint checkpoint;
     private StateDirectory stateDirectory;
 
-    private Position persistentPosition;
-    private Position nonPersistentPosition;
-    private StateStorePositionCheckpoint persistentCheckpoint;
-    private StateStorePositionCheckpoint nonPersistentCheckpoint;
-
     @Mock(type = MockType.NICE)
     private StateStore store;
     @Mock(type = MockType.NICE)
@@ -145,13 +143,6 @@ public class ProcessorStateManagerTest {
         }), new MockTime(), true, true);
         checkpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
-
-        persistentPosition = Position.emptyPosition().withComponent(persistentStoreTopicName, 1, 123L);
-        nonPersistentPosition = Position.emptyPosition().withComponent(nonPersistentStoreTopicName, 1, 123L);
-        final File persistentFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), persistentStoreName + ".position");
-        final File nonPersistentFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), nonPersistentStoreName + ".position");
-        persistentCheckpoint = new StateStorePositionCheckpoint(persistentFile, persistentPosition);
-        nonPersistentCheckpoint = new StateStorePositionCheckpoint(nonPersistentFile, nonPersistentPosition);
 
         expect(storeMetadata.changelogPartition()).andReturn(persistentStorePartition).anyTimes();
         expect(storeMetadata.store()).andReturn(store).anyTimes();
@@ -839,9 +830,13 @@ public class ProcessorStateManagerTest {
     public void shouldThrowIfRestoreCallbackThrows() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
-        stateMgr.registerStore(persistentStore, (key, value) -> {
-            throw new RuntimeException("KABOOM!");
-        }, null);
+        stateMgr.registerStore(
+            persistentStore,
+            (key, value) -> {
+                throw new RuntimeException("KABOOM!");
+            },
+            null
+        );
 
         final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
 
@@ -1051,63 +1046,93 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldWritePositionCheckpointFile() throws IOException {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        try {
-            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, persistentCheckpoint);
-            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, nonPersistentCheckpoint);
-        } finally {
-            stateMgr.checkpoint();
+        final Position persistentPosition =
+            Position.emptyPosition().withComponent(persistentStoreTopicName, 1, 123L);
+        final File persistentFile = new File(
+            stateDirectory.getOrCreateDirectoryForTask(taskId),
+            "shouldWritePositionCheckpointFile.position"
+        );
+        final StateStorePositionCommit persistentCheckpoint = new StateStorePositionCommit(persistentFile, persistentPosition);
+        stateMgr.registerStore(
+            persistentStore,
+            persistentStore.stateRestoreCallback,
+            persistentCheckpoint
+        );
 
-            assertTrue(persistentCheckpoint.getFile().exists());
-            assertTrue(nonPersistentCheckpoint.getFile().exists());
+        assertFalse(persistentCheckpoint.getFile().exists());
 
-            // the checkpoint file should contain an offset from the persistent store only.
-            final Map<TopicPartition, Long> persistentOffsets = persistentCheckpoint.getOffsetCheckpoint().read();
-            assertThat(persistentOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L)));
+        stateMgr.checkpoint();
 
-            final Map<TopicPartition, Long> nonPersistentOffsets = nonPersistentCheckpoint.getOffsetCheckpoint().read();
-            assertThat(nonPersistentOffsets, is(singletonMap(new TopicPartition(nonPersistentStoreTopicName, 1), 123L)));
+        assertTrue(persistentCheckpoint.getFile().exists());
 
-            assertEquals(persistentCheckpoint.getCheckpointedPosition(), persistentCheckpoint.getStateStorePosition());
-            assertEquals(nonPersistentCheckpoint.getCheckpointedPosition(), nonPersistentCheckpoint.getStateStorePosition());
+        // the checkpoint file should contain an offset from the persistent store only.
+        final Map<TopicPartition, Long> persistentOffsets = persistentCheckpoint.getOffsetCheckpoint()
+                                                                                .read();
+        assertThat(
+            persistentOffsets,
+            is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L))
+        );
 
-            stateMgr.close();
+        assertEquals(
+            persistentCheckpoint.getCheckpointedPosition(),
+            persistentCheckpoint.getStateStorePosition()
+        );
 
-            assertTrue(persistentStore.closed);
-            assertTrue(nonPersistentStore.closed);
-        }
+        stateMgr.close();
+
+        assertTrue(persistentStore.closed);
     }
 
     @Test
-    public void shouldFailWritingPositionCheckpointFile() throws IOException {
+    public void shouldThrowOnFailureToWritePositionCheckpointFile() throws IOException {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        try {
-            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, persistentCheckpoint);
-            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, nonPersistentCheckpoint);
-        } finally {
-            stateMgr.checkpoint();
+        final CommitCallback persistentCheckpoint = mock(CommitCallback.class);
+        persistentCheckpoint.onCommit();
+        final IOException ioException = new IOException("asdf");
+        expectLastCall().andThrow(ioException);
+        replay(persistentCheckpoint);
+        stateMgr.registerStore(
+            persistentStore,
+            persistentStore.stateRestoreCallback,
+            persistentCheckpoint
+        );
 
-            assertTrue(persistentCheckpoint.getFile().exists());
-            assertTrue(nonPersistentCheckpoint.getFile().exists());
+        final ProcessorStateException processorStateException = assertThrows(
+            ProcessorStateException.class,
+            stateMgr::checkpoint
+        );
 
-            persistentCheckpoint.getFile().delete();
-            nonPersistentCheckpoint.getFile().delete();
-
-            assertEquals(persistentCheckpoint.getCheckpointedPosition(), Position.emptyPosition());
-            assertEquals(nonPersistentCheckpoint.getCheckpointedPosition(), Position.emptyPosition());
-
-            stateMgr.close();
-
-            assertTrue(persistentStore.closed);
-            assertTrue(nonPersistentStore.closed);
-        }
+        assertThat(
+            processorStateException.getMessage(),
+            containsString(
+                "process-state-manager-test Exception caught while trying to checkpoint store,"
+                    + " changelog partition test-application-My-Topology-persistentStore-changelog-1"
+            )
+        );
+        assertThat(processorStateException.getCause(), is(ioException));
     }
 
-    public static class StateStorePositionCheckpoint implements CheckpointCallback {
+    @Test
+    public void shouldLoadMissingFileAsEmptyPosition() {
+        final Position persistentPosition =
+            Position.emptyPosition().withComponent(persistentStoreTopicName, 1, 123L);
+        final File persistentFile = new File(
+            stateDirectory.getOrCreateDirectoryForTask(taskId),
+            "shouldFailWritingPositionCheckpointFile.position"
+        );
+        final StateStorePositionCommit persistentCheckpoint = new StateStorePositionCommit(persistentFile, persistentPosition);
+
+        assertFalse(persistentCheckpoint.getFile().exists());
+
+        assertEquals(persistentCheckpoint.getCheckpointedPosition(), Position.emptyPosition());
+    }
+
+    public static class StateStorePositionCommit implements CommitCallback {
         private File file;
         private final OffsetCheckpoint checkpointFile;
         private final Position position;
 
-        public StateStorePositionCheckpoint(final File file, final Position position) {
+        public StateStorePositionCommit(final File file, final Position position) {
             this.file = file;
             this.checkpointFile = new OffsetCheckpoint(file);
             this.position = position;
@@ -1130,7 +1155,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public void checkpoint() throws IOException {
+        public void onCommit() throws IOException {
             StoreQueryUtils.checkpointPosition(checkpointFile, position);
         }
     };

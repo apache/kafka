@@ -99,7 +99,11 @@ public class CachingKeyValueStore
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        init((StateStoreContext) asInternalProcessorContext(context), root);
+        initInternal(asInternalProcessorContext(context));
+        super.init(context, root);
+        // save the stream thread as we only ever want to trigger a flush
+        // when the stream thread is the current thread.
+        streamThread = Thread.currentThread();
     }
 
     @Override

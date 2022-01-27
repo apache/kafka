@@ -46,10 +46,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+    private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
-
-    private final Position position = Position.emptyPosition();
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
@@ -76,7 +75,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public void init(final StateStoreContext context,
                      final StateStore root) {
         init(StoreToProcessorContextAdapter.adapt(context), root);
-
         this.context = context;
     }
 

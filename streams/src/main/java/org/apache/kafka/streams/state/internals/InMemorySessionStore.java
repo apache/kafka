@@ -73,7 +73,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private StateStoreContext stateStoreContext;
-    private Position position;
+    private final Position position;
 
     InMemorySessionStore(final String name,
                          final long retentionPeriod,

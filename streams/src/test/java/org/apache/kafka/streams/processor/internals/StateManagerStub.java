@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.CheckpointCallback;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -36,7 +36,7 @@ public class StateManagerStub implements StateManager {
     @Override
     public void registerStore(final StateStore store,
                               final StateRestoreCallback stateRestoreCallback,
-                              final CheckpointCallback checkpoint) {}
+                              final CommitCallback checkpoint) {}
 
     @Override
     public void flush() {}

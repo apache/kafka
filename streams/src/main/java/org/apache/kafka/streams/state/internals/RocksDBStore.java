@@ -116,9 +116,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected volatile boolean open = false;
     protected StateStoreContext context;
-    // VisibleForTesting
     protected Position position;
-    private File positionCheckpointFile;
     private OffsetCheckpoint positionCheckpoint;
 
     // VisibleForTesting
@@ -134,6 +132,44 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.parentDir = parentDir;
         this.metricsRecorder = metricsRecorder;
         this.position = Position.emptyPosition();
+    }
+
+    @Deprecated
+    @Override
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
+        if (context instanceof StateStoreContext) {
+            init((StateStoreContext) context, root);
+        } else {
+            throw new UnsupportedOperationException(
+                "Use RocksDBStore#init(StateStoreContext, StateStore) instead."
+            );
+        }
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        // open the DB dir
+        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        openDB(context.appConfigs(), context.stateDir());
+
+        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+
+        // value getter should always read directly from rocksDB
+        // since it is only for values that are already flushed
+        this.context = context;
+        context.register(
+            root,
+            (RecordBatchingStateRestoreCallback) this::restoreBatch,
+            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+        );
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false);
     }
 
     @SuppressWarnings("unchecked")
@@ -163,7 +199,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
-        // of compaction threads but not flush threads (the latter remains one). Also
+        // of compaction threads but not flush threads (the latter remains one). Also,
         // the parallelism value needs to be at least two because of the code in
         // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
         // subtracts one from the value passed to determine the number of compaction threads
@@ -191,9 +227,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } catch (final IOException fatal) {
             throw new ProcessorStateException(fatal);
         }
-
-        this.positionCheckpointFile = new File(stateDir, this.name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
 
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
@@ -246,46 +279,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
         }
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
-        openDB(context.appConfigs(), context.stateDir());
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-
-        // value getter should always read directly from rocksDB
-        // since it is only for values that are already flushed
-        context.register(root,
-                         (RecordBatchingStateRestoreCallback) this::restoreBatch,
-                         this::checkpoint);
-    }
-
-    public void checkpoint() throws IOException {
-        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
-        openDB(context.appConfigs(), context.stateDir());
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-
-        // value getter should always read directly from rocksDB
-        // since it is only for values that are already flushed
-        this.context = context;
-        context.register(root,
-                         (RecordBatchingStateRestoreCallback) this::restoreBatch,
-                         this::checkpoint);
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
     }
 
     @Override
@@ -342,7 +335,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
@@ -487,7 +479,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         return value < 0;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public synchronized void flush() {
         if (db == null) {

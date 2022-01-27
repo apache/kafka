@@ -85,23 +85,8 @@ public interface ProcessorContext {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    default void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback) {
-        register(store, stateRestoreCallback, null);
-    }
-
-    /**
-     * Register and possibly restores the specified storage engine.
-     *
-     * @param store the storage engine
-     * @param stateRestoreCallback the restoration callback logic for log-backed state stores upon restart
-     * @param checkpointCallback called to checkpoint position metatadata of state stores
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
     void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback, final CheckpointCallback checkpointCallback);
+                  final StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.
