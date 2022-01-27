@@ -19,7 +19,6 @@ name: unitTest
 
 on:
   pull_request:
-  push:
     # Using wildcard (e.g. '**') to build on all branches will cause PRs to run duplicate checks like `test (pull_request)` with `test (push)`.
     branches: ['2.4-li']
 
