@@ -89,8 +89,7 @@ public class KStreamKStreamJoinTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(6);
 
             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);

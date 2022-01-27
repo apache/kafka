@@ -1064,7 +1064,6 @@ public class StreamsConfigTest {
     @Test
     public void shouldLogWarningWhenEosAlphaIsUsed() throws InterruptedException {
         try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-            this.getClass().getName() + "#shouldLogWarningWhenEosAlphaIsUsed",
             Collections.singletonMap(StreamsConfig.class.getName(), "DEBUG")
         )) {
             logCaptureContext.setLatch(3);
@@ -1088,7 +1087,6 @@ public class StreamsConfigTest {
     @Test
     public void shouldLogWarningWhenEosBetaIsUsed() throws InterruptedException {
         try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-            this.getClass().getName() + "#shouldLogWarningWhenEosBetaIsUsed",
             Collections.singletonMap(StreamsConfig.class.getName(), "DEBUG")
         )) {
             logCaptureContext.setLatch(3);
@@ -1109,10 +1107,8 @@ public class StreamsConfigTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldLogWarningWhenRetriesIsUsed() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldLogWarningWhenRetriesIsUsed")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(1);
-
             props.put(StreamsConfig.RETRIES_CONFIG, 0);
             new StreamsConfig(props);
 

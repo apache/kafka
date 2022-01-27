@@ -371,8 +371,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
 
             processor.process(new Record<>(null, "1", 0L));
 
@@ -412,9 +411,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 11L));
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace")) {
-
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             // record is late
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
@@ -465,9 +462,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         ).get();
         processor.init(context);
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace")) {
-
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             // dummy record to establish stream time = 0
             context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 0L));

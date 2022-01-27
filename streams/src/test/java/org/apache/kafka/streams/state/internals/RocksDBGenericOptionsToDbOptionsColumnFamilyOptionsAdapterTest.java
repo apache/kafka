@@ -330,10 +330,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
     @Test
     public void shouldLogWarningWhenSettingWalOptions() throws Exception {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldLogWarningWhenSettingWalOptions",
-            Collections.singletonMap(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getName(), "WARN")
-        )) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
+            Collections.singletonMap(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class.getName(), "WARN"))) {
             logCaptureContext.setLatch(16);
             final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter
                 = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions());

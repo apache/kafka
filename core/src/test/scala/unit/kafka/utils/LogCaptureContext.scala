@@ -16,8 +16,9 @@
  */
 package unit.kafka.utils
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import org.apache.kafka.test.TestUtils
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
 import org.apache.logging.log4j.test.appender.ListAppender
@@ -52,9 +53,9 @@ class LogCaptureContext(listAppender: ListAppender, prevLevelMap: Map[String, Le
 }
 
 object LogCaptureContext {
-  def apply(name: String, levelMap: Map[String, String] = Map()): LogCaptureContext = {
+  def apply(levelMap: Map[String, String] = Map()): LogCaptureContext = {
     val loggerContext = LoggerContext.getContext(false)
-    val listAppender = ListAppender.createAppender(name,
+    val listAppender = ListAppender.createAppender("logger-context-" + TestUtils.randomString(8),
       false, false, null, null)
     listAppender.start
     loggerContext.getConfiguration.addAppender(listAppender)

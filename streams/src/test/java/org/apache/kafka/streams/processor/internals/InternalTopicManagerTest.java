@@ -781,8 +781,7 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() throws InterruptedException {
         try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldLogWhenTopicNotFoundAndNotThrowException",
-                Collections.singletonMap(InternalTopicManager.class.getName(), "DEBUG"))) {
+            Collections.singletonMap(InternalTopicManager.class.getName(), "DEBUG"))) {
             logCaptureContext.setLatch(4);
 
             mockAdminClient.addTopic(

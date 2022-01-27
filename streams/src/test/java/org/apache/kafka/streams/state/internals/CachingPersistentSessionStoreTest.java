@@ -818,8 +818,7 @@ public class CachingPersistentSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWhenBackwardWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
@@ -845,8 +844,7 @@ public class CachingPersistentSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 

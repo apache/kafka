@@ -53,8 +53,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenNewStoreInRegularMode() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldOpenNewStoreInRegularMode")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
             rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
@@ -69,8 +68,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenExistingStoreInRegularMode() throws Exception {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldOpenExistingStoreInRegularMode")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(3);
 
             // prepare store
@@ -132,8 +130,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     public void shouldMigrateDataFromDefaultToTimestampColumnFamily() throws Exception {
         prepareOldStore();
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldMigrateDataFromDefaultToTimestampColumnFamily")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(3);
 
             rocksDBStore.init((StateStoreContext) context, rocksDBStore);

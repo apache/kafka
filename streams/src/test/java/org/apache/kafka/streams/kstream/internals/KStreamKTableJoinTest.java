@@ -228,8 +228,7 @@ public class KStreamKTableJoinTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftKey() {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogAndMeterWhenSkippingNullLeftKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "A");
@@ -244,8 +243,7 @@ public class KStreamKTableJoinTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftValue() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogAndMeterWhenSkippingNullLeftValue")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(5);
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());

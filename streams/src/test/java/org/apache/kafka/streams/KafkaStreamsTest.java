@@ -476,8 +476,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldCleanupResourcesOnCloseWithoutPreviousStart");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
             final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.close();
 
@@ -537,8 +536,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#testStateGlobalThreadClose");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
             waitForCondition(

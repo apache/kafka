@@ -202,9 +202,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
     createServer(Some(adminClientConfig))
 
-    val logCaptureContext = LogCaptureContext(
-      classOf[AppInfoParser].getName, Map(classOf[AppInfoParser].getName -> "WARN")
-    )
+    val logCaptureContext = LogCaptureContext(Map(classOf[AppInfoParser].getName -> "WARN"))
     try {
         testAclCli(adminArgs)
       val warning = logCaptureContext.getMessages.find(e => e.getLevel == Level.WARN &&

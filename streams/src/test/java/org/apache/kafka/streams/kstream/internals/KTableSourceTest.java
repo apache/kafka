@@ -135,9 +135,7 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#kTableShouldLogAndMeterOnSkippedRecords",
-                     Collections.singletonMap(KTableSource.class.getName(), "WARN"));
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(Collections.singletonMap(KTableSource.class.getName(), "WARN"));
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -163,9 +161,7 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed, Materialized.as("store"));
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#kTableShouldLogOnOutOfOrder",
-                     Collections.singletonMap(KTableSource.class.getName(), "WARN"));
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(Collections.singletonMap(KTableSource.class.getName(), "WARN"));
             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =

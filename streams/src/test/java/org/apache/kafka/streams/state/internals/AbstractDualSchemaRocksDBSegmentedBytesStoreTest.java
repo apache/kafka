@@ -1023,8 +1023,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogAndMeasureExpiredRecords")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(1);
 
             // write a record to advance stream time, with a high enough timestamp

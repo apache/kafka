@@ -341,8 +341,7 @@ public class StateDirectoryTest {
         assertEquals(1, directory.listAllTaskDirectories().size());
         assertEquals(1, directory.listNonEmptyTaskDirectories().size());
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldCleanupObsoleteStateDirectoriesOnlyOnce.0")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             time.sleep(5000);
             logCaptureContext.setLatch(1);
             directory.cleanRemovedTasks(0);
@@ -498,8 +497,7 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldNotCreateBaseDirectory() throws IOException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldNotCreateBaseDirectory")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             initializeStateDirectory(false, false);
             assertThat(stateDir.exists(), is(false));
             assertThat(appDir.exists(), is(false));
@@ -579,8 +577,7 @@ public class StateDirectoryTest {
         final File dummyFile = new File(appDir, "dummy");
         assertTrue(dummyFile.createNewFile());
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldNotDeleteAppDirWhenCleanUpIfNotEmpty")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(4);
             // call StateDirectory#clean
             directory.clean();
@@ -599,8 +596,7 @@ public class StateDirectoryTest {
         assertThat(testFile.mkdir(), is(true));
         assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldLogManualUserCallMessage")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             directory.clean();
@@ -619,8 +615,7 @@ public class StateDirectoryTest {
         assertThat(testFile.mkdir(), is(true));
         assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldLogStateDirCleanerMessage")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
             final long cleanupDelayMs = 0;
             time.sleep(5000);
@@ -631,8 +626,7 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldLogTempDirMessage() {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogTempDirMessage")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(4);
 
             new StateDirectory(
@@ -769,9 +763,7 @@ public class StateDirectoryTest {
         assertThat(directory.listAllTaskDirectories().size(), is(1));
         assertThat(directory.listNonEmptyTaskDirectories().size(), is(1));
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() +
-                     "#shouldCleanupObsoleteTaskDirectoriesInNamedTopologiesAndDeleteTheParentDirectories")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
             time.sleep(5000);
             directory.cleanRemovedTasks(0);

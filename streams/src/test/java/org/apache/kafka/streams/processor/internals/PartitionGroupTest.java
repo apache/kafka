@@ -571,8 +571,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldNeverWaitIfIdlingIsDisabled",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -611,8 +610,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldBeReadyIfAllPartitionsAreBuffered",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(true));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -644,8 +642,7 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldWaitForFetchesWhenMetadataIsIncomplete",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -682,8 +679,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldWaitForPollWhenLagIsNonzero",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -715,8 +711,7 @@ public class PartitionGroupTest {
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.1",
-                     Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(0L), is(false));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -725,8 +720,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.2",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
                 logCaptureContext.getMessages(),
@@ -740,8 +734,7 @@ public class PartitionGroupTest {
         }
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldIdleAsSpecifiedWhenLagIsZero.3",
-                 Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
+                 LogCaptureContext.create(Collections.singletonMap(PartitionGroup.class.getName(), "TRACE"))) {
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
                 logCaptureContext.getMessages(),

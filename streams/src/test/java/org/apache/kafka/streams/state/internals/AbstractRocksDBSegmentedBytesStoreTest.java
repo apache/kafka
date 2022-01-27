@@ -803,8 +803,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeasureExpiredRecords")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             // write a record to advance stream time, with a high enough timestamp
             // that the subsequent record in windows[0] will already be expired.
             bytesStore.put(serializeKey(new Windowed<>("dummy", nextSegmentWindow)), serializeValue(0));

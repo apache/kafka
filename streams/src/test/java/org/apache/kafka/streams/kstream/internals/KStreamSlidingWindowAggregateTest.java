@@ -1012,7 +1012,7 @@ public class KStreamSlidingWindowAggregateTest {
                 .aggregate(MockInitializer.STRING_INIT, MockAggregator.toStringInstance("+"), Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()));
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingNullKey");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             logCaptureContext.setLatch(1);
             final TestInputTopic<String, String> inputTopic =
@@ -1046,7 +1046,7 @@ public class KStreamSlidingWindowAggregateTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeterWhenSkippingNullKey");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             logCaptureContext.setLatch(1);
 

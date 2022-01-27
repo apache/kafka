@@ -582,7 +582,7 @@ public class KGroupedStreamImplTest {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeasureSkipsInAggregate");
+                 LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);
@@ -632,7 +632,7 @@ public class KGroupedStreamImplTest {
         );
 
         try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeasureSkipsInReduce");
+                 LogCaptureContext.create();
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             processData(driver);

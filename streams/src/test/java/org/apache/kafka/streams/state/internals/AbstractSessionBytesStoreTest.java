@@ -722,8 +722,7 @@ public abstract class AbstractSessionBytesStoreTest {
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldLogAndMeasureExpiredRecords")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
@@ -799,8 +798,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final String keyTo = Serdes.String().deserializer()
             .deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(1);
 
             final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);

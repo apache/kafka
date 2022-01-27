@@ -170,8 +170,7 @@ public class GlobalStateManagerImplTest {
         file.createNewFile();
         file.setWritable(false);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldLogWarningMessageWhenIOExceptionInCheckPoint")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
             stateManager.checkpoint();
             logCaptureContext.await();

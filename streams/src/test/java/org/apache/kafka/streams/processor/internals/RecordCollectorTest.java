@@ -730,8 +730,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-                + "#shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(1);
 
             final RecordCollector collector = new RecordCollectorImpl(

@@ -807,8 +807,7 @@ public class CachingInMemorySessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWhenBackwardWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
@@ -830,8 +829,7 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));

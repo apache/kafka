@@ -998,8 +998,7 @@ public class CachingPersistentWindowStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
@@ -1024,8 +1023,7 @@ public class CachingPersistentWindowStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =

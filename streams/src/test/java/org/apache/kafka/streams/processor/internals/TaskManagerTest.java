@@ -2762,9 +2762,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldHaveRemainingPartitionsUncleared() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldHaveRemainingPartitionsUncleared",
-            Collections.singletonMap(TaskManager.class.getName(), "DEBUG"))) {
+        try (final LogCaptureContext logCaptureContext =
+                 LogCaptureContext.create(Collections.singletonMap(TaskManager.class.getName(), "DEBUG"))) {
             logCaptureContext.setLatch(4);
 
             final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);

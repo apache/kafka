@@ -579,8 +579,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             try (final KeyValueIterator<Integer, String> iterator = store.range(-1, 1)) {
@@ -599,8 +598,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithNegativeFromKey() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidReverseRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1)) {
@@ -619,8 +617,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             try (final KeyValueIterator<Integer, String> iterator = store.range(2, 1)) {
@@ -639,8 +636,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithFromLargerThanTo() throws InterruptedException {
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowInvalidReverseRangeExceptionWithFromLargerThanTo")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             logCaptureContext.setLatch(2);
 
             try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1)) {

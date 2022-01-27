@@ -968,8 +968,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() + "#shouldNotThrowInvalidRangeExceptionWithNegativeFromKey")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L);
             assertFalse(iterator.hasNext());
 
@@ -999,8 +998,7 @@ public abstract class AbstractWindowBytesStoreTest {
         context.setTime(1L);
         windowStore.init((StateStoreContext) context, windowStore);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldLogAndMeasureExpiredRecords")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
 

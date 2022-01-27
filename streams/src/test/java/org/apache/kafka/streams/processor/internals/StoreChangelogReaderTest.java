@@ -1129,8 +1129,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     @Test
     public void shouldNotThrowOnUnknownRevokedPartition() throws InterruptedException {
         try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(
-                this.getClass().getName() + "#shouldNotThrowOnUnknownRevokedPartition",
-                Collections.singletonMap(StoreChangelogReader.class.getName(), "DEBUG"))) {
+            Collections.singletonMap(StoreChangelogReader.class.getName(), "DEBUG"))) {
             logCaptureContext.setLatch(2);
 
             changelogReader.unregister(Collections.singletonList(new TopicPartition("unknown", 0)));

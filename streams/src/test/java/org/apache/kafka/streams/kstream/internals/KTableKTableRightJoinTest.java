@@ -52,9 +52,7 @@ public class KTableKTableRightJoinTest {
         context.setRecordMetadata("left", -1, -2);
         join.init(context);
 
-        try (final LogCaptureContext logCaptureContext =
-                 LogCaptureContext.create(this.getClass().getName() +
-                     "#shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersionLatest")) {
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create()) {
             join.process(new Record<>(null, new Change<>("new", "old"), 0));
 
             assertThat(

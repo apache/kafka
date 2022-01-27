@@ -379,8 +379,7 @@ public class AdjustStreamThreadCountTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldResizeCacheAfterThreadRemovalTimesOut");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             logCaptureContext.setLatch(20);
 
@@ -405,8 +404,7 @@ public class AdjustStreamThreadCountTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, maxBufferBytes);
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldResizeMaxBufferAfterThreadRemovalTimesOut");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             logCaptureContext.setLatch(20);
             addStreamStateChangeListener(kafkaStreams);
@@ -458,8 +456,7 @@ public class AdjustStreamThreadCountTest {
             }
         });
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldResizeCacheAfterThreadReplacement");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             logCaptureContext.setLatch(20);
 
@@ -515,8 +512,7 @@ public class AdjustStreamThreadCountTest {
             }
         });
 
-        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create(this.getClass().getName()
-            + "#shouldResizeMaxBufferAfterThreadReplacement");
+        try (final LogCaptureContext logCaptureContext = LogCaptureContext.create();
              final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             logCaptureContext.setLatch(20);
             addStreamStateChangeListener(kafkaStreams);

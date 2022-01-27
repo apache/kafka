@@ -32,18 +32,18 @@ public class LogCaptureContext implements AutoCloseable {
     private final ListAppender listAppender;
     private final Map<String, Level> prevLevelMap = new HashMap<>();
 
-    public static LogCaptureContext create(final String name) {
-        return create(name, new HashMap<>());
+    public static LogCaptureContext create() {
+        return create(new HashMap<>());
     }
 
-    public static LogCaptureContext create(final String name, final Map<String, String> levelMap) {
-        return new LogCaptureContext(name, levelMap);
+    public static LogCaptureContext create(final Map<String, String> levelMap) {
+        return new LogCaptureContext(levelMap);
     }
 
-    private LogCaptureContext(final String name, final Map<String, String> levelMap) {
+    private LogCaptureContext(final Map<String, String> levelMap) {
         final LoggerContext loggerContext = LoggerContext.getContext(false);
-        listAppender = ListAppender.createAppender(name, false, false,
-            PatternLayout.newBuilder().withPattern("%p %m %throwable").build(), null);
+        listAppender = ListAppender.createAppender("logger-context-" + TestUtils.randomString(8),
+            false, false, PatternLayout.newBuilder().withPattern("%p %m %throwable").build(), null);
         listAppender.start();
         loggerContext.getConfiguration().addAppender(listAppender);
         loggerContext.getRootLogger().addAppender(listAppender);

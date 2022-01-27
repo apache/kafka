@@ -590,7 +590,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     testControllerMove(() => {
       val adminZkClient = new AdminZkClient(zkClient)
       adminZkClient.createTopicWithAssignment(tp.topic, config = new Properties(), assignment)
-    }, s"classOf[ControllerIntegrationTest]#testControllerMoveOnTopicCreation")
+    })
   }
 
   @Test
@@ -604,7 +604,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     testControllerMove(() => {
       val adminZkClient = new AdminZkClient(zkClient)
       adminZkClient.deleteTopic(tp.topic())
-    }, s"classOf[ControllerIntegrationTest]#testControllerMoveOnTopicDeletion")
+    })
   }
 
   @Test
@@ -615,8 +615,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp.topic(), assignment, servers)
 
     testControllerMove(
-      () => zkClient.createPreferredReplicaElection(Set(tp)),
-      s"classOf[ControllerIntegrationTest]#testControllerMoveOnPreferredReplicaElection")
+      () => zkClient.createPreferredReplicaElection(Set(tp)))
   }
 
   @Test
@@ -629,8 +628,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
 
     val reassignment = Map(tp -> Seq(0))
     testControllerMove(
-      () => zkClient.createPartitionReassignment(reassignment),
-      s"classOf[ControllerIntegrationTest]#testControllerMoveOnPartitionReassignment")
+      () => zkClient.createPartitionReassignment(reassignment))
   }
 
   @Test
@@ -1528,9 +1526,9 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertTrue(servers.head.kafkaController.controllerContext.topicNames.get(topicIdAfterUpgrade.get).isEmpty)
   }
 
-  private def testControllerMove(fun: () => Unit, contextName: String): Unit = {
+  private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
-    val logCaptureContext = LogCaptureContext(contextName, scala.Predef.Map(classOf[KafkaController].getName -> "INFO"))
+    val logCaptureContext = LogCaptureContext(scala.Predef.Map(classOf[KafkaController].getName -> "INFO"))
     logCaptureContext.setLatch(1)
 
     try {
