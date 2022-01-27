@@ -365,14 +365,16 @@ class WorkerSourceTask extends WorkerTask {
                     producerRecord,
                     (recordMetadata, e) -> {
                         if (e != null) {
-                            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                             if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
+                                log.trace("Ignoring failed record send: {} failed to send record to {}: ",
+                                        WorkerSourceTask.this, topic, e);
                                 // executeFailed here allows the use of existing logging infrastructure/configuration
                                 retryWithToleranceOperator.executeFailed(Stage.KAFKA_PRODUCE, WorkerSourceTask.class,
                                         preTransformRecord, e);
                                 commitTaskRecord(preTransformRecord, null);
                             } else {
+                                log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
+                                log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                                 producerSendException.compareAndSet(null, e);
                             }
                         } else {
