@@ -419,7 +419,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
     val log: UnifiedLog = getLog(broker, partition)
-    log.flush()
+    log.flush(false)
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 

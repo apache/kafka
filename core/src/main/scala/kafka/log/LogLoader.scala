@@ -326,8 +326,9 @@ class LogLoader(
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
           case _: NoSuchFileException =>
-            error(s"Could not find offset index file corresponding to log file" +
-              s" ${segment.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
+            if (hadCleanShutdown || segment.baseOffset < recoveryPointCheckpoint)
+              error(s"Could not find offset index file corresponding to log file" +
+                s" ${segment.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
             recoverSegment(segment)
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file" +

@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -764,7 +764,7 @@ class LogLoaderTest {
     val lastOffset = log.logEndOffset
     // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
     val lastTimeIndexOffset = log.logEndOffset - 1
-    val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
+    val lastTimeIndexTimestamp = log.activeSegment.largestTimestamp
     // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
     val numTimeIndexEntries = log.activeSegment.timeIndex.entries + {
       if (log.activeSegment.timeIndex.lastEntry.offset == log.logEndOffset - 1) 0 else 1
@@ -790,7 +790,7 @@ class LogLoaderTest {
     log = createLog(logDir, logConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     // the recovery point should not be updated after unclean shutdown until the log is flushed
     verifyRecoveredLog(log, recoveryPoint)
-    log.flush()
+    log.flush(false)
     verifyRecoveredLog(log, lastOffset)
     log.close()
   }
@@ -1680,5 +1680,48 @@ class LogLoaderTest {
     assertTrue(offsetsWithMissingSnapshotFiles.isEmpty,
       s"Found offsets with missing producer state snapshot files: $offsetsWithMissingSnapshotFiles")
     assertFalse(logDir.list().exists(_.endsWith(UnifiedLog.DeletedFileSuffix)), "Expected no files to be present with the deleted file suffix")
+  }
+
+  @Test
+  def testRecoverWithEmptyActiveSegment(): Unit = {
+    val numMessages = 100
+    val messageSize = 100
+    val segmentSize = 7 * messageSize
+    val indexInterval = 3 * messageSize
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = indexInterval, segmentIndexBytes = 4096)
+    var log = createLog(logDir, logConfig)
+    for(i <- 0 until numMessages)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
+        timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+    assertEquals(numMessages, log.logEndOffset,
+      "After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages))
+    log.roll()
+    log.flush(false)
+    assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
+    var lastOffset = log.logEndOffset
+    log.closeHandlers()
+
+    log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
+    assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
+    assertEquals(numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
+    assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
+    log.activeSegment.sanityCheck(true) // this should not throw because the LogLoader created the empty active log index file during recovery
+
+    for(i <- 0 until numMessages)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
+        timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+    log.roll()
+    assertThrows(classOf[NoSuchFileException], () => log.activeSegment.sanityCheck(true))
+    log.flush(true)
+    log.activeSegment.sanityCheck(true) // this should not throw because we flushed the active segment which created the empty log index file
+    lastOffset = log.logEndOffset
+
+    log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
+    assertEquals(lastOffset, log.recoveryPoint, s"Unexpected recovery point")
+    assertEquals(2 * numMessages, log.logEndOffset, s"Should have $numMessages messages when log is reopened w/o recovery")
+    assertEquals(0, log.activeSegment.timeIndex.entries, "Should have same number of time index entries as before.")
+    log.activeSegment.sanityCheck(true) // this should not throw
+
+    log.close()
   }
 }
