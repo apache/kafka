@@ -38,6 +38,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -270,23 +273,52 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     @Test
-    public void shouldFallbackToLeastLoadedClientsWhenThereIsNotEnoughCapacityToSatisfyTheRackAwareness() {
+    public void shouldSatisfyTheRackAwarenessWhenThereIsNoCapacityOnOtherClients() {
         final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
-            mkEntry(UUID_2, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_2)), TASK_0_1)),
-            mkEntry(UUID_3, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_2)),
-            mkEntry(UUID_4, createClientStateWithCapacity(1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1)), TASK_1_0))
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_0_1)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0, TASK_1_1)),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_2_0, TASK_2_1)),
+            mkEntry(UUID_4, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_1_2, TASK_1_3))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
-        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG, ZONE_TAG);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
 
         new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
 
-        assertEquals(1, clientStates.get(UUID_1).standbyTaskCount());
-        assertEquals(1, clientStates.get(UUID_2).standbyTaskCount());
-        assertEquals(1, clientStates.get(UUID_3).standbyTaskCount());
-        assertEquals(1, clientStates.get(UUID_4).standbyTaskCount());
+        assertEquals(2, clientStates.get(UUID_1).standbyTaskCount());
+        assertEquals(2, clientStates.get(UUID_2).standbyTaskCount());
+        assertEquals(2, clientStates.get(UUID_3).standbyTaskCount());
+        assertEquals(2, clientStates.get(UUID_4).standbyTaskCount());
+
+        assertTrue(standbyClientsHonorRackAwareness(TASK_0_0, clientStates, asList(mkSet(UUID_3), mkSet(UUID_4))));
+        assertTrue(standbyClientsHonorRackAwareness(TASK_0_1, clientStates, asList(mkSet(UUID_3), mkSet(UUID_4))));
+
+        assertTrue(standbyClientsHonorRackAwareness(TASK_1_0, clientStates, asList(mkSet(UUID_3), mkSet(UUID_4))));
+        assertTrue(standbyClientsHonorRackAwareness(TASK_1_1, clientStates, asList(mkSet(UUID_3), mkSet(UUID_4))));
+
+        assertTrue(standbyClientsHonorRackAwareness(TASK_2_0, clientStates, asList(mkSet(UUID_1), mkSet(UUID_2))));
+        assertTrue(standbyClientsHonorRackAwareness(TASK_2_1, clientStates, asList(mkSet(UUID_1), mkSet(UUID_2))));
+
+        assertTrue(standbyClientsHonorRackAwareness(TASK_1_2, clientStates, asList(mkSet(UUID_1), mkSet(UUID_2))));
+        assertTrue(standbyClientsHonorRackAwareness(TASK_1_3, clientStates, asList(mkSet(UUID_1), mkSet(UUID_2))));
+    }
+
+    @Test
+    public void shouldDisregardRackAwarenessWhenCapacityIsReachedAndOtherClientsHaveEnoughCapacity() {
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_0_1)),
+            mkEntry(UUID_2, createClientStateWithCapacity(4, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_2_0, TASK_2_1))
+        );
+
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(1, CLUSTER_TAG);
+
+        new ClientTagAwareStandbyTaskAssignor().assign(clientStates, allActiveTasks, allActiveTasks, assignmentConfigs);
+
+        assertEquals(4, clientStates.get(UUID_2).standbyTaskCount());
+        assertTrue(clientStates.get(UUID_2).standbyTasks().containsAll(mkSet(TASK_0_0, TASK_0_1, TASK_2_0, TASK_2_1)));
     }
 
     @Test

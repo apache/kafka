@@ -33,6 +33,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.shouldBalanceLoad;
+
 public class StickyTaskAssignor implements TaskAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
@@ -173,28 +175,15 @@ public class StickyTaskAssignor implements TaskAssignor {
             return leastLoaded(taskId, clientsWithin);
         }
 
-        if (shouldBalanceLoad(previous)) {
+        if (shouldBalanceLoad(clients.values(), previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
-            if (standby == null || shouldBalanceLoad(standby)) {
+            if (standby == null || shouldBalanceLoad(clients.values(), previous)) {
                 return leastLoaded(taskId, clientsWithin);
             }
             return standby;
         }
 
         return previous;
-    }
-
-    private boolean shouldBalanceLoad(final ClientState client) {
-        return client.reachedCapacity() && hasClientsWithMoreAvailableCapacity(client);
-    }
-
-    private boolean hasClientsWithMoreAvailableCapacity(final ClientState client) {
-        for (final ClientState clientState : clients.values()) {
-            if (clientState.hasMoreAvailableCapacityThan(client)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<UUID> clientsWithin) {

@@ -29,8 +29,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.shouldBalanceLoad;
 
 /**
  * Distributes standby tasks over different tag dimensions.
@@ -209,7 +210,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
             final ClientState standbyTaskClient = clientStates.get(polledClient);
 
-            if (standbyTaskClient.reachedCapacity()) {
+            if (shouldBalanceLoad(clientStates.values(), standbyTaskClient)) {
                 final Map<String, String> standbyClientTags = standbyTaskClient.clientTags();
                 log.warn("Can't assign {} of {} standby task for task [{}]. " +
                          "There is not enough capacity on client(s) with {} tag dimensions. " +

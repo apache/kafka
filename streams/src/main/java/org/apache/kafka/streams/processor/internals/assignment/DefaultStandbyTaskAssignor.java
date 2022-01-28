@@ -24,8 +24,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
 
 class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);

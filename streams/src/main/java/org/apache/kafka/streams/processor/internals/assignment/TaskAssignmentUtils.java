@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -25,8 +26,21 @@ import java.util.function.Function;
 
 import static java.util.stream.Collectors.toMap;
 
-final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {
+final class TaskAssignmentUtils {
+    private TaskAssignmentUtils() {
+    }
+
+    static boolean shouldBalanceLoad(final Collection<ClientState> clientStates, final ClientState client) {
+        return client.reachedCapacity() && hasClientsWithMoreAvailableCapacity(clientStates, client);
+    }
+
+    static boolean hasClientsWithMoreAvailableCapacity(final Collection<ClientState> clientStates, final ClientState client) {
+        for (final ClientState clientState : clientStates) {
+            if (clientState.hasMoreAvailableCapacityThan(client)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static int pollClientAndMaybeAssignRemainingStandbyTasks(final Map<UUID, ClientState> clients,
