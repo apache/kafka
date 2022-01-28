@@ -452,7 +452,7 @@ object ConsoleConsumer extends Logging {
     }
 
     def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
-      if (!recordIter.hasNext) {
+      while (!recordIter.hasNext) {
         recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator
       }
 
