@@ -108,7 +108,7 @@ public class RepartitionOptimizingTest {
     @Before
     public void setUp() {
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        streamsConfiguration.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, Integer.toString(1024 * 10));
+        streamsConfiguration.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, Integer.toString(1024 * 10));
         streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(5000));
 
         processorValueCollector.clear();

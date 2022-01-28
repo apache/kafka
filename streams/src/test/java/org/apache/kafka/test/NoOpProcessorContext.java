@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -117,7 +118,8 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
     }
 
     @Override

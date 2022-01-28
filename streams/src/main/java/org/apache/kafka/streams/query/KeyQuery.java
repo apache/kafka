@@ -27,9 +27,11 @@ import java.util.Objects;
 public final class KeyQuery<K, V> implements Query<V> {
 
     private final K key;
+    private final boolean skipCache;
 
-    private KeyQuery(final K key) {
+    private KeyQuery(final K key, final boolean skipCache) {
         this.key = Objects.requireNonNull(key);
+        this.skipCache = skipCache;
     }
 
     /**
@@ -40,7 +42,15 @@ public final class KeyQuery<K, V> implements Query<V> {
      * @param <V> The type of the value that will be retrieved
      */
     public static <K, V> KeyQuery<K, V> withKey(final K key) {
-        return new KeyQuery<>(key);
+        return new KeyQuery<>(key, false);
+    }
+
+    /**
+     * Specifies that the cache should be skipped during query evaluation. This means, that the query will always
+     * get forwarded to the underlying store.
+     */
+    public KeyQuery<K, V> skipCache() {
+        return new KeyQuery<>(key, true);
     }
 
     /**
@@ -48,5 +58,12 @@ public final class KeyQuery<K, V> implements Query<V> {
      */
     public K getKey() {
         return key;
+    }
+
+    /**
+     * The flag whether to skip the cache or not during query evaluation.
+     */
+    public boolean isSkipCache() {
+        return skipCache;
     }
 }

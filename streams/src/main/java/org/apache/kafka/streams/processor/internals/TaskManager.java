@@ -190,15 +190,15 @@ public class TaskManager {
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
             final Collection<Task> tasksToCommit = tasks()
-                .values()
-                .stream()
-                .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                .filter(t -> !corruptedTasks.contains(t.id()))
-                .collect(Collectors.toSet());
+                    .values()
+                    .stream()
+                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                    .filter(t -> !corruptedTasks.contains(t.id()))
+                    .collect(Collectors.toSet());
             commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, new HashMap<>());
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
-                         "tasks to clean and revive: {}", e.corruptedTasks());
+                    "tasks to clean and revive: {}", e.corruptedTasks());
             corruptedActiveTasks.addAll(tasks.tasks(e.corruptedTasks()));
         } catch (final TimeoutException e) {
             log.info("Hit TimeoutException when committing all non-corrupted tasks, these will be closed and revived");
@@ -249,13 +249,13 @@ public class TaskManager {
                 final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
-                    intersection(HashSet::new, currentAssignment, taskInputPartitions);
+                        intersection(HashSet::new, currentAssignment, taskInputPartitions);
                 if (!assignedToPauseAndReset.equals(taskInputPartitions)) {
                     log.warn(
-                        "Expected the current consumer assignment {} to contain the input partitions {}. " +
-                            "Will proceed to recover.",
-                        currentAssignment,
-                        taskInputPartitions
+                            "Expected the current consumer assignment {} to contain the input partitions {}. " +
+                                    "Will proceed to recover.",
+                            currentAssignment,
+                            taskInputPartitions
                     );
                 }
 
@@ -274,15 +274,15 @@ public class TaskManager {
     public void handleAssignment(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                  final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         log.info("Handle new assignment with:\n" +
-                     "\tNew active tasks: {}\n" +
-                     "\tNew standby tasks: {}\n" +
-                     "\tExisting active tasks: {}\n" +
-                     "\tExisting standby tasks: {}",
-                 activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
+                        "\tNew active tasks: {}\n" +
+                        "\tNew standby tasks: {}\n" +
+                        "\tExisting active tasks: {}\n" +
+                        "\tExisting standby tasks: {}",
+                activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
         topologyMetadata.addSubscribedTopicsFromAssignment(
-            activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
-            logPrefix
+                activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
+                logPrefix
         );
 
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
@@ -311,12 +311,12 @@ public class TaskManager {
 
         // close and recycle those tasks
         handleCloseAndRecycle(
-            tasksToRecycle,
-            tasksToCloseClean,
-            tasksToCloseDirty,
-            activeTasksToCreate,
-            standbyTasksToCreate,
-            taskCloseExceptions
+                tasksToRecycle,
+                tasksToCloseClean,
+                tasksToCloseDirty,
+                activeTasksToCreate,
+                standbyTasksToCreate,
+                taskCloseExceptions
         );
 
         if (!taskCloseExceptions.isEmpty()) {
@@ -333,11 +333,11 @@ public class TaskManager {
                         throw new StreamsException(exception, taskId);
                     } else {
                         throw new StreamsException(
-                            "Unexpected failure to close " + taskCloseExceptions.size() +
-                                " task(s) [" + taskCloseExceptions.keySet() + "]. " +
-                                "First unexpected exception (for task " + taskId + ") follows.",
-                            exception,
-                            taskId
+                                "Unexpected failure to close " + taskCloseExceptions.size() +
+                                        " task(s) [" + taskCloseExceptions.keySet() + "]. " +
+                                        "First unexpected exception (for task " + taskId + ") follows.",
+                                exception,
+                                taskId
                         );
                     }
                 }
@@ -484,10 +484,10 @@ public class TaskManager {
                     } catch (final TimeoutException timeoutException) {
                         task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
                         log.debug(
-                            String.format(
-                                "Could not complete restoration for %s due to the following exception; will retry",
-                                task.id()),
-                            timeoutException
+                                String.format(
+                                        "Could not complete restoration for %s due to the following exception; will retry",
+                                        task.id()),
+                                timeoutException
                         );
 
                         allRunning = false;
@@ -539,8 +539,8 @@ public class TaskManager {
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
-                          + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+                    + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                    "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
@@ -562,7 +562,7 @@ public class TaskManager {
             commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                     e.corruptedTasks());
+                    e.corruptedTasks());
 
             // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
             dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
@@ -773,8 +773,8 @@ public class TaskManager {
             } else if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
                 if (offset < 0) {
                     throw new StreamsException(
-                        new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
-                        id);
+                            new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
+                            id);
                 }
                 offsetSum += offset;
                 if (offsetSum < 0) {
@@ -818,17 +818,17 @@ public class TaskManager {
         activeTasks.addAll(tasks.activeTasks());
 
         executeAndMaybeSwallow(
-            clean,
-            () -> closeAndCleanUpTasks(activeTasks, standbyTaskIterable(), clean),
-            e -> firstException.compareAndSet(null, e),
-            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+                clean,
+                () -> closeAndCleanUpTasks(activeTasks, standbyTaskIterable(), clean),
+                e -> firstException.compareAndSet(null, e),
+                e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
         executeAndMaybeSwallow(
-            clean,
-            tasks::closeThreadProducerIfNeeded,
-            e -> firstException.compareAndSet(null, e),
-            e -> log.warn("Ignoring an exception while closing thread producer.", e)
+                clean,
+                tasks::closeThreadProducerIfNeeded,
+                e -> firstException.compareAndSet(null, e),
+                e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
 
         tasks.clear();
@@ -836,10 +836,10 @@ public class TaskManager {
         // this should be called after closing all tasks and clearing them from `tasks` to make sure we unlock the dir
         // for any tasks that may have still been in CREATED at the time of shutdown, since Task#close will not do so
         executeAndMaybeSwallow(
-            clean,
-            this::releaseLockedUnassignedTaskDirectories,
-            e -> firstException.compareAndSet(null, e),
-            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+                clean,
+                this::releaseLockedUnassignedTaskDirectories,
+                e -> firstException.compareAndSet(null, e),
+                e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
         final RuntimeException fatalException = firstException.get();
@@ -865,10 +865,10 @@ public class TaskManager {
         // TODO: change type to `StreamTask`
         for (final Task activeTask : activeTasks) {
             executeAndMaybeSwallow(
-                clean,
-                () -> tasks.closeAndRemoveTaskProducerIfNeeded(activeTask),
-                e -> firstException.compareAndSet(null, e),
-                e -> log.warn("Ignoring an exception while closing task " + activeTask.id() + " producer.", e)
+                    clean,
+                    () -> tasks.closeAndRemoveTaskProducerIfNeeded(activeTask),
+                    e -> firstException.compareAndSet(null, e),
+                    e -> log.warn("Ignoring an exception while closing task " + activeTask.id() + " producer.", e)
             );
         }
 
@@ -1005,14 +1005,14 @@ public class TaskManager {
 
     Set<TaskId> activeTaskIds() {
         return activeTaskStream()
-            .map(Task::id)
-            .collect(Collectors.toSet());
+                .map(Task::id)
+                .collect(Collectors.toSet());
     }
 
     Set<TaskId> standbyTaskIds() {
         return standbyTaskStream()
-            .map(Task::id)
-            .collect(Collectors.toSet());
+                .map(Task::id)
+                .collect(Collectors.toSet());
     }
 
     Map<TaskId, Task> tasks() {
@@ -1061,12 +1061,23 @@ public class TaskManager {
 
             if (activeTask == null) {
                 log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
-                    partition, toString(">"));
+                        partition, toString(">"));
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
             activeTask.addRecords(partition, records.records(partition));
         }
+    }
+
+    /**
+     *  Fetch all non-empty partitions for pausing
+     */
+    Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
+        for (final Task task : activeTaskIterable()) {
+            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+        }
+        return nonEmptyPartitions;
     }
 
     /**
@@ -1084,8 +1095,8 @@ public class TaskManager {
             committed = commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadataPerTask);
         } catch (final TimeoutException timeoutException) {
             consumedOffsetsAndMetadataPerTask
-                .keySet()
-                .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
+                    .keySet()
+                    .forEach(t -> t.maybeInitTaskTimeoutOrThrow(time.milliseconds(), timeoutException));
         }
 
         return committed;
@@ -1164,19 +1175,19 @@ public class TaskManager {
                     final Task task = taskToCommit.getKey();
                     try {
                         tasks.streamsProducerForTask(task.id())
-                            .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                                .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
                         updateTaskCommitMetadata(taskToCommit.getValue());
                     } catch (final TimeoutException timeoutException) {
                         log.error(
-                            String.format("Committing task %s failed.", task.id()),
-                            timeoutException
+                                String.format("Committing task %s failed.", task.id()),
+                                timeoutException
                         );
                         corruptedTasks.add(task.id());
                     }
                 }
             } else {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                        .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
                 if (processingMode == EXACTLY_ONCE_V2) {
                     try {
@@ -1184,17 +1195,17 @@ public class TaskManager {
                         updateTaskCommitMetadata(allOffsets);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
-                            String.format("Committing task(s) %s failed.",
-                                offsetsPerTask
-                                    .keySet()
-                                    .stream()
-                                    .map(t -> t.id().toString())
-                                    .collect(Collectors.joining(", "))),
-                            timeoutException
+                                String.format("Committing task(s) %s failed.",
+                                        offsetsPerTask
+                                                .keySet()
+                                                .stream()
+                                                .map(t -> t.id().toString())
+                                                .collect(Collectors.joining(", "))),
+                                timeoutException
                         );
                         offsetsPerTask
-                            .keySet()
-                            .forEach(task -> corruptedTasks.add(task.id()));
+                                .keySet()
+                                .forEach(task -> corruptedTasks.add(task.id()));
                     }
                 } else {
                     try {
@@ -1202,16 +1213,16 @@ public class TaskManager {
                         updateTaskCommitMetadata(allOffsets);
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
-                                                            "indicating the corresponding thread is no longer part of the group", error);
+                                "indicating the corresponding thread is no longer part of the group", error);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
-                            String.format("Committing task(s) %s failed.",
-                                offsetsPerTask
-                                    .keySet()
-                                    .stream()
-                                    .map(t -> t.id().toString())
-                                    .collect(Collectors.joining(", "))),
-                            timeoutException
+                                String.format("Committing task(s) %s failed.",
+                                        offsetsPerTask
+                                                .keySet()
+                                                .stream()
+                                                .map(t -> t.id().toString())
+                                                .collect(Collectors.joining(", "))),
+                                timeoutException
                         );
                         throw timeoutException;
                     } catch (final KafkaException error) {
@@ -1269,7 +1280,7 @@ public class TaskManager {
             }
 
             final Set<TaskId> allRemovedTasks =
-                union(HashSet::new, activeTasksToRemove, standbyTasksToRemove).stream().map(Task::id).collect(Collectors.toSet());
+                    union(HashSet::new, activeTasksToRemove, standbyTasksToRemove).stream().map(Task::id).collect(Collectors.toSet());
             closeAndCleanUpTasks(activeTasksToRemove, standbyTasksToRemove, true);
             allRemovedTasks.forEach(tasks::removeTaskBeforeClosing);
             releaseLockedDirectoriesForTasks(allRemovedTasks);
@@ -1279,6 +1290,14 @@ public class TaskManager {
             //  the user of an error in this named topology without killing the thread and delaying the others
             log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
+    }
+
+    long getInputBufferSizeInBytes() {
+        long bytesBuffered = 0L;
+        for (final Task task : activeTaskIterable()) {
+            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
+        }
+        return bytesBuffered;
     }
 
     /**
@@ -1300,14 +1319,14 @@ public class TaskManager {
             } catch (final TimeoutException timeoutException) {
                 task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
                 log.debug(
-                    String.format(
-                        "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
-                        task.id()),
-                    timeoutException
+                        String.format(
+                                "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                                task.id()),
+                        timeoutException
                 );
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
-                             "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                        "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
             } catch (final StreamsException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
@@ -1348,7 +1367,7 @@ public class TaskManager {
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
-                             "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
+                        "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
             } catch (final StreamsException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
@@ -1371,7 +1390,7 @@ public class TaskManager {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
                 log.debug("Previous delete-records request has failed: {}. Try sending the new request now",
-                          deleteRecordsResult.lowWatermarks());
+                        deleteRecordsResult.lowWatermarks());
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -1405,13 +1424,13 @@ public class TaskManager {
         stringBuilder.append(indent).append("\tTasks:\n");
         for (final Task task : tasks.allTasks()) {
             stringBuilder.append(indent)
-                         .append("\t\t")
-                         .append(task.id())
-                         .append(" ")
-                         .append(task.state())
-                         .append(" ")
-                         .append(task.getClass().getSimpleName())
-                         .append('(').append(task.isActive() ? "active" : "standby").append(')');
+                    .append("\t\t")
+                    .append(task.id())
+                    .append(" ")
+                    .append(task.state())
+                    .append(" ")
+                    .append(task.getClass().getSimpleName())
+                    .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
     }
@@ -1459,12 +1478,12 @@ public class TaskManager {
                                               final String name,
                                               final Logger log) {
         executeAndMaybeSwallow(
-            clean,
-            runnable,
-            e -> {
-                throw e;
-            },
-            e -> log.debug("Ignoring error in unclean {}", name));
+                clean,
+                runnable,
+                e -> {
+                    throw e;
+                },
+                e -> log.debug("Ignoring error in unclean {}", name));
     }
 
     boolean needsInitializationOrRestoration() {

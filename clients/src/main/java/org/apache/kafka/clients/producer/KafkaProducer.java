@@ -969,6 +969,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 callback.onCompletion(null, e);
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
+            if (transactionManager != null) {
+                transactionManager.maybeTransitionToErrorState(e);
+            }
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();

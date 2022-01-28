@@ -121,7 +121,7 @@ class KafkaServer(
   var tokenManager: DelegationTokenManager = null
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
-  var dynamicConfigManager: DynamicConfigManager = null
+  var dynamicConfigManager: ZkConfigManager = null
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
 
@@ -233,7 +233,7 @@ class KafkaServer(
         this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
-        // applied after DynamicConfigManager starts.
+        // applied after ZkConfigManager starts.
         config.dynamicConfig.initialize(Some(zkClient))
 
         /* start scheduler */
@@ -428,6 +428,7 @@ class KafkaServer(
 
         /* Add all reconfigurables for config change notification before starting config handlers */
         config.dynamicConfig.addReconfigurables(this)
+        Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
 
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController)),
@@ -437,7 +438,7 @@ class KafkaServer(
                                                            ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
-        dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
+        dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
         socketServer.startProcessingRequests(authorizerFutures)

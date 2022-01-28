@@ -178,6 +178,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
+    private Queue<StreamsException> nonFatalExceptionsToHandle;
     private Time time;
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -212,6 +213,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
         assignmentErrorCode = referenceContainer.assignmentErrorCode;
         nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
+        nonFatalExceptionsToHandle = referenceContainer.nonFatalExceptionsToHandle;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = new PartitionGrouper();
@@ -382,7 +384,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // the maximum of the depending sub-topologies source topics' number of partitions
             final RepartitionTopics repartitionTopics = prepareRepartitionTopics(metadata);
             final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = repartitionTopics.topicPartitionsInfo();
-            final Map<String, Set<String>> missingUserInputTopicsPerTopology = repartitionTopics.missingUserInputTopicsPerTopology();
 
             final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
             log.debug("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
@@ -392,7 +393,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // construct the assignment of tasks to clients
 
             final Map<Subtopology, TopicsInfo> topicGroups =
-                taskManager.topologyMetadata().topicGroups(missingUserInputTopicsPerTopology.keySet());
+                taskManager.topologyMetadata().subtopologyTopicsInfoMapExcluding(repartitionTopics.topologiesWithMissingInputTopics());
 
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
@@ -511,14 +512,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             metadata,
             logPrefix
         );
-        final boolean isMissingInputTopics = !repartitionTopics.setup();
+        repartitionTopics.setup();
+        final boolean isMissingInputTopics = !repartitionTopics.missingSourceTopicExceptions().isEmpty();
         if (isMissingInputTopics) {
             if (!taskManager.topologyMetadata().hasNamedTopologies()) {
                 throw new MissingSourceTopicException("Missing source topics.");
+            } else {
+                nonFatalExceptionsToHandle.addAll(repartitionTopics.missingSourceTopicExceptions());
             }
         }
         return repartitionTopics;
     }
+
 
     /**
      * Populates the taskForPartition and tasksForTopicGroup maps, and checks that partitions are assigned to exactly

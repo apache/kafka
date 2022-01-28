@@ -102,7 +102,7 @@ class LogCleanerManagerTest extends Logging {
     val segments = new LogSegments(tp)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val offsets = new LogLoader(
       tpDir,
       tp,
       config,
@@ -115,7 +115,8 @@ class LogCleanerManagerTest extends Logging {
       0L,
       maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable

@@ -712,7 +712,7 @@ public class TransactionManager {
         removeInFlightBatch(batch);
     }
 
-    private void maybeTransitionToErrorState(RuntimeException exception) {
+    public synchronized void maybeTransitionToErrorState(RuntimeException exception) {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException

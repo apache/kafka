@@ -64,10 +64,12 @@ public class PartitionGroup {
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
+    private final Sensor totalBytesSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
     private int totalBuffered;
+    private long totalBytesBuffered;
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
 
@@ -92,6 +94,7 @@ public class PartitionGroup {
                    final Function<TopicPartition, OptionalLong> lagProvider,
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
+                   final Sensor totalBytesSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
@@ -100,6 +103,7 @@ public class PartitionGroup {
         this.enforcedProcessingSensor = enforcedProcessingSensor;
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
+        this.totalBytesSensor = totalBytesSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
@@ -118,11 +122,11 @@ public class PartitionGroup {
                     }
                 }
                 logger.trace("Ready for processing because max.task.idle.ms is disabled." +
-                              "\n\tThere may be out-of-order processing for this task as a result." +
-                              "\n\tBuffered partitions: {}" +
-                              "\n\tNon-buffered partitions: {}",
-                          bufferedPartitions,
-                          emptyPartitions);
+                                "\n\tThere may be out-of-order processing for this task as a result." +
+                                "\n\tBuffered partitions: {}" +
+                                "\n\tNon-buffered partitions: {}",
+                        bufferedPartitions,
+                        emptyPartitions);
             }
             return true;
         }
@@ -151,9 +155,9 @@ public class PartitionGroup {
                     // must wait to poll the data we know to be on the broker
                     idlePartitionDeadlines.remove(partition);
                     logger.trace(
-                        "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
-                        partition,
-                        fetchedLag.getAsLong()
+                            "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
+                            partition,
+                            fetchedLag.getAsLong()
                     );
                     return false;
                 } else {
@@ -167,11 +171,11 @@ public class PartitionGroup {
                     final long deadline = idlePartitionDeadlines.get(partition);
                     if (wallClockTime < deadline) {
                         logger.trace(
-                            "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
-                            partition,
-                            wallClockTime,
-                            maxTaskIdleMs,
-                            deadline
+                                "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                                partition,
+                                wallClockTime,
+                                maxTaskIdleMs,
+                                deadline
                         );
                         return false;
                     } else {
@@ -193,15 +197,15 @@ public class PartitionGroup {
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
-                         "\n\tThere may be out-of-order processing for this task as a result." +
-                         "\n\tPartitions with local data: {}." +
-                         "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
-                         "\n\tConfigured max.task.idle.ms: {}." +
-                         "\n\tCurrent wall-clock time: {}.",
-                     queued,
-                     enforced,
-                     maxTaskIdleMs,
-                     wallClockTime);
+                            "\n\tThere may be out-of-order processing for this task as a result." +
+                            "\n\tPartitions with local data: {}." +
+                            "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
+                            "\n\tConfigured max.task.idle.ms: {}." +
+                            "\n\tCurrent wall-clock time: {}.",
+                    queued,
+                    enforced,
+                    maxTaskIdleMs,
+                    wallClockTime);
             return true;
         }
     }
@@ -225,6 +229,7 @@ public class PartitionGroup {
             if (!newInputPartitions.contains(topicPartition)) {
                 // if partition is removed should delete its queue
                 totalBuffered -= queueEntry.getValue().size();
+                totalBytesBuffered -= queueEntry.getValue().getTotalBytesBuffered();
                 queuesIterator.remove();
                 removedPartitions.add(topicPartition);
             }
@@ -260,12 +265,17 @@ public class PartitionGroup {
         info.queue = queue;
 
         if (queue != null) {
+            // get the buffer size of queue before poll
+            final long oldBufferSize = queue.getTotalBytesBuffered();
             // get the first record from this queue.
             record = queue.poll();
+            // After polling, the buffer size would have reduced.
+            final long newBufferSize = queue.getTotalBytesBuffered();
 
             if (record != null) {
                 --totalBuffered;
-
+                totalBytesBuffered -= oldBufferSize - newBufferSize;
+                totalBytesSensor.record(totalBytesBuffered);
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
                     allBuffered = false;
@@ -301,7 +311,9 @@ public class PartitionGroup {
         }
 
         final int oldSize = recordQueue.size();
+        final long oldBufferSize = recordQueue.getTotalBytesBuffered();
         final int newSize = recordQueue.addRawRecords(rawRecords);
+        final long newBufferSize = recordQueue.getTotalBytesBuffered();
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
@@ -316,7 +328,8 @@ public class PartitionGroup {
         }
 
         totalBuffered += newSize - oldSize;
-
+        totalBytesBuffered += newBufferSize - oldBufferSize;
+        totalBytesSensor.record(totalBytesBuffered);
         return newSize;
     }
 
@@ -354,12 +367,20 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
+    Set<TopicPartition> getNonEmptyTopicPartitions() {
+        final Set<TopicPartition> nonEmptyTopicPartitions = new HashSet<>();
+        for (final RecordQueue recordQueue : nonEmptyQueuesByTime) {
+            nonEmptyTopicPartitions.add(recordQueue.partition());
+        }
+        return nonEmptyTopicPartitions;
+    }
+
     int numBuffered() {
         return totalBuffered;
     }
 
-    boolean allPartitionsBufferedLocally() {
-        return allBuffered;
+    long totalBytesBuffered() {
+        return totalBytesBuffered;
     }
 
     void clear() {
@@ -369,5 +390,11 @@ public class PartitionGroup {
         nonEmptyQueuesByTime.clear();
         totalBuffered = 0;
         streamTime = RecordQueue.UNKNOWN;
+    }
+
+    // Below methods are for only testing.
+
+    boolean allPartitionsBufferedLocally() {
+        return allBuffered;
     }
 }
