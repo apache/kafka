@@ -228,6 +228,7 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             anyObject(StreamsMetadataState.class),
             anyLong(),
+            anyLong(),
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt(),
@@ -239,6 +240,10 @@ public class KafkaStreamsTest {
         EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
+        EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
         prepareStreamThread(streamThreadOne, 1, true);
         prepareStreamThread(streamThreadTwo, 2, false);
 
@@ -286,6 +291,8 @@ public class KafkaStreamsTest {
         }).anyTimes();
         EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
         globalStreamThread.join();
+        EasyMock.expectLastCall().anyTimes();
+        globalStreamThread.resize(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
 
         PowerMock.replay(
@@ -342,7 +349,7 @@ public class KafkaStreamsTest {
         ).anyTimes();
         EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-        thread.resizeCache(EasyMock.anyLong());
+        thread.resizeCacheAndBufferMemory(EasyMock.anyLong(), EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
