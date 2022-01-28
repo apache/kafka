@@ -463,7 +463,6 @@ object ConsoleConsumer extends Logging {
       val startTimeMs = time.milliseconds
       while (!recordIter.hasNext) {
         recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator
-        System.out.println(time.milliseconds - startTimeMs)
         if (!recordIter.hasNext && (time.milliseconds - startTimeMs > timeoutMs)) {
           throw new TimeoutException()
         }
