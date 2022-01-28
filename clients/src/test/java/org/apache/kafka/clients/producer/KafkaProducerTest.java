@@ -124,8 +124,7 @@ import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
     private final String topic = "topic";
-    private final Node host1 = new Node(0, "host1", 1000);
-    private final Collection<Node> nodes = Collections.singletonList(host1);
+    private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
             null,
             nodes,
@@ -148,6 +147,7 @@ public class KafkaProducerTest {
             Collections.emptySet(),
             Collections.emptySet());
     private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
+    private static final Node NODE = new Node(0, "host1", 1000);
 
 
     private static <K, V> KafkaProducer<K, V> kafkaProducer(Map<String, Object> configs,
@@ -577,9 +577,17 @@ public class KafkaProducerTest {
     private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
                                                                                ProducerMetadata metadata,
                                                                                Time timer) {
+        // let mockClient#leastLoadedNode return the node directly so that we can isolate Metadata calls from KafkaProducer for idempotent producer
+        MockClient mockClient = new MockClient(Time.SYSTEM, metadata) {
+            @Override
+            public Node leastLoadedNode(long now) {
+                return NODE;
+            }
+        };
+
         return new KafkaProducer<String, String>(
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, timer) {
+                new StringSerializer(), new StringSerializer(), metadata, mockClient, null, timer) {
             @Override
             Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
@@ -597,14 +605,8 @@ public class KafkaProducerTest {
 
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
-        if (isIdempotenceEnabled) {
-            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
-            // and rest 4 fetch will be called during KafkaProducer#waitOnMetadata
-            when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
-        } else {
-            // Return empty cluster 4 times and cluster from then on
-            when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
-        }
+        // Return empty cluster 4 times and cluster from then on
+        when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -613,19 +615,19 @@ public class KafkaProducerTest {
         // One request update for each empty cluster returned
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
+        verify(metadata, times(5)).fetch();
 
         // Should not request update for subsequent `send`
         producer.send(record, null);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 7 : 6)).fetch();
+        verify(metadata, times(6)).fetch();
 
         // Should not request update for subsequent `partitionsFor`
         producer.partitionsFor(topic);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 8 : 7)).fetch();
+        verify(metadata, times(7)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
@@ -640,16 +642,12 @@ public class KafkaProducerTest {
 
         Cluster emptyCluster = new Cluster(
             "dummy",
-            Collections.singletonList(host1),
+            Collections.singletonList(NODE),
             Collections.emptySet(),
             Collections.emptySet(),
             Collections.emptySet());
-        if (isIdempotenceEnabled) {
-            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
-            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, emptyCluster, onePartitionCluster);
-        } else {
-            when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
-        }
+
+        when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -658,13 +656,13 @@ public class KafkaProducerTest {
         // Verify the topic's metadata isn't requested since it's already present.
         verify(metadata, times(0)).requestUpdateForTopic(topic);
         verify(metadata, times(0)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 2 : 1)).fetch();
+        verify(metadata, times(1)).fetch();
 
         // The metadata has been expired. Verify the producer requests the topic's metadata.
         producer.send(record, null);
         verify(metadata, times(1)).requestUpdateForTopic(topic);
         verify(metadata, times(1)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 4 : 3)).fetch();
+        verify(metadata, times(3)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
@@ -698,9 +696,9 @@ public class KafkaProducerTest {
         // TimeoutException is thrown
         // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
         Future<RecordMetadata> future = producer.send(record);
-        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).requestUpdateForTopic(topic);
-        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(5)).fetch();
         try {
             future.get();
         } catch (ExecutionException e) {
@@ -724,19 +722,14 @@ public class KafkaProducerTest {
 
         MockTime mockTime = new MockTime();
 
-        if (isIdempotenceEnabled) {
-            // For idempotence enabled case, the first metadata.fetch will be called in Sender#maybeSendAndPollTransactionalRequest
-            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, onePartitionCluster, threePartitionCluster);
-        } else {
-            when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
-        }
+        when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
         // One request update if metadata is available but outdated for the given record
         producer.send(record);
         verify(metadata, times(2)).requestUpdateForTopic(topic);
         verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 4 : 3)).fetch();
+        verify(metadata, times(3)).fetch();
 
         producer.close(Duration.ofMillis(0));
     }
@@ -772,9 +765,9 @@ public class KafkaProducerTest {
         // before the producer#send and after it finished
         Future<RecordMetadata> future = producer.send(record);
 
-        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).requestUpdateForTopic(topic);
-        verify(metadata, times(isIdempotenceEnabled ? 3 : 4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(isIdempotenceEnabled ? 6 : 5)).fetch();
+        verify(metadata, times(4)).requestUpdateForTopic(topic);
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(5)).fetch();
         try {
             future.get();
         } catch (ExecutionException e) {
@@ -1074,7 +1067,7 @@ public class KafkaProducerTest {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
             Future<?> future = executor.submit(producer::initTransactions);
             TestUtils.waitForCondition(client::hasInFlightRequests,
@@ -1111,14 +1104,14 @@ public class KafkaProducerTest {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
             assertThrows(TimeoutException.class, producer::initTransactions);
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                                ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
-                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", host1));
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -1144,7 +1137,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1166,7 +1159,7 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
@@ -1188,7 +1181,7 @@ public class KafkaProducerTest {
         ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1225,10 +1218,10 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         String groupId = "group";
         client.prepareResponse(request ->
             ((TxnOffsetCommitRequest) request).data().groupId().equals(groupId),
@@ -1268,7 +1261,7 @@ public class KafkaProducerTest {
 
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1277,7 +1270,7 @@ public class KafkaProducerTest {
             assertDurationAtLeast(producer, "txn-init-time-ns-total", tick.toNanos());
 
             client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-            client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+            client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
             client.prepareResponse(txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
             client.prepareResponse(endTxnResponse(Errors.NONE));
@@ -1326,10 +1319,10 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
         client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         String groupId = "group";
         String memberId = "member";
         int generationId = 5;
@@ -1382,7 +1375,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
@@ -1593,7 +1586,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", NODE));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();
@@ -1622,7 +1615,7 @@ public class KafkaProducerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         CountDownLatch assertionDoneLatch = new CountDownLatch(1);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "this-is-a-transactional-id", NODE));
         executorService.submit(() -> {
             assertThrows(KafkaException.class, producer::initTransactions);
             assertionDoneLatch.countDown();

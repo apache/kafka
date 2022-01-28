@@ -361,8 +361,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val tp2 = new TopicPartition(topic2, 0)
 
     setReadAndWriteAcls(tp2)
-    // in idempotence producer, we need to create another producer because the previous one is in FATEL_ERROR state (due to authorization error)
-    // If the transaction state in FATEL_ERROR, it'll never transit to other state. check TransactionManager#isTransitionValid for detail
+    // in idempotence producer, we need to create another producer because the previous one is in FATAL_ERROR state (due to authorization error)
+    // If the transaction state in FATAL_ERROR, it'll never transit to other state. check TransactionManager#isTransitionValid for detail
     val producer2 = if (isIdempotenceEnabled)
       createProducer(configOverrides = prop)
     else
