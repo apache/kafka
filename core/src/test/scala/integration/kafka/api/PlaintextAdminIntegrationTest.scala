@@ -2228,10 +2228,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
      * However, there are two problems with method 2:
      *
      * - Method 1 supports 8 Log4j levels; However, method 2 supports only 6 levels. (see [[LogLevelConfig.VALID_LOG_LEVELS]])
-     *   So, OFF and ALL are only supported in method 1.
-     * - If the user tries to call APPEND or SUBTRACT with method 2, [[InvalidRequestException]] is thrown; However, if the user
-     *   specifies the wrong logger name or level, it throws [[InvalidConfigurationException]]. (see [[ConfigAdminManager#validateLogLevelConfigs]])
-     *   Is this consistent?
+     *   So, OFF and ALL are only supported in method 1. Lacking support of OFF level limits the utilization of this functionality.
+     * - With Method 1, an unsupported log level is regarded as DEBUG; However, with Method 2, an unsupported log level raises
+     *   [[InvalidConfigurationException]]. The documentation does not state their slightly different semantics.
      */
     val invalidLogLevelLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
