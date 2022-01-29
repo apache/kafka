@@ -19,6 +19,13 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_320_notable" href="#upgrade_320_notable">Notable changes in 3.2.0</a></h5>
+    <ul>
+        <li>Idempotent producer is enabled by default. In 3.0.0 and 3.1.0, in spite of the default value of <code>enable.idempotence</code> is true,
+            there is a bug that causes the idempotent producer won't be enabled unless user set <code>enable.idempotence</code> to true explicitly.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.</li></li>
+    </ul>
+
 <h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
 
 <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
