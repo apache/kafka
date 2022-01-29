@@ -26,6 +26,8 @@ if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
 fi
 
+echo "Running with log4j 2.x - Log4j MBean registration is not supported."
+
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M -Xms512M"
 fi
