@@ -30,6 +30,11 @@ public class LogLevelConfig {
      */
 
     /**
+     * The <code>OFF</code> level turns off the logging.
+     */
+    public static final String OFF_LOG_LEVEL = "OFF";
+
+    /**
      * The <code>FATAL</code> level designates a very severe error
      * that will lead the Kafka broker to abort.
      */
@@ -64,8 +69,12 @@ public class LogLevelConfig {
      */
     public static final String TRACE_LOG_LEVEL = "TRACE";
 
+    /**
+     * The set of all available log levels, i.e., <code>OFF</code>, <code>FATAL</code>, <code>ERROR</code>
+     * , <code>WARN</code>, <code>INFO</code>, <code>DEBUG</code>, and <code>TRACE</code>.
+     */
     public static final Set<String> VALID_LOG_LEVELS = new HashSet<>(Arrays.asList(
-            FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
+        OFF_LOG_LEVEL, FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
             INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
     ));
 }
