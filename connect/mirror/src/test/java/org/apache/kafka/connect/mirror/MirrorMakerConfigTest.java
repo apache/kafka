@@ -149,7 +149,7 @@ public class MirrorMakerConfigTest {
             "Filters should be passed through to underlying Connectors.");
         assertEquals("__", connectorConfig.getString("replication.policy.separator"),
             "replication policy separator should be passed through to underlying Connectors.");
-        assertFalse(connectorConfig.originalsContainsKey("xxx"),
+        assertFalse(connectorConfig.originals().containsKey("xxx"),
             "Unknown properties should not be passed through to Connectors.");
     }
 

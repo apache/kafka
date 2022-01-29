@@ -494,7 +494,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         int lingerAndRequestTimeoutMs = (int) Math.min((long) lingerMs + requestTimeoutMs, Integer.MAX_VALUE);
 
         if (deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
-            if (config.originalsContainsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
+            if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
                 // throw an exception if the user explicitly set an inconsistent value
                 throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
                     + " should be equal to or larger than " + ProducerConfig.LINGER_MS_CONFIG

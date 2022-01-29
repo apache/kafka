@@ -643,13 +643,6 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled);
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
-        Cluster emptyCluster = new Cluster(
-            "dummy",
-            Collections.singletonList(NODE),
-            Collections.emptySet(),
-            Collections.emptySet(),
-            Collections.emptySet());
-
         when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);

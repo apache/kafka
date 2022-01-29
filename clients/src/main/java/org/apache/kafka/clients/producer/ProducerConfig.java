@@ -207,6 +207,8 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
                                                                             + " Note that if this config is set to be greater than 1 and <code>enable.idempotence</code> is set to false, there is a risk of"
                                                                             + " message re-ordering after a failed send due to retries (i.e., if retries are enabled).";
+    // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
+    private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
@@ -269,8 +271,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5 "
-                                                        + "(with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE
+                                                        + " (with message ordering preserved for any allowable value), <code>" + RETRIES_CONFIG + "</code> to be greater than 0, and <code>"
                                                         + ACKS_CONFIG + "</code> must be 'all'. If these values are not explicitly set by the user, suitable values will be chosen. If incompatible "
                                                         + "values are set, a <code>ConfigException</code> will be thrown.";
 
@@ -445,7 +447,7 @@ public class ProducerConfig extends AbstractConfig {
 
     private void maybeOverrideClientId(final Map<String, Object> configs) {
         String refinedClientId;
-        boolean userConfiguredClientId = this.originalsContainsKey(CLIENT_ID_CONFIG);
+        boolean userConfiguredClientId = this.originals().containsKey(CLIENT_ID_CONFIG);
         if (userConfiguredClientId) {
             refinedClientId = this.getString(CLIENT_ID_CONFIG);
         } else {
@@ -456,25 +458,26 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     private void postProcessAndValidateIdempotenceConfigs(final Map<String, Object> configs) {
+        final Map<String, Object> originalConfigs = this.originals();
         final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
         configs.put(ACKS_CONFIG, acksStr);
 
         // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` need validation
         if (idempotenceEnabled()) {
-            boolean userConfiguredRetries = originalsContainsKey(RETRIES_CONFIG);
+            boolean userConfiguredRetries = originalConfigs.containsKey(RETRIES_CONFIG);
             if (userConfiguredRetries && this.getInt(RETRIES_CONFIG) == 0) {
                 throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
             }
 
-            boolean userConfiguredAcks = originalsContainsKey(ACKS_CONFIG);
+            boolean userConfiguredAcks = originalConfigs.containsKey(ACKS_CONFIG);
             final short acks = Short.valueOf(acksStr);
             if (userConfiguredAcks && acks != (short) -1) {
                 throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
             }
 
-            boolean userConfiguredInflightRequests = originalsContainsKey(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-            if (userConfiguredInflightRequests && 5 < this.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+            boolean userConfiguredInflightRequests = originalConfigs.containsKey(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            if (userConfiguredInflightRequests && MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE < this.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
                 throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                         " to use the idempotent producer.");
             }
@@ -509,13 +512,11 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     boolean idempotenceEnabled() {
-
-        boolean userConfiguredIdempotence = this.originalsContainsKey(ENABLE_IDEMPOTENCE_CONFIG);
-        boolean userConfiguredTransactions = this.originalsContainsKey(TRANSACTIONAL_ID_CONFIG);
-        boolean idempotenceEnabled = !userConfiguredIdempotence || this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
-        // default value for enable.idempotence is true since v3.0, it must be wrong setting if transactionId set and idempotence disabled
+        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+        boolean idempotenceEnabled = this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
         if (!idempotenceEnabled && userConfiguredTransactions)
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
+
         return userConfiguredTransactions || idempotenceEnabled;
     }
 
