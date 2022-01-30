@@ -386,18 +386,39 @@ public final class ByteUtils {
         buffer.putDouble(value);
     }
 
+    final static int[] LEADING_ZEROS_TO_U_VARINT_SIZE = new int[] {
+        // 32 bits, and each 7-bits adds one byte to the output
+        5, 5, 5, 5, // 32
+        4, 4, 4, 4, 4, 4, 4, // 28
+        3, 3, 3, 3, 3, 3, 3, // 21
+        2, 2, 2, 2, 2, 2, 2, // 14
+        1, 1, 1, 1, 1, 1, 1, // 7
+        1 // 0
+    };
+
+    final static int[] LEADING_ZEROS_TO_U_VARLONG_SIZE = new int[] {
+        // 64 bits, and each 7-bits adds one byte to the output
+        10, // 64
+        9, 9, 9, 9, 9, 9, 9, // 63
+        8, 8, 8, 8, 8, 8, 8, // 56
+        7, 7, 7, 7, 7, 7, 7, // 49
+        6, 6, 6, 6, 6, 6, 6, // 42
+        5, 5, 5, 5, 5, 5, 5, // 35
+        4, 4, 4, 4, 4, 4, 4, // 28
+        3, 3, 3, 3, 3, 3, 3, // 21
+        2, 2, 2, 2, 2, 2, 2, // 14
+        1, 1, 1, 1, 1, 1, 1, // 7
+        1 // 0
+    };
+
     /**
      * Number of bytes needed to encode an integer in unsigned variable-length format.
      *
      * @param value The signed value
      */
     public static int sizeOfUnsignedVarint(int value) {
-        int bytes = 1;
-        while ((value & 0xffffff80) != 0L) {
-            bytes += 1;
-            value >>>= 7;
-        }
-        return bytes;
+        int leadingZeros = Integer.numberOfLeadingZeros(value);
+        return LEADING_ZEROS_TO_U_VARINT_SIZE[leadingZeros];
     }
 
     /**
@@ -416,12 +437,8 @@ public final class ByteUtils {
      */
     public static int sizeOfVarlong(long value) {
         long v = (value << 1) ^ (value >> 63);
-        int bytes = 1;
-        while ((v & 0xffffffffffffff80L) != 0L) {
-            bytes += 1;
-            v >>>= 7;
-        }
-        return bytes;
+        int leadingZeros = Long.numberOfLeadingZeros(v);
+        return LEADING_ZEROS_TO_U_VARLONG_SIZE[leadingZeros];
     }
 
     private static IllegalArgumentException illegalVarintException(int value) {

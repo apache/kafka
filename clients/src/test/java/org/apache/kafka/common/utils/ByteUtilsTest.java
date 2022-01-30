@@ -239,6 +239,44 @@ public class ByteUtilsTest {
         assertDoubleSerde(Double.NEGATIVE_INFINITY, 0xFFF0000000000000L);
     }
 
+    private static int oldSizeOfUnsignedVarint(int value) {
+        int bytes = 1;
+        // use highestOneBit or numberOfLeadingZeros
+        while ((value & 0xffffff80) != 0L) {
+            bytes += 1;
+            value >>>= 7;
+        }
+        return bytes;
+    }
+
+    @Test
+    public void testSizeOfUnsignedVarint() {
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
+            final int expected = oldSizeOfUnsignedVarint(i);
+            final int actual = ByteUtils.sizeOfUnsignedVarint(i);
+            assertEquals(expected, actual);
+        }
+    }
+
+    private static int oldSizeOfVarlong(long value) {
+        long v = (value << 1) ^ (value >> 63);
+        int bytes = 1;
+        while ((v & 0xffffffffffffff80L) != 0L) {
+            bytes += 1;
+            v >>>= 7;
+        }
+        return bytes;
+    }
+
+    @Test
+    public void testSizeOfVarlong() {
+        for (long l = Integer.MIN_VALUE - 100; l <= Integer.MAX_VALUE + 100; l++) {
+            final int expected = oldSizeOfVarlong(l);
+            final int actual = ByteUtils.sizeOfVarlong(l);
+            assertEquals(expected, actual);
+        }
+    }
+
     private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(32);
         ByteUtils.writeUnsignedVarint(value, buf);
