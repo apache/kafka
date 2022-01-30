@@ -22,7 +22,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * This class holds definitions for log level configurations related to Kafka's application logging. See KIP-412 for additional information
+ * This class holds definitions for log level configurations related to Kafka's application logging.
+ * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-412%3A+Extend+Admin+API+to+support+dynamic+application+log+levels"></a>KIP-412 and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-817%3A+Fix+inconsistency+in+dynamic+application+log+levels">KIP-817</a> for additional information.
  */
 public class LogLevelConfig {
     /*
