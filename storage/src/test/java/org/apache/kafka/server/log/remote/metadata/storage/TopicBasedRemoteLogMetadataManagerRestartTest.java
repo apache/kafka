@@ -28,8 +28,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
-import scala.jdk.CollectionConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,6 +40,7 @@ import java.util.List;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
 
+@SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private static final int SEG_SIZE = 1024 * 1024;
@@ -86,8 +87,8 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         leaderTopicReplicas.add(0);
         leaderTopicReplicas.add(1);
         leaderTopicReplicas.add(2);
-        assignedLeaderTopicReplicas.put(0, CollectionConverters.asScalaBuffer(leaderTopicReplicas));
-        remoteLogMetadataManagerHarness.createTopic(leaderTopic, CollectionConverters.mapAsScalaMap(assignedLeaderTopicReplicas));
+        assignedLeaderTopicReplicas.put(0, JavaConverters.asScalaBuffer(leaderTopicReplicas));
+        remoteLogMetadataManagerHarness.createTopic(leaderTopic, JavaConverters.mapAsScalaMap(assignedLeaderTopicReplicas));
 
         String followerTopic = "new-follower";
         HashMap<Object, Seq<Object>> assignedFollowerTopicReplicas = new HashMap<>();
@@ -96,8 +97,8 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         followerTopicReplicas.add(1);
         followerTopicReplicas.add(2);
         followerTopicReplicas.add(0);
-        assignedFollowerTopicReplicas.put(0, CollectionConverters.asScalaBuffer(followerTopicReplicas));
-        remoteLogMetadataManagerHarness.createTopic(followerTopic, CollectionConverters.mapAsScalaMap(assignedFollowerTopicReplicas));
+        assignedFollowerTopicReplicas.put(0, JavaConverters.asScalaBuffer(followerTopicReplicas));
+        remoteLogMetadataManagerHarness.createTopic(followerTopic, JavaConverters.mapAsScalaMap(assignedFollowerTopicReplicas));
 
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));

@@ -46,6 +46,6 @@ public abstract class RemotePartitionMetadataEventHandler {
 
     public abstract void syncLogMetadataDataFile(TopicIdPartition topicIdPartition,
                                                  int metadataPartition,
-                                                 Long metadataPartitionOffset) throws IOException;
+                                                 long metadataPartitionOffset) throws IOException;
 
 }

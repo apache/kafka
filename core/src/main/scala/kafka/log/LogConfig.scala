@@ -33,6 +33,13 @@ import scala.annotation.nowarn
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
+object Constants {
+  val FallBackToRetentionSize = -2
+  val FallBackToRetentionMs = -2
+  val NoRetentionSizeLimit = -1
+  val NoRetentionMsLimit = -1
+}
+
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
@@ -42,8 +49,8 @@ object Defaults {
   val RetentionSize = kafka.server.Defaults.LogRetentionBytes
   val RetentionMs = kafka.server.Defaults.LogRetentionHours * 60 * 60 * 1000L
   val RemoteLogStorageEnable = false
-  val LocalRetentionBytes = -2 // It indicates the value to be derived from RetentionSize
-  val LocalRetentionMs = -2 // It indicates the value to be derived from RetentionMs
+  val LocalRetentionBytes = Constants.FallBackToRetentionSize // It indicates the value to be derived from RetentionSize
+  val LocalRetentionMs = Constants.FallBackToRetentionMs // It indicates the value to be derived from RetentionMs
   val MaxMessageSize = kafka.server.Defaults.MessageMaxBytes
   val MaxIndexSize = kafka.server.Defaults.LogIndexSizeMaxBytes
   val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
@@ -113,39 +120,39 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
   val localRetentionMs: Long = {
     val localLogRetentionMs = getLong(LogConfig.LocalLogRetentionMsProp)
-
-    // -2 indicates to derive value from retentionMs property.
-    if(localLogRetentionMs == -2) retentionMs
-    else {
-      // Added validation here to check the effective value should not be more than RetentionMs.
-      if(localLogRetentionMs == -1 && retentionMs != -1) {
-        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+    if (localLogRetentionMs == Constants.FallBackToRetentionMs) {
+      retentionMs
+    } else {
+      if (retentionMs != Constants.NoRetentionMsLimit) {
+        if (localLogRetentionMs == Constants.NoRetentionMsLimit) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
+            s"Value must not be -1 as ${LogConfig.RetentionMsProp} value is set as $retentionMs.")
+        }
+        if (localLogRetentionMs > retentionMs) {
+          throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs,
+            s"Value must not be more than ${LogConfig.RetentionMsProp} property: $retentionMs")
+        }
       }
-
-      if (localLogRetentionMs > retentionMs) {
-        throw new ConfigException(LogConfig.LocalLogRetentionMsProp, localLogRetentionMs, s"Value must not be more than property: ${LogConfig.RetentionMsProp} value.")
-      }
-
       localLogRetentionMs
     }
   }
 
   val localRetentionBytes: Long = {
-    val localLogRetentionBytes = getLong(LogConfig.LocalLogRetentionBytesProp)
-
-    // -2 indicates to derive value from retentionSize property.
-    if(localLogRetentionBytes == -2) retentionSize;
-    else {
-      // Added validation here to check the effective value should not be more than RetentionBytes.
-      if(localLogRetentionBytes == -1 && retentionSize != -1) {
-        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
+    val localLogRetentionSize = getLong(LogConfig.LocalLogRetentionBytesProp)
+    if (localLogRetentionSize == Constants.FallBackToRetentionSize) {
+      retentionSize
+    } else {
+      if (retentionSize != Constants.NoRetentionSizeLimit) {
+        if (localLogRetentionSize == Constants.NoRetentionSizeLimit) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
+            s"Value must not be -1 as ${LogConfig.RetentionBytesProp} value is set as $retentionSize.")
+        }
+        if (localLogRetentionSize > retentionSize) {
+          throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionSize,
+            s"Value must not be more than ${LogConfig.RetentionBytesProp} property value: $retentionSize");
+        }
       }
-
-      if (localLogRetentionBytes > retentionSize) {
-        throw new ConfigException(LogConfig.LocalLogRetentionBytesProp, localLogRetentionBytes, s"Value must not be more than property: ${LogConfig.RetentionBytesProp} value.");
-      }
-
-      localLogRetentionBytes
+      localLogRetentionSize
     }
   }
 

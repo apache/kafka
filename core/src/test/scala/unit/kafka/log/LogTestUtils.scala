@@ -50,13 +50,16 @@ object LogTestUtils {
                       segmentBytes: Int = Defaults.SegmentSize,
                       retentionMs: Long = Defaults.RetentionMs,
                       retentionBytes: Long = Defaults.RetentionSize,
+                      localRetentionMs: Long = Defaults.LocalRetentionMs,
+                      localRetentionBytes: Long = Defaults.LocalRetentionBytes,
                       segmentJitterMs: Long = Defaults.SegmentJitterMs,
                       cleanupPolicy: String = Defaults.CleanupPolicy,
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
                       fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
-                      producerBatchDecompressionEnable: Boolean = Defaults.ProducerBatchDecompressionEnable): LogConfig = {
+                      producerBatchDecompressionEnable: Boolean = Defaults.ProducerBatchDecompressionEnable,
+                      remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
@@ -69,6 +72,9 @@ object LogTestUtils {
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
     logProps.put(LogConfig.ProducerBatchDecompressionEnableProp, producerBatchDecompressionEnable: java.lang.Boolean)
+    logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
+    logProps.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs: java.lang.Long)
+    logProps.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes: java.lang.Long)
     LogConfig(logProps)
   }
 

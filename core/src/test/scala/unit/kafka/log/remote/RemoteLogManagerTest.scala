@@ -27,7 +27,7 @@ import kafka.server._
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{Endpoint, TopicIdPartition, TopicPartition}
+import org.apache.kafka.common.{Endpoint, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
@@ -53,7 +53,7 @@ class RemoteLogManagerTest {
 
   val rsmConfig: Map[String, Any] = Map(
     rsmConfigPrefix + "url" -> "foo.url",
-    rsmConfigPrefix + "timeout.ms" -> 1000L
+    rsmConfigPrefix + "timeout.ms" -> "1000"
   )
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -134,11 +134,9 @@ class RemoteLogManagerTest {
 
     def logFetcher(tp: TopicPartition): Option[Log] = logManager.getLog(tp)
 
-    def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
-
     // this should initialize RSM
     val logsDirTmp = Files.createTempDirectory("kafka-").toString
-    val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, 1, "", logsDirTmp, new BrokerTopicStats)
+    val remoteLogManager = new RemoteLogManager(logFetcher, (_, _) => {}, rlmConfig, time, 1, "", logsDirTmp, new BrokerTopicStats)
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val endpoint = new Endpoint(listenerName.value(), securityProtocol, "localhost", 9092)
@@ -223,6 +221,20 @@ class RemoteLogManagerTest {
 
     assertEquals(props.get(rlmmConfigPrefix + key), rlmmConfig.get(key))
     assertFalse(rlmmConfig.containsKey("remote.log.metadata.y"))
+  }
+
+  @Test
+  def testFindHighestRemoteOffset(): Unit = {
+
+    // FIXME(@kamalcph): Improve this test
+    def logFetcher(tp: TopicPartition): Option[Log] = logManager.getLog(tp)
+
+    // this should initialize RSM
+    val logsDirTmp = Files.createTempDirectory("kafka-").toString
+    val remoteLogManager = new RemoteLogManager(logFetcher, (_, _) => {}, rlmConfig, time, 1, "", logsDirTmp, new BrokerTopicStats)
+
+    val idPartition = new TopicIdPartition(Uuid.randomUuid(), topicPartition)
+    assertEquals(-1L, remoteLogManager.findHighestRemoteOffset(idPartition))
   }
 }
 

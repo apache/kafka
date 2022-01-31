@@ -160,6 +160,18 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def findPreviousEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.lowerKey(epoch))
+    }
+  }
+
+  def findNextEpoch(epoch: Int): Option[Int] = {
+    inReadLock(lock) {
+      Option(epochs.higherKey(epoch))
+    }
+  }
+
   /**
    * Get the earliest cached entry if one exists.
    */
@@ -253,6 +265,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
         previousEpoch = Some(entry.epoch)
       })
       previousEpoch
+    }
+  }
+
+  def getEpochEntry(epoch: Int): Option[EpochEntry] = {
+    inReadLock(lock) {
+      Option.apply(epochs.get(epoch))
     }
   }
 

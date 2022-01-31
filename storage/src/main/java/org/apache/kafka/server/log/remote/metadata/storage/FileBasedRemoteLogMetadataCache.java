@@ -45,11 +45,12 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     }
 
     public void flushToFile(int metadataPartition,
-                            Long metadataPartitionOffset) throws IOException {
-        // todo-tier take a lock here as the metadata may be getting modified.
-        // For each topic partition, there is only one thread updating the cache. But in future, if we want to parallelize then we may need to take
-        // a lock.
-        committedLogMetadataFile.write(new CommittedLogMetadataFile.Snapshot(topicIdPartition.topicId(), metadataPartition, metadataPartitionOffset,
+                            long metadataPartitionOffset) throws IOException {
+        // For each topic partition, there is only one thread updating the cache. But in the future, if we want to
+        // parallelize then we may need to take a lock.
+        committedLogMetadataFile.write(new CommittedLogMetadataFile.Snapshot(topicIdPartition.topicId(),
+                                                                             metadataPartition,
+                                                                             metadataPartitionOffset,
                                                                              idToSegmentMetadata.values()));
     }
 }

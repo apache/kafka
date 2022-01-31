@@ -1065,7 +1065,7 @@ class LogTest {
   @Test
   def testSegmentDeletionDisabledBeforeUploadToRemoteTier(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12, retentionBytes = 1,
-      fileDeleteDelayMs = 0)
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteLogEnable = true)
     val pid = 1L
     val epoch = 0.toShort
@@ -1086,7 +1086,7 @@ class LogTest {
   @Test
   def testSegmentDeletionEnabledAfterUploadToRemoteTier(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
-      retentionBytes = 1, fileDeleteDelayMs = 0)
+      retentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteLogEnable = true)
     val pid = 1L
     val epoch = 0.toShort
@@ -1102,6 +1102,37 @@ class LogTest {
     log.updateRemoteIndexHighestOffset(0L)
     log.deleteOldSegments()
     mockTime.sleep(1)
+    assertEquals(1, log.logSegments.size)
+  }
+
+  @Test
+  def testSegmentDeletionWithLocalRetention(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionBytes = 3, localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteLogEnable = true)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    // Append 3 messages and roll the segments
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+
+    // Update the highWatermark so that these segments will be eligible for deletion.
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(3, log.logSegments.size)
+
+    // Update remoteIndexHighestOffset to 2, that means all the segments are copied. But the local retention bytes
+    // is set as 1, which means 1 active segment should exist even though it is already copied to remote storage.
+    log.updateRemoteIndexHighestOffset(2L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    // It should have deleted earlier 2 segments as they are eligible because of localRetentionBytes is 1.
     assertEquals(1, log.logSegments.size)
   }
 

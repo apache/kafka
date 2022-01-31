@@ -59,7 +59,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManager.class);
-    private static final long INITIALIZATION_RETRY_INTERVAL_MS = 30000L;
+    private static final long INITIALIZATION_RETRY_INTERVAL_MS = 100L;
 
     private final Time time = Time.SYSTEM;
     private final boolean startConsumerThread;
@@ -402,7 +402,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             if (e.getCause() instanceof TopicExistsException) {
                 topicCreated = true;
             } else {
-                log.error("Encountered error while creating remote log metadata topic.", e);
+                log.warn("Encountered error while creating remote log metadata topic: {} " +
+                        "Retrying topic creation in {} ms", e.getMessage(), INITIALIZATION_RETRY_INTERVAL_MS);
             }
         } finally {
             if (adminClient != null) {
