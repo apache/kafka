@@ -67,11 +67,7 @@ import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
@@ -512,8 +508,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, V> merge(final KStream<K, V> stream) {
-        return merge(stream, NamedInternal.empty());
+    public KStream<K, V> merge(final KStream<K, V>... streams) {
+        return merge(Arrays.asList(streams), NamedInternal.empty());
     }
 
     @Override
@@ -522,18 +518,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(stream, "stream can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
-        return merge(builder, stream, new NamedInternal(named));
+        return merge(Collections.singleton(stream), named);
     }
 
-    private KStream<K, V> merge(final InternalStreamsBuilder builder,
-                                final KStream<K, V> stream,
-                                final NamedInternal named) {
-        final KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
-        final boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
-        final String name = named.orElseGenerateWithPrefix(builder, MERGE_NAME);
+    public KStream<K, V> merge(final Collection<KStream<K, V>> streams,
+                               final Named named) {
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MERGE_NAME);
         final Set<String> allSubTopologySourceNodes = new HashSet<>();
         allSubTopologySourceNodes.addAll(subTopologySourceNodes);
-        allSubTopologySourceNodes.addAll(streamImpl.subTopologySourceNodes);
+        final List<GraphNode> graphNodes = new ArrayList<>();
+        graphNodes.add(graphNode);
+        boolean requireRepartitioning = repartitionRequired;
+        for (KStream<K, V> stream : streams) {
+            final KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
+            requireRepartitioning = requireRepartitioning || streamImpl.repartitionRequired;
+            allSubTopologySourceNodes.addAll(streamImpl.subTopologySourceNodes);
+            graphNodes.add(streamImpl.graphNode);
+        }
 
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
             new ProcessorParameters<>(new PassThrough<>(), name);
@@ -541,7 +542,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             new ProcessorGraphNode<>(name, processorParameters);
         mergeNode.setMergeNode(true);
 
-        builder.addGraphNode(Arrays.asList(graphNode, streamImpl.graphNode), mergeNode);
+        builder.addGraphNode(graphNodes, mergeNode);
 
         // drop the serde as we cannot safely use either one to represent both streams
         return new KStreamImpl<>(
