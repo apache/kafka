@@ -37,7 +37,6 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
