@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
-
-import org.apache.kafka.streams.query.Query;
+package org.apache.kafka.streams.errors;
 
 /**
- * A very simple query that all stores can handle to verify that the store is participating in the
- * IQv2 framework properly.
- * <p>
- * This is not a public API and may change without notice.
+ * Indicates that the {@link org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology} being
+ * looked up does not exist in this application
  */
-public class PingQuery implements Query<Boolean> {
+public class UnknownTopologyException extends StreamsException {
+    private static final long serialVersionUID = 1L;
+
+    public UnknownTopologyException(final String message, final String namedTopology) {
+        super(message + "due to being unable to locate a Topology named " + namedTopology);
+    }
+
+    public UnknownTopologyException(final String message, final Throwable throwable, final String namedTopology) {
+        super(message + "due to being unable to locate a Topology named " + namedTopology, throwable);
+    }
 
 }

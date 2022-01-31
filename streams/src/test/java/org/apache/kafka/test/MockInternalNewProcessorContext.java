@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
@@ -120,7 +122,15 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     public void uninitialize() {}
 
     @Override
-    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {
+        addStateStore(store);
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
         addStateStore(store);
     }
 
@@ -171,7 +181,8 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
     }
 
     @Override

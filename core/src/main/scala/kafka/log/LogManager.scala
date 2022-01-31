@@ -524,7 +524,7 @@ class LogManager(logDirs: Seq[File],
       val jobsForDir = logs.map { log =>
         val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
-          log.flush()
+          log.flush(true)
           log.close()
         }
         runnable
@@ -1242,7 +1242,7 @@ class LogManager(logDirs: Seq[File],
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
               s" last flushed ${log.lastFlushTime} time since last flush: $timeSinceLastFlush")
         if(timeSinceLastFlush >= log.config.flushMs)
-          log.flush()
+          log.flush(false)
       } catch {
         case e: Throwable =>
           error(s"Error flushing topic ${topicPartition.topic}", e)

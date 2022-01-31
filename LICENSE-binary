@@ -232,26 +232,27 @@ jetty-util-9.4.43.v20210629
 jetty-util-ajax-9.4.43.v20210629
 jersey-common-2.34
 jersey-server-2.34
+jose4j-0.7.8
 log4j-1.2.17
-lz4-java-1.7.1
+lz4-java-1.8.0
 maven-artifact-3.8.1
 metrics-core-4.1.12.1
-netty-buffer-4.1.62.Final
-netty-codec-4.1.62.Final
-netty-common-4.1.62.Final
-netty-handler-4.1.62.Final
-netty-resolver-4.1.62.Final
-netty-transport-4.1.62.Final
-netty-transport-native-epoll-4.1.62.Final
-netty-transport-native-unix-common-4.1.62.Final
+netty-buffer-4.1.68.Final
+netty-codec-4.1.68.Final
+netty-common-4.1.68.Final
+netty-handler-4.1.68.Final
+netty-resolver-4.1.68.Final
+netty-transport-4.1.68.Final
+netty-transport-native-epoll-4.1.68.Final
+netty-transport-native-unix-common-4.1.68.Final
 plexus-utils-3.2.1
-rocksdbjni-6.19.3
+rocksdbjni-6.22.1.1
 scala-collection-compat_2.13-2.4.4
 scala-library-2.13.6
 scala-logging_2.13-3.9.3
 scala-reflect-2.13.6
 scala-java8-compat_2.13-1.0.0
-snappy-java-1.1.8.1
+snappy-java-1.1.8.4
 zookeeper-3.6.3
 zookeeper-jute-3.6.3
 
@@ -305,7 +306,7 @@ slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.0-2 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.0-4 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause

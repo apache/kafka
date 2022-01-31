@@ -20,10 +20,9 @@ import java.io.File
 import java.nio.file.Files
 import java.util
 import java.util.Properties
-
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
-import org.apache.kafka.common.config.ConfigException
+import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
@@ -89,7 +88,8 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
     setListenerProps(propertiesFile)
-    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
@@ -104,7 +104,8 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
     setListenerProps(propertiesFile)
-    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
@@ -119,7 +120,8 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
     setListenerProps(propertiesFile)
-    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(propertiesFile))
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
@@ -134,21 +136,39 @@ class KafkaTest {
     propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
     propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "")
     setListenerProps(propertiesFile)
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
+    assertBadConfigContainingMessage(propertiesFile,
+      "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")
 
     // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
     propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(propertiesFile))
+    assertBadConfigContainingMessage(propertiesFile,
+      "Missing required configuration `zookeeper.connect` which has no default value.")
 
-    // Ensure that no exception is thrown once zookeeper.connect is defined
+    // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
     propertiesFile.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    propertiesFile.setProperty(KafkaConfig.ControllerListenerNamesProp, "")
     KafkaConfig.fromProps(propertiesFile)
   }
 
   private def setListenerProps(props: Properties): Unit = {
-    props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9093")
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-    if (props.getProperty(KafkaConfig.ProcessRolesProp).contains("broker")) {
+    val hasBrokerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("broker")
+    val hasControllerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("controller")
+    val controllerListener = "SASL_PLAINTEXT://localhost:9092"
+    val brokerListener = "PLAINTEXT://localhost:9093"
+
+    if (hasBrokerRole || hasControllerRole) { // KRaft
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SASL_PLAINTEXT")
+      if (hasBrokerRole && hasControllerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, s"$brokerListener,$controllerListener")
+      } else if (hasControllerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, controllerListener)
+      } else if (hasBrokerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+      }
+    } else { // ZK-based
+       props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+    }
+    if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
       props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
       props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
     }

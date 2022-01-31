@@ -93,8 +93,7 @@ public class Position {
     }
 
     /**
-     * Create a new, structurally independent Position that is the result of merging two other
-     * Positions.
+     * Merges the provided Position into the current instance.
      * <p>
      * If both Positions contain the same topic -> partition -> offset mapping, the resulting
      * Position will contain a mapping with the larger of the two offsets.
@@ -103,12 +102,10 @@ public class Position {
         if (other == null) {
             return this;
         } else {
-            final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> copy =
-                deepCopy(position);
             for (final Entry<String, ConcurrentHashMap<Integer, Long>> entry : other.position.entrySet()) {
                 final String topic = entry.getKey();
                 final Map<Integer, Long> partitionMap =
-                    copy.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
+                    position.computeIfAbsent(topic, k -> new ConcurrentHashMap<>());
                 for (final Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                     final Integer partition = partitionOffset.getKey();
                     final Long offset = partitionOffset.getValue();
@@ -118,7 +115,7 @@ public class Position {
                     }
                 }
             }
-            return new Position(copy);
+            return this;
         }
     }
 
@@ -132,8 +129,9 @@ public class Position {
     /**
      * Return the partition -> offset mapping for a specific topic.
      */
-    public Map<Integer, Long> getBound(final String topic) {
-        return Collections.unmodifiableMap(position.get(topic));
+    public Map<Integer, Long> getPartitionPositions(final String topic) {
+        final ConcurrentHashMap<Integer, Long> bound = position.get(topic);
+        return bound == null ? Collections.emptyMap() : Collections.unmodifiableMap(bound);
     }
 
     private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> deepCopy(
@@ -173,5 +171,9 @@ public class Position {
     public int hashCode() {
         throw new UnsupportedOperationException(
             "This mutable object is not suitable as a hash key");
+    }
+
+    public boolean isEmpty() {
+        return position.isEmpty();
     }
 }

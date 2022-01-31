@@ -21,18 +21,26 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry, NewPartitionReassignment, NewTopic}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
-import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
+import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
-
 import java.util
+import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections, Optional}
+
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.protocol.Errors._
+import org.slf4j.LoggerFactory
+
+import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
@@ -40,6 +48,8 @@ import scala.jdk.CollectionConverters._
 @Timeout(120)
 @Tag("integration")
 class KRaftClusterTest {
+  val log = LoggerFactory.getLogger(classOf[KRaftClusterTest])
+  val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName() + "2")
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -458,5 +468,249 @@ class KRaftClusterTest {
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
       topicsNotFound.isEmpty && extraTopics.isEmpty
     }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): ${extraTopics}")
+  }
+
+  private def incrementalAlter(
+    admin: Admin,
+    changes: Seq[(ConfigResource, Seq[AlterConfigOp])]
+  ): Seq[ApiError] = {
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    changes.foreach {
+      case (resource, ops) => configs.put(resource, ops.asJava)
+    }
+    val values = admin.incrementalAlterConfigs(configs).values()
+    changes.map {
+      case (resource, _) => try {
+        values.get(resource).get()
+        ApiError.NONE
+      } catch {
+        case e: ExecutionException => ApiError.fromThrowable(e.getCause)
+        case t: Throwable => ApiError.fromThrowable(t)
+      }
+    }
+  }
+
+  private def validateConfigs(
+    admin: Admin,
+    expected: Map[ConfigResource, Seq[(String, String)]],
+    exhaustive: Boolean = false
+  ): Map[ConfigResource, util.Map[String, String]] = {
+    val results = new mutable.HashMap[ConfigResource, util.Map[String, String]]()
+    TestUtils.retry(60000) {
+      try {
+        val values = admin.describeConfigs(expected.keySet.asJava).values()
+        results.clear()
+        assertEquals(expected.keySet, values.keySet().asScala)
+        expected.foreach {
+          case (resource, pairs) =>
+            val config = values.get(resource).get()
+            val actual = new util.TreeMap[String, String]()
+            val expected = new util.TreeMap[String, String]()
+            config.entries().forEach {
+              case entry =>
+                actual.put(entry.name(), entry.value())
+                if (!exhaustive) {
+                  expected.put(entry.name(), entry.value())
+                }
+            }
+            pairs.foreach {
+              case (k, v) => expected.put(k, v)
+            }
+            assertEquals(expected, actual)
+            results.put(resource, actual)
+        }
+      } catch {
+        case t: Throwable =>
+          log.warn(s"Unable to describeConfigs(${expected.keySet.asJava})", t)
+          throw t
+      }
+    }
+    results.toMap
+  }
+
+  @Test
+  def testIncrementalAlterConfigs(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
+          (new ConfigResource(Type.BROKER, ""), Seq(
+            new AlterConfigOp(new ConfigEntry("log.roll.ms", "1234567"), OpType.SET),
+            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "6"), OpType.SET))))))
+        validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
+          ("log.roll.ms", "1234567"),
+          ("max.connections.per.ip", "6"))), true)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 2, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).all().get()
+        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
+        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 2)
+
+        validateConfigs(admin, Map(new ConfigResource(Type.TOPIC, "bar") -> Seq()))
+
+        assertEquals(Seq(ApiError.NONE,
+            new ApiError(INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
+            new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
+          incrementalAlter(admin, Seq(
+            (new ConfigResource(Type.TOPIC, "foo"), Seq(
+              new AlterConfigOp(new ConfigEntry("segment.jitter.ms", "345"), OpType.SET))),
+            (new ConfigResource(Type.TOPIC, "bar"), Seq(
+              new AlterConfigOp(new ConfigEntry("not.a.real.topic.config", "789"), OpType.SET))),
+            (new ConfigResource(Type.TOPIC, "baz"), Seq(
+              new AlterConfigOp(new ConfigEntry("segment.jitter.ms", "678"), OpType.SET))))))
+
+        validateConfigs(admin, Map(new ConfigResource(Type.TOPIC, "foo") -> Seq(
+          ("segment.jitter.ms", "345"))))
+
+        assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
+          (new ConfigResource(Type.BROKER, "2"), Seq(
+            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "7"), OpType.SET))))))
+
+        validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "2") -> Seq(
+          ("max.connections.per.ip", "7"))))
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testSetLog4jConfigurations(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        Seq(log, log2).foreach(_.debug("setting log4j"))
+
+        val broker2 = new ConfigResource(Type.BROKER_LOGGER, "2")
+        val broker3 = new ConfigResource(Type.BROKER_LOGGER, "3")
+        val initialLog4j = validateConfigs(admin, Map(broker2 -> Seq()))
+
+        assertEquals(Seq(ApiError.NONE,
+            new ApiError(INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
+          incrementalAlter(admin, Seq(
+            (broker2, Seq(
+              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SET),
+              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SET))),
+            (broker3, Seq(
+              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.APPEND),
+              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.APPEND))))))
+
+        validateConfigs(admin, Map(broker2 -> Seq(
+          (log.getName(), "TRACE"),
+          (log2.getName(), "TRACE"))))
+
+        assertEquals(Seq(ApiError.NONE,
+          new ApiError(INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
+          incrementalAlter(admin, Seq(
+            (broker2, Seq(
+              new AlterConfigOp(new ConfigEntry(log.getName(), ""), OpType.DELETE),
+              new AlterConfigOp(new ConfigEntry(log2.getName(), ""), OpType.DELETE))),
+            (broker3, Seq(
+              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SUBTRACT),
+              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SUBTRACT))))))
+
+        validateConfigs(admin, Map(broker2 -> Seq(
+          (log.getName(), initialLog4j.get(broker2).get.get(log.getName())),
+          (log2.getName(), initialLog4j.get(broker2).get.get(log2.getName())))))
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @nowarn("cat=deprecation") // Suppress warnings about using legacy alterConfigs
+  def legacyAlter(
+    admin: Admin,
+    resources: Map[ConfigResource, Seq[ConfigEntry]]
+  ): Seq[ApiError] = {
+    val configs = new util.HashMap[ConfigResource, Config]()
+    resources.foreach {
+      case (resource, entries) => configs.put(resource, new Config(entries.asJava))
+    }
+    val values = admin.alterConfigs(configs).values()
+    resources.map {
+      case (resource, _) => try {
+        values.get(resource).get()
+        ApiError.NONE
+      } catch {
+        case e: ExecutionException => ApiError.fromThrowable(e.getCause)
+        case t: Throwable => ApiError.fromThrowable(t)
+      }
+    }.toSeq
+  }
+
+  @Test
+  def testLegacyAlterConfigs(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val defaultBroker = new ConfigResource(Type.BROKER, "")
+
+        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
+          new ConfigEntry("log.roll.ms", "1234567"),
+          new ConfigEntry("max.connections.per.ip", "6")))))
+
+        validateConfigs(admin, Map(defaultBroker -> Seq(
+          ("log.roll.ms", "1234567"),
+          ("max.connections.per.ip", "6"))), true)
+
+        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
+          new ConfigEntry("log.roll.ms", "1234567")))))
+
+        // Since max.connections.per.ip was left out of the previous legacyAlter, it is removed.
+        validateConfigs(admin, Map(defaultBroker -> Seq(
+          ("log.roll.ms", "1234567"))), true)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 2, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).all().get()
+        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
+        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 2)
+        assertEquals(Seq(ApiError.NONE,
+            new ApiError(INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
+            new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
+          legacyAlter(admin, Map(
+            new ConfigResource(Type.TOPIC, "foo") -> Seq(
+              new ConfigEntry("segment.jitter.ms", "345")),
+            new ConfigResource(Type.TOPIC, "bar") -> Seq(
+              new ConfigEntry("not.a.real.topic.config", "789")),
+            new ConfigResource(Type.TOPIC, "baz") -> Seq(
+              new ConfigEntry("segment.jitter.ms", "678")))))
+
+        validateConfigs(admin, Map(new ConfigResource(Type.TOPIC, "foo") -> Seq(
+          ("segment.jitter.ms", "345"))))
+
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
   }
 }

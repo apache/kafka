@@ -18,8 +18,9 @@ package org.apache.kafka.streams.query;
 
 
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.internals.FailedQueryResult;
+import org.apache.kafka.streams.query.internals.SucceededQueryResult;
 
-import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -27,43 +28,24 @@ import java.util.List;
  *
  * @param <R> The result type of the query.
  */
-public final class QueryResult<R> {
-
-    private final List<String> executionInfo = new LinkedList<>();
-    private final FailureReason failureReason;
-    private final String failure;
-    private final R result;
-    private Position position;
-
-    private QueryResult(final R result) {
-        this.result = result;
-        this.failureReason = null;
-        this.failure = null;
-    }
-
-    private QueryResult(final FailureReason failureReason, final String failure) {
-        this.result = null;
-        this.failureReason = failureReason;
-        this.failure = failure;
-    }
-
+public interface QueryResult<R> {
     /**
      * Static factory method to create a result object for a successful query. Used by StateStores
      * to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
      */
-    public static <R> QueryResult<R> forResult(final R result) {
-        return new QueryResult<>(result);
+    static <R> QueryResult<R> forResult(final R result) {
+        return new SucceededQueryResult<>(result);
     }
 
     /**
      * Static factory method to create a result object for a failed query. Used by StateStores to
      * respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
      */
-    public static <R> QueryResult<R> forFailure(
+    static <R> QueryResult<R> forFailure(
         final FailureReason failureReason,
         final String failureMessage) {
 
-        return new QueryResult<>(failureReason, failureMessage);
+        return new FailedQueryResult<>(failureReason, failureMessage);
     }
 
     /**
@@ -72,11 +54,11 @@ public final class QueryResult<R> {
      * <p>
      * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
      */
-    public static <R> QueryResult<R> forUnknownQueryType(
+    static <R> QueryResult<R> forUnknownQueryType(
         final Query<R> query,
         final StateStore store) {
 
-        return new QueryResult<>(
+        return forFailure(
             FailureReason.UNKNOWN_QUERY_TYPE,
             "This store (" + store.getClass() + ") doesn't know how to execute "
                 + "the given query (" + query + ")." +
@@ -89,58 +71,56 @@ public final class QueryResult<R> {
      * <p>
      * Used by StateStores to respond to a {@link StateStore#query(Query, PositionBound, boolean)}.
      */
-    public static <R> QueryResult<R> notUpToBound(
+    static <R> QueryResult<R> notUpToBound(
         final Position currentPosition,
         final PositionBound positionBound,
-        final int partition) {
+        final Integer partition) {
 
-        return new QueryResult<>(
-            FailureReason.NOT_UP_TO_BOUND,
-            "For store partition " + partition + ", the current position "
-                + currentPosition + " is not yet up to the bound "
-                + positionBound
-        );
+        if (partition == null) {
+            return new FailedQueryResult<>(
+                FailureReason.NOT_UP_TO_BOUND,
+                "The store is not initialized yet, so it is not yet up to the bound "
+                    + positionBound
+            );
+        } else {
+            return new FailedQueryResult<>(
+                FailureReason.NOT_UP_TO_BOUND,
+                "For store partition " + partition + ", the current position "
+                    + currentPosition + " is not yet up to the bound "
+                    + positionBound
+            );
+        }
     }
 
     /**
      * Used by stores to add detailed execution information (if requested) during query execution.
      */
-    public void addExecutionInfo(final String message) {
-        executionInfo.add(message);
-    }
+    void addExecutionInfo(final String message);
 
     /**
      * Used by stores to report what exact position in the store's history it was at when it
      * executed the query.
      */
-    public void setPosition(final Position position) {
-        this.position = position;
-    }
+    void setPosition(final Position position);
 
     /**
      * True iff the query was successfully executed. The response is available in {@link
      * this#getResult()}.
      */
-    public boolean isSuccess() {
-        return failureReason == null;
-    }
+    boolean isSuccess();
 
 
     /**
      * True iff the query execution failed. More information about the failure is available in
      * {@link this#getFailureReason()} and {@link this#getFailureMessage()}.
      */
-    public boolean isFailure() {
-        return failureReason != null;
-    }
+    boolean isFailure();
 
     /**
      * If detailed execution information was requested in {@link StateQueryRequest#enableExecutionInfo()},
      * this method returned the execution details for this partition's result.
      */
-    public List<String> getExecutionInfo() {
-        return executionInfo;
-    }
+    List<String> getExecutionInfo();
 
     /**
      * This state partition's exact position in its history when this query was executed. Can be
@@ -148,37 +128,21 @@ public final class QueryResult<R> {
      * <p>
      * Note: stores are encouraged, but not required to set this property.
      */
-    public Position getPosition() {
-        return position;
-    }
+    Position getPosition();
 
     /**
      * If this partition failed to execute the query, returns the reason.
      *
      * @throws IllegalArgumentException if this is not a failed result.
      */
-    public FailureReason getFailureReason() {
-        if (!isFailure()) {
-            throw new IllegalArgumentException(
-                "Cannot get failure reason because this query did not fail."
-            );
-        }
-        return failureReason;
-    }
+    FailureReason getFailureReason();
 
     /**
      * If this partition failed to execute the query, returns the failure message.
      *
      * @throws IllegalArgumentException if this is not a failed result.
      */
-    public String getFailureMessage() {
-        if (!isFailure()) {
-            throw new IllegalArgumentException(
-                "Cannot get failure message because this query did not fail."
-            );
-        }
-        return failure;
-    }
+    String getFailureMessage();
 
     /**
      * Returns the result of executing the query on one partition. The result type is determined by
@@ -188,23 +152,5 @@ public final class QueryResult<R> {
      *
      * @throws IllegalArgumentException if this is not a successful query.
      */
-    public R getResult() {
-        if (!isSuccess()) {
-            throw new IllegalArgumentException(
-                "Cannot get result for failed query. Failure is " + failureReason.name() + ": "
-                    + failure);
-        }
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "QueryResult{" +
-            "executionInfo=" + executionInfo +
-            ", failureReason=" + failureReason +
-            ", failure='" + failure + '\'' +
-            ", result=" + result +
-            ", position=" + position +
-            '}';
-    }
+    R getResult();
 }

@@ -182,11 +182,11 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
   }
 
   def topicNamesToIds(): util.Map[String, Uuid] = {
-    new util.HashMap(metadataSnapshot.topicIds.asJava)
+    Collections.unmodifiableMap(metadataSnapshot.topicIds.asJava)
   }
 
   def topicIdsToNames(): util.Map[Uuid, String] = {
-    new util.HashMap(metadataSnapshot.topicNames.asJava)
+    Collections.unmodifiableMap(metadataSnapshot.topicNames.asJava)
   }
 
   /**
@@ -194,7 +194,7 @@ class ZkMetadataCache(brokerId: Int) extends MetadataCache with Logging {
    */
   def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
     val snapshot = metadataSnapshot
-    (new util.HashMap(snapshot.topicIds.asJava), new util.HashMap(snapshot.topicNames.asJava))
+    (Collections.unmodifiableMap(snapshot.topicIds.asJava), Collections.unmodifiableMap(snapshot.topicNames.asJava))
   }
 
   override def getAllTopics(): Set[String] = {

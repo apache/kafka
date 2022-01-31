@@ -20,7 +20,7 @@ package kafka.tools
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.util.Properties
-
+import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
@@ -30,7 +30,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
-
 import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
@@ -146,71 +145,94 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
-    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message.")
+    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, " +
+      "and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message. " +
+      "This is the option to control `retries` in producer configs.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)
-    val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata.")
+    val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. " +
+      "Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata. " +
+      "This is the option to control `retry.backoff.ms` in producer configs.")
       .withRequiredArg
-      .ofType(classOf[java.lang.Integer])
+      .ofType(classOf[java.lang.Long])
       .defaultsTo(100)
     val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
-      " a message will queue awaiting sufficient batch size. The value is given in ms.")
+      " a message will queue awaiting sufficient batch size. The value is given in ms. " +
+      "This is the option to control `linger.ms` in producer configs.")
       .withRequiredArg
       .describedAs("timeout_ms")
-      .ofType(classOf[java.lang.Integer])
+      .ofType(classOf[java.lang.Long])
       .defaultsTo(1000)
-    val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests")
+    val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required `acks` of the producer requests")
       .withRequiredArg
       .describedAs("request required acks")
       .ofType(classOf[java.lang.String])
       .defaultsTo("1")
-    val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero")
+    val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero.")
       .withRequiredArg
       .describedAs("request timeout ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1500)
     val metadataExpiryMsOpt = parser.accepts("metadata-expiry-ms",
-      "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any leadership changes.")
+      "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any leadership changes. " +
+        "This is the option to control `metadata.max.age.ms` in producer configs.")
       .withRequiredArg
       .describedAs("metadata expiration interval")
       .ofType(classOf[java.lang.Long])
       .defaultsTo(5*60*1000L)
     val maxBlockMsOpt = parser.accepts("max-block-ms",
-      "The max time that the producer will block for during a send request")
+      "The max time that the producer will block for during a send request.")
       .withRequiredArg
       .describedAs("max block on send")
       .ofType(classOf[java.lang.Long])
       .defaultsTo(60*1000L)
     val maxMemoryBytesOpt = parser.accepts("max-memory-bytes",
-      "The total memory used by the producer to buffer records waiting to be sent to the server.")
+      "The total memory used by the producer to buffer records waiting to be sent to the server. " +
+        "This is the option to control `buffer.memory` in producer configs.")
       .withRequiredArg
       .describedAs("total memory in bytes")
       .ofType(classOf[java.lang.Long])
       .defaultsTo(32 * 1024 * 1024L)
     val maxPartitionMemoryBytesOpt = parser.accepts("max-partition-memory-bytes",
       "The buffer size allocated for a partition. When records are received which are smaller than this size the producer " +
-        "will attempt to optimistically group them together until this size is reached.")
+        "will attempt to optimistically group them together until this size is reached. " +
+        "This is the option to control `batch.size` in producer configs.")
       .withRequiredArg
       .describedAs("memory in bytes per partition")
-      .ofType(classOf[java.lang.Long])
-      .defaultsTo(16 * 1024L)
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(16 * 1024)
     val messageReaderOpt = parser.accepts("line-reader", "The class name of the class to use for reading lines from standard in. " +
       "By default each line is read as a separate message.")
       .withRequiredArg
       .describedAs("reader_class")
       .ofType(classOf[java.lang.String])
       .defaultsTo(classOf[LineMessageReader].getName)
-    val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
+    val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size. " +
+      "This is the option to control `send.buffer.bytes` in producer configs.")
       .withRequiredArg
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024*100)
-    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
-      "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
-      "\tparse.key=true|false\n" +
-      "\tkey.separator=<key.separator>\n" +
-      "\tignore.error=true|false")
+    val propertyOpt = parser.accepts("property",
+      """A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader.
+        |Default properties include:
+        | parse.key=false
+        | parse.headers=false
+        | ignore.error=false
+        | key.separator=\t
+        | headers.delimiter=\t
+        | headers.separator=,
+        | headers.key.separator=:
+        |Default parsing pattern when:
+        | parse.headers=true and parse.key=true:
+        |  "h1:v1,h2:v2...\tkey\tvalue"
+        | parse.key=true:
+        |  "key\tvalue"
+        | parse.headers=true:
+        |  "h1:v1,h2:v2...\tvalue"
+      """.stripMargin
+      )
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -264,9 +286,14 @@ object ConsoleProducer {
     var reader: BufferedReader = null
     var parseKey = false
     var keySeparator = "\t"
+    var parseHeader = false
+    var headersDelimiter = "\t"
+    var headersSeparator = ","
+    var headerKeySeparator = ":"
     var ignoreError = false
     var lineNumber = 0
     var printPrompt = System.console != null
+    var headerSeparatorPattern: Pattern = _
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -274,28 +301,73 @@ object ConsoleProducer {
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
       if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
+      if (props.containsKey("parse.headers"))
+        parseHeader = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
+      if (props.containsKey("headers.delimiter"))
+        headersDelimiter = props.getProperty("headers.delimiter")
+      if (props.containsKey("headers.separator"))
+        headersSeparator = props.getProperty("headers.separator")
+        headerSeparatorPattern = Pattern.compile(headersSeparator)
+      if (props.containsKey("headers.key.separator"))
+        headerKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
+      if (headersDelimiter == headersSeparator)
+        throw new KafkaException("headers.delimiter and headers.separator may not be equal")
+      if (headersDelimiter == headerKeySeparator)
+        throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
+      if (headersSeparator == headerKeySeparator)
+        throw new KafkaException("headers.separator and headers.key.separator may not be equal")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
-    override def readMessage() = {
+    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = {
       lineNumber += 1
-      if (printPrompt)
-        print(">")
-      (reader.readLine(), parseKey) match {
-        case (null, _) => null
-        case (line, true) =>
-          line.indexOf(keySeparator) match {
-            case -1 =>
-              if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
-              else throw new KafkaException(s"No key found on line $lineNumber: $line")
-            case n =>
-              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
-              new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
+      if (printPrompt) print(">")
+      val line = reader.readLine()
+      line match {
+        case null => null
+        case line =>
+          val headers = parse(parseHeader, line, 0, headersDelimiter, "headers delimiter")
+          val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
+
+          val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
+          val keyOffset = if (key == null) 0 else key.length + keySeparator.length
+
+          val value = line.substring(headerOffset + keyOffset)
+
+          val record = new ProducerRecord[Array[Byte], Array[Byte]](
+            topic,
+            if (key != null) key.getBytes(StandardCharsets.UTF_8) else null,
+            if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
+          )
+
+          if (headers != null) {
+            splitHeaders(headers)
+              .foreach(header => record.headers.add(header._1, header._2))
           }
-        case (line, false) =>
-          new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+
+          record
+      }
+    }
+
+    private def parse(enabled: Boolean, line: String, startIndex: Int, demarcation: String, demarcationName: String): String = {
+      (enabled, line.indexOf(demarcation, startIndex)) match {
+        case (false, _) => null
+        case (_, -1) =>
+          if (ignoreError) null
+          else throw new KafkaException(s"No $demarcationName found on line number $lineNumber: '$line'")
+        case (_, index) => line.substring(startIndex, index)
+      }
+    }
+
+    private def splitHeaders(headers: String): Array[(String, Array[Byte])] = {
+      headerSeparatorPattern.split(headers).map { pair =>
+        (pair.indexOf(headerKeySeparator), ignoreError) match {
+          case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
+          case (-1, true) => (pair, null)
+          case (i, _) => (pair.substring(0, i), pair.substring(i + headerKeySeparator.length).getBytes(StandardCharsets.UTF_8))
+        }
       }
     }
   }

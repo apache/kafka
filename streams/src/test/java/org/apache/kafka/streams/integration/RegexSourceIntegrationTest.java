@@ -129,7 +129,7 @@ public class RegexSourceIntegrationTest {
     public void setUp() throws InterruptedException {
         outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -309,7 +309,7 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         final TestCondition stateStoreNameBoundToSourceTopic = () -> {
-            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
+            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToFullSourceTopicNames();
             final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
             return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
         };

@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -45,7 +48,9 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
@@ -57,6 +62,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext<KOut, VOut>
@@ -76,6 +82,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     private long timestamp = -1L;
     private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    private final boolean consistencyEnabled;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -226,6 +233,10 @@ public class InternalMockProcessorContext<KOut, VOut>
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.time = time;
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false);
     }
 
     @Override
@@ -279,10 +290,11 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback func) {
+                         final StateRestoreCallback func,
+                         final CommitCallback checkpoint) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
-        stateManager().registerStore(store, func);
+        stateManager().registerStore(store, func, checkpoint);
     }
 
     @SuppressWarnings("unchecked")
@@ -425,12 +437,25 @@ public class InternalMockProcessorContext<KOut, VOut>
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
+
+        Headers headers = new RecordHeaders();
+        if (!consistencyEnabled) {
+            headers = null;
+        } else {
+            // Add the vector clock to the header part of every record
+            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+            headers.add(new RecordHeader(
+                    ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                    PositionSerde.serialize(position).array()));
+        }
+
         recordCollector().send(
             storeName + "-changelog",
             key,
             value,
-            null,
+            headers,
             taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
@@ -460,6 +485,11 @@ public class InternalMockProcessorContext<KOut, VOut>
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
         restoreCallback.restoreBatch(records);
+    }
+
+    public void restoreWithHeaders(final String storeName, final List<ConsumerRecord<byte[], byte[]>> changeLog) {
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
+        restoreCallback.restoreBatch(changeLog);
     }
 
     public void addChangelogForStore(final String storeName, final String changelogTopic) {

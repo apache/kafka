@@ -81,7 +81,7 @@ class DumpLogSegmentsTest {
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
-    log.flush()
+    log.flush(false)
   }
 
   @AfterEach
@@ -242,7 +242,7 @@ class DumpLogSegmentsTest {
       new SimpleRecord(null, buf.array)
     }).toArray
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
-    log.flush()
+    log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
     assert(output.contains("TOPIC_RECORD"))

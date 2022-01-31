@@ -16,16 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -39,19 +44,20 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
+    private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
-    private Position position;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
-        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -64,8 +70,25 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public void init(final ProcessorContext context,
                      final StateStore root) {
         if (root != null) {
+            final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
+            );
             // register the store
-            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
+            context.register(
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(Bytes.wrap(record.key()), record.value());
+                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                            record,
+                            consistencyEnabled,
+                            position
+                        );
+                    }
+                }
+            );
         }
 
         open = true;
@@ -88,21 +111,23 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return open;
     }
 
-    Position getPosition() {
+    @Override
+    public Position getPosition() {
         return position;
     }
 
     @Override
-    public <R> QueryResult<R> query(
-        final Query<R> query,
-        final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
-            collectExecutionInfo,
-            this
+            config,
+            this,
+            position,
+            context
         );
     }
 

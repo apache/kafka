@@ -26,10 +26,6 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
-    // Override jgit dependency used by grgit and spotless as we appear to auto resolve to 
-    // 5.13.0.202109080827-r and the latest version requires java 9.
-    // Requires force=true to be used in spotless as reported by ./gradlew buildEnvironment.
-    classpath("org.eclipse.jgit:org.eclipse.jgit:$versions.jgit") { force = true }
   }
 }
 
@@ -1865,6 +1861,8 @@ project(':streams') {
             ':streams:upgrade-system-tests-26:test',
             ':streams:upgrade-system-tests-27:test',
             ':streams:upgrade-system-tests-28:test',
+            ':streams:upgrade-system-tests-30:test',
+            ':streams:upgrade-system-tests-31:test',
             ':streams:examples:test'
     ]
   )
@@ -2169,6 +2167,32 @@ project(':streams:upgrade-system-tests-28') {
 
   dependencies {
     testImplementation libs.kafkaStreams_28
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-30') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-30"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_30
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-31') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-31"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_31
     testRuntimeOnly libs.junitJupiter
   }
 

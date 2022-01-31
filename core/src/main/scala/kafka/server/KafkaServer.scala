@@ -30,7 +30,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
-import kafka.network.{RequestChannel, SocketServer}
+import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
@@ -121,7 +121,7 @@ class KafkaServer(
   var tokenManager: DelegationTokenManager = null
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
-  var dynamicConfigManager: DynamicConfigManager = null
+  var dynamicConfigManager: ZkConfigManager = null
   var credentialProvider: CredentialProvider = null
   var tokenCache: DelegationTokenCache = null
 
@@ -233,7 +233,7 @@ class KafkaServer(
         this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
-        // applied after DynamicConfigManager starts.
+        // applied after ZkConfigManager starts.
         config.dynamicConfig.initialize(Some(zkClient))
 
         /* start scheduler */
@@ -416,18 +416,19 @@ class KafkaServer(
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
-          config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
+          config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent", DataPlaneAcceptor.ThreadPrefix)
 
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = createKafkaApis(controlPlaneRequestChannel)
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
-            1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
+            1, s"${ControlPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent", ControlPlaneAcceptor.ThreadPrefix)
         }
 
         Mx4jLoader.maybeLoad()
 
         /* Add all reconfigurables for config change notification before starting config handlers */
         config.dynamicConfig.addReconfigurables(this)
+        Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
 
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController)),
@@ -437,7 +438,7 @@ class KafkaServer(
                                                            ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
-        dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
+        dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
         socketServer.startProcessingRequests(authorizerFutures)
@@ -497,14 +498,14 @@ class KafkaServer(
   }
 
   def createBrokerInfo: BrokerInfo = {
-    val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
+    val endPoints = config.effectiveAdvertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
       require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
-    val listeners = config.advertisedListeners.map { endpoint =>
+    val listeners = config.effectiveAdvertisedListeners.map { endpoint =>
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
       else
@@ -808,7 +809,7 @@ class KafkaServer(
 
   /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
   def advertisedListeners: Seq[EndPoint] = {
-    config.advertisedListeners.map { endPoint =>
+    config.effectiveAdvertisedListeners.map { endPoint =>
       endPoint.copy(port = boundPort(endPoint.listenerName))
     }
   }

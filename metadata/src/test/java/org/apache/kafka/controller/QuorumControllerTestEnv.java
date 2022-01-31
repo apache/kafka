@@ -58,7 +58,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         this.controllers = new ArrayList<>(numControllers);
         try {
             for (int i = 0; i < numControllers; i++) {
-                QuorumController.Builder builder = new QuorumController.Builder(i);
+                QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
                 if (sessionTimeoutMillis.isPresent()) {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(
