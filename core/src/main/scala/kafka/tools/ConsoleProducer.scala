@@ -320,9 +320,8 @@ object ConsoleProducer {
         throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
       if (headersSeparator == headersKeySeparator)
         throw new KafkaException("headers.separator and headers.key.separator may not be equal")
-      if (props.containsKey("null.marker")) {
+      if (props.containsKey("null.marker"))
         nullMarker = props.getProperty("null.marker")
-      }
       if (nullMarker == keySeparator)
         throw new KafkaException("null.marker and key.separator may not be equal")
       if (nullMarker == headersSeparator)
@@ -381,13 +380,14 @@ object ConsoleProducer {
           case (-1, true) => (pair, null)
           case (i, _) =>
             val headerKey = pair.substring(0, i) match {
-              case k =>
-                if (k == nullMarker)
+              case k if k == nullMarker =>
                   throw new KafkaException(s"Header keys should not be equal to the null marker '$nullMarker' as they can't be null")
-                else k
+              case k => k
             }
             val headerValue = pair.substring(i + headersKeySeparator.length) match {
-              case v => if (v == nullMarker) null else v.getBytes(StandardCharsets.UTF_8)
+              case v if v == nullMarker =>
+                null
+              case v => v.getBytes(StandardCharsets.UTF_8)
             }
             (headerKey, headerValue)
         }
