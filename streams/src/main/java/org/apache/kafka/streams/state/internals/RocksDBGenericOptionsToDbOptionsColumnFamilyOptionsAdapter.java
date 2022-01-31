@@ -1685,6 +1685,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return this;
     }
 
+    //
+    // BEGIN options for blobs (integrated BlobDB)
+    //
+    
     @Override
     public Options setEnableBlobFiles(final boolean enableBlobFiles) {
         columnFamilyOptions.setEnableBlobFiles(enableBlobFiles);
@@ -1761,6 +1765,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public double blobGarbageCollectionForceThreshold() {
         return columnFamilyOptions.blobGarbageCollectionForceThreshold();
     }
+
+    //
+    // END options for blobs (integrated BlobDB)
+    //
 
     @Override
     public void close() {
