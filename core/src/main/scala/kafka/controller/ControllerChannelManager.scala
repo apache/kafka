@@ -228,6 +228,8 @@ class ControllerChannelManager(controllerContext: ControllerContext,
 case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                      callback: AbstractResponse => Unit, enqueueTimeMs: Long)
 
+case class LatestRequestStatus(isInFlight: Boolean, isInQueue: Boolean, enqueueTimeMs: Long)
+
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
                         val queue: BlockingQueue[QueueItem],
@@ -239,15 +241,36 @@ class RequestSendThread(val controllerId: Int,
                         val stateChangeLogger: StateChangeLogger,
                         name: String,
                         val controllerChannelManager: ControllerChannelManager)
-  extends ShutdownableThread(name = name) {
+  extends ShutdownableThread(name = name) with KafkaMetricsGroup {
 
   logIdent = s"[RequestSendThread controllerId=$controllerId] "
+
+  private val MaxRequestAgeMetricName = "maxRequestAge"
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
   private val controllerRequestMerger = new ControllerRequestMerger
 
   private var firstUpdateMetadataWithPartitionsSent = false
+
+  @volatile private var latestRequestStatus = LatestRequestStatus(isInFlight = false, isInQueue = false, 0)
+
+  // This metric reports the queued time of the latest request from the queue
+  // Case 1: if there is an inflight request, the metric need to report the age of the inflight request.
+  // Case 2: if there is no inflight request and there are requests inside the queue, the metric need to report
+  //         the age of the oldest item in the queue, which is the one that should be dequeued next.
+  // Case 3: if there is no inflight request and there are no requests inside the queue, the metric should report 0.
+  val queueTimeGauge = newGauge(
+    MaxRequestAgeMetricName,
+    new Gauge[Long] {
+      def value: Long =
+        if (latestRequestStatus.isInFlight || latestRequestStatus.isInQueue) time.milliseconds() - latestRequestStatus.enqueueTimeMs
+        else 0
+    },
+    brokerMetricTags(brokerNode.id())
+  )
+
+  private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
 
   def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
@@ -274,6 +297,7 @@ class RequestSendThread(val controllerId: Int,
       // handle case 4 first
       if (!controllerRequestMerger.hasPendingRequests()) {
         val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
+        latestRequestStatus = LatestRequestStatus(isInFlight = true, isInQueue = false, enqueueTimeMs)
         mergeControlRequest(enqueueTimeMs, apiKey, requestBuilder, callback)
       }
 
@@ -292,6 +316,7 @@ class RequestSendThread(val controllerId: Int,
     } else {
       // use the old behavior of sending each item in the queue as a separate request
       val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
+      latestRequestStatus = LatestRequestStatus(isInFlight = true, isInQueue = false, enqueueTimeMs)
       updateMetrics(apiKey, enqueueTimeMs)
       (requestBuilder, callback)
     }
@@ -321,6 +346,13 @@ class RequestSendThread(val controllerId: Int,
             clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
             isSendSuccessful = true
             remoteTimeMs = time.milliseconds() - remoteTimeStartMs
+
+            val nextRequest = queue.peek()
+            if (nextRequest != null) {
+              latestRequestStatus = LatestRequestStatus(isInFlight = false, isInQueue = true, nextRequest.enqueueTimeMs)
+            } else {
+              latestRequestStatus = LatestRequestStatus(isInFlight = false, isInQueue = false, 0)
+            }
           }
         } catch {
           case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
@@ -402,6 +434,7 @@ class RequestSendThread(val controllerId: Int,
   override def initiateShutdown(): Boolean = {
     if (super.initiateShutdown()) {
       networkClient.initiateClose()
+      removeMetric(MaxRequestAgeMetricName, brokerMetricTags(brokerNode.id()))
       true
     } else
       false
