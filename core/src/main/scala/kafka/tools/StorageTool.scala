@@ -46,7 +46,9 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = MetadataVersions.fromValue(namespace.getString("metadata_version").toShort)
+          val metadataVersion = Option(namespace.getString("metadata_version")).
+            map(mv => MetadataVersions.fromValue(mv.toShort)).
+            getOrElse(MetadataVersions.stable())
           val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -95,7 +97,6 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--metadata-version", "-v").
       action(store()).
-      setDefault(MetadataVersions.stable().version().toString).
       help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
 
     parser.parseArgsOrFail(args)
