@@ -26,27 +26,26 @@ import java.nio.ByteBuffer;
 import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
-import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
 
 public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
-    private final InputStream is;
+    private final InputStream inputStream;
+    // LogHeader buffer up to magic.
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
 
-    public RemoteLogInputStream(InputStream is) {
-        this.is = is;
+    public RemoteLogInputStream(InputStream inputStream) {
+        this.inputStream = inputStream;
     }
 
     @Override
     public RecordBatch nextBatch() throws IOException {
         logHeaderBuffer.rewind();
-        Utils.readFully(is, logHeaderBuffer);
+        Utils.readFully(inputStream, logHeaderBuffer);
 
         if (logHeaderBuffer.position() < HEADER_SIZE_UP_TO_MAGIC)
             return null;
 
         logHeaderBuffer.rewind();
-        logHeaderBuffer.getLong(OFFSET_OFFSET);
         int size = logHeaderBuffer.getInt(SIZE_OFFSET);
 
         // V0 has the smallest overhead, stricter checking is done later
@@ -54,16 +53,19 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
                                                                    "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
 
-        byte magic = logHeaderBuffer.get(MAGIC_OFFSET);
-        ByteBuffer buffer = ByteBuffer.allocate(size + LOG_OVERHEAD);
-        buffer.put(logHeaderBuffer);
+        // 'size' includes, 4 bytes + magic + size(batch-records). So, the complete batch buffer including the header
+        // will have size of "LOG_OVERHEAD + size"
+        int bufferSize = LOG_OVERHEAD + size;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        System.arraycopy(logHeaderBuffer.array(), 0, buffer.array(), 0, logHeaderBuffer.limit());
         buffer.position(logHeaderBuffer.limit());
 
-        Utils.readFully(is, buffer);
-        if (buffer.position() != size + LOG_OVERHEAD)
+        Utils.readFully(inputStream, buffer);
+        if (buffer.position() != bufferSize)
             return null;
         buffer.rewind();
 
+        byte magic = logHeaderBuffer.get(MAGIC_OFFSET);
         MutableRecordBatch batch;
         if (magic > RecordBatch.MAGIC_VALUE_V1)
             batch = new DefaultRecordBatch(buffer);
