@@ -189,7 +189,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
-            TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -718,8 +717,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            // TODO maxBufferedSize != -1 would be removed once the deprecated config buffered.records.per.partition is removed
-            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
+            if (recordInfo.queue().size() == maxBufferedSize) {
                 mainConsumer.resume(singleton(partition));
             }
 
@@ -973,8 +971,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        // We do this only if the deprecated config buffered.records.per.partition is set
-        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+        if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
     }
@@ -1253,14 +1250,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     RecordCollector recordCollector() {
         return recordCollector;
-    }
-
-    Set<TopicPartition> getNonEmptyTopicPartitions() {
-        return this.partitionGroup.getNonEmptyTopicPartitions();
-    }
-
-    long totalBytesBuffered() {
-        return partitionGroup.totalBytesBuffered();
     }
 
     // below are visible for testing only

@@ -964,7 +964,7 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
-        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, cacheSizeBytes);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 

@@ -53,7 +53,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-@SuppressWarnings({"unchecked"})
+@SuppressWarnings("unchecked")
 public class KTableFilterTest {
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
@@ -61,7 +61,7 @@ public class KTableFilterTest {
     @Before
     public void setUp() {
         // disable caching at the config level
-        props.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
+        props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
     }
 
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
