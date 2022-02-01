@@ -189,6 +189,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
+            TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -704,33 +705,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         }
 
-
         try {
-            // process the record by passing to the source node of the topology
-            final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
-            log.trace("Start processing one record [{}]", record);
-
-            final ProcessorRecordContext recordContext = new ProcessorRecordContext(
-                record.timestamp,
-                record.offset(),
-                record.partition(),
-                record.topic(),
-                record.headers()
-            );
-            updateProcessorContext(currNode, wallClockTime, recordContext);
-
-            maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
-            final Record<Object, Object> toProcess = new Record<>(
-                record.key(),
-                record.value(),
-                processorContext.timestamp(),
-                processorContext.headers()
-            );
-            maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
-
-            log.trace("Completed processing one record [{}]", record);
+            if (!(record instanceof CorruptedRecord)) {
+                doProcess(wallClockTime);
+            }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -738,7 +718,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
+            // TODO maxBufferedSize != -1 would be removed once the deprecated config buffered.records.per.partition is removed
+            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
                 mainConsumer.resume(singleton(partition));
             }
 
@@ -774,6 +755,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void doProcess(final long wallClockTime) {
+        // process the record by passing to the source node of the topology
+        final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
+        log.trace("Start processing one record [{}]", record);
+
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            record.timestamp,
+            record.offset(),
+            record.partition(),
+            record.topic(),
+            record.headers()
+        );
+        updateProcessorContext(currNode, wallClockTime, recordContext);
+
+        maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
+        final Record<Object, Object> toProcess = new Record<>(
+            record.key(),
+            record.value(),
+            processorContext.timestamp(),
+            processorContext.headers()
+        );
+        maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
+
+        log.trace("Completed processing one record [{}]", record);
     }
 
     @Override
@@ -965,7 +973,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (newQueueSize > maxBufferedSize) {
+        // We do this only if the deprecated config buffered.records.per.partition is set
+        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
     }
@@ -1244,6 +1253,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    Set<TopicPartition> getNonEmptyTopicPartitions() {
+        return this.partitionGroup.getNonEmptyTopicPartitions();
+    }
+
+    long totalBytesBuffered() {
+        return partitionGroup.totalBytesBuffered();
     }
 
     // below are visible for testing only

@@ -304,6 +304,11 @@ public class KafkaAdminClient extends AdminClient {
     private static final long INVALID_SHUTDOWN_TIME = -1;
 
     /**
+     * The base reason for a LeaveGroupRequest
+     */
+    static final String LEAVE_GROUP_REASON = "member was removed by an admin";
+
+    /**
      * Thread name prefix for admin client network thread
      */
     static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
@@ -3731,6 +3736,10 @@ public class KafkaAdminClient extends AdminClient {
         } else {
             members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
         }
+        
+        String reason = options.reason() == null ? LEAVE_GROUP_REASON : LEAVE_GROUP_REASON + ": " + options.reason();
+        members.forEach(member -> member.setReason(reason));
+
         SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
         RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);

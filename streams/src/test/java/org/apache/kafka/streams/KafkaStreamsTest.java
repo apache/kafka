@@ -53,6 +53,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -102,7 +103,9 @@ import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.capture;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -225,6 +228,7 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             anyObject(StreamsMetadataState.class),
             anyLong(),
+            anyLong(),
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt(),
@@ -236,6 +240,10 @@ public class KafkaStreamsTest {
         EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
+        EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
+        EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
         prepareStreamThread(streamThreadOne, 1, true);
         prepareStreamThread(streamThreadTwo, 2, false);
 
@@ -283,6 +291,8 @@ public class KafkaStreamsTest {
         }).anyTimes();
         EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
         globalStreamThread.join();
+        EasyMock.expectLastCall().anyTimes();
+        globalStreamThread.resize(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
 
         PowerMock.replay(
@@ -339,7 +349,7 @@ public class KafkaStreamsTest {
         ).anyTimes();
         EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-        thread.resizeCache(EasyMock.anyLong());
+        thread.resizeCacheAndBufferMemory(EasyMock.anyLong(), EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
@@ -459,12 +469,15 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.close();
 
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
+
+            assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
         }
 
         assertTrue(supplier.consumer.closed());
@@ -516,7 +529,8 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -528,6 +542,8 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
+
+            // shutting down the global thread from "external" will yield an error in KafkaStreams
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
                 "Thread never stopped."
@@ -538,6 +554,8 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.ERROR,
                 "Thread never stopped."
             );
+
+            assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
         }
     }
 

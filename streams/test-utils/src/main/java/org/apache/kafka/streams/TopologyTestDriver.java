@@ -71,6 +71,7 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -154,7 +155,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
  * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
- * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache.max.bytes.buffering} configuration have no effect.
  * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
  * after each input record.
  *
@@ -308,6 +309,7 @@ public class TopologyTestDriver implements Closeable {
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
+    @SuppressWarnings({"unchecked", "deprecation"})
     private TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
@@ -328,7 +330,7 @@ public class TopologyTestDriver implements Closeable {
 
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
+            Math.max(0, streamsConfig.getLong(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG)),
             streamsMetrics
         );
 
@@ -641,7 +643,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
+        for (final String sourceTopicName : internalTopologyBuilder.fullSourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                                                 " cannot contain regex pattern for input record topic: " + inputRecordTopic +
@@ -651,7 +653,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
-        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
+        if (!internalTopologyBuilder.fullSourceTopicNames().isEmpty()) {
             validateSourceTopicNameRegexPattern(topicName);
         }
 
@@ -1237,6 +1239,11 @@ public class TopologyTestDriver implements Closeable {
         public boolean isOpen() {
             return inner.isOpen();
         }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
     }
 
     static class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
@@ -1330,6 +1337,11 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public boolean isOpen() {
             return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
         }
     }
 

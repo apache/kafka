@@ -78,6 +78,8 @@ public class RetryWithToleranceOperatorTest {
 
     public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
             ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+    public static final RetryWithToleranceOperator ALL_OPERATOR = new RetryWithToleranceOperator(
+            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM);
     static {
         Map<String, String> properties = new HashMap<>();
         properties.put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
@@ -91,6 +93,11 @@ public class RetryWithToleranceOperatorTest {
         NOOP_OPERATOR.metrics(new ErrorHandlingMetrics(
             new ConnectorTaskId("noop-connector", -1),
             new ConnectMetrics("noop-worker", new TestableWorkerConfig(properties), new SystemTime(), "test-cluster"))
+        );
+        ALL_OPERATOR.metrics(new ErrorHandlingMetrics(
+                new ConnectorTaskId("errors-all-tolerate-connector", -1),
+                new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(properties),
+                        new SystemTime(), "test-cluster"))
         );
     }
 

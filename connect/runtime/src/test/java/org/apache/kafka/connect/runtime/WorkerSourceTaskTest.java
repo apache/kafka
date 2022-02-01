@@ -42,6 +42,7 @@ import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -219,18 +220,32 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createWorkerTaskWithErrorToleration() {
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
-    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter) {
+        createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
+                                  HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
             transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
             offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
+                retryWithToleranceOperator, statusBackingStore, Runnable::run);
     }
 
     @Test
@@ -811,6 +826,32 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
         Whitebox.invokeMethod(workerTask, "sendRecords");
         assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testSourceTaskIgnoresProducerException() throws Exception {
+        createWorkerTaskWithErrorToleration();
+        expectTopicCreation(TOPIC);
+
+        // send two records
+        // record 1 will succeed
+        // record 2 will invoke the producer's failure callback, but ignore the exception via retryOperator
+        // and no ConnectException will be thrown
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+
+        expectSendRecordOnce();
+        expectSendRecordProducerCallbackFail();
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.isNull());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
 
         PowerMock.verifyAll();
     }

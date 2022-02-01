@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -110,7 +111,7 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
                                           Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
@@ -176,7 +177,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,
@@ -259,7 +262,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,

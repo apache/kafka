@@ -170,12 +170,12 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
-    createServer(config, time, threadNamePrefix, enableForwarding = false)
+    createServer(config, time, threadNamePrefix, enableForwarding = false, startup = true)
   }
 
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], enableForwarding: Boolean): KafkaServer = {
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], enableForwarding: Boolean, startup: Boolean): KafkaServer = {
     val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding)
-    server.startup()
+    if (startup) server.startup()
     server
   }
 
@@ -241,12 +241,12 @@ object TestUtils extends Logging {
   /**
     * Shutdown `servers` and delete their log directories.
     */
-  def shutdownServers[B <: KafkaBroker](brokers: Seq[B]): Unit = {
+  def shutdownServers[B <: KafkaBroker](brokers: Seq[B], deleteLogDirs: Boolean = true): Unit = {
     import ExecutionContext.Implicits._
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        CoreUtils.delete(s.config.logDirs)
+        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))

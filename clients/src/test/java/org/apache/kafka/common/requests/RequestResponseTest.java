@@ -1715,7 +1715,8 @@ public class RequestResponseTest {
             .setSessionTimeoutMs(30000)
             .setMemberId("consumer1")
             .setProtocolType("consumer")
-            .setProtocols(protocols);
+            .setProtocols(protocols)
+            .setReason("reason: test");
 
         // v1 and above contains rebalance timeout
         if (version >= 1)
@@ -1837,7 +1838,8 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupRequest createLeaveGroupRequest(short version) {
-        return new LeaveGroupRequest.Builder("group1", singletonList(new MemberIdentity().setMemberId("consumer1")))
+        MemberIdentity member = new MemberIdentity().setMemberId("consumer1").setReason("reason: test");
+        return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member))
                 .build(version);
     }
 

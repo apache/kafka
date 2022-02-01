@@ -20,18 +20,22 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -49,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKeyBytes;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
 
@@ -110,8 +115,28 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         );
 
         if (root != null) {
-            context.register(root, (key, value) ->
-                put(Bytes.wrap(extractStoreKeyBytes(key)), value, extractStoreTimestamp(key)));
+            final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
+            );
+            context.register(
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(
+                            Bytes.wrap(extractStoreKeyBytes(record.key())),
+                            record.value(),
+                            extractStoreTimestamp(record.key())
+                        );
+                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                            record,
+                            consistencyEnabled,
+                            position
+                        );
+                    }
+                }
+            );
         }
         open = true;
     }
@@ -119,11 +144,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        init(StoreToProcessorContextAdapter.adapt(context), root);
         this.stateStoreContext = context;
+        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
-    Position getPosition() {
+    @Override
+    public Position getPosition() {
         return position;
     }
 
@@ -353,15 +379,15 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
-            collectExecutionInfo,
+            config,
             this,
             position,
-            context.taskId().partition()
+            stateStoreContext
         );
     }
 

@@ -268,7 +268,7 @@ public class ClusterControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record,
             metadataVersionProvider.activeVersion().recordVersion(REGISTER_BROKER_RECORD)));
-        return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
+        return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
     public void replay(RegisterBrokerRecord record) {

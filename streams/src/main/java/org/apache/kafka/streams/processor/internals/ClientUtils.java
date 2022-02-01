@@ -161,4 +161,9 @@ public class ClientUtils {
         }
         return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
     }
+
+    public static String extractThreadId(final String fullThreadName) {
+        final int index = fullThreadName.indexOf("StreamThread-");
+        return fullThreadName.substring(index);
+    }
 }

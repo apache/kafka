@@ -1506,7 +1506,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
   private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
   private[server] def valuesFromThisConfig: util.Map[String, _] = super.values
-  private[server] def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
+  def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
     super.valuesWithPrefixOverride(prefix)
 
   /** ********* Zookeeper Configuration ***********/

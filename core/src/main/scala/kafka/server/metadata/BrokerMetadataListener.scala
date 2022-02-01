@@ -258,6 +258,9 @@ class BrokerMetadataListener(
     val delta = _delta
     _image = _delta.apply()
     _delta = new MetadataDelta(_image, metadataVersionProvider)
+    if (isDebugEnabled) {
+      debug(s"Publishing new metadata delta ${delta} at offset ${_image.highestOffsetAndEpoch().offset}.")
+    }
     publisher.publish(delta, _image)
   }
 

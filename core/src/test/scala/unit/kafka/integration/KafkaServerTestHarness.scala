@@ -114,23 +114,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityBeforeServersStart()
 
-    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
-    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs) {
-      if (isKRaftTest()) {
-        _brokers += createAndStartBroker(config, brokerTime(config.brokerId))
-      } else {
-        _brokers += TestUtils.createServer(
-          config,
-          time = brokerTime(config.brokerId),
-          threadNamePrefix = None,
-          enableForwarding
-        )
-      }
-    }
-    brokerList = TestUtils.bootstrapServers(_brokers, listenerName)
-    alive = new Array[Boolean](_brokers.length)
-    Arrays.fill(alive, true)
+    createBrokers(startup = true)
+
 
     // default implementation is a no-op, it is overridden by subclasses if required
     configureSecurityAfterServersStart()
@@ -140,6 +125,21 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(_brokers)
     super.tearDown()
+  }
+
+  def recreateBrokers(reconfigure: Boolean = false, startup: Boolean = false): Unit = {
+    // The test must be allowed to fail and be torn down if an exception is raised here.
+    if (reconfigure) {
+      instanceConfigs = null
+    }
+    if (configs.isEmpty)
+      throw new KafkaException("Must supply at least one server config.")
+
+    TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
+    _brokers.clear()
+    Arrays.fill(alive, false)
+
+    createBrokers(startup)
   }
 
   /**
@@ -211,19 +211,16 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     if (reconfigure) {
       instanceConfigs = null
     }
+    if (configs.isEmpty)
+      throw new KafkaException("Must supply at least one server config.")
     for(i <- _brokers.indices if !alive(i)) {
       if (reconfigure) {
-        _brokers(i) = TestUtils.createServer(
-          configs(i),
-          time = brokerTime(configs(i).brokerId),
-          threadNamePrefix = None,
-          enableForwarding
-        )
-      } else {
-        brokers(i).startup()
+        _brokers(i) = createBrokerFromConfig(configs(i))
       }
+      _brokers(i).startup()
       alive(i) = true
     }
+    brokerList = TestUtils.bootstrapServers(_brokers, listenerName)
   }
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
@@ -264,4 +261,34 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     getController().kafkaController.controllerContext.topicNames.toMap
   }
 
+  private def createBrokers(startup: Boolean): Unit = {
+    // Add each broker to `brokers` buffer as soon as it is created to ensure that brokers
+    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
+    val potentiallyRegeneratedConfigs = configs
+    alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
+    Arrays.fill(alive, false)
+    for (config <- potentiallyRegeneratedConfigs) {
+      val broker = createBrokerFromConfig(config)
+      _brokers += broker
+      if (startup) {
+        broker.startup()
+        alive(_brokers.length - 1) = true
+      }
+    }
+    brokerList = if (startup) TestUtils.bootstrapServers(_brokers, listenerName) else null
+  }
+
+  private def createBrokerFromConfig(config: KafkaConfig) = {
+    if (isKRaftTest()) {
+      createBroker(config, brokerTime(config.brokerId), startup = false)
+    } else {
+      TestUtils.createServer(
+        config,
+        time = brokerTime(config.brokerId),
+        threadNamePrefix = None,
+        enableForwarding,
+        startup = false
+      )
+    }
+  }
 }
