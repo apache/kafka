@@ -309,7 +309,7 @@ object ConsoleProducer {
         headersDelimiter = props.getProperty("headers.delimiter")
       if (props.containsKey("headers.separator"))
         headersSeparator = props.getProperty("headers.separator")
-        headersSeparatorPattern = Pattern.compile(headersSeparator)
+      headersSeparatorPattern = Pattern.compile(headersSeparator)
       if (props.containsKey("headers.key.separator"))
         headersKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
@@ -381,12 +381,11 @@ object ConsoleProducer {
           case (i, _) =>
             val headerKey = pair.substring(0, i) match {
               case k if k == nullMarker =>
-                  throw new KafkaException(s"Header keys should not be equal to the null marker '$nullMarker' as they can't be null")
+                throw new KafkaException(s"Header keys should not be equal to the null marker '$nullMarker' as they can't be null")
               case k => k
             }
             val headerValue = pair.substring(i + headersKeySeparator.length) match {
-              case v if v == nullMarker =>
-                null
+              case v if v == nullMarker => null
               case v => v.getBytes(StandardCharsets.UTF_8)
             }
             (headerKey, headerValue)
