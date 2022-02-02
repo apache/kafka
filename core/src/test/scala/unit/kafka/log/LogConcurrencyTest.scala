@@ -148,11 +148,13 @@ class LogConcurrencyTest {
       scheduler = scheduler,
       brokerTopicStats = brokerTopicStats,
       time = Time.SYSTEM,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
-      keepPartitionMetadataFile = true)
+      keepPartitionMetadataFile = true
+    )
   }
 
   private def validateConsumedData(log: UnifiedLog, consumedBatches: Iterable[FetchedBatch]): Unit = {

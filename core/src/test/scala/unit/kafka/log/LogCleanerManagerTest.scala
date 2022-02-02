@@ -98,10 +98,11 @@ class LogCleanerManagerTest extends Logging {
     Files.createDirectories(tpDir.toPath)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
+    val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val segments = new LogSegments(tp)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
+    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     val offsets = new LogLoader(
       tpDir,
       tp,
@@ -113,7 +114,6 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager
     ).load()
@@ -796,13 +796,15 @@ class LogCleanerManagerTest extends Logging {
     val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
     val partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition))
 
-    UnifiedLog(partitionDir,
-      config,
+    UnifiedLog(
+      dir = partitionDir,
+      config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
       brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
@@ -847,11 +849,23 @@ class LogCleanerManagerTest extends Logging {
     log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
   }
 
-  private def makeLog(dir: File = logDir, config: LogConfig) =
-    UnifiedLog(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+  private def makeLog(dir: File = logDir, config: LogConfig) = {
+    UnifiedLog(
+      dir = dir,
+      config = config,
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
+  }
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

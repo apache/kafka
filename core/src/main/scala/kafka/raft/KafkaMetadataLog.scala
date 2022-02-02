@@ -571,6 +571,7 @@ object KafkaMetadataLog {
       scheduler = scheduler,
       brokerTopicStats = new BrokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = Int.MaxValue,
       maxProducerIdExpirationMs = Int.MaxValue,
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),

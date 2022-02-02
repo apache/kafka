@@ -62,8 +62,6 @@ object LogLoader extends Logging {
  *                 populated
  * @param logStartOffsetCheckpoint The checkpoint of the log start offset
  * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
- * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is
- *                                  considered expired
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
  */
@@ -78,7 +76,6 @@ class LogLoader(
   segments: LogSegments,
   logStartOffsetCheckpoint: Long,
   recoveryPointCheckpoint: Long,
-  maxProducerIdExpirationMs: Int,
   leaderEpochCache: Option[LeaderEpochFileCache],
   producerStateManager: ProducerStateManager
 ) extends Logging {
@@ -354,7 +351,8 @@ class LogLoader(
     val producerStateManager = new ProducerStateManager(
       topicPartition,
       dir,
-      maxProducerIdExpirationMs,
+      this.producerStateManager.maxTransactionTimeoutMs,
+      this.producerStateManager.maxProducerIdExpirationMs,
       time)
     UnifiedLog.rebuildProducerState(
       producerStateManager,

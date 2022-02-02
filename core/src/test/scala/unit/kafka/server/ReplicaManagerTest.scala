@@ -392,7 +392,72 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
 
+  @Test
+  def testPartitionsWithLateTransactionsCount(): Unit = {
+    val timer = new MockTimer(time)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+    val topicPartition = new TopicPartition(topic, 0)
+
+    def assertLateTransactionCount(expectedCount: Option[Int]): Unit = {
+      assertEquals(expectedCount, TestUtils.yammerGaugeValue[Int]("PartitionsWithLateTransactionsCount"))
+    }
+
+    try {
+      assertLateTransactionCount(Some(0))
+
+      val partition = replicaManager.createPartition(topicPartition)
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+
+      // Make this replica the leader.
+      val brokerList = Seq[Integer](0, 1, 2).asJava
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(0)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(0)
+          .setIsr(brokerList)
+          .setZkVersion(0)
+          .setReplicas(brokerList)
+          .setIsNew(true)).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+
+      // Start a transaction
+      val producerId = 234L
+      val epoch = 5.toShort
+      val sequence = 9
+      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
+        new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
+      appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      assertLateTransactionCount(Some(0))
+
+      // The transaction becomes late if not finished before the max transaction timeout passes
+      time.sleep(replicaManager.logManager.maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs)
+      assertLateTransactionCount(Some(0))
+      time.sleep(1)
+      assertLateTransactionCount(Some(1))
+
+      // After the late transaction is aborted, we expect the count to return to 0
+      val abortTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
+      val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, abortTxnMarker)
+      appendRecords(replicaManager, new TopicPartition(topic, 0),
+        abortRecordBatch, origin = AppendOrigin.Coordinator).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      assertLateTransactionCount(Some(0))
+    } finally {
+      // After shutdown, the metric should no longer be registered
+      replicaManager.shutdown(checkpointHW = false)
+      assertLateTransactionCount(None)
+    }
   }
 
   @Test
@@ -1750,10 +1815,12 @@ class ReplicaManagerTest {
     val mockBrokerTopicStats = new BrokerTopicStats
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val tp = new TopicPartition(topic, topicPartition)
+    val maxTransactionTimeoutMs = 30000
     val maxProducerIdExpirationMs = 30000
     val segments = new LogSegments(tp)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, tp, mockLogDirFailureChannel, logConfig.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(tp, logDir, maxProducerIdExpirationMs, time)
+    val producerStateManager = new ProducerStateManager(tp, logDir,
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     val offsets = new LogLoader(
       logDir,
       tp,
@@ -1765,7 +1832,6 @@ class ReplicaManagerTest {
       segments,
       0L,
       0L,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager
     ).load()
