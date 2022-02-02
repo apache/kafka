@@ -160,11 +160,6 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      if (config.interBrokerProtocolVersionString != Defaults.InterBrokerProtocolVersion) {
-        // TODO can we have a stronger check here?
-        throw new ConfigException(s"Detected non-default IBP value ${config.interBrokerProtocolVersionString}. Cannot run KRaft mode with IBP set!")
-      }
-
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
 
       val initialMetadataVersion = MetadataVersion.fromValue(metaProperties.initialMetadataVersion)
