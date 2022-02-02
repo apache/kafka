@@ -158,6 +158,7 @@ if (file('.git').exists()) {
     excludes.addAll([
         '**/.git/**',
         '**/build/**',
+        '**/docs/**',
         'CONTRIBUTING.md',
         'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
@@ -890,6 +891,7 @@ project(':core') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':storage:api').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.easymock
@@ -1064,6 +1066,9 @@ project(':core') {
     from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
     from(configurations.runtimeClasspath) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+    // To test the local tiered storage implementation, copying the clients-test and storage-test jars to the distribution.
+    from(project(':clients').configurations.archives.artifacts.files) { into("libs/") }
+    from(project(':storage').configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
     from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
@@ -1800,6 +1805,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':storage:api')
     testImplementation libs.log4j
     testImplementation libs.junitJupiterApi
     testImplementation libs.junitVintageEngine

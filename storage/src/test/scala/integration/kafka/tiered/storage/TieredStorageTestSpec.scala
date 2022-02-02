@@ -24,6 +24,7 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.utils.{TestUtils, nonthreadsafe}
+import kafka.utils.RecordsKeyValueMatcher.correspondTo
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{ElectionType, TopicPartition}
@@ -35,7 +36,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 import org.hamcrest.MatcherAssert.assertThat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, fail}
-import unit.kafka.utils.RecordsKeyValueMatcher.correspondTo
 
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._

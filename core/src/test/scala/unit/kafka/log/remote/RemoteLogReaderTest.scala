@@ -17,30 +17,36 @@
 
 package kafka.log.remote
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.concurrent.{CompletableFuture, RejectedExecutionException}
-
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchTxnCommitted, LogOffsetMetadata, RemoteStorageFetchInfo}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
 class RemoteLogReaderTest {
 
+  val logDir: Path = Files.createTempDirectory("kafka-test-")
+
+  @AfterEach
+  def afterEach(): Unit = {
+    Utils.delete(logDir.toFile)
+  }
+
   @Test
   def testReadRemoteLog(): Unit = {
-    val rlm = new MockRemoteLogManager(2, 10)
+    val rlm = new MockRemoteLogManager(2, 10, logDir.toString)
     val tp = new TopicPartition("test", 0)
     val fetchInfo = new PartitionData(200, 200, 1000, Optional.of(1))
     val resultFuture = new CompletableFuture[RemoteLogReadResult]
@@ -59,7 +65,7 @@ class RemoteLogReaderTest {
 
   @Test
   def testTaskQueueFullAndCancelTask(): Unit = {
-    val rlm = new MockRemoteLogManager(5, 20)
+    val rlm = new MockRemoteLogManager(5, 20, logDir.toString)
     rlm.pause()
 
     val tp = new TopicPartition("test", 0)
@@ -100,7 +106,7 @@ class RemoteLogReaderTest {
 
   @Test
   def testErr(): Unit = {
-    val rlm = new MockRemoteLogManager(2, 10) {
+    val rlm = new MockRemoteLogManager(2, 10, logDir.toString) {
       override def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {
         throw new OffsetOutOfRangeException("Offset: %d is out of range"
           .format(remoteStorageFetchInfo.fetchInfo.fetchOffset))
@@ -121,7 +127,7 @@ class RemoteLogReaderTest {
   }
 }
 
-class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
+class MockRemoteLogManager(threads: Int, taskQueueSize: Int, logDir: String)
   extends RemoteLogManager(
     _ => None,
     (_, _) => {},
@@ -129,7 +135,7 @@ class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
     new SystemTime,
     1,
     "mock-cluster-id",
-    Files.createTempDirectory("kafka-test-").toString,
+    logDir,
     new BrokerTopicStats) {
 
   private val lock = new ReentrantReadWriteLock
@@ -163,10 +169,10 @@ object MockRemoteLogManager {
   def rlmConfig(threads: Int, taskQueueSize: Int): RemoteLogManagerConfig = {
     val props = new Properties
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, "rlmm.config.")
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, "rsm.config.")
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, "kafka.log.remote.MockRemoteStorageManager")
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, "kafka.log.remote.MockRemoteLogMetadataManager")
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+      "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+      "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, threads.toString)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP, taskQueueSize.toString)
     val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props, false)

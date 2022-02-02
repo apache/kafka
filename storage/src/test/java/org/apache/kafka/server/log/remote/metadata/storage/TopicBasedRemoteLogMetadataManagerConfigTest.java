@@ -20,7 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +31,17 @@ import java.util.Map;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIRS;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.getLogDirectory;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final  Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerConfigTest.class);
@@ -45,9 +49,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final String BOOTSTRAP_SERVERS = "localhost:9091";
 
     @Test
-    public void testEmptyConfig() throws Exception {
+    public void testEmptyConfig() {
         // "bootstrap.servers" config is required, it will throw IllegalArgumentException if it does not exist.
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new TopicBasedRemoteLogMetadataManagerConfig(Collections.emptyMap()));
+        assertThrows(IllegalArgumentException.class, () -> new TopicBasedRemoteLogMetadataManagerConfig(Collections.emptyMap()));
     }
 
     @Test
@@ -68,28 +72,28 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
 
         // Check for topic properties
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
-        Assertions.assertEquals(props.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), rlmmConfig.metadataTopicPartitionsCount());
+        assertEquals(props.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), rlmmConfig.metadataTopicPartitionsCount());
 
         // Check for common client configs.
         for (Map.Entry<String, Object> entry : commonClientConfig.entrySet()) {
             log.info("Checking config: " + entry.getKey());
-            Assertions.assertEquals(entry.getValue(),
+            assertEquals(entry.getValue(),
                                     rlmmConfig.producerProperties().get(entry.getKey()));
-            Assertions.assertEquals(entry.getValue(),
+            assertEquals(entry.getValue(),
                                     rlmmConfig.consumerProperties().get(entry.getKey()));
         }
 
         // Check for producer configs.
         for (Map.Entry<String, Object> entry : producerConfig.entrySet()) {
             log.info("Checking config: " + entry.getKey());
-            Assertions.assertEquals(entry.getValue(),
+            assertEquals(entry.getValue(),
                                     rlmmConfig.producerProperties().get(entry.getKey()));
         }
 
         // Check for consumer configs.
         for (Map.Entry<String, Object> entry : consumerConfig.entrySet()) {
             log.info("Checking config: " + entry.getKey());
-            Assertions.assertEquals(entry.getValue(),
+            assertEquals(entry.getValue(),
                                     rlmmConfig.consumerProperties().get(entry.getKey()));
         }
     }
@@ -115,9 +119,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig);
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
 
-        Assertions.assertEquals(overriddenProducerPropValue,
+        assertEquals(overriddenProducerPropValue,
                                 rlmmConfig.producerProperties().get(overrideEntry.getKey()));
-        Assertions.assertEquals(overriddenConsumerPropValue,
+        assertEquals(overriddenConsumerPropValue,
                                 rlmmConfig.consumerProperties().get(overrideEntry.getKey()));
     }
 
@@ -149,5 +153,39 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         }
 
         return props;
+    }
+
+    @Test
+    public void shouldThrowErrorWhenNoLogDirectoryIsConfigured() {
+        Throwable throwable =
+                assertThrows(IllegalArgumentException.class, () -> getLogDirectory(Collections.emptyMap()));
+        assertEquals("At least one log directory must be defined via log.dirs or log.dir.",
+                throwable.getMessage());
+
+        Map<String, Object> props = Collections.singletonMap(LOG_DIRS, "  , ");
+        throwable = assertThrows(IllegalArgumentException.class, () -> getLogDirectory(props));
+        assertEquals("At least one log directory must be defined via log.dirs or log.dir.",
+                throwable.getMessage());
+    }
+
+    @Test
+    public void shouldThrowErrorWhenMultipleLogDirectoriesAreConfigured() {
+        Map<String, Object> props = Collections.singletonMap(LOG_DIRS, "/tmp/a,/tmp/b");
+        Throwable throwable = assertThrows(IllegalArgumentException.class, () -> getLogDirectory(props));
+        assertEquals("Multiple log directories are not supported when remote log storage is enabled",
+                throwable.getMessage());
+    }
+
+    @Test
+    public void testGetLogDirectory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(LOG_DIR, "/tmp/a");
+        assertEquals("/tmp/a", getLogDirectory(props));
+
+        props.put(LOG_DIRS, "/tmp/b");
+        assertEquals("/tmp/b", getLogDirectory(props));
+
+        props.remove(LOG_DIRS);
+        assertEquals("/tmp/a", getLogDirectory(props));
     }
 }

@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import java.lang
 import kafka.cluster.Partition
-import kafka.log.Log
+import kafka.log.{AbortedTxn, Log, OffsetPosition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -43,9 +43,11 @@ import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, 
 import org.apache.kafka.server.log.remote.metadata.storage.{ClassLoaderAwareRemoteLogMetadataManager, TopicBasedRemoteLogMetadataManagerConfig}
 import org.apache.kafka.server.log.remote.storage.{LogSegmentData, RemoteLogManagerConfig, RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemoteStorageManager}
 
+import java.security.{AccessController, PrivilegedAction}
 import scala.collection.mutable
 import scala.collection.Searching._
 import scala.collection.Set
+import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
@@ -134,19 +136,22 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     rlmScheduledThreadPool.getIdlePercent()
   })
 
-  private def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = {
-    val classPath = rlmConfig.remoteStorageManagerClassPath()
-    val rsmClassLoader = {
-      if (classPath != null && classPath.trim.nonEmpty) {
-        new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
-      } else {
-        this.getClass.getClassLoader
-      }
-    }
+  private[remote] def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = {
+    AccessController.doPrivileged(new PrivilegedAction[ClassLoaderAwareRemoteStorageManager] {
+      private val classPath = rlmConfig.remoteStorageManagerClassPath()
 
-    val rsm = rsmClassLoader.loadClass(rlmConfig.remoteStorageManagerClassName())
-      .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
-    new ClassLoaderAwareRemoteStorageManager(rsm, rsmClassLoader)
+      override def run(): ClassLoaderAwareRemoteStorageManager = {
+        val classLoader =
+          if (classPath != null && classPath.trim.nonEmpty) {
+            new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
+          } else {
+            this.getClass.getClassLoader
+          }
+        val delegate = classLoader.loadClass(rlmConfig.remoteStorageManagerClassName())
+          .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
+        new ClassLoaderAwareRemoteStorageManager(delegate, classLoader)
+      }
+    })
   }
 
   private def configureRSM(): Unit = {
@@ -157,20 +162,27 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     remoteLogStorageManager.configure(rsmProps)
   }
 
-  private def createRemoteLogMetadataManager(): RemoteLogMetadataManager = {
-    val classPath = rlmConfig.remoteLogMetadataManagerClassPath
+  private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = {
+    AccessController.doPrivileged(new PrivilegedAction[RemoteLogMetadataManager] {
+      private val classPath = rlmConfig.remoteLogMetadataManagerClassPath
 
-    val rlmm: RemoteLogMetadataManager = if (classPath != null && classPath.trim.nonEmpty) {
-      val rlmmClassLoader = new ChildFirstClassLoader(classPath, this.getClass.getClassLoader)
-      val rlmmLoaded = rlmmClassLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
-        .getDeclaredConstructor().newInstance().asInstanceOf[RemoteLogMetadataManager]
-      new ClassLoaderAwareRemoteLogMetadataManager(rlmmLoaded, rlmmClassLoader)
-    } else {
-      this.getClass.getClassLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName()).getDeclaredConstructor()
-        .newInstance().asInstanceOf[RemoteLogMetadataManager]
-    }
-
-    rlmm
+      override def run(): RemoteLogMetadataManager = {
+        var classLoader = this.getClass.getClassLoader
+        if (classPath != null && classPath.trim.nonEmpty) {
+          classLoader = new ChildFirstClassLoader(classPath, classLoader)
+          val delegate = classLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
+            .getDeclaredConstructor()
+            .newInstance()
+            .asInstanceOf[RemoteLogMetadataManager]
+          new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader)
+        } else {
+          classLoader.loadClass(rlmConfig.remoteLogMetadataManagerClassName())
+            .getDeclaredConstructor()
+            .newInstance()
+            .asInstanceOf[RemoteLogMetadataManager]
+        }
+      }
+    })
   }
 
   private def configureRLMM(endPoint: Endpoint): Unit = {
@@ -217,7 +229,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   def storageManager(): RemoteStorageManager = {
-    remoteLogStorageManager.delegate()
+    remoteLogStorageManager
   }
 
   /**
@@ -633,7 +645,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)
 
     // get the epoch for the requested  offset from local leader epoch cache
-    // val epoch = fetchLog(tp).map(log => log.leaderEpochCache.map(cache => cache.epochForOffset()))
+    // FIXME(@kamal), use the epochForOffset API instead of latest epoch.
+    //  val epoch = fetchLog(tp).map(log => log.leaderEpochCache.map(cache => cache.epochForOffset()))
     var rlsMetadata: Optional[RemoteLogSegmentMetadata] = Optional.empty()
     fetchLog(tp).foreach { log =>
       log.leaderEpochCache.foreach(cache => {
@@ -697,22 +710,82 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       }
       buffer.flip()
 
-      val abortedTxns = if (includeAbortedTxns) {
-        Some(collectAbortedTransactions(rlsMetadata.get(), firstBatch.baseOffset(), updatedFetchSize))
-      }  else {
-        None
+      var fetchDataInfo = FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.readableRecords(buffer))
+      if (includeAbortedTxns) {
+        fetchDataInfo = addAbortedTransactions(firstBatch.baseOffset(), rlsMetadata.get(), fetchDataInfo)
       }
-      FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.readableRecords(buffer), abortedTransactions = abortedTxns)
+      fetchDataInfo
     } finally {
       Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
     }
   }
 
-  private def collectAbortedTransactions(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset:Long,
-                                         fetchSize:Int): List[AbortedTransaction] = {
-    // TxnIndexSearchResult will be useful whether to search through the next segments or not.
-    indexCache.collectAbortedTransaction(remoteLogSegmentMetadata, offset, fetchSize).abortedTransactions
-      .map(_.asAbortedTransaction)
+  private[remote] def addAbortedTransactions(startOffset: Long,
+                                             segmentMetadata: RemoteLogSegmentMetadata,
+                                             fetchInfo: FetchDataInfo): FetchDataInfo = {
+    val fetchSize = fetchInfo.records.sizeInBytes
+    val startOffsetPosition = OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
+      fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
+
+    val offsetIndex = indexCache.getIndexEntry(segmentMetadata).offsetIndex
+    val upperBoundOffset = offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize)
+      .map(_.offset).getOrElse(segmentMetadata.endOffset()+1)
+
+    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+    def accumulator(abortedTxn: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxn.map(_.asAbortedTransaction)
+
+    collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator)
+
+    FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
+      records = fetchInfo.records,
+      firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
+      abortedTransactions = Some(abortedTransactions.toList))
+  }
+
+  private[remote] def collectAbortedTransactions(startOffset: Long,
+                                                 upperBoundOffset: Long,
+                                                 segmentMetadata: RemoteLogSegmentMetadata,
+                                                 accumulator: List[AbortedTxn] => Unit): Unit = {
+    val topicPartition = segmentMetadata.topicIdPartition().topicPartition()
+    val localLogSegments = fetchLog(topicPartition).map(log => log.logSegments.iterator).getOrElse(Iterator.empty)
+
+    var searchInLocalLog = false
+    var nextSegmentMetadataOpt = Option.apply(segmentMetadata)
+    var txnIndexOpt = nextSegmentMetadataOpt.map(metadata => indexCache.getIndexEntry(metadata).txnIndex)
+    while (txnIndexOpt.isDefined) {
+      val searchResult = txnIndexOpt.get.collectAbortedTxns(startOffset, upperBoundOffset)
+      accumulator(searchResult.abortedTransactions)
+      if (!searchResult.isComplete) {
+        if (!searchInLocalLog) {
+          nextSegmentMetadataOpt = nextSegmentMetadataOpt.flatMap(x => findNextSegmentMetadata(x))
+          txnIndexOpt = nextSegmentMetadataOpt.map(x => indexCache.getIndexEntry(x).txnIndex)
+          if (txnIndexOpt.isEmpty) {
+            searchInLocalLog = true
+          }
+        }
+        if (searchInLocalLog) {
+          txnIndexOpt = if (localLogSegments.hasNext) Some(localLogSegments.next().txnIndex) else None
+        }
+      } else {
+        return
+      }
+    }
+  }
+
+  private[remote] def findNextSegmentMetadata(segmentMetadata: RemoteLogSegmentMetadata): Option[RemoteLogSegmentMetadata] = {
+    val topicPartition = segmentMetadata.topicIdPartition().topicPartition()
+    val nextSegmentBaseOffset = segmentMetadata.endOffset()+1
+    var epoch = Option(segmentMetadata.segmentLeaderEpochs().lastEntry().getKey.toInt)
+    var result: Option[RemoteLogSegmentMetadata] = Option.empty;
+    fetchLog(topicPartition).foreach ( log => {
+      log.leaderEpochCache.foreach( cache => {
+        while (result.isEmpty && epoch.isDefined) {
+          result = Option(fetchRemoteLogSegmentMetadata(topicPartition, epoch.get, nextSegmentBaseOffset).orElse(null))
+          epoch = cache.findNextEpoch(epoch.get)
+        }
+      })
+    })
+    result
   }
 
   def fetchRemoteLogSegmentMetadata(tp: TopicPartition,

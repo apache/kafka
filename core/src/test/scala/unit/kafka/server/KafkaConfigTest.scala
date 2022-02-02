@@ -1246,4 +1246,22 @@ class KafkaConfigTest {
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
+
+  @Test
+  def testMultipleLogDirectoriesNotSupportedWithRemoteLogStorage(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
+    props.put(KafkaConfig.LogDirsProp, "/tmp/a,/tmp/b")
+
+    val caught = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Multiple log directories `/tmp/a,/tmp/b` are not supported when remote log storage is enabled"))
+  }
+
+  @Test
+  def testSingleLogDirectoryWithRemoteLogStorage(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
+    props.put(KafkaConfig.LogDirsProp, "/tmp/a")
+    KafkaConfig.fromProps(props)
+  }
 }

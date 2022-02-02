@@ -72,7 +72,20 @@ class LeaderEpochFileCacheTest {
     assertEquals(Some(4), cache.findPreviousEpoch(10))
 
     cache.truncateFromEnd(18)
-    assertEquals(Some(4), cache.findPreviousEpoch(10))
+    assertEquals(Some(2), cache.findPreviousEpoch(cache.latestEpoch.get))
+  }
+
+  @Test
+  def testFindNextEpoch(): Unit = {
+    cache.assign(0, 0)
+    cache.assign(1, 100)
+    cache.assign(2, 200)
+
+    assertEquals(Some(0), cache.findNextEpoch(-1))
+    assertEquals(Some(1), cache.findNextEpoch(0))
+    assertEquals(Some(2), cache.findNextEpoch(1))
+    assertEquals(None, cache.findNextEpoch(2))
+    assertEquals(None, cache.findNextEpoch(100))
   }
 
   @Test

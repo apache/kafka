@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
+package kafka.utils
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
