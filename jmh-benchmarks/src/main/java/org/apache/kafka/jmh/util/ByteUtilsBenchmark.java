@@ -57,6 +57,16 @@ public class ByteUtilsBenchmark {
     }
 
     @Benchmark
+    public long testSizeOfUnsignedVarintMath() {
+        long result = 0;
+        for (final int input : sizeOfInputs) {
+             int leadingZeros = Integer.numberOfLeadingZeros(input);
+             result += (38 - leadingZeros) / 7 + leadingZeros / 32;
+        }
+        return result;
+    }
+
+    @Benchmark
     public long testSizeOfUnsignedVarintOriginal() {
         long result = 0;
         for (int input : sizeOfInputs) {
@@ -79,5 +89,7 @@ public class ByteUtilsBenchmark {
 
         new Runner(opt).run();
     }
+
+
 
 }
