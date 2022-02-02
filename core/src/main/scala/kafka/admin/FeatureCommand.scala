@@ -419,7 +419,7 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
             s"\tFeature: $feature" +
             s"\tExistingFinalizedMaxVersion: -" +
             s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-          (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
+          (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, FeatureUpdate.DowngradeType.NONE))))
         } else {
           if (targetVersionRange.max > existingVersionRange.maxVersionLevel) {
             val updateStr =
@@ -427,7 +427,7 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
               s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
+            (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, FeatureUpdate.DowngradeType.NONE))))
           } else {
             (feature, Option.empty)
           }
@@ -467,7 +467,7 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
             s"\tFeature: $feature" +
             s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
             s"\tNewFinalizedMaxVersion: -"
-          (feature, Some(updateStr, new FeatureUpdate(0.toShort, true)))
+          (feature, Some(updateStr, new FeatureUpdate(0.toShort,  FeatureUpdate.DowngradeType.SAFE)))
         } else {
           if (targetVersionRange.max < existingVersionRange.maxVersionLevel) {
             val updateStr =
@@ -475,7 +475,7 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
               s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, Some(updateStr, new FeatureUpdate(targetVersionRange.max, true)))
+            (feature, Some(updateStr, new FeatureUpdate(targetVersionRange.max,  FeatureUpdate.DowngradeType.SAFE)))
           } else {
             (feature, Option.empty)
           }

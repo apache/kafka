@@ -23,11 +23,9 @@ import java.util.Objects;
  */
 public class FeatureUpdate {
     private final short maxVersionLevel;
-    private final boolean allowDowngrade;
     private final DowngradeType downgradeType;
 
     public enum DowngradeType {
-        UNSET(-1), // Used for backwards compatibility with allowDowngrade
         NONE(0),
         SAFE(1),
         UNSAFE(2);
@@ -49,9 +47,11 @@ public class FeatureUpdate {
      *                          delete the finalized feature, and should be accompanied by setting
      *                          the allowDowngrade flag to true.
      * @param allowDowngrade    - true, if this feature update was meant to downgrade the existing
-     *                            maximum version level of the finalized feature.
+     *                            maximum version level of the finalized feature. Only "safe" downgrades are
+     *                            enabled with this boolean. See {@link FeatureUpdate#FeatureUpdate(short, DowngradeType)}
      *                          - false, otherwise.
      */
+    @Deprecated
     public FeatureUpdate(final short maxVersionLevel, final boolean allowDowngrade) {
         if (maxVersionLevel < 1 && !allowDowngrade) {
             throw new IllegalArgumentException(String.format(
@@ -59,32 +59,40 @@ public class FeatureUpdate {
                 maxVersionLevel));
         }
         this.maxVersionLevel = maxVersionLevel;
-        this.allowDowngrade = allowDowngrade;
-        this.downgradeType = DowngradeType.UNSET;
+        if (allowDowngrade) {
+            this.downgradeType = DowngradeType.SAFE;
+        } else {
+            this.downgradeType = DowngradeType.NONE;
+        }
     }
 
     /**
-     * TODO
-     * @param maxVersionLevel
-     * @param downgradeType
+     * @param maxVersionLevel   The new maximum version level for the finalized feature.
+     *                          a value &lt; 1 is special and indicates that the update is intended to
+     *                          delete the finalized feature, and should be accompanied by setting
+     *                          the allowDowngrade flag to true.
+     * @param downgradeType     Indicate what kind of downgrade, if any, is allowed in this operation.
+     *                          - NONE: no downgrades are permitted
+     *                          - SAFE: only downgrades which do not lose metadata are permitted
+     *                          - UNSAFE: any downgrade, including those which may result in metadata loss, are permitted
      */
     public FeatureUpdate(final short maxVersionLevel, final DowngradeType downgradeType) {
-        if (maxVersionLevel < 1 && (downgradeType.equals(DowngradeType.NONE) || downgradeType.equals(DowngradeType.UNSET))) {
+        if (maxVersionLevel < 1 && downgradeType.equals(DowngradeType.NONE)) {
             throw new IllegalArgumentException(String.format(
                     "The downgradeType flag should be set to SAFE or UNSAFE when the provided maxVersionLevel:%d is < 1.",
                     maxVersionLevel));
         }
         this.maxVersionLevel = maxVersionLevel;
         this.downgradeType = downgradeType;
-        this.allowDowngrade = false;
     }
 
     public short maxVersionLevel() {
         return maxVersionLevel;
     }
 
+    @Deprecated
     public boolean allowDowngrade() {
-        return allowDowngrade;
+        return downgradeType != DowngradeType.NONE;
     }
 
     public DowngradeType downgradeType() {
@@ -102,21 +110,16 @@ public class FeatureUpdate {
         }
 
         final FeatureUpdate that = (FeatureUpdate) other;
-        return this.maxVersionLevel == that.maxVersionLevel && this.allowDowngrade == that.allowDowngrade
-            && this.downgradeType.equals(that.downgradeType);
+        return this.maxVersionLevel == that.maxVersionLevel && this.downgradeType.equals(that.downgradeType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxVersionLevel, allowDowngrade, downgradeType);
+        return Objects.hash(maxVersionLevel, downgradeType);
     }
 
     @Override
     public String toString() {
-        if (downgradeType.equals(DowngradeType.UNSET)) {
-            return String.format("FeatureUpdate{maxVersionLevel:%d, allowDowngrade:%s}", maxVersionLevel, allowDowngrade);
-        } else {
-            return String.format("FeatureUpdate{maxVersionLevel:%d, downgradeType:%s}", maxVersionLevel, downgradeType);
-        }
+        return String.format("FeatureUpdate{maxVersionLevel:%d, downgradeType:%s}", maxVersionLevel, downgradeType);
     }
 }
