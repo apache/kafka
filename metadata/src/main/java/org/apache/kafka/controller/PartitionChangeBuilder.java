@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -60,6 +61,7 @@ public class PartitionChangeBuilder {
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
     private List<Integer> targetAdding;
+    private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean alwaysElectPreferredIfPossible;
 
     public PartitionChangeBuilder(PartitionRegistration partition,
@@ -76,6 +78,7 @@ public class PartitionChangeBuilder {
         this.targetReplicas = Replicas.toList(partition.replicas);
         this.targetRemoving = Replicas.toList(partition.removingReplicas);
         this.targetAdding = Replicas.toList(partition.addingReplicas);
+        this.targetLeaderRecoveryState = partition.leaderRecoveryState;
         this.alwaysElectPreferredIfPossible = false;
     }
 
@@ -104,6 +107,14 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
+        this.targetLeaderRecoveryState = targetLeaderRecoveryState;
+        return this;
+    }
+
+    // TODO: We need to make sure that the LeaderRecoveryState is not lost when the partition transitions from
+    // leader to no leader and back to leader. I think this code is correct because these are change record but
+    // it would be good to have a test that confirms this.
     boolean shouldTryElection() {
         // If the new isr doesn't have the current leader, we need to try to elect a new
         // one. Note: this also handles the case where the current leader is NO_LEADER,
@@ -151,6 +162,8 @@ public class PartitionChangeBuilder {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(bestLeader.node));
+                // And mark the leader recovery state as RECOVERING
+                record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
             }
         } else {
             log.debug("Failed to find a new leader with current state: {}", this);
@@ -240,6 +253,10 @@ public class PartitionChangeBuilder {
         if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
             record.setAddingReplicas(targetAdding);
         }
+        if (targetLeaderRecoveryState != partition.leaderRecoveryState) {
+            record.setLeaderRecoveryState(targetLeaderRecoveryState.value());
+        }
+
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
@@ -260,6 +277,7 @@ public class PartitionChangeBuilder {
             ", targetReplicas=" + targetReplicas +
             ", targetRemoving=" + targetRemoving +
             ", targetAdding=" + targetAdding +
+            ", targetLeaderRecoveryState=" + targetLeaderRecoveryState +
             ", alwaysElectPreferredIfPossible=" + alwaysElectPreferredIfPossible +
             ')';
     }

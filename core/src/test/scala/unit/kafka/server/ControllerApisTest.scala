@@ -293,11 +293,11 @@ class ControllerApisTest {
   }
 
   @Test
-  def testUnauthorizedHandleAlterIsrRequest(): Unit = {
+  def testUnauthorizedHandleAlterPartitionRequest(): Unit = {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
-        handleAlterIsrRequest(buildRequest(new AlterIsrRequest.Builder(
-          new AlterIsrRequestData()).build(0))))
+        handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
+          new AlterPartitionRequestData()).build(0))))
   }
 
   @Test

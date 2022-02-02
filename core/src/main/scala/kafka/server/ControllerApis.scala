@@ -91,7 +91,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
         case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
-        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.ALTER_PARTITION => handleAlterPartitionRequest(request)
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
@@ -510,15 +510,15 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
-    val alterIsrRequest = request.body[AlterIsrRequest]
+  def handleAlterPartitionRequest(request: RequestChannel.Request): Unit = {
+    val alterPartitionRequest = request.body[AlterPartitionRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    val future = controller.alterIsr(alterIsrRequest.data)
+    val future = controller.alterPartition(alterPartitionRequest.data)
     future.whenComplete { (result, exception) =>
       val response = if (exception != null) {
-        alterIsrRequest.getErrorResponse(exception)
+        alterPartitionRequest.getErrorResponse(exception)
       } else {
-        new AlterIsrResponse(result)
+        new AlterPartitionResponse(result)
       }
       requestHelper.sendResponseExemptThrottle(request, response)
     }

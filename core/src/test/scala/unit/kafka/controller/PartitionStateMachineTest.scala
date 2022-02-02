@@ -316,7 +316,7 @@ class PartitionStateMachineTest {
         )
       )
 
-    val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+    val leaderAndIsrAfterElection = leaderAndIsr.newRecoveringLeaderAndIsr(brokerId, List(brokerId))
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
 
     EasyMock

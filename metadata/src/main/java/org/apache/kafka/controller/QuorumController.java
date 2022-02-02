@@ -29,8 +29,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -1208,12 +1208,12 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+    public CompletableFuture<AlterPartitionResponseData> alterPartition(AlterPartitionRequestData request) {
         if (request.topics().isEmpty()) {
-            return CompletableFuture.completedFuture(new AlterIsrResponseData());
+            return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
-        return appendWriteEvent("alterIsr", () ->
-            replicationControl.alterIsr(request));
+        return appendWriteEvent("alterPartition", () ->
+            replicationControl.alterPartition(request));
     }
 
     @Override

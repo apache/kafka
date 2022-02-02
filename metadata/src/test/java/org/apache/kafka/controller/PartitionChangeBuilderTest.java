@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.controller.PartitionChangeBuilder.BestLeader;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -55,7 +56,7 @@ public class PartitionChangeBuilderTest {
 
     private final static PartitionRegistration FOO = new PartitionRegistration(
         new int[] {2, 1, 3}, new int[] {2, 1, 3}, Replicas.NONE, Replicas.NONE,
-        1, 100, 200);
+        1, LeaderRecoveryState.RECOVERED, 100, 200);
 
     private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
@@ -65,7 +66,7 @@ public class PartitionChangeBuilderTest {
 
     private final static PartitionRegistration BAR = new PartitionRegistration(
         new int[] {1, 2, 3, 4}, new int[] {1, 2, 3}, new int[] {1}, new int[] {4},
-        1, 100, 200);
+        1, LeaderRecoveryState.RECOVERED, 100, 200);
 
     private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 

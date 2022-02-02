@@ -377,7 +377,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      result.put(topicPartition, new LeaderAndIsrPartitionState()
+      val partitionState = new LeaderAndIsrPartitionState()
         .setTopicName(topicPartition.topic)
         .setPartitionIndex(topicPartition.partition)
         .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
@@ -388,7 +388,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setReplicas(replicaAssignment.replicas.map(Integer.valueOf).asJava)
         .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
         .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
-        .setIsNew(isNew || alreadyNew))
+        .setIsNew(isNew || alreadyNew)
+
+      if (config.interBrokerProtocolVersion >= KAFKA_3_2_IV0) {
+        partitionState.setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+      }
+
+      result.put(topicPartition, partitionState)
     }
 
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
@@ -454,7 +460,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendLeaderAndIsrRequest(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val leaderAndIsrRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV1) 5
+      if (config.interBrokerProtocolVersion >= KAFKA_3_2_IV0) 6
+      else if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV1) 5
       else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 4
       else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV0) 3
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2

@@ -22,11 +22,12 @@ import kafka.cluster.Partition
 import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.easymock.EasyMock
 import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
@@ -339,7 +340,8 @@ class ReplicaManagerQuotasTest {
         assignment = Seq(leaderBrokerId, configs.last.brokerId),
         isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId),
         addingReplicas = Seq.empty,
-        removingReplicas = Seq.empty
+        removingReplicas = Seq.empty,
+        leaderRecoveryState = LeaderRecoveryState.RECOVERED
       )
     }
   }
