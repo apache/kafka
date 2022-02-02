@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
-import org.apache.kafka.metadata.{MetadataRecordSerde, MetadataVersions}
+import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.queue.EventQueue
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -65,7 +65,7 @@ class BrokerMetadataSnapshotterTest {
     }
 
     def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
-      val delta = new MetadataDelta(MetadataImage.EMPTY, () => MetadataVersions.latest)
+      val delta = new MetadataDelta(MetadataImage.EMPTY)
       val memoryRecords = MemoryRecords.readableRecords(buffer)
       val batchIterator = memoryRecords.batchIterator()
       while (batchIterator.hasNext) {

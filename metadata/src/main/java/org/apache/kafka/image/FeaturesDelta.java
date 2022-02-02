@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.metadata.MetadataVersion;
-import org.apache.kafka.metadata.MetadataVersions;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -96,7 +95,7 @@ public final class FeaturesDelta {
         if (metadataVersionChange == null) {
             metadataVersion = image.metadataVersion();
         } else {
-            metadataVersion = MetadataVersions.fromValue(metadataVersionChange);
+            metadataVersion = MetadataVersion.fromValue(metadataVersionChange);
         }
         return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
@@ -105,7 +104,7 @@ public final class FeaturesDelta {
     public String toString() {
         return "FeaturesDelta(" +
             "changes=" + changes +
-            "metadataVersionChange=" + metadataVersionChange +
+            ", metadataVersionChange=" + metadataVersionChange +
             ')';
     }
 }

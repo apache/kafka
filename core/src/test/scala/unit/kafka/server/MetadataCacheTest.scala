@@ -37,7 +37,6 @@ import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.MetadataVersions
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -66,7 +65,7 @@ object MetadataCacheTest {
           new RaftOffsetAndEpoch(100, 10),
           image.features(), ClusterImage.EMPTY,
           image.topics(), image.configs(), image.clientQuotas(), image.producerIds())
-        val delta = new MetadataDelta(partialImage, () => MetadataVersions.latest)
+        val delta = new MetadataDelta(partialImage)
 
         def toRecord(broker: UpdateMetadataBroker): RegisterBrokerRecord = {
           val endpoints = new BrokerEndpointCollection()

@@ -24,7 +24,7 @@ import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersion
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -104,14 +104,14 @@ class RawMetaProperties(val props: Properties = new Properties()) {
 
 object MetaProperties {
   def apply(clusterId: String, nodeId: Int): MetaProperties = {
-    MetaProperties(clusterId, nodeId, MetadataVersions.latest().version())
+    MetaProperties(clusterId, nodeId, MetadataVersion.latest().version())
   }
 
   def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = require(ClusterIdKey, properties.clusterId)
     val nodeId = require(NodeIdKey, properties.nodeId)
-    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersions.V1.version())
+    val metadataVersion = properties.initialMetadataVersion.getOrElse(MetadataVersion.V1.version())
     new MetaProperties(clusterId, nodeId, metadataVersion)
   }
 

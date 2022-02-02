@@ -21,21 +21,97 @@ import org.apache.kafka.common.metadata.MetadataRecordType;
 
 import java.util.Optional;
 
-public interface MetadataVersion extends Comparable<MetadataVersions> {
-    String FEATURE_NAME = "metadata.version";
 
-    short version();
+/**
+ * An enumeration of the valid metadata versions for the cluster.
+ */
+public enum MetadataVersion {
 
-    boolean isBackwardsCompatible();
+    UNINITIALIZED(0, null, "Uninitialized version", false, type -> {
+        throw new IllegalStateException("Cannot determine record version with uninitialized metadata.version");
+    }),
+    V1(1, null, "KRaft preview version", false, MetadataVersion::recordResolverV1),
+    V2(2, V1, "Initial KRaft version", true, MetadataVersion::recordResolverV2);
 
-    Optional<MetadataVersion> previous();
 
-    String description();
+    public static final String FEATURE_NAME = "metadata.version";
 
-    short recordVersion(MetadataRecordType type);
+    private final short version;
+    private final MetadataVersion previous;
+    private final String description;
+    private final boolean isBackwardsCompatible;
+    private final MetadataRecordVersionResolver resolver;
 
-    @Override
-    default int compareTo(MetadataVersions o) {
-        return Short.compare(this.version(), o.version());
+    MetadataVersion(int version, MetadataVersion previous, String description, boolean isBackwardsCompatible, MetadataRecordVersionResolver resolver) {
+        if (version > Short.MAX_VALUE || version < Short.MIN_VALUE) {
+            throw new IllegalArgumentException("version must be a short");
+        }
+        this.version = (short) version;
+        this.previous = previous;
+        this.description = description;
+        this.isBackwardsCompatible = isBackwardsCompatible;
+        this.resolver = resolver;
+    }
+
+    public static MetadataVersion fromValue(short value) {
+        for (MetadataVersion version : MetadataVersion.values()) {
+            if (version.version == value) {
+                return version;
+            }
+        }
+        throw new IllegalArgumentException("Unsupported metadata.version " + value + "!");
+    }
+
+    public static MetadataVersion stable() {
+        return V2;
+    }
+
+    public static MetadataVersion latest() {
+        return V2;
+    }
+
+    public static boolean isBackwardsCompatible(MetadataVersion sourceVersion, MetadataVersion targetVersion) {
+        if (sourceVersion.compareTo(targetVersion) < 0) {
+            return false;
+        }
+        MetadataVersion version = sourceVersion;
+        while (version.isBackwardsCompatible() && version != targetVersion) {
+            Optional<MetadataVersion> prev = version.previous();
+            if (prev.isPresent()) {
+                version = prev.get();
+            } else {
+                break;
+            }
+        }
+        return version == targetVersion;
+    }
+
+
+    public short version() {
+        return version;
+    }
+
+    public Optional<MetadataVersion> previous() {
+        return Optional.ofNullable(previous);
+    }
+
+    public boolean isBackwardsCompatible() {
+        return isBackwardsCompatible;
+    }
+
+    public String description() {
+        return description;
+    }
+
+    public short recordVersion(MetadataRecordType type) {
+        return resolver.recordVersion(type);
+    }
+
+    private static short recordResolverV1(MetadataRecordType type) {
+        return type.lowestSupportedVersion();
+    }
+
+    private static short recordResolverV2(MetadataRecordType type) {
+        return type.highestSupportedVersion();
     }
 }

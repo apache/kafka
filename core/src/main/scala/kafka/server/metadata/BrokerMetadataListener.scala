@@ -22,7 +22,6 @@ import java.util.function.Consumer
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.metadata.MetadataVersionProvider
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -39,8 +38,7 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: Option[MetadataSnapshotter],
-  val metadataVersionProvider: MetadataVersionProvider
+  val snapshotter: Option[MetadataSnapshotter]
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -74,7 +72,7 @@ class BrokerMetadataListener(
   /**
    * The current metadata delta. Accessed only from the event queue thread.
    */
-  private var _delta = new MetadataDelta(_image, metadataVersionProvider)
+  private var _delta = new MetadataDelta(_image)
 
   /**
    * The object to use to publish new metadata changes, or None if this listener has not
@@ -150,7 +148,7 @@ class BrokerMetadataListener(
     override def run(): Unit = {
       try {
         info(s"Loading snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}.")
-        _delta = new MetadataDelta(_image, metadataVersionProvider) // Discard any previous deltas.
+        _delta = new MetadataDelta(_image) // Discard any previous deltas.
         val loadResults = loadBatches(
           _delta,
           reader,
@@ -257,7 +255,7 @@ class BrokerMetadataListener(
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
     _image = _delta.apply()
-    _delta = new MetadataDelta(_image, metadataVersionProvider)
+    _delta = new MetadataDelta(_image)
     if (isDebugEnabled) {
       debug(s"Publishing new metadata delta ${delta} at offset ${_image.highestOffsetAndEpoch().offset}.")
     }

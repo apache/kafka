@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.MetadataVersions;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -62,7 +62,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
-                new StripedReplicaPlacer(new Random()), new MockControllerMetrics(), MetadataVersions::latest);
+                new StripedReplicaPlacer(new Random()), new MockControllerMetrics(), MetadataVersion::latest);
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
 
@@ -94,7 +94,7 @@ public class ClusterControlManagerTest {
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), "fPZv1VBsRFmnlRvmGcOW9w", new MockTime(0, 0, 0),
             snapshotRegistry, 1000,
-            new StripedReplicaPlacer(new Random()), new MockControllerMetrics(), MetadataVersions::latest);
+            new StripedReplicaPlacer(new Random()), new MockControllerMetrics(), MetadataVersion::latest);
         clusterControl.activate();
         assertThrows(InconsistentClusterIdException.class, () ->
             clusterControl.registerBroker(new BrokerRegistrationRequestData().
@@ -123,7 +123,7 @@ public class ClusterControlManagerTest {
             new LogContext(), Uuid.randomUuid().toString(), new MockTime(0, 0, 0),
             snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics(),
-            MetadataVersions::latest);
+            MetadataVersion::latest);
         clusterControl.activate();
         clusterControl.replay(brokerRecord);
         assertEquals(new BrokerRegistration(1, 100,
@@ -147,7 +147,7 @@ public class ClusterControlManagerTest {
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(),  Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(random), new MockControllerMetrics(),
-            MetadataVersions::latest);
+            MetadataVersion::latest);
         clusterControl.activate();
         for (int i = 0; i < numUsableBrokers; i++) {
             RegisterBrokerRecord brokerRecord =
@@ -185,7 +185,7 @@ public class ClusterControlManagerTest {
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), Uuid.randomUuid().toString(), time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(new Random()), new MockControllerMetrics(),
-            MetadataVersions::latest);
+            MetadataVersion::latest);
         clusterControl.activate();
         assertFalse(clusterControl.unfenced(0));
         for (int i = 0; i < 3; i++) {

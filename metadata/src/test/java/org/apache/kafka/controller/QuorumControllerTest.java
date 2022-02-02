@@ -76,7 +76,7 @@ import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceCheck
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.MetadataVersions;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -195,9 +195,9 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 1000;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
-                logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutMillis), MetadataVersions.V1);
+                LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv, b -> b.setConfigDefs(CONFIGS), Optional.of(sessionTimeoutMillis), MetadataVersion.V1);
         ) {
             ListenerCollection listeners = new ListenerCollection();
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));

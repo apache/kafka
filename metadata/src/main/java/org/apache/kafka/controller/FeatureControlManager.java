@@ -33,7 +33,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.MetadataVersionProvider;
-import org.apache.kafka.metadata.MetadataVersions;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
@@ -94,18 +94,18 @@ public class FeatureControlManager {
     }
 
     ControllerResult<Map<String, ApiError>> initializeMetadataVersion(short initVersion) {
-        if (finalizedVersions.containsKey(MetadataVersions.FEATURE_NAME)) {
+        if (finalizedVersions.containsKey(MetadataVersion.FEATURE_NAME)) {
             return ControllerResult.atomicOf(
                 Collections.emptyList(),
                 Collections.singletonMap(
-                    MetadataVersions.FEATURE_NAME,
+                    MetadataVersion.FEATURE_NAME,
                     new ApiError(Errors.INVALID_UPDATE_VERSION,
                         "Cannot initialize metadata.version since it has already been initialized.")
             ));
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
         ApiError result = updateMetadataVersion(initVersion, initVersion, records::add);
-        return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersions.FEATURE_NAME, result));
+        return ControllerResult.atomicOf(records, Collections.singletonMap(MetadataVersion.FEATURE_NAME, result));
     }
 
     void register(String listenerName, FeatureLevelListener listener) {
@@ -160,7 +160,7 @@ public class FeatureControlManager {
             }
         }
 
-        if (featureName.equals(MetadataVersions.FEATURE_NAME)) {
+        if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, metadataVersionProvider.activeVersion().version(), records::add);
         } else {
@@ -179,7 +179,7 @@ public class FeatureControlManager {
     private ApiError updateMetadataVersion(short newVersion,
                                            short recordVersion,
                                            Consumer<ApiMessageAndVersion> recordConsumer) {
-        Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersions.FEATURE_NAME);
+        Optional<VersionRange> quorumSupported = quorumFeatures.quorumSupportedFeature(MetadataVersion.FEATURE_NAME);
         if (!quorumSupported.isPresent()) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The quorum can not support metadata.version!");
@@ -194,20 +194,20 @@ public class FeatureControlManager {
                 "The controller quorum cannot support the given metadata.version " + newVersion);
         }
 
-        Short currentVersion = finalizedVersions.get(MetadataVersions.FEATURE_NAME);
+        Short currentVersion = finalizedVersions.get(MetadataVersion.FEATURE_NAME);
         if (currentVersion != null && currentVersion > newVersion) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION, "Downgrading metadata.version is not yet supported.");
         }
 
         try {
-            MetadataVersions.fromValue(newVersion);
+            MetadataVersion.fromValue(newVersion);
         } catch (IllegalArgumentException e) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION, "Unknown metadata.version " + newVersion);
         }
 
         recordConsumer.accept(new ApiMessageAndVersion(
             new FeatureLevelRecord()
-                .setName(MetadataVersions.FEATURE_NAME)
+                .setName(MetadataVersion.FEATURE_NAME)
                 .setFeatureLevel(newVersion), recordVersion));
         return ApiError.NONE;
     }

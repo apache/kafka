@@ -68,7 +68,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
 import org.apache.kafka.metadata.MetadataVersion;
-import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -246,7 +245,7 @@ public final class QuorumController implements Controller {
             if (raftClient == null) {
                 throw new RuntimeException("You must set a raft client.");
             }
-            if (initialMetadataVersion == null || initialMetadataVersion.equals(MetadataVersions.UNINITIALIZED)) {
+            if (initialMetadataVersion == null || initialMetadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
                 throw new RuntimeException("You must set an initial metadata.version in meta.properties");
             }
             if (quorumFeatures == null) {
@@ -874,16 +873,16 @@ public final class QuorumController implements Controller {
                     // Check if we need to bootstrap a metadata.version into the log. This must happen before we can
                     // write any records to the log since we need the metadata.version to determine the correct
                     // record version
-                    if (activeMetadataVersion == MetadataVersions.UNINITIALIZED.version()) {
+                    if (activeMetadataVersion == MetadataVersion.UNINITIALIZED.version()) {
                         final CompletableFuture<Map<String, ApiError>> future;
-                        if (initialMetadataVersion == MetadataVersions.UNINITIALIZED) {
+                        if (initialMetadataVersion == MetadataVersion.UNINITIALIZED) {
                             future = new CompletableFuture<>();
                             future.completeExceptionally(
                                 new IllegalStateException("Cannot become leader without an initial metadata.version to use."));
-                        } else if (initialMetadataVersion == MetadataVersions.V1) {
+                        } else if (initialMetadataVersion == MetadataVersion.V1) {
                             future = prependWriteEvent("initializeMetadataVersion", () -> {
                                 log.info("Upgrading from KRaft preview. Initializing metadata.version to 1");
-                                return featureControl.initializeMetadataVersion(MetadataVersions.V1.version());
+                                return featureControl.initializeMetadataVersion(MetadataVersion.V1.version());
                             });
                         } else {
                             future = prependWriteEvent("initializeMetadataVersion", () -> {
@@ -1109,7 +1108,7 @@ public final class QuorumController implements Controller {
         lastCommittedOffset = -1;
         lastCommittedEpoch = -1;
         lastCommittedTimestamp = -1;
-        activeMetadataVersion = MetadataVersions.UNINITIALIZED.version();
+        activeMetadataVersion = MetadataVersion.UNINITIALIZED.version();
     }
 
     private final LogContext logContext;
@@ -1256,7 +1255,7 @@ public final class QuorumController implements Controller {
 
     private final MetadataVersion initialMetadataVersion;
 
-    private short activeMetadataVersion = MetadataVersions.UNINITIALIZED.version();
+    private short activeMetadataVersion = MetadataVersion.UNINITIALIZED.version();
 
 
     private QuorumController(LogContext logContext,
@@ -1596,8 +1595,8 @@ public final class QuorumController implements Controller {
         return curClaimEpoch;
     }
 
-    private MetadataVersions activeMetadataVersion() {
-        return MetadataVersions.fromValue(activeMetadataVersion);
+    private MetadataVersion activeMetadataVersion() {
+        return MetadataVersion.fromValue(activeMetadataVersion);
     }
 
     @Override

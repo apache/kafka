@@ -31,7 +31,6 @@ import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 import java.util
-import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections, Optional}
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType

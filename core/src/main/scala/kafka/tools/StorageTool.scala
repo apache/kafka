@@ -26,7 +26,7 @@ import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersion
 
 import scala.collection.mutable
 
@@ -47,8 +47,8 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = Option(namespace.getString("metadata_version")).
-            map(mv => MetadataVersions.fromValue(mv.toShort)).
-            getOrElse(MetadataVersions.stable())
+            map(mv => MetadataVersion.fromValue(mv.toShort)).
+            getOrElse(MetadataVersion.stable())
           val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -97,7 +97,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--metadata-version", "-v").
       action(store()).
-      help(s"The initial metadata.version to use. Default is (${MetadataVersions.stable().version()}).")
+      help(s"The initial metadata.version to use. Default is (${MetadataVersion.stable().version()}).")
 
     parser.parseArgsOrFail(args)
   }

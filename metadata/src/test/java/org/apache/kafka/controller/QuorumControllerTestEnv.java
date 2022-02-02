@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.controller.QuorumController.Builder;
 import org.apache.kafka.metadata.MetadataVersion;
-import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.test.TestUtils;
@@ -51,7 +50,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, Optional.empty(), MetadataVersions.V1);
+        this(logEnv, builderConsumer, Optional.empty(), MetadataVersion.V1);
     }
 
     public QuorumControllerTestEnv(

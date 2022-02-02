@@ -20,5 +20,5 @@ package org.apache.kafka.metadata;
 
 @FunctionalInterface
 public interface MetadataVersionProvider {
-    MetadataVersions activeVersion();
+    MetadataVersion activeVersion();
 }

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.metadata.MetadataVersions;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,7 @@ public class MetadataImageTest {
             ClientQuotasImageTest.IMAGE1,
             ProducerIdsImageTest.IMAGE1);
 
-        DELTA1 = new MetadataDelta(IMAGE1, MetadataVersions::latest);
+        DELTA1 = new MetadataDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, 200, 5, FeaturesImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, ClusterImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, TopicsImageTest.DELTA1_RECORDS);
@@ -85,7 +84,7 @@ public class MetadataImageTest {
     private void testToImageAndBack(MetadataImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
         image.write(writer);
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY, MetadataVersions::latest);
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         RecordTestUtils.replayAllBatches(
             delta, image.highestOffsetAndEpoch().offset, image.highestOffsetAndEpoch().epoch, writer.batches());
         MetadataImage nextImage = delta.apply();

@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
@@ -27,10 +27,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
-import org.apache.kafka.metadata.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersion
 
 import scala.collection.mutable
-
 
 object BrokerMetadataPublisher extends Logging {
   /**
@@ -99,8 +98,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               featureCache: FinalizedFeatureCache,
-                              dynamicConfigHandlers: Map[String, ConfigHandler],
-                              metadataVersionManager: MetadataVersionManager) extends MetadataPublisher with Logging {
+                              dynamicConfigHandlers: Map[String, ConfigHandler]) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -125,29 +123,31 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       metadataCache.setImage(newImage)
 
       val metadataVersion: Option[Short] = Option(newImage.features().metadataVersion())
-        .filterNot(mv => mv.equals(MetadataVersions.UNINITIALIZED))
+        .filterNot(mv => mv.equals(MetadataVersion.UNINITIALIZED))
         .map(_.version)
-      val versionDelta = metadataVersionManager.update(metadataVersion, highestOffsetAndEpoch.offset)
 
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $versionDelta.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch  with metadata.version $metadataVersion.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with metadata.version $versionDelta.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with metadata.version $metadataVersion.")
       }
 
       // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
+        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
+          info(s"Updating metadata.version to $metadataVersion at offset $highestOffsetAndEpoch.")
+        }
       }
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
         // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(topicsDelta, newImage, versionDelta)
+        replicaManager.applyDelta(topicsDelta, newImage)
 
         // Update the group coordinator of local changes
         updateCoordinator(

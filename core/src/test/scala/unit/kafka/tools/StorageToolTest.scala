@@ -25,7 +25,7 @@ import java.util.Properties
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.MetadataVersions
+import org.apache.kafka.metadata.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
@@ -183,14 +183,14 @@ Found problem:
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-          () => StorageTool.buildMetadataProperties("invalid", config, MetadataVersions.V1.version())).getMessage)
+          () => StorageTool.buildMetadataProperties("invalid", config, MetadataVersion.V1.version())).getMessage)
   }
 
   @Test
   def testFormatWithInvalidMetadataVersion(): Unit = {
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("The initial metadata.version must be greater than zero.", assertThrows(classOf[TerseFailure],
-      () => StorageTool.buildMetadataProperties("XcZZOzUqS4yHOjhMQB6JLQ", config, MetadataVersions.UNINITIALIZED.version())).getMessage)
+      () => StorageTool.buildMetadataProperties("XcZZOzUqS4yHOjhMQB6JLQ", config, MetadataVersion.UNINITIALIZED.version())).getMessage)
   }
 
   @Test

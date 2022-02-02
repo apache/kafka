@@ -32,7 +32,7 @@ import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import kafka.server.metadata.{MetadataVersionDelta, ZkMetadataCache}
+import kafka.server.metadata.ZkMetadataCache
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
@@ -2108,7 +2108,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param delta           The delta to apply.
    * @param newImage        The new metadata image.
    */
-  def applyDelta(delta: TopicsDelta, newImage: MetadataImage, metadataVersion: MetadataVersionDelta): Unit = {
+  def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
 

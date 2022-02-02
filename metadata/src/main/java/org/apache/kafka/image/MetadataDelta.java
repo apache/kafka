@@ -33,12 +33,13 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.MetadataVersionProvider;
+import org.apache.kafka.metadata.MetadataVersion;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 
 /**
@@ -48,8 +49,6 @@ import java.util.List;
  */
 public final class MetadataDelta {
     private final MetadataImage image;
-
-    private final MetadataVersionProvider metadataVersionProvider;
 
     private long highestOffset;
 
@@ -67,9 +66,8 @@ public final class MetadataDelta {
 
     private ProducerIdsDelta producerIdsDelta = null;
 
-    public MetadataDelta(MetadataImage image, MetadataVersionProvider metadataVersionProvider) {
+    public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.metadataVersionProvider = metadataVersionProvider;
         this.highestOffset = image.highestOffsetAndEpoch().offset;
         this.highestEpoch = image.highestOffsetAndEpoch().epoch;
     }
@@ -134,6 +132,13 @@ public final class MetadataDelta {
         return producerIdsDelta;
     }
 
+    public Optional<MetadataVersion> metadataVersionChanged() {
+        if (featuresDelta == null) {
+            return Optional.empty();
+        } else {
+            return featuresDelta.metadataVersionChange().map(MetadataVersion::fromValue);
+        }
+    }
     public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
         while (reader.hasNext()) {
             List<ApiMessageAndVersion> batch = reader.next();
