@@ -1542,6 +1542,7 @@ public class KafkaProducerTest {
 
                 assertEquals(-1, recordMetadata.serializedKeySize());
                 assertEquals(-1, recordMetadata.serializedValueSize());
+                assertEquals(-1, recordMetadata.partition());
             };
 
             producer.send(record, callBack);
