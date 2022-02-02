@@ -346,6 +346,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 }
 
 object ProducerStateManager {
+  val LateTransactionBufferMs = 5 * 60 * 1000
+
   private val ProducerSnapshotVersion: Short = 1
   private val VersionField = "version"
   private val CrcField = "crc"
@@ -513,7 +515,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   @threadsafe
   def hasLateTransaction(currentTimeMs: Long): Boolean = {
     val lastTimestamp = oldestTxnLastTimestamp
-    lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs
+    lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
   }
 
   /**

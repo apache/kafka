@@ -440,7 +440,7 @@ class ReplicaManagerTest {
       assertLateTransactionCount(Some(0))
 
       // The transaction becomes late if not finished before the max transaction timeout passes
-      time.sleep(replicaManager.logManager.maxTransactionTimeoutMs)
+      time.sleep(replicaManager.logManager.maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs)
       assertLateTransactionCount(Some(0))
       time.sleep(1)
       assertLateTransactionCount(Some(1))

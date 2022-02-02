@@ -42,6 +42,7 @@ class ProducerStateManagerTest {
   private val producerId = 1L
   private val maxTransactionTimeoutMs = 5 * 60 * 1000
   private val maxProducerIdExpirationMs = 60 * 60 * 1000
+  private val lateTransactionTimeoutMs = maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
   private val time = new MockTime
 
   @BeforeEach
@@ -282,7 +283,7 @@ class ProducerStateManagerTest {
     assertFalse(stateManager.hasLateTransaction(time.milliseconds()))
 
     // Only the first transaction is late
-    time.sleep(maxTransactionTimeoutMs - 500 + 1)
+    time.sleep(lateTransactionTimeoutMs - 500 + 1)
     assertTrue(stateManager.hasLateTransaction(time.milliseconds()))
 
     // Both transactions are now late
@@ -316,7 +317,7 @@ class ProducerStateManagerTest {
 
     // Take a snapshot and reload the state
     stateManager.takeSnapshot()
-    time.sleep(maxTransactionTimeoutMs - 500 + 1)
+    time.sleep(lateTransactionTimeoutMs - 500 + 1)
     assertTrue(stateManager.hasLateTransaction(time.milliseconds()))
 
     // After reloading from the snapshot, the transaction should still be considered late
@@ -335,7 +336,7 @@ class ProducerStateManagerTest {
     // Start one transaction and sleep until it is late
     append(stateManager, producerId, epoch, seq = 0, offset = 100, isTransactional = true)
     assertFalse(stateManager.hasLateTransaction(time.milliseconds()))
-    time.sleep(maxTransactionTimeoutMs + 1)
+    time.sleep(lateTransactionTimeoutMs + 1)
     assertTrue(stateManager.hasLateTransaction(time.milliseconds()))
 
     // After truncation, the ongoing transaction will be cleared
@@ -351,7 +352,7 @@ class ProducerStateManagerTest {
     // Start one transaction and sleep until it is late
     append(stateManager, producerId, epoch, seq = 0, offset = 100, isTransactional = true)
     assertFalse(stateManager.hasLateTransaction(time.milliseconds()))
-    time.sleep(maxTransactionTimeoutMs + 1)
+    time.sleep(lateTransactionTimeoutMs + 1)
     assertTrue(stateManager.hasLateTransaction(time.milliseconds()))
 
     // After truncation, the ongoing transaction will be cleared
