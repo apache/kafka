@@ -270,7 +270,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 // when it is initialized successfully in initializeResources().
                 this.pendingAssignPartitions.addAll(allPartitions);
             } else {
-                this.pendingAssignPartitions.clear();
                 assignPartitions(allPartitions);
             }
         } finally {
@@ -362,7 +361,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     }
 
                     if (!pendingAssignPartitions.isEmpty()) {
-                        consumerManager.addAssignmentsForPartitions(pendingAssignPartitions);
+                        assignPartitions(pendingAssignPartitions);
                         pendingAssignPartitions.clear();
                     }
 
