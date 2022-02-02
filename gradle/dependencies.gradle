@@ -107,7 +107,7 @@ versions += [
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",
-  rocksDB: "6.22.1.1",
+  rocksDB: "6.27.3",
   scalaCollectionCompat: "2.4.4",
   scalafmt: "2.7.5",
   scalaJava8Compat : "1.0.0",
