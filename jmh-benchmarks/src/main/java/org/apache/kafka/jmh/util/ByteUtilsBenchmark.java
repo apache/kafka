@@ -22,84 +22,57 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.utils.ByteUtils;
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ByteUtilsBenchmark {
-    private static final int INPUT_COUNT = 10_000;
-    private static final int MAX_INT = 2 * 1024 * 1024;
+    private int input;
 
-    private final int[] sizeOfInputs = new int[INPUT_COUNT];
-
-    @Setup(Level.Trial)
+    @Setup(Level.Iteration)
     public void setUp() {
-        for (int i = 0; i < INPUT_COUNT; ++i) {
-            sizeOfInputs[i] = ThreadLocalRandom.current().nextInt(MAX_INT);
-        }
+        input = ThreadLocalRandom.current().nextInt(2 * 1024 * 1024);
     }
 
     @Benchmark
+    @Fork(3)
+    @Warmup(iterations = 5, time = 1)
+    @Measurement(iterations = 10, time = 1)
     public long testSizeOfUnsignedVarint() {
-        long result = 0;
-        for (final int input : sizeOfInputs) {
-            result += ByteUtils.sizeOfUnsignedVarint(input);
-        }
-        return result;
+        return ByteUtils.sizeOfUnsignedVarint(input);
     }
 
     @Benchmark
-    public long testSizeOfUnsignedVarintOne() {
-        return ByteUtils.sizeOfUnsignedVarint(sizeOfInputs[0]);
-    }
-
-    @Benchmark
+    @Fork(3)
+    @Warmup(iterations = 5, time = 1)
+    @Measurement(iterations = 10, time = 1)
     public long testSizeOfUnsignedVarintMath() {
-        long result = 0;
-        for (final int input : sizeOfInputs) {
-             int leadingZeros = Integer.numberOfLeadingZeros(input);
-             result += (38 - leadingZeros) / 7 + leadingZeros / 32;
-        }
-        return result;
-    }
-
-    @Benchmark
-    public long testSizeOfUnsignedVarintMathOne() {
-        int leadingZeros = Integer.numberOfLeadingZeros(sizeOfInputs[0]);
+        int leadingZeros = Integer.numberOfLeadingZeros(input);
         return (38 - leadingZeros) / 7 + leadingZeros / 32;
     }
 
     @Benchmark
+    @Fork(3)
+    @Warmup(iterations = 5, time = 1)
+    @Measurement(iterations = 10, time = 1)
     public long testSizeOfUnsignedVarintOriginal() {
-        long result = 0;
-        for (int input : sizeOfInputs) {
-            int bytes = 1;
-            // use highestOneBit or numberOfLeadingZeros
-            while ((input & 0xffffff80) != 0L) {
-                bytes += 1;
-                input >>>= 7;
-            }
-            result += bytes;
-        }
-        return result;
-    }
-
-    @Benchmark
-    public long testSizeOfUnsignedVarintOriginalOne() {
-        int input = sizeOfInputs[0];
+        int value = input;
         int bytes = 1;
         // use highestOneBit or numberOfLeadingZeros
-        while ((input & 0xffffff80) != 0L) {
+        while ((value & 0xffffff80) != 0L) {
             bytes += 1;
-            input >>>= 7;
+            value >>>= 7;
         }
         return bytes;
     }
