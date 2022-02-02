@@ -57,6 +57,11 @@ public class ByteUtilsBenchmark {
     }
 
     @Benchmark
+    public long testSizeOfUnsignedVarintOne() {
+        return ByteUtils.sizeOfUnsignedVarint(sizeOfInputs[0]);
+    }
+
+    @Benchmark
     public long testSizeOfUnsignedVarintMath() {
         long result = 0;
         for (final int input : sizeOfInputs) {
@@ -64,6 +69,12 @@ public class ByteUtilsBenchmark {
              result += (38 - leadingZeros) / 7 + leadingZeros / 32;
         }
         return result;
+    }
+
+    @Benchmark
+    public long testSizeOfUnsignedVarintMathOne() {
+        int leadingZeros = Integer.numberOfLeadingZeros(sizeOfInputs[0]);
+        return (38 - leadingZeros) / 7 + leadingZeros / 32;
     }
 
     @Benchmark
@@ -79,6 +90,18 @@ public class ByteUtilsBenchmark {
             result += bytes;
         }
         return result;
+    }
+
+    @Benchmark
+    public long testSizeOfUnsignedVarintOriginalOne() {
+        int input = sizeOfInputs[0];
+        int bytes = 1;
+        // use highestOneBit or numberOfLeadingZeros
+        while ((input & 0xffffff80) != 0L) {
+            bytes += 1;
+            input >>>= 7;
+        }
+        return bytes;
     }
 
     public static void main(String[] args) throws RunnerException {
