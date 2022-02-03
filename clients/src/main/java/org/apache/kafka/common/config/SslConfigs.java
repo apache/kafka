@@ -130,6 +130,15 @@ public class SslConfigs {
     public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = "ssl.engine.factory.class";
     public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
 
+    public static final String SSL_RELOADING_ENGINE_FACTORY_CLASS_CONFIG = "ssl.reloading.engine.factory.class";
+    public static final String SSL_RELOADING_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
+
+    public static final String SSL_RELOADING_ENGINE_FACTORY_ID_CONFIG = "ssl.reloading.engine.factory.id";
+    public static final String SSL_RELOADING_ENGINE_FACTORY_ID_DOC = "A discriminating SslEngineFactory identifier when using multiple distinct SSL configurations in the same JVM.";
+
+    public static final String SSL_RELOADING_ENGINE_FACTORY_INTERVAL_CONFIG = "ssl.reloading.engine.factory.interval.ms";
+    public static final String SSL_RELOADING_ENGINE_FACTORY_INTERVAL_DOC = "The interval in milliseconds at which the delegate SslEngineFactory will be recreated. Default value is 12hrs. A negative value disables the scheduling.";
+
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
                 .define(SslConfigs.SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
@@ -149,7 +158,10 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
-                .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC);
+                .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC)
+                .define(SslConfigs.SSL_RELOADING_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_RELOADING_ENGINE_FACTORY_CLASS_DOC)
+                .define(SslConfigs.SSL_RELOADING_ENGINE_FACTORY_ID_CONFIG, Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_RELOADING_ENGINE_FACTORY_ID_DOC)
+                .define(SslConfigs.SSL_RELOADING_ENGINE_FACTORY_INTERVAL_CONFIG, Type.LONG, null, ConfigDef.Importance.LOW, SslConfigs.SSL_RELOADING_ENGINE_FACTORY_INTERVAL_DOC);
     }
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
@@ -174,5 +186,8 @@ public class SslConfigs {
             SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
             SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
             SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
-            SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+            SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
+            SslConfigs.SSL_RELOADING_ENGINE_FACTORY_CLASS_CONFIG,
+            SslConfigs.SSL_RELOADING_ENGINE_FACTORY_ID_CONFIG,
+            SslConfigs.SSL_RELOADING_ENGINE_FACTORY_INTERVAL_CONFIG);
 }
