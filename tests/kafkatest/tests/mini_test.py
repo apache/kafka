@@ -20,7 +20,7 @@ from kafkatest.tests.kafka_test import KafkaTest
 class MiniTest(KafkaTest):
 
     def __init__(self, test_context):
-        super().__init__(test_context, 1, 1)
+        super(MiniTest, self).__init__(test_context, 1, 1)
 
     @cluster(num_nodes=2)
     def test_whatever(self):
