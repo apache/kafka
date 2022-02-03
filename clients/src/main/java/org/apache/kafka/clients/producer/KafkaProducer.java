@@ -993,8 +993,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
-            if (callback != null)
-                callback.onCompletion(null, e);
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            if (tp == null) {
+                // set topicPartition to -1 when null
+                tp = ProducerInterceptors.extractTopicPartition(record);
+            }
+
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+            // The onCompletion callback does expect a non-null metadata, but one will be created inside
+            // the interceptor's onCompletion implementation before the user's callback is invoked.
+            interceptCallback.onCompletion(null, e);
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
             if (transactionManager != null) {

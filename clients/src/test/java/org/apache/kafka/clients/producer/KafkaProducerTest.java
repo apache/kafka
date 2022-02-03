@@ -51,6 +51,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -58,6 +59,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
@@ -1692,6 +1694,47 @@ public class KafkaProducerTest {
         // send a record with null topic should fail
         assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
             "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    public void testCallbackHandlesError() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
+
+        Time time = new MockTime();
+        ProducerMetadata producerMetadata = newMetadata(0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, producerMetadata);
+
+        String invalidTopicName = "topic abc"; // Invalid topic name due to space
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
+                producerMetadata, client, null, time)) {
+            ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
+
+            // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
+            // is non-null and adheres to the onCompletion contract.
+            Callback callBack = (recordMetadata, exception) -> {
+                assertNotNull(exception);
+                assertNotNull(recordMetadata);
+
+                assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
+                assertEquals(invalidTopicName, recordMetadata.topic());
+                assertNotNull(recordMetadata.partition(), "Partition should be valid even on send failure");
+
+                assertFalse(recordMetadata.hasOffset());
+                assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
+
+                assertFalse(recordMetadata.hasTimestamp());
+                assertEquals(RecordBatch.NO_TIMESTAMP, recordMetadata.timestamp());
+
+                assertEquals(-1, recordMetadata.serializedKeySize());
+                assertEquals(-1, recordMetadata.serializedValueSize());
+                assertEquals(-1, recordMetadata.partition());
+            };
+
+            producer.send(record, callBack);
+        }
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();
