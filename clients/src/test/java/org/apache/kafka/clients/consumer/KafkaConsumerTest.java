@@ -2982,25 +2982,21 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         for (int i = 0; i < 10; i++) {
-            // Prepare a retriable error periodically for the client to retry connection
-            exec.schedule(
-                () -> client.prepareResponseFrom(
-                    listOffsetsResponse(
-                        Collections.emptyMap(),
-                        Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
-                    ),
-                    node), 50L, TimeUnit.MILLISECONDS);
-            // Sleep periodically to make loop retry timeout
-            exec.schedule(() -> time.sleep(defaultApiTimeoutMs / 10), 50L, TimeUnit.MILLISECONDS);
-
+            client.prepareResponse(
+                request -> {
+                    time.sleep(defaultApiTimeoutMs / 10);
+                    return request instanceof ListOffsetsRequest;
+                },
+                listOffsetsResponse(
+                    Collections.emptyMap(),
+                    Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+                ));
         }
 
         return consumer;
