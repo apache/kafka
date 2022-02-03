@@ -718,7 +718,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
-            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, this.generation, requestBuilder);
+            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
             return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);

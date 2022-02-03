@@ -26,7 +26,12 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -34,11 +39,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
@@ -55,13 +63,38 @@ public class CachingKeyValueStore
     private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private Position position;
+    private final Position position;
+    private final boolean timestampedSchema;
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
-        super(underlying);
-        position = Position.emptyPosition();
+    @FunctionalInterface
+    public interface CacheQueryHandler {
+        QueryResult<?> apply(
+            final Query<?> query,
+            final Position mergedPosition,
+            final PositionBound positionBound,
+            final QueryConfig config,
+            final StateStore store
+        );
     }
 
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, CacheQueryHandler> queryHandlers =
+        mkMap(
+            mkEntry(
+                KeyQuery.class,
+                (query, mergedPosition, positionBound, config, store) ->
+                    runKeyQuery(query, mergedPosition, positionBound, config)
+            )
+        );
+
+
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final boolean timestampedSchema) {
+        super(underlying);
+        position = Position.emptyPosition();
+        this.timestampedSchema = timestampedSchema;
+    }
+
+    @SuppressWarnings("deprecation") // This can be removed when it's removed from the interface.
     @Deprecated
     @Override
     public void init(final ProcessorContext context,
@@ -83,8 +116,93 @@ public class CachingKeyValueStore
         streamThread = Thread.currentThread();
     }
 
-    Position getPosition() {
-        return position;
+    @Override
+    public Position getPosition() {
+        // We return the merged position since the query uses the merged position as well
+        final Position mergedPosition = Position.emptyPosition();
+        mergedPosition.merge(position);
+        mergedPosition.merge(wrapped().getPosition());
+        return mergedPosition;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+
+        final CacheQueryHandler handler = queryHandlers.get(query.getClass());
+        if (handler == null) {
+            result = wrapped().query(query, positionBound, config);
+
+        } else {
+            final int partition = context.taskId().partition();
+            final Lock lock = this.lock.readLock();
+            lock.lock();
+            try {
+                validateStoreOpen();
+                final Position mergedPosition = getPosition();
+
+                // We use the merged position since the cache and the store may be at different positions
+                if (!StoreQueryUtils.isPermitted(mergedPosition, positionBound, partition)) {
+                    result = QueryResult.notUpToBound(mergedPosition, positionBound, partition);
+                } else {
+                    result = (QueryResult<R>) handler.apply(
+                        query,
+                        mergedPosition,
+                        positionBound,
+                        config,
+                        this
+                    );
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                "Handled in " + getClass() + " in " + (System.nanoTime() - start) + "ns");
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                           final Position mergedPosition,
+                                           final PositionBound positionBound,
+                                           final QueryConfig config) {
+        QueryResult<R> result = null;
+        final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
+
+        if (keyQuery.isSkipCache()) {
+            return wrapped().query(query, positionBound, config);
+        }
+
+        final Bytes key = keyQuery.getKey();
+
+        if (context.cache() != null) {
+            final LRUCacheEntry lruCacheEntry = context.cache().get(cacheName, key);
+            if (lruCacheEntry != null) {
+                final byte[] rawValue;
+                if (timestampedSchema && !WrappedStateStore.isTimestamped(wrapped())) {
+                    rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
+                } else {
+                    rawValue = lruCacheEntry.value();
+                }
+                result = (QueryResult<R>) QueryResult.forResult(rawValue);
+            }
+        }
+
+        // We don't need to check the position at the state store since we already performed the check on
+        // the merged position above
+        if (result == null) {
+            result = wrapped().query(query, PositionBound.unbounded(), config);
+        }
+        result.setPosition(mergedPosition);
+        return result;
     }
 
     private void initInternal(final InternalProcessorContext<?, ?> context) {

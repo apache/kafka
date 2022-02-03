@@ -173,7 +173,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldThrowIfStatisticsToAddIsNotNullButExsitingStatisticsAreNull() {
+    public void shouldThrowIfStatisticsToAddIsNotNullButExistingStatisticsAreNull() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
 
         final Throwable exception = assertThrows(
@@ -190,7 +190,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldThrowIfStatisticsToAddIsNullButExsitingStatisticsAreNotNull() {
+    public void shouldThrowIfStatisticsToAddIsNullButExistingStatisticsAreNotNull() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
@@ -207,7 +207,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldThrowIfCacheToAddIsNullButExsitingCacheIsNotNull() {
+    public void shouldThrowIfCacheToAddIsNullButExistingCacheIsNotNull() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, null, statisticsToAdd1);
 
         final Throwable exception = assertThrows(

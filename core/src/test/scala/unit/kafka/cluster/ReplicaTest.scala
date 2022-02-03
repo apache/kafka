@@ -41,18 +41,21 @@ class ReplicaTest {
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
     val config = LogConfig(logProps)
-    log = UnifiedLog(logDir,
-      config,
+    log = UnifiedLog(
+      dir = logDir,
+      config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
-      keepPartitionMetadataFile = true)
+      keepPartitionMetadataFile = true
+    )
   }
 
   @AfterEach

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -25,9 +26,14 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -45,9 +51,14 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Queue;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -57,6 +68,7 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -65,15 +77,22 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.extractThreadId;
+import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
 public class NamedTopologyIntegrationTest {
@@ -84,31 +103,35 @@ public class NamedTopologyIntegrationTest {
     private static final String TOPOLOGY_3 = "topology-3";
 
     // "standard" input topics which are pre-filled with the STANDARD_INPUT_DATA
-    private final static String INPUT_STREAM_1 = "input-stream-1";
-    private final static String INPUT_STREAM_2 = "input-stream-2";
-    private final static String INPUT_STREAM_3 = "input-stream-3";
+    private static final String INPUT_STREAM_1 = "input-stream-1";
+    private static final String INPUT_STREAM_2 = "input-stream-2";
+    private static final String INPUT_STREAM_3 = "input-stream-3";
 
-    private final static String OUTPUT_STREAM_1 = "output-stream-1";
-    private final static String OUTPUT_STREAM_2 = "output-stream-2";
-    private final static String OUTPUT_STREAM_3 = "output-stream-3";
+    private static final String OUTPUT_STREAM_1 = "output-stream-1";
+    private static final String OUTPUT_STREAM_2 = "output-stream-2";
+    private static final String OUTPUT_STREAM_3 = "output-stream-3";
 
-    private final static String SUM_OUTPUT = "sum";
-    private final static String COUNT_OUTPUT = "count";
+    private static final String SUM_OUTPUT = "sum";
+    private static final String COUNT_OUTPUT = "count";
 
     // "delayed" input topics which are empty at start to allow control over when input data appears
-    private final static String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
-    private final static String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
-    private final static String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
-    private final static String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
+    private static final String DELAYED_INPUT_STREAM_1 = "delayed-input-stream-1";
+    private static final String DELAYED_INPUT_STREAM_2 = "delayed-input-stream-2";
+    private static final String DELAYED_INPUT_STREAM_3 = "delayed-input-stream-3";
+    private static final String DELAYED_INPUT_STREAM_4 = "delayed-input-stream-4";
 
     // topic that is not initially created during the test setup
-    private final static String NEW_STREAM = "new-stream";
+    private static final String NEW_STREAM = "new-stream";
 
     // existing topic that is pre-filled but cleared between tests
-    private final static String EXISTING_STREAM = "existing-stream";
+    private static final String EXISTING_STREAM = "existing-stream";
 
-    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
-    private final static Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
+    // topic created with just one partition
+    private static final String SINGLE_PARTITION_INPUT_STREAM = "single-partition-input-stream";
+    private static final String SINGLE_PARTITION_OUTPUT_STREAM = "single-partition-output-stream";
+
+    private static final Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> IN_MEMORY_STORE = Materialized.as(Stores.inMemoryKeyValueStore("store"));
+    private static final Materialized<Object, Long, KeyValueStore<Bytes, byte[]>> ROCKSDB_STORE = Materialized.as(Stores.persistentKeyValueStore("store"));
 
     private static Properties producerConfig;
     private static Properties consumerConfig;
@@ -145,13 +168,13 @@ public class NamedTopologyIntegrationTest {
     private String changelog2;
     private String changelog3;
 
-    private final static List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
+    private static final List<KeyValue<String, Long>> STANDARD_INPUT_DATA =
         asList(pair("A", 100L), pair("B", 200L), pair("A", 300L), pair("C", 400L), pair("C", -50L));
-    private final static List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
+    private static final List<KeyValue<String, Long>> COUNT_OUTPUT_DATA =
         asList(pair("B", 1L), pair("A", 2L), pair("C", 2L)); // output of count operation with caching
-    private final static List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
+    private static final List<KeyValue<String, Long>> SUM_OUTPUT_DATA =
         asList(pair("B", 200L), pair("A", 400L), pair("C", 350L)); // output of summation with caching
-    private final static String TOPIC_PREFIX = "unique_topic_prefix";
+    private static final String TOPIC_PREFIX = "unique_topic_prefix";
 
     private final KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
 
@@ -170,9 +193,8 @@ public class NamedTopologyIntegrationTest {
     // builders for the 2nd Streams instance
     private NamedTopologyBuilder topology1Builder2;
     private NamedTopologyBuilder topology2Builder2;
-    private NamedTopologyBuilder topology3Builder2;
 
-    private Properties configProps(final String appId) {
+    private Properties configProps(final String appId, final String host) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -180,6 +202,7 @@ public class NamedTopologyIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, host + ":2020");
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10 * 1000);
@@ -193,8 +216,7 @@ public class NamedTopologyIntegrationTest {
         changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
         changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
         changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";
-        props = configProps(appId);
-
+        props = configProps(appId, "host1");
         streams = new KafkaStreamsNamedTopologyWrapper(props, clientSupplier);
 
         topology1Builder = streams.newNamedTopologyBuilder(TOPOLOGY_1);
@@ -209,11 +231,10 @@ public class NamedTopologyIntegrationTest {
     }
 
     private void setupSecondKafkaStreams() {
-        props2 = configProps(appId);
+        props2 = configProps(appId, "host2");
         streams2 = new KafkaStreamsNamedTopologyWrapper(props2, clientSupplier);
         topology1Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_1);
         topology2Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_2);
-        topology3Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_3);
     }
 
     @After
@@ -319,23 +340,84 @@ public class NamedTopologyIntegrationTest {
     }
 
     @Test
-    public void shouldAddNamedTopologyToUnstartedApplicationWithEmptyInitialTopology() throws Exception {
-        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
-        streams.addNamedTopology(topology1Builder.build());
-        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
+    public void shouldAddNamedTopologiesBeforeStartingAndRouteQueriesToCorrectTopology() throws Exception {
+        try {
+            // for this test we have one of the topologies read from an input topic with just one partition so
+            // that there's only one instance of that topology's store and thus should always have exactly one
+            // StreamsMetadata returned by any of the methods that look up all hosts with a specific store and topology
+            CLUSTER.createTopic(SINGLE_PARTITION_INPUT_STREAM, 1, 1);
+            CLUSTER.createTopic(SINGLE_PARTITION_OUTPUT_STREAM, 1, 1);
+            produceToInputTopics(SINGLE_PARTITION_INPUT_STREAM, STANDARD_INPUT_DATA);
 
-        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+            final String topology1Store = "store-" + TOPOLOGY_1;
+            final String topology2Store = "store-" + TOPOLOGY_2;
 
-        final ReadOnlyKeyValueStore<String, Long> store =
-            streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
-                "topology-1",
-                "store",
-                QueryableStoreTypes.keyValueStore())
-            );
-        assertThat(store.get("A"), equalTo(2L));
+            topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
+            topology2Builder.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
+            streams.addNamedTopology(topology1Builder.build());
+            streams.addNamedTopology(topology2Builder.build());
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(15));
 
-        final Collection<StreamsMetadata> test1 = streams.streamsMetadataForStore("store");
-        final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore("store", "topology-1");
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SINGLE_PARTITION_OUTPUT_STREAM, 3), equalTo(COUNT_OUTPUT_DATA));
+
+            final ReadOnlyKeyValueStore<String, Long> store =
+                streams.store(NamedTopologyStoreQueryParameters.fromNamedTopologyAndStoreNameAndType(
+                    TOPOLOGY_1,
+                    topology1Store,
+                    QueryableStoreTypes.keyValueStore())
+                );
+            assertThat(store.get("A"), equalTo(2L));
+
+            final Collection<StreamsMetadata> streamsMetadata = streams.streamsMetadataForStore(topology1Store, TOPOLOGY_1);
+            final Collection<StreamsMetadata> streamsMetadata2 = streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2);
+            assertThat(streamsMetadata.size(), equalTo(1));
+            assertThat(streamsMetadata2.size(), equalTo(1));
+
+            final KeyQueryMetadata keyMetadata = streams.queryMetadataForKey(topology1Store, "A", new StringSerializer(), TOPOLOGY_1);
+            final KeyQueryMetadata keyMetadata2 = streams.queryMetadataForKey(topology2Store, "A", new StringSerializer(), TOPOLOGY_2);
+
+            assertThat(keyMetadata, not(NOT_AVAILABLE));
+            assertThat(keyMetadata, equalTo(keyMetadata2));
+
+            final Map<String, Map<Integer, LagInfo>> partitionLags1 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_1);
+            final Map<String, Map<Integer, LagInfo>> partitionLags2 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_2);
+
+            assertThat(partitionLags1.keySet(), equalTo(singleton(topology1Store)));
+            assertThat(partitionLags1.get(topology1Store).keySet(), equalTo(mkSet(0, 1)));
+            assertThat(partitionLags2.keySet(), equalTo(singleton(topology2Store)));
+            assertThat(partitionLags2.get(topology2Store).keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
+
+            // Start up a second node with both topologies
+            setupSecondKafkaStreams();
+
+            topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(Materialized.as(topology1Store)).toStream().to(OUTPUT_STREAM_1);
+            topology2Builder2.stream(SINGLE_PARTITION_INPUT_STREAM).groupByKey().count(Materialized.as(topology2Store)).toStream().to(SINGLE_PARTITION_OUTPUT_STREAM);
+
+            streams2.start(asList(topology1Builder2.build(), topology2Builder2.build()));
+            waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
+
+            verifyMetadataForTopology(
+                TOPOLOGY_1,
+                streams.streamsMetadataForStore(topology1Store, TOPOLOGY_1),
+                streams2.streamsMetadataForStore(topology1Store, TOPOLOGY_1));
+            verifyMetadataForTopology(
+                TOPOLOGY_2,
+                streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2),
+                streams2.streamsMetadataForStore(topology2Store, TOPOLOGY_2));
+
+            verifyMetadataForTopology(
+                TOPOLOGY_1,
+                streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
+                streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1));
+            verifyMetadataForTopology(
+                TOPOLOGY_2,
+                streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2),
+                streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2));
+
+        } finally {
+            CLUSTER.deleteTopics(SINGLE_PARTITION_INPUT_STREAM, SINGLE_PARTITION_OUTPUT_STREAM);
+        }
     }
     
     @Test
@@ -592,6 +674,10 @@ public class NamedTopologyIntegrationTest {
             topology1Builder.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
             topology1Builder2.stream(EXISTING_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
+            final TrackingExceptionHandler handler = new TrackingExceptionHandler();
+            streams.setUncaughtExceptionHandler(handler);
+            streams2.setUncaughtExceptionHandler(handler);
+
             streams.start(topology1Builder.build());
             streams2.start(topology1Builder2.build());
             waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
@@ -600,8 +686,17 @@ public class NamedTopologyIntegrationTest {
             topology2Builder.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
             topology2Builder2.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
 
+            assertThat(handler.nextError(TOPOLOGY_2), nullValue());
+
             streams.addNamedTopology(topology2Builder.build());
             streams2.addNamedTopology(topology2Builder2.build());
+
+            // verify that the missing source topics were noticed and the handler invoked
+            retryOnExceptionWithTimeout(() -> {
+                final Throwable error = handler.nextError(TOPOLOGY_2);
+                assertThat(error, notNullValue());
+                assertThat(error.getCause().getClass(), is(MissingSourceTopicException.class));
+            });
 
             // make sure the original topology can continue processing while waiting on the new source topics
             produceToInputTopics(EXISTING_STREAM, singletonList(pair("A", 30L)));
@@ -610,6 +705,22 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+
+            // Make sure the threads were not actually killed and replaced
+            assertThat(streams.metadataForLocalThreads().size(), equalTo(2));
+            assertThat(streams2.metadataForLocalThreads().size(), equalTo(2));
+
+            final Set<String> localThreadsNames = streams.metadataForLocalThreads().stream()
+                .map(t -> extractThreadId(t.threadName()))
+                .collect(Collectors.toSet());
+            final Set<String> localThreadsNames2 = streams2.metadataForLocalThreads().stream()
+                .map(t -> extractThreadId(t.threadName()))
+                .collect(Collectors.toSet());
+
+            assertThat(localThreadsNames.contains("StreamThread-1"), is(true));
+            assertThat(localThreadsNames.contains("StreamThread-2"), is(true));
+            assertThat(localThreadsNames2.contains("StreamThread-1"), is(true));
+            assertThat(localThreadsNames2.contains("StreamThread-2"), is(true));
         } finally {
             CLUSTER.deleteTopicsAndWait(EXISTING_STREAM, NEW_STREAM);
         }
@@ -621,18 +732,105 @@ public class NamedTopologyIntegrationTest {
         topology1Builder.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
         topology1Builder2.stream(NEW_STREAM).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
 
+        final TrackingExceptionHandler handler = new  TrackingExceptionHandler();
+        streams.setUncaughtExceptionHandler(handler);
+        streams2.setUncaughtExceptionHandler(handler);
+
         streams.start(topology1Builder.build());
         streams2.start(topology1Builder2.build());
         waitForApplicationState(asList(streams, streams2), State.RUNNING, Duration.ofSeconds(30));
+
+        retryOnExceptionWithTimeout(() -> {
+            final Throwable error = handler.nextError(TOPOLOGY_1);
+            assertThat(error, notNullValue());
+            assertThat(error.getCause().getClass(), is(MissingSourceTopicException.class));
+        });
 
         try {
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
 
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+
+            // Make sure the threads were not actually killed and replaced
+            assertThat(streams.metadataForLocalThreads().size(), equalTo(2));
+            assertThat(streams2.metadataForLocalThreads().size(), equalTo(2));
+
+            final Set<String> localThreadsNames = streams.metadataForLocalThreads().stream()
+                .map(t -> extractThreadId(t.threadName()))
+                .collect(Collectors.toSet());
+            final Set<String> localThreadsNames2 = streams2.metadataForLocalThreads().stream()
+                .map(t -> extractThreadId(t.threadName()))
+                .collect(Collectors.toSet());
+
+            assertThat(localThreadsNames.contains("StreamThread-1"), is(true));
+            assertThat(localThreadsNames.contains("StreamThread-2"), is(true));
+            assertThat(localThreadsNames2.contains("StreamThread-1"), is(true));
+            assertThat(localThreadsNames2.contains("StreamThread-2"), is(true));
         } finally {
             CLUSTER.deleteTopicsAndWait(NEW_STREAM);
         }
+    }
+
+    /**
+     * Validates that each metadata object has only partitions & state stores for its specific topology name and
+     * asserts that {@code left} and {@code right} differ only by {@link StreamsMetadata#hostInfo()}
+     */
+    private void verifyMetadataForTopology(final String topologyName,
+                                           final Collection<StreamsMetadata> left,
+                                           final Collection<StreamsMetadata> right) {
+        assertThat(left.size(), equalTo(right.size()));
+        final Iterator<StreamsMetadata> leftIter = left.iterator();
+        final Iterator<StreamsMetadata> rightIter = right.iterator();
+
+        while (leftIter.hasNext()) {
+            final StreamsMetadataImpl leftMetadata = (StreamsMetadataImpl) leftIter.next();
+            final StreamsMetadataImpl rightMetadata = (StreamsMetadataImpl) rightIter.next();
+
+            verifyPartitionsAndStoresForTopology(topologyName, leftMetadata);
+            verifyPartitionsAndStoresForTopology(topologyName, rightMetadata);
+
+            assertThat(verifyEquivalentMetadataForHost(leftMetadata, rightMetadata), is(true));
+        }
+    }
+
+    private void verifyPartitionsAndStoresForTopology(final String topologyName, final StreamsMetadataImpl metadata) {
+        assertThat(metadata.topologyName(), equalTo(topologyName));
+        assertThat(streams.getTopologyByName(topologyName).isPresent(), is(true));
+        assertThat(streams2.getTopologyByName(topologyName).isPresent(), is(true));
+        final List<String> streams1SourceTopicsForTopology = streams.getTopologyByName(topologyName).get().sourceTopics();
+        final List<String> streams2SourceTopicsForTopology = streams2.getTopologyByName(topologyName).get().sourceTopics();
+
+        // first check that all partitions in the metadata correspond to the given named topology
+        assertThat(
+            streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                            .map(TopicPartition::topic)
+                                                            .collect(Collectors.toList())),
+            is(true));
+        assertThat(
+            streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
+                                                            .map(TopicPartition::topic)
+                                                            .collect(Collectors.toList())),
+            is(true));
+
+        // then verify that only this topology's one store appears
+        assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+
+        // finally make sure the standby fields are empty since they are not enabled for this test
+        assertThat(metadata.standbyTopicPartitions().isEmpty(), is(true));
+        assertThat(metadata.standbyStateStoreNames().isEmpty(), is(true));
+    }
+
+    /**
+     * @return  true iff all fields other than {@link StreamsMetadataImpl#topologyName()}
+     *          match between the two StreamsMetadata objects
+     */
+    private static boolean verifyEquivalentMetadataForHost(final StreamsMetadataImpl left, final StreamsMetadataImpl right) {
+        return left.hostInfo().equals(right.hostInfo())
+            && left.stateStoreNames().equals(right.stateStoreNames())
+            && left.topicPartitions().equals(right.topicPartitions())
+            && left.standbyStateStoreNames().equals(right.standbyStateStoreNames())
+            && left.standbyTopicPartitions().equals(right.standbyTopicPartitions());
     }
 
     private static void produceToInputTopics(final String topic, final Collection<KeyValue<String, Long>> records) {
@@ -642,5 +840,30 @@ public class NamedTopologyIntegrationTest {
             producerConfig,
             CLUSTER.time
         );
+    }
+
+    private static class TrackingExceptionHandler implements StreamsUncaughtExceptionHandler {
+        private final Map<String, Queue<Throwable>> newErrorsByTopology = new HashMap<>();
+
+        @Override
+        public synchronized StreamThreadExceptionResponse handle(final Throwable exception) {
+            final String topologyName =
+                exception instanceof StreamsException && ((StreamsException) exception).taskId().isPresent() ?
+                    ((StreamsException) exception).taskId().get().topologyName()
+                    : null;
+
+            newErrorsByTopology.computeIfAbsent(topologyName, t -> new LinkedList<>()).add(exception);
+            if (exception.getCause() instanceof MissingSourceTopicException) {
+                return StreamThreadExceptionResponse.REPLACE_THREAD;
+            } else {
+                return StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
+            }
+        }
+
+        public synchronized Throwable nextError(final String topologyName) {
+            return newErrorsByTopology.containsKey(topologyName) ?
+                newErrorsByTopology.get(topologyName).poll() :
+                null;
+        }
     }
 }

@@ -224,6 +224,7 @@ object ConsoleProducer {
         | headers.delimiter=\t
         | headers.separator=,
         | headers.key.separator=:
+        | null.marker=   When set, any fields (key, value and headers) equal to this will be replaced by null
         |Default parsing pattern when:
         | parse.headers=true and parse.key=true:
         |  "h1:v1,h2:v2...\tkey\tvalue"
@@ -286,14 +287,15 @@ object ConsoleProducer {
     var reader: BufferedReader = null
     var parseKey = false
     var keySeparator = "\t"
-    var parseHeader = false
+    var parseHeaders = false
     var headersDelimiter = "\t"
     var headersSeparator = ","
-    var headerKeySeparator = ":"
+    var headersKeySeparator = ":"
     var ignoreError = false
     var lineNumber = 0
     var printPrompt = System.console != null
-    var headerSeparatorPattern: Pattern = _
+    var headersSeparatorPattern: Pattern = _
+    var nullMarker: String = _
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -302,22 +304,32 @@ object ConsoleProducer {
       if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
       if (props.containsKey("parse.headers"))
-        parseHeader = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
+        parseHeaders = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
       if (props.containsKey("headers.delimiter"))
         headersDelimiter = props.getProperty("headers.delimiter")
       if (props.containsKey("headers.separator"))
         headersSeparator = props.getProperty("headers.separator")
-        headerSeparatorPattern = Pattern.compile(headersSeparator)
+      headersSeparatorPattern = Pattern.compile(headersSeparator)
       if (props.containsKey("headers.key.separator"))
-        headerKeySeparator = props.getProperty("headers.key.separator")
+        headersKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       if (headersDelimiter == headersSeparator)
         throw new KafkaException("headers.delimiter and headers.separator may not be equal")
-      if (headersDelimiter == headerKeySeparator)
+      if (headersDelimiter == headersKeySeparator)
         throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
-      if (headersSeparator == headerKeySeparator)
+      if (headersSeparator == headersKeySeparator)
         throw new KafkaException("headers.separator and headers.key.separator may not be equal")
+      if (props.containsKey("null.marker"))
+        nullMarker = props.getProperty("null.marker")
+      if (nullMarker == keySeparator)
+        throw new KafkaException("null.marker and key.separator may not be equal")
+      if (nullMarker == headersSeparator)
+        throw new KafkaException("null.marker and headers.separator may not be equal")
+      if (nullMarker == headersDelimiter)
+        throw new KafkaException("null.marker and headers.delimiter may not be equal")
+      if (nullMarker == headersKeySeparator)
+        throw new KafkaException("null.marker and headers.key.separator may not be equal")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
@@ -328,7 +340,7 @@ object ConsoleProducer {
       line match {
         case null => null
         case line =>
-          val headers = parse(parseHeader, line, 0, headersDelimiter, "headers delimiter")
+          val headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter")
           val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
 
           val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
@@ -338,11 +350,11 @@ object ConsoleProducer {
 
           val record = new ProducerRecord[Array[Byte], Array[Byte]](
             topic,
-            if (key != null) key.getBytes(StandardCharsets.UTF_8) else null,
-            if (value != null) value.getBytes(StandardCharsets.UTF_8) else null,
+            if (key != null && key != nullMarker) key.getBytes(StandardCharsets.UTF_8) else null,
+            if (value != null && value != nullMarker) value.getBytes(StandardCharsets.UTF_8) else null,
           )
 
-          if (headers != null) {
+          if (headers != null && headers != nullMarker) {
             splitHeaders(headers)
               .foreach(header => record.headers.add(header._1, header._2))
           }
@@ -362,11 +374,21 @@ object ConsoleProducer {
     }
 
     private def splitHeaders(headers: String): Array[(String, Array[Byte])] = {
-      headerSeparatorPattern.split(headers).map { pair =>
-        (pair.indexOf(headerKeySeparator), ignoreError) match {
+      headersSeparatorPattern.split(headers).map { pair =>
+        (pair.indexOf(headersKeySeparator), ignoreError) match {
           case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
           case (-1, true) => (pair, null)
-          case (i, _) => (pair.substring(0, i), pair.substring(i + headerKeySeparator.length).getBytes(StandardCharsets.UTF_8))
+          case (i, _) =>
+            val headerKey = pair.substring(0, i) match {
+              case k if k == nullMarker =>
+                throw new KafkaException(s"Header keys should not be equal to the null marker '$nullMarker' as they can't be null")
+              case k => k
+            }
+            val headerValue = pair.substring(i + headersKeySeparator.length) match {
+              case v if v == nullMarker => null
+              case v => v.getBytes(StandardCharsets.UTF_8)
+            }
+            (headerKey, headerValue)
         }
       }
     }

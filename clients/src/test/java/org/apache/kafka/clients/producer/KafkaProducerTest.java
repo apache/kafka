@@ -37,6 +37,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -50,6 +51,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -57,6 +59,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
@@ -97,6 +100,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
@@ -549,7 +554,7 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
 
-        // Create a record with a partition higher than the initial (outdated) partition range
+        // Create a record for a not-yet-created topic
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
@@ -1062,6 +1067,149 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testCommitTransactionWithRecordTooLargeException() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, 1000);
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        when(metadata.fetch()).thenReturn(onePartitionCluster);
+
+        String largeString = IntStream.range(0, 1000).mapToObj(i -> "*").collect(Collectors.joining());
+        ProducerRecord<String, String> largeRecord = new ProducerRecord<>(topic, "large string", largeString);
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
+            assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
+    public void testCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record for a not-yet-created topic
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        MockTime mockTime = new MockTime();
+
+        MockClient client = new MockClient(mockTime, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() > 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return emptyCluster;
+        });
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, mockTime)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
+    public void testCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        MockTime mockTime = new MockTime();
+
+        MockClient client = new MockClient(mockTime, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() > 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return onePartitionCluster;
+        });
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, mockTime)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
+            assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
+    public void testCommitTransactionWithSendToInvalidTopic() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, emptyMap());
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        String invalidTopicName = "topic abc"; // Invalid topic name due to space
+        ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
+
+        List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
+        topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION,
+                invalidTopicName, false, Collections.emptyList()));
+        MetadataResponse updateResponse =  RequestTestUtils.metadataResponse(
+                new ArrayList<>(initialUpdateResponse.brokers()),
+                initialUpdateResponse.clusterId(),
+                initialUpdateResponse.controller().id(),
+                topicMetadata);
+        client.prepareMetadataUpdate(updateResponse);
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
+            assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
@@ -1546,6 +1694,47 @@ public class KafkaProducerTest {
         // send a record with null topic should fail
         assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
             "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    public void testCallbackHandlesError() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
+
+        Time time = new MockTime();
+        ProducerMetadata producerMetadata = newMetadata(0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, producerMetadata);
+
+        String invalidTopicName = "topic abc"; // Invalid topic name due to space
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
+                producerMetadata, client, null, time)) {
+            ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
+
+            // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
+            // is non-null and adheres to the onCompletion contract.
+            Callback callBack = (recordMetadata, exception) -> {
+                assertNotNull(exception);
+                assertNotNull(recordMetadata);
+
+                assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
+                assertEquals(invalidTopicName, recordMetadata.topic());
+                assertNotNull(recordMetadata.partition(), "Partition should be valid even on send failure");
+
+                assertFalse(recordMetadata.hasOffset());
+                assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
+
+                assertFalse(recordMetadata.hasTimestamp());
+                assertEquals(RecordBatch.NO_TIMESTAMP, recordMetadata.timestamp());
+
+                assertEquals(-1, recordMetadata.serializedKeySize());
+                assertEquals(-1, recordMetadata.serializedValueSize());
+                assertEquals(-1, recordMetadata.partition());
+            };
+
+            producer.send(record, callBack);
+        }
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

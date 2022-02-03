@@ -257,8 +257,14 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
   newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
   newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
+  newGauge("PartitionsWithLateTransactionsCount", () => lateTransactionsCount)
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
+
+  private def lateTransactionsCount: Int = {
+    val currentTimeMs = time.milliseconds()
+    leaderPartitionsIterator.count(_.hasLateTransaction(currentTimeMs))
+  }
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -1134,8 +1140,9 @@ class ReplicaManager(val config: KafkaConfig,
             fetchIsolation = fetchIsolation,
             fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
+          val isFromFollower = Request.isValidBrokerId(replicaId)
 
-          val fetchDataInfo = if (shouldLeaderThrottle(quota, partition, replicaId)) {
+          val fetchDataInfo = if (isFromFollower && shouldLeaderThrottle(quota, partition, replicaId)) {
             // If the partition is being throttled, simply return an empty set.
             FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
           } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
@@ -1938,6 +1945,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("UnderMinIsrPartitionCount")
     removeMetric("AtMinIsrPartitionCount")
     removeMetric("ReassigningPartitions")
+    removeMetric("PartitionsWithLateTransactionsCount")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests

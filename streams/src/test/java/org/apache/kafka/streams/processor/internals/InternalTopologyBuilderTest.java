@@ -113,7 +113,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "test-topic");
         builder.initializeSubscription();
 
-        assertEquals(Collections.singletonList("test-topic"), builder.sourceTopicCollection());
+        assertEquals(Collections.singletonList("test-topic"), builder.fullSourceTopicNames());
 
         assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
     }
@@ -290,7 +290,7 @@ public class InternalTopologyBuilderTest {
         builder.initializeSubscription();
 
         assertFalse(builder.usesPatternSubscription());
-        assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.sourceTopicCollection());
+        assertEquals(Arrays.asList("X-topic-3", "topic-1", "topic-2"), builder.fullSourceTopicNames());
     }
 
     @Test
@@ -353,7 +353,7 @@ public class InternalTopologyBuilderTest {
         );
         builder.initializeSubscription();
 
-        assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
+        assertThat(builder.fullSourceTopicNames(), equalTo(asList("topic-1", "topic-2")));
     }
 
     @Test
@@ -809,7 +809,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
-        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
@@ -819,7 +819,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
-        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
@@ -831,7 +831,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(storeBuilder, "processor");
-        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("testStore"));
     }
@@ -1064,7 +1064,7 @@ public class InternalTopologyBuilderTest {
         builder.addSubscribedTopicsFromMetadata(updatedTopics, "test-thread");
         builder.setApplicationId("test-app");
 
-        final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();
+        final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToFullSourceTopicNames();
         final List<String> topics = stateStoreAndTopics.get(storeBuilder.name());
 
         assertEquals("Expected to contain two topics", 2, topics.size());

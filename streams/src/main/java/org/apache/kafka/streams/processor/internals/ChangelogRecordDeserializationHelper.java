@@ -40,19 +40,18 @@ public class ChangelogRecordDeserializationHelper {
     public static final RecordHeader CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY = new RecordHeader(
             CHANGELOG_VERSION_HEADER_KEY, V_0_CHANGELOG_VERSION_HEADER_VALUE);
 
-    public static Position applyChecksAndUpdatePosition(
+    public static void applyChecksAndUpdatePosition(
             final ConsumerRecord<byte[], byte[]> record,
             final boolean consistencyEnabled,
             final Position position
     ) {
         if (!consistencyEnabled) {
-            return position;
+            return;
         }
-        Position restoredPosition = Position.emptyPosition();
         final Header versionHeader = record.headers().lastHeader(
                 ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
         if (versionHeader == null) {
-            return position;
+            return;
         } else {
             switch (versionHeader.value()[0]) {
                 case 0:
@@ -61,14 +60,13 @@ public class ChangelogRecordDeserializationHelper {
                         throw new StreamsException("This should not happen. Consistency is enabled but the changelog "
                                 + "contains records without consistency information.");
                     }
-                    restoredPosition = position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value())));
+                    position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value())));
                     break;
                 default:
                     log.warn("Changelog records have been encoded using a larger version than this server understands." +
                             "Please upgrade your server.");
             }
         }
-        return restoredPosition;
     }
 
 

@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -368,9 +369,18 @@ class WorkerSourceTask extends WorkerTask {
                     producerRecord,
                     (recordMetadata, e) -> {
                         if (e != null) {
-                            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-                            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
-                            producerSendException.compareAndSet(null, e);
+                            if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
+                                log.trace("Ignoring failed record send: {} failed to send record to {}: ",
+                                        WorkerSourceTask.this, topic, e);
+                                // executeFailed here allows the use of existing logging infrastructure/configuration
+                                retryWithToleranceOperator.executeFailed(Stage.KAFKA_PRODUCE, WorkerSourceTask.class,
+                                        preTransformRecord, e);
+                                commitTaskRecord(preTransformRecord, null);
+                            } else {
+                                log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
+                                log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                                producerSendException.compareAndSet(null, e);
+                            }
                         } else {
                             submittedRecord.ack();
                             counter.completeRecord();
