@@ -490,7 +490,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      *
      * We loop the sortedPartition, and compare the ith element in sortedAssignedPartitions(i start from 0):
      *   - if not equal to the ith element, add to unassignedPartitions
-     *   - if equal to the the ith element, get next element from sortedAssignedPartitions
+     *   - if equal to the ith element, get next element from sortedAssignedPartitions
      *
      * @param sortedAllPartitions:          sorted all partitions
      * @param sortedAssignedPartitions:     sorted partitions, all are included in the sortedPartitions
@@ -538,7 +538,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * We loop through the all sorted topics, and then iterate all partitions the topic has,
      * compared with the ith element in sortedAssignedPartitions(i starts from 0):
      *   - if not equal to the ith element, add to unassignedPartitions
-     *   - if equal to the the ith element, get next element from sortedAssignedPartitions
+     *   - if equal to the ith element, get next element from sortedAssignedPartitions
      *
      * @param totalPartitionsCount      all partitions counts in this assignment
      * @param partitionsPerTopic        the number of partitions for each subscribed topic.
@@ -588,7 +588,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     /**
      * update the prevAssignment with the partitions, consumer and generation in parameters
      *
-     * @param partitions:       The partitions to be updated the prevAssignement
+     * @param partitions:       The partitions to be updated the prevAssignment
      * @param consumer:         The consumer Id
      * @param prevAssignment:   The assignment contains the assignment with the 2nd largest generation
      * @param generation:       The generation of this assignment (partitions)
