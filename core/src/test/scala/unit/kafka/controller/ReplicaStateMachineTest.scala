@@ -31,6 +31,7 @@ import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
 class ReplicaStateMachineTest {
@@ -226,6 +227,8 @@ class ReplicaStateMachineTest {
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
       partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment(replicaIds), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
     assertEquals(updatedLeaderIsrAndControllerEpoch, controllerContext.partitionLeadershipInfo(partition).get)
     assertEquals(OfflineReplica, replicaState(replica))
   }

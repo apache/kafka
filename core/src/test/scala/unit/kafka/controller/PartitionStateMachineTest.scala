@@ -28,6 +28,7 @@ import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
+import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
 class PartitionStateMachineTest {
@@ -95,6 +96,7 @@ class PartitionStateMachineTest {
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
       partition, leaderIsrAndControllerEpoch, replicaAssignment(Seq(brokerId)), isNew = true)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).createTopicPartitionStatesRaw(any(), anyInt())
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
@@ -113,6 +115,7 @@ class PartitionStateMachineTest {
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).createTopicPartitionStatesRaw(any(), anyInt())
     assertEquals(NewPartition, partitionState(partition))
   }
 
@@ -131,6 +134,7 @@ class PartitionStateMachineTest {
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).createTopicPartitionStatesRaw(any(), anyInt())
     assertEquals(NewPartition, partitionState(partition))
   }
 
@@ -172,6 +176,8 @@ class PartitionStateMachineTest {
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
       partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId)), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
@@ -207,6 +213,8 @@ class PartitionStateMachineTest {
       partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId, otherBrokerId)),
       isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
@@ -261,6 +269,9 @@ class PartitionStateMachineTest {
     verify(mockControllerBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(Seq(brokerId),
       partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), replicaAssignment(Seq(brokerId)), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    verify(mockZkClient).getLogConfigs(any(), any())
+    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
@@ -316,6 +327,8 @@ class PartitionStateMachineTest {
       replicaAssignment(Seq(leaderBrokerId, brokerId)),
       false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
+    verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
@@ -338,6 +351,7 @@ class PartitionStateMachineTest {
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
     assertEquals(OfflinePartition, partitionState(partition))
   }
 
@@ -362,6 +376,7 @@ class PartitionStateMachineTest {
     )
     verify(mockControllerBrokerRequestBatch).newBatch()
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockZkClient).getTopicPartitionStatesRaw(any())
     assertEquals(OfflinePartition, partitionState(partition))
   }
 

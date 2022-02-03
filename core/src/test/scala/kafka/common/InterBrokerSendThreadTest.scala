@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyLong, same}
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.util
@@ -64,14 +64,15 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shutdownThreadShouldNotCauseException(): Unit = {
-    val networkClient = Mockito.mock(classOf[NetworkClient])
     // InterBrokerSendThread#shutdown calls NetworkClient#initiateClose first so NetworkClient#poll
     // can throw DisconnectException when thread is running
-    Mockito.when(networkClient.poll(anyLong(), anyLong())).thenThrow(new DisconnectException())
+    when(networkClient.poll(anyLong(), anyLong())).thenThrow(new DisconnectException())
     var exception: Throwable = null
     val thread = new TestInterBrokerSendThread(networkClient, e => exception = e)
     thread.shutdown()
     thread.pollOnce(100)
+
+    verify(networkClient).poll(anyLong(), anyLong())
     assertNull(exception)
   }
 
@@ -116,7 +117,16 @@ class InterBrokerSendThreadTest {
     sendThread.enqueue(handler)
     sendThread.doWork()
 
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong(),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong())
     verify(networkClient).send(same(clientRequest), anyLong())
+    verify(networkClient).poll(anyLong(), anyLong())
     assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
@@ -156,6 +166,18 @@ class InterBrokerSendThreadTest {
     sendThread.enqueue(handler)
     sendThread.doWork()
 
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      anyLong,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong)
+    verify(networkClient).connectionDelay(any[Node], anyLong)
+    verify(networkClient).poll(anyLong, anyLong)
+    verify(networkClient).connectionFailed(any[Node])
+    verify(networkClient).authenticationException(any[Node])
     assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
@@ -201,6 +223,18 @@ class InterBrokerSendThreadTest {
 
     sendThread.enqueue(handler)
     sendThread.doWork()
+
+    verify(networkClient).newClientRequest(
+      ArgumentMatchers.eq("1"),
+      same(handler.request),
+      ArgumentMatchers.eq(handler.creationTimeMs),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(requestTimeoutMs),
+      same(handler.handler))
+    verify(networkClient).ready(any[Node], anyLong)
+    verify(networkClient).connectionDelay(any[Node], anyLong)
+    verify(networkClient).poll(anyLong, anyLong)
+    verify(networkClient).connectionFailed(any[Node])
 
     assertFalse(sendThread.hasUnsentRequests)
     assertTrue(completionHandler.executedWithDisconnectedResponse)
