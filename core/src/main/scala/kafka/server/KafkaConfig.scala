@@ -2020,9 +2020,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
           s"when `process.roles` is defined (i.e. when running in KRaft mode).")
       }
-      if (originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
-        throw new ConfigException(s"Cannot specify ${KafkaConfig.InterBrokerProtocolVersionProp} when running in KRaft mode.")
-      }
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
