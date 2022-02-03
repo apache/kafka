@@ -2040,7 +2040,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
     def validateControlPlaneListenerEmptyForKRaft(): Unit = {
       require(controlPlaneListenerName.isEmpty,
-        s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode. KRaft uses ${KafkaConfig.ControllerListenerNamesProp} instead.")
+        s"${KafkaConfig.ControlPlaneListenerNameProp} is not supported in KRaft mode.")
     }
     def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
       require(!advertisedListenerNames.exists(aln => controllerListenerNames.contains(aln.value())),
