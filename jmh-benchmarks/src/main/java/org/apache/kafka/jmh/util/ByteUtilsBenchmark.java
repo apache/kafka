@@ -49,7 +49,7 @@ public class ByteUtilsBenchmark {
     @Fork(3)
     @Warmup(iterations = 5, time = 1)
     @Measurement(iterations = 10, time = 1)
-    public long testSizeOfUnsignedVarint() {
+    public int testSizeOfUnsignedVarint() {
         return ByteUtils.sizeOfUnsignedVarint(input);
     }
 
@@ -57,16 +57,7 @@ public class ByteUtilsBenchmark {
     @Fork(3)
     @Warmup(iterations = 5, time = 1)
     @Measurement(iterations = 10, time = 1)
-    public long testSizeOfUnsignedVarintMath() {
-        int leadingZeros = Integer.numberOfLeadingZeros(input);
-        return (38 - leadingZeros) / 7 + leadingZeros / 32;
-    }
-
-    @Benchmark
-    @Fork(3)
-    @Warmup(iterations = 5, time = 1)
-    @Measurement(iterations = 10, time = 1)
-    public long testSizeOfUnsignedVarintOriginal() {
+    public int testSizeOfUnsignedVarintOriginal() {
         int value = input;
         int bytes = 1;
         // use highestOneBit or numberOfLeadingZeros
@@ -85,7 +76,4 @@ public class ByteUtilsBenchmark {
 
         new Runner(opt).run();
     }
-
-
-
 }

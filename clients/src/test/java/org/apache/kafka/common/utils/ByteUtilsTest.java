@@ -239,6 +239,25 @@ public class ByteUtilsTest {
         assertDoubleSerde(Double.NEGATIVE_INFINITY, 0xFFF0000000000000L);
     }
 
+    private static int mathSizeOfUnsignedVarint(int value) {
+        int leadingZeros = Integer.numberOfLeadingZeros(value);
+        // return (38 - leadingZeros) / 7 + leadingZeros / 32;
+        int leadingZerosBelow38DividedBy7 = ((38 - leadingZeros) * 0b10010010010010011) >>> 19;
+        return leadingZerosBelow38DividedBy7 + (leadingZeros >>> 5);
+    }
+
+    @Test
+    public void testSizeOfUnsignedVarintMath() {
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
+            final int actual = mathSizeOfUnsignedVarint(i);
+            final int expected = oldSizeOfUnsignedVarint(i);
+            assertEquals(expected, actual);
+        }
+    }
+
+    /**
+     * The old well-known implementation for sizeOfUnsignedVarint
+     */
     private static int oldSizeOfUnsignedVarint(int value) {
         int bytes = 1;
         // use highestOneBit or numberOfLeadingZeros
@@ -258,6 +277,9 @@ public class ByteUtilsTest {
         }
     }
 
+    /**
+     * The old well-known implementation for sizeOfVarlong
+     */
     private static int oldSizeOfVarlong(long value) {
         long v = (value << 1) ^ (value >> 63);
         int bytes = 1;
@@ -270,7 +292,7 @@ public class ByteUtilsTest {
 
     @Test
     public void testSizeOfVarlong() {
-        for (long l = Integer.MIN_VALUE - 100; l <= Integer.MAX_VALUE + 100; l++) {
+        for (long l = Integer.MIN_VALUE - 10000000000L; l <= Integer.MAX_VALUE + 10000000000L; l += 10000) {
             final int expected = oldSizeOfVarlong(l);
             final int actual = ByteUtils.sizeOfVarlong(l);
             assertEquals(expected, actual);
