@@ -55,7 +55,7 @@ public class Schema extends Type {
      */
     public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
-        this.fieldsByName = new HashMap<>();
+        this.fieldsByName = new HashMap<>(fs.length);
         this.tolerateMissingFieldsWithDefaults = tolerateMissingFieldsWithDefaults;
         for (int i = 0; i < this.fields.length; i++) {
             Field def = fs[i];
