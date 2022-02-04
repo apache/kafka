@@ -261,6 +261,16 @@ public class KafkaProducerTest {
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
             "Must set acks to all in order to use the idempotent producer");
+
+        Properties invalidProps4 = new Properties() {{
+                putAll(baseProps);
+                setProperty(ProducerConfig.ACKS_CONFIG, "0");
+                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+            }};
+        assertThrows(
+            ConfigException.class,
+            () -> new ProducerConfig(invalidProps4),
+            "Must set retries to non-zero when using the idempotent producer.");
     }
 
     @Test
@@ -314,6 +324,16 @@ public class KafkaProducerTest {
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
+            "Must set retries to non-zero when using the idempotent producer.");
+
+        Properties invalidProps4 = new Properties() {{
+                putAll(baseProps);
+                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+            }};
+        assertThrows(
+            ConfigException.class,
+            () -> new ProducerConfig(invalidProps4),
             "Must set retries to non-zero when using the idempotent producer.");
     }
 
@@ -369,6 +389,16 @@ public class KafkaProducerTest {
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
             "Must set max.in.flight.requests.per.connection to at most 5 when using the idempotent producer.");
+
+        Properties invalidProps4 = new Properties() {{
+                putAll(baseProps);
+                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "10");
+                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
+            }};
+        assertThrows(
+            ConfigException.class,
+            () -> new ProducerConfig(invalidProps4),
+            "Must set retries to non-zero when using the idempotent producer.");
     }
 
     @Test
