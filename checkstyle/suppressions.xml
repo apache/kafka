@@ -279,11 +279,13 @@
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="(ClientQuotasImage|ReplicationControlManager).java"/>
+              files="(ClientQuotasImage|MetadataDelta|QuorumController|ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+    <suppress checks="BooleanExpressionComplexity"
+              files="(MetadataImage).java"/>
 
     <!-- Storage -->
     <suppress checks="(CyclomaticComplexity|ParameterNumber)"

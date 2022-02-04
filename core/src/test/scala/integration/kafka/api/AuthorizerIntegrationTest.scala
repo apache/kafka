@@ -59,6 +59,7 @@ import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrinci
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -77,12 +78,14 @@ object AuthorizerIntegrationTest {
 
   val BrokerListenerName = "BROKER"
   val ClientListenerName = "CLIENT"
+  val ControllerListenerName = "CONTROLLER"
 
   class PrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context.listenerName match {
         case BrokerListenerName => BrokerPrincipal
         case ClientListenerName => ClientPrincipal
+        case ControllerListenerName => BrokerPrincipal
         case listenerName => throw new IllegalArgumentException(s"No principal mapped to listener $listenerName")
       }
     }
@@ -147,7 +150,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+    if (isKRaftTest()) {
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
+    } else {
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+    }
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -156,6 +164,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
       classOf[PrincipalBuilder].getName)
+  }
+
+  override def kraftControllerConfigs(): Seq[Properties] = {
+    val controllerConfigs = Seq(new Properties())
+    controllerConfigs.foreach { properties =>
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName())
+      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString())
+      properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+        classOf[PrincipalBuilder].getName)
+    }
+    controllerConfigs
   }
 
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
@@ -321,7 +340,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     // Allow inter-broker communication
     addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
 
-    TestUtils.createOffsetsTopic(zkClient, servers)
+    if (isKRaftTest()) {
+      TestUtils.createOffsetsTopicWithAdmin(brokers)
+    } else {
+      TestUtils.createOffsetsTopic(zkClient, servers)
+    }
   }
 
   @AfterEach
@@ -725,8 +748,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testAuthorizationWithTopicExisting(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
     sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
 
@@ -761,16 +785,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest,
       ApiKeys.DESCRIBE_PRODUCERS -> describeProducersRequest,
       ApiKeys.DESCRIBE_TRANSACTIONS -> describeTransactionsRequest,
-
-      // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
-      ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest,
-      ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest,
-
-      // Delete the topic last
-      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
+    if (!isKRaftTest()) {
+      // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
+      requestKeyToRequest += ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest
+      requestKeyToRequest += ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest
+      requestKeyToRequest += ApiKeys.STOP_REPLICA -> stopReplicaRequest
+      requestKeyToRequest += ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest
+    }
+    // Delete the topic last
+    requestKeyToRequest += ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
 
     sendRequests(requestKeyToRequest, true)
   }
@@ -2292,7 +2316,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   def removeAllClientAcls(): Unit = {
-    val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
+    val authorizer = TestUtils.pickAuthorizerForWrite(brokers, controllerServers)
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
     val aclFilter = new AclBindingFilter(ResourcePatternFilter.ANY, aclEntryFilter)
 
@@ -2325,7 +2349,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     if (topicExists)
       if (isAuthorized)
-        assertFalse(authorizationErrors.contains(error), s"$apiKey should be allowed. Found unexpected authorization error $error")
+        assertFalse(authorizationErrors.contains(error), s"$apiKey should be allowed. Found unexpected authorization error $error with $request")
       else
         assertTrue(authorizationErrors.contains(error), s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors")
     else if (resources == Set(TOPIC))
@@ -2358,11 +2382,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.addAndVerifyAcls(servers.head, acls, resource)
+    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   private def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.removeAndVerifyAcls(servers.head, acls, resource)
+    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],

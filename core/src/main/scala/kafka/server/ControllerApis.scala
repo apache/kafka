@@ -689,7 +689,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleCreatePartitions(request: RequestChannel.Request): Unit = {
     val future = createPartitions(request.body[CreatePartitionsRequest].data,
       authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
-      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+      names => authHelper.filterByAuthorized(request.context, ALTER, TOPIC, names)(n => n))
     future.whenComplete { (responses, exception) =>
       if (exception != null) {
         requestHelper.handleError(request, exception)

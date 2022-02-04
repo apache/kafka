@@ -375,7 +375,7 @@ object TestUtils extends Logging {
     val adminClientProperties = new Properties(adminConfig)
     if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
       adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-        getBrokerListStrFromServers(brokers))
+        bootstrapServers(brokers, brokers.head.config.interBrokerListenerName))
     }
     Admin.create(adminClientProperties)
   }
@@ -2106,8 +2106,32 @@ object TestUtils extends Logging {
       s"There still are ongoing reassignments", pause = pause)
   }
 
-  def addAndVerifyAcls(broker: KafkaBroker, acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    val authorizer = broker.dataPlaneRequestProcessor.authorizer.get
+  /**
+   * Find an Authorizer that we can call createAcls or deleteAcls on.
+   */
+  def pickAuthorizerForWrite[B <: KafkaBroker](
+    brokers: Seq[B],
+    controllers: Seq[ControllerServer],
+  ): JAuthorizer = {
+    if (controllers.isEmpty) {
+      brokers.head.authorizer.get
+    } else {
+      var result: JAuthorizer = null
+      TestUtils.retry(120000) {
+        val active = controllers.filter(_.controller.isActive).head
+        result = active.authorizer.get
+      }
+      result
+    }
+  }
+
+  def addAndVerifyAcls[B <: KafkaBroker](
+    brokers: Seq[B],
+    acls: Set[AccessControlEntry],
+    resource: ResourcePattern,
+    controllers: Seq[ControllerServer] = Seq(),
+  ): Unit = {
+    val authorizer = pickAuthorizerForWrite(brokers, controllers)
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
     authorizer.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
@@ -2115,13 +2139,20 @@ object TestUtils extends Logging {
         result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
-    waitAndVerifyAcls(
-      authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
-      authorizer, resource)
+    (brokers.map(_.authorizer.get) ++ controllers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+        authorizer, resource)
+    }
   }
 
-  def removeAndVerifyAcls(broker: KafkaBroker, acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    val authorizer = broker.dataPlaneRequestProcessor.authorizer.get
+  def removeAndVerifyAcls[B <: KafkaBroker](
+    brokers: Seq[B],
+    acls: Set[AccessControlEntry],
+    resource: ResourcePattern,
+    controllers: Seq[ControllerServer] = Seq(),
+  ): Unit = {
+    val authorizer = pickAuthorizerForWrite(brokers, controllers)
     val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
     authorizer.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
@@ -2129,9 +2160,11 @@ object TestUtils extends Logging {
         result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
-    waitAndVerifyAcls(
-      authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
-      authorizer, resource)
+    (brokers.map(_.authorizer.get) ++ controllers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
+        authorizer, resource)
+    }
   }
 
   def buildRequestWithEnvelope(request: AbstractRequest,
