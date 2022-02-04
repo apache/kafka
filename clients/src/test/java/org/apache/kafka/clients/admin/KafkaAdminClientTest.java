@@ -108,6 +108,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
@@ -167,6 +168,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
@@ -231,6 +233,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.admin.KafkaAdminClient.LEAVE_GROUP_REASON;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
@@ -1621,6 +1624,12 @@ public class KafkaAdminClientTest {
                 )));
     }
 
+    private static DescribeLogDirsResponse prepareEmptyDescribeLogDirsResponse(Optional<Errors> error) {
+        DescribeLogDirsResponseData data = new DescribeLogDirsResponseData();
+        if (error.isPresent()) data.setErrorCode(error.get().code());
+        return new DescribeLogDirsResponse(data);
+    }
+
     @Test
     public void testDescribeLogDirs() throws ExecutionException, InterruptedException {
         Set<Integer> brokers = singleton(0);
@@ -1645,6 +1654,22 @@ public class KafkaAdminClientTest {
             Map<Integer, Map<String, LogDirDescription>> allDescriptions = result.allDescriptions().get();
             assertEquals(brokers, allDescriptions.keySet());
             assertDescriptionContains(allDescriptions.get(0), logDir, tp, partitionSize, offsetLag);
+
+            // Empty results when not authorized with version < 3
+            env.kafkaClient().prepareResponseFrom(
+                    prepareEmptyDescribeLogDirsResponse(Optional.empty()),
+                    env.cluster().nodeById(0));
+            final DescribeLogDirsResult errorResult = env.adminClient().describeLogDirs(brokers);
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> errorResult.allDescriptions().get());
+            assertTrue(exception.getCause() instanceof ClusterAuthorizationException);
+
+            // Empty results with an error with version >= 3
+            env.kafkaClient().prepareResponseFrom(
+                    prepareEmptyDescribeLogDirsResponse(Optional.of(Errors.UNKNOWN_SERVER_ERROR)),
+                    env.cluster().nodeById(0));
+            final DescribeLogDirsResult errorResult2 = env.adminClient().describeLogDirs(brokers);
+            exception = assertThrows(ExecutionException.class, () -> errorResult2.allDescriptions().get());
+            assertTrue(exception.getCause() instanceof UnknownServerException);
         }
     }
 
@@ -3905,6 +3930,53 @@ public class KafkaAdminClientTest {
             );
             assertNull(successResult.all().get());
         }
+    }
+
+    private void testRemoveMembersFromGroup(String reason, String expectedReason) throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster)) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(body -> {
+                if (!(body instanceof LeaveGroupRequest)) {
+                    return false;
+                }
+                LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
+
+                return leaveGroupRequest.members().stream().allMatch(
+                        member -> member.reason().equals(expectedReason)
+                );
+            }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                    Arrays.asList(
+                            new MemberResponse().setGroupInstanceId("instance-1"),
+                            new MemberResponse().setGroupInstanceId("instance-2")
+                    ))
+            ));
+
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove("instance-1"), new MemberToRemove("instance-2"));
+
+            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(membersToRemove);
+            options.reason(reason);
+
+            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                    GROUP_ID, options);
+
+            assertNull(result.all().get());
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupReason() throws Exception {
+        testRemoveMembersFromGroup("testing remove members reason", LEAVE_GROUP_REASON + ": testing remove members reason");
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupDefaultReason() throws Exception {
+        testRemoveMembersFromGroup(null, LEAVE_GROUP_REASON);
     }
 
     @Test

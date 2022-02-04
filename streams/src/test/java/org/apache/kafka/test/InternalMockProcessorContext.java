@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -289,10 +290,11 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback func) {
+                         final StateRestoreCallback func,
+                         final CommitCallback checkpoint) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
-        stateManager().registerStore(store, func);
+        stateManager().registerStore(store, func, checkpoint);
     }
 
     @SuppressWarnings("unchecked")

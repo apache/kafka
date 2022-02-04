@@ -22,8 +22,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -122,18 +124,23 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     public <R> QueryResult<R> query(
         final Query<R> query,
         final PositionBound positionBound,
-        final boolean collectExecutionInfo) {
+        final QueryConfig config) {
 
 
-        final long start = collectExecutionInfo ? System.nanoTime() : -1L;
-        final QueryResult<R> result = store.query(query, positionBound, collectExecutionInfo);
-        if (collectExecutionInfo) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result = store.query(query, positionBound, config);
+        if (config.isCollectExecutionInfo()) {
             final long end = System.nanoTime();
             result.addExecutionInfo(
                 "Handled in " + getClass() + " in " + (end - start) + "ns"
             );
         }
         return result;
+    }
+
+    @Override
+    public Position getPosition() {
+        return store.getPosition();
     }
 
     @Override

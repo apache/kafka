@@ -237,6 +237,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -286,14 +287,13 @@ public class RequestResponseTest {
     // Exception includes a message that we verify is not included in error responses
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
 
-
     @Test
     public void testSerialization() {
         Map<ApiKeys, List<Short>> toSkip = new HashMap<>();
         // It's not possible to create a MetadataRequest v0 via the builder
         toSkip.put(METADATA, singletonList((short) 0));
-        // DescribeLogDirsResponse does not have a top level error field
-        toSkip.put(DESCRIBE_LOG_DIRS, DESCRIBE_LOG_DIRS.allVersions());
+        // DescribeLogDirsResponse v0, v1 and v2 don't have a top level error field
+        toSkip.put(DESCRIBE_LOG_DIRS, Arrays.asList((short) 0, (short) 1, (short) 2));
         // ElectLeaders v0 does not have a top level error field, when accessing it, it defaults to NONE
         toSkip.put(ELECT_LEADERS, singletonList((short) 0));
 
@@ -938,6 +938,7 @@ public class RequestResponseTest {
         assertEquals(1, createDescribeClientQuotasResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createDescribeConfigsResponse(DESCRIBE_CONFIGS.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(2, createDescribeLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createElectLeadersResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createEndTxnResponse().errorCounts().get(Errors.NONE));
@@ -1715,7 +1716,8 @@ public class RequestResponseTest {
             .setSessionTimeoutMs(30000)
             .setMemberId("consumer1")
             .setProtocolType("consumer")
-            .setProtocols(protocols);
+            .setProtocols(protocols)
+            .setReason("reason: test");
 
         // v1 and above contains rebalance timeout
         if (version >= 1)
@@ -1837,7 +1839,8 @@ public class RequestResponseTest {
     }
 
     private LeaveGroupRequest createLeaveGroupRequest(short version) {
-        return new LeaveGroupRequest.Builder("group1", singletonList(new MemberIdentity().setMemberId("consumer1")))
+        MemberIdentity member = new MemberIdentity().setMemberId("consumer1").setReason("reason: test");
+        return new LeaveGroupRequest.Builder("group1", Collections.singletonList(member))
                 .build(version);
     }
 

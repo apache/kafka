@@ -133,9 +133,14 @@ public class ReplicationControlManagerTest {
         final MockTime time = new MockTime();
         final MockRandom random = new MockRandom();
         final ControllerMetrics metrics = new MockControllerMetrics();
-        final ClusterControlManager clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
-            new StripedReplicaPlacer(random), metrics);
+        final String clusterId = Uuid.randomUuid().toString();
+        final ClusterControlManager clusterControl = new ClusterControlManager(logContext,
+            clusterId,
+            time,
+            snapshotRegistry,
+            TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS),
+            new StripedReplicaPlacer(random),
+            metrics);
         final ConfigurationControlManager configurationControl = new ConfigurationControlManager(
             new LogContext(), snapshotRegistry, Collections.emptyMap(), Optional.empty(),
                 (__, ___) -> { });

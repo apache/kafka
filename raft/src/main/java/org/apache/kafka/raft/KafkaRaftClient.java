@@ -443,7 +443,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
         // We update the end offset before flushing so that parked fetches can return sooner.
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
-        log.flush();
+        log.flush(false);
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) {
@@ -1136,7 +1136,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsFollower(records);
-        log.flush();
+        log.flush(false);
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
@@ -2362,6 +2362,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
+        log.flush(true);
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }

@@ -58,7 +58,7 @@ public interface QueryResult<R> {
         final Query<R> query,
         final StateStore store) {
 
-        return new FailedQueryResult<>(
+        return forFailure(
             FailureReason.UNKNOWN_QUERY_TYPE,
             "This store (" + store.getClass() + ") doesn't know how to execute "
                 + "the given query (" + query + ")." +
@@ -74,14 +74,22 @@ public interface QueryResult<R> {
     static <R> QueryResult<R> notUpToBound(
         final Position currentPosition,
         final PositionBound positionBound,
-        final int partition) {
+        final Integer partition) {
 
-        return new FailedQueryResult<>(
-            FailureReason.NOT_UP_TO_BOUND,
-            "For store partition " + partition + ", the current position "
-                + currentPosition + " is not yet up to the bound "
-                + positionBound
-        );
+        if (partition == null) {
+            return new FailedQueryResult<>(
+                FailureReason.NOT_UP_TO_BOUND,
+                "The store is not initialized yet, so it is not yet up to the bound "
+                    + positionBound
+            );
+        } else {
+            return new FailedQueryResult<>(
+                FailureReason.NOT_UP_TO_BOUND,
+                "For store partition " + partition + ", the current position "
+                    + currentPosition + " is not yet up to the bound "
+                    + positionBound
+            );
+        }
     }
 
     /**

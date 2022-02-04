@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -85,8 +86,13 @@ class CachingWindowStore
     }
 
     private void initInternal(final InternalProcessorContext<?, ?> context) {
+        final String prefix = StreamsConfig.InternalConfig.getString(
+            context.appConfigs(),
+            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+            context.applicationId()
+        );
         this.context = context;
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name(),  context.taskId().topologyName());
+        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  context.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
             topic,

@@ -99,4 +99,13 @@ public final class SucceededQueryResult<R>
     public R getResult() {
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "SucceededQueryResult{" +
+            "result=" + result +
+            ", executionInfo=" + getExecutionInfo() +
+            ", position=" + getPosition() +
+            '}';
+    }
 }
