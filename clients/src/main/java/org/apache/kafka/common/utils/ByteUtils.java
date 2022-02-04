@@ -390,33 +390,23 @@ public final class ByteUtils {
      * Number of bytes needed to encode an integer in unsigned variable-length format.
      *
      * @param value The signed value
+     *
+     * @see #writeUnsignedVarint(int, DataOutput)
      */
     public static int sizeOfUnsignedVarint(int value) {
-        int leadingZeros = Integer.numberOfLeadingZeros(value);
+        // Protocol buffers varint encoding is variable length, with a minimum of 1 byte
+        // (for zero). The values themselves are not important. What's important here is
+        // any leading zero bits are dropped from output. We can use this leading zero
+        // count w/ fast intrinsic to calc the output length directly.
 
-        // magic sequence of numbers that produces a function equivalent to this lookup
-        // table, where the index in the lookup table is provided by the number of
-        // leading zeros of the value, and the result is the number of bytes used
-        // in the output
-
-        // see the test cases as well to verify the implementation matches the prior
-        // for-loop logic
-
-        // final static byte[] LEADING_ZEROS_TO_U_VARINT_SIZE = new byte[] {
-        //     // 32 bits, and each 7-bits adds one byte to the output
-        //     5, 5, 5, 5, // 32
-        //     4, 4, 4, 4, 4, 4, 4, // 28
-        //     3, 3, 3, 3, 3, 3, 3, // 21
-        //     2, 2, 2, 2, 2, 2, 2, // 14
-        //     1, 1, 1, 1, 1, 1, 1, // 7
-        //     1 // 0
-        // };
-
-        // this is the core logic, but the Java encoding is suboptimal when we have a narrow
-        // range of integers, so we can do better here
+        // Test cases verify this matches the output for loop logic exactly.
 
         // return (38 - leadingZeros) / 7 + leadingZeros / 32;
 
+        // The above formula provides the implementation, but the Java encoding is suboptimal
+        // when we have a narrow range of integers, so we can do better manually
+
+        int leadingZeros = Integer.numberOfLeadingZeros(value);
         int leadingZerosBelow38DividedBy7 = ((38 - leadingZeros) * 0b10010010010010011) >>> 19;
         return leadingZerosBelow38DividedBy7 + (leadingZeros >>> 5);
     }
@@ -438,30 +428,14 @@ public final class ByteUtils {
      */
     public static int sizeOfVarlong(long value) {
         long v = (value << 1) ^ (value >> 63);
-        int leadingZeros = Long.numberOfLeadingZeros(v);
 
-        // For implementation notes see sizeOfUnsignedVarint, assuming the below table
+        // For implementation notes @see #sizeOfUnsignedVarint(int)
 
-        // final static byte[] LEADING_ZEROS_TO_U_VARLONG_SIZE = new byte[] {
-        //     // 63 bits, and each 7-bits adds one byte to the output
-        //     9, // 64
-        //     8, 9, 9, 9, 9, 9, 9, // 63
-        //     7, 8, 8, 8, 8, 8, 8, // 56
-        //     6, 7, 7, 7, 7, 7, 7, // 49
-        //     5, 6, 6, 6, 6, 6, 6, // 42
-        //     4, 5, 5, 5, 5, 5, 5, // 35
-        //     3, 4, 4, 4, 4, 4, 4, // 28
-        //     2, 3, 3, 3, 3, 3, 3, // 21
-        //     1, 2, 2, 2, 2, 2, 2, // 14
-        //     0, 1, 1, 1, 1, 1, 1, // 7
-        //     0 // 0
-        // };
-
-        // this is the core logic, but the Java encoding is suboptimal when we have a narrow
-        // range of integers, so we can do better here
+        // Similar logic is applied to allow for 64bit input -> 1-9byte output.
 
         // return (70 - leadingZeros) / 7 + leadingZeros / 64;
 
+        int leadingZeros = Long.numberOfLeadingZeros(v);
         int leadingZerosBelow70DividedBy7 = ((70 - leadingZeros) * 0b10010010010010011) >>> 19;
         return leadingZerosBelow70DividedBy7 + (leadingZeros >>> 6);
     }

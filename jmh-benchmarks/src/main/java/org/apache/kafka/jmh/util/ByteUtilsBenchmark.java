@@ -57,13 +57,34 @@ public class ByteUtilsBenchmark {
     @Fork(3)
     @Warmup(iterations = 5, time = 1)
     @Measurement(iterations = 10, time = 1)
-    public int testSizeOfUnsignedVarintOriginal() {
+    public int testSizeOfUnsignedVarintSimple() {
         int value = input;
         int bytes = 1;
-        // use highestOneBit or numberOfLeadingZeros
         while ((value & 0xffffff80) != 0L) {
             bytes += 1;
             value >>>= 7;
+        }
+        return bytes;
+    }
+
+    @Benchmark
+    @Fork(3)
+    @Warmup(iterations = 5, time = 1)
+    @Measurement(iterations = 10, time = 1)
+    public int testSizeOfVarlong() {
+        return ByteUtils.sizeOfVarlong(input);
+    }
+
+    @Benchmark
+    @Fork(3)
+    @Warmup(iterations = 5, time = 1)
+    @Measurement(iterations = 10, time = 1)
+    public int testSizeOfVarlongSimple() {
+        long v = (input << 1) ^ (input >> 63);
+        int bytes = 1;
+        while ((v & 0xffffffffffffff80L) != 0L) {
+            bytes += 1;
+            v >>>= 7;
         }
         return bytes;
     }
