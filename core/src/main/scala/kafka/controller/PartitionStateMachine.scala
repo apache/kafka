@@ -81,12 +81,13 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
    * zookeeper
    */
   private def initializePartitionState(): Unit = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
-          if (controllerContext.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
+          if (controllerContextSnapshot.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
           // leader is alive
             controllerContext.putPartitionState(topicPartition, OnlinePartition)
           else
@@ -268,10 +269,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * @return The partitions that have been successfully initialized.
    */
   private def initializeLeaderAndIsrForPartitions(partitions: Seq[TopicPartition]): Seq[TopicPartition] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val successfulInitializations = mutable.Buffer.empty[TopicPartition]
     val replicasPerPartition = partitions.map(partition => partition -> controllerContext.partitionReplicaAssignment(partition))
     val liveReplicasPerPartition = replicasPerPartition.map { case (partition, replicas) =>
-        val liveReplicasForPartition = replicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+        val liveReplicasForPartition = replicas.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
         partition -> liveReplicasForPartition
     }
     val (partitionsWithoutLiveReplicas, partitionsWithLiveReplicas) = liveReplicasPerPartition.partition { case (_, liveReplicas) => liveReplicas.isEmpty }
@@ -457,9 +459,10 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)],
     allowUnclean: Boolean
   ): Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderAndIsrs.partition {
       case (partition, leaderAndIsr) =>
-        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContext.isReplicaOnline(_, partition))
+        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContextSnapshot.isReplicaOnline(_, partition))
         liveInSyncReplicas.isEmpty
     }
 

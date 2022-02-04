@@ -308,10 +308,11 @@ class TopicDeletionManager(config: KafkaConfig,
     val allDeadReplicas = mutable.ListBuffer.empty[PartitionAndReplica]
     val allReplicasForDeletionRetry = mutable.ListBuffer.empty[PartitionAndReplica]
     val allTopicsIneligibleForDeletion = mutable.Set.empty[String]
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
 
     topicsToBeDeleted.foreach { topic =>
       val (aliveReplicas, deadReplicas) = controllerContext.replicasForTopic(topic).partition { r =>
-        controllerContext.isReplicaOnline(r.replica, r.topicPartition)
+        controllerContextSnapshot.isReplicaOnline(r.replica, r.topicPartition)
       }
 
       val successfullyDeletedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)

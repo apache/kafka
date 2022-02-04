@@ -30,9 +30,9 @@ object Election extends Logging {
                                leaderAndIsrOpt: Option[LeaderAndIsr],
                                uncleanLeaderElectionEnabled: Boolean,
                                controllerContext: ControllerContext): ElectionResult = {
-
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val assignment = controllerContext.partitionReplicaAssignment(partition)
-    val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+    val liveReplicas = assignment.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         val isr = leaderAndIsr.isr
@@ -44,7 +44,7 @@ object Election extends Logging {
             warn(s"Unclean leader election. Partition $partition has been assigned leader $leader from deposed " +
               s"leader ${leaderAndIsr.leader}.")
           }
-          val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+          val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
           else List(leader)
           leaderAndIsr.newLeaderAndIsr(leader, newIsr)
         }
@@ -78,8 +78,9 @@ object Election extends Logging {
   private def leaderForReassign(partition: TopicPartition,
                                 leaderAndIsr: LeaderAndIsr,
                                 controllerContext: ControllerContext): ElectionResult = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val targetReplicas = controllerContext.partitionFullReplicaAssignment(partition).targetReplicas
-    val liveReplicas = targetReplicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+    val liveReplicas = targetReplicas.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
     val isr = leaderAndIsr.isr
     val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(targetReplicas, isr, liveReplicas.toSet)
     val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeader(leader))
@@ -105,8 +106,9 @@ object Election extends Logging {
   private def leaderForPreferredReplica(partition: TopicPartition,
                                         leaderAndIsr: LeaderAndIsr,
                                         controllerContext: ControllerContext): ElectionResult = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val assignment = controllerContext.partitionReplicaAssignment(partition)
-    val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+    val liveReplicas = assignment.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
     val isr = leaderAndIsr.isr
     val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas.toSet)
     val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeader(leader))
@@ -133,9 +135,10 @@ object Election extends Logging {
                                           leaderAndIsr: LeaderAndIsr,
                                           shuttingDownBrokerIds: Set[Int],
                                           controllerContext: ControllerContext): ElectionResult = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveOrShuttingDownReplicas = assignment.filter(replica =>
-      controllerContext.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
+      controllerContextSnapshot.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
     val isr = leaderAndIsr.isr
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment, isr,
       liveOrShuttingDownReplicas.toSet, shuttingDownBrokerIds)

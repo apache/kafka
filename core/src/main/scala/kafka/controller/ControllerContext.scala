@@ -238,14 +238,6 @@ class ControllerContext {
     }.toSet
   }
 
-  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
-    val brokerOnline = {
-      if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
-      else liveBrokerIds.contains(brokerId)
-    }
-    brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
-  }
-
   def replicasOnBrokers(brokerIds: Set[Int]): Set[PartitionAndReplica] = {
     brokerIds.flatMap { brokerId =>
       partitionAssignments.flatMap {
@@ -279,12 +271,13 @@ class ControllerContext {
   def onlineAndOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
     val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
     val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    val snapshot = ControllerContextSnapshot(this)
     for ((topic, partitionAssignments) <- partitionAssignments;
          (partitionId, assignment) <- partitionAssignments) {
       val partition = new TopicPartition(topic, partitionId)
       for (replica <- assignment.replicas) {
         val partitionAndReplica = PartitionAndReplica(partition, replica)
-        if (isReplicaOnline(replica, partition))
+        if (snapshot.isReplicaOnline(replica, partition))
           onlineReplicas.add(partitionAndReplica)
         else
           offlineReplicas.add(partitionAndReplica)
@@ -469,8 +462,9 @@ class ControllerContext {
     partitionLeadershipInfo.keySet.filter(tp => !isTopicQueuedUpForDeletion(tp.topic))
 
   def partitionsWithOfflineLeader: Set[TopicPartition] = {
+    val snapshot = ControllerContextSnapshot(this)
     partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
-      !isReplicaOnline(leaderIsrAndControllerEpoch.leaderAndIsr.leader, topicPartition) &&
+      !snapshot.isReplicaOnline(leaderIsrAndControllerEpoch.leaderAndIsr.leader, topicPartition) &&
         !isTopicQueuedUpForDeletion(topicPartition.topic)
     }.keySet
   }
@@ -538,4 +532,23 @@ class ControllerContext {
   private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
 
+}
+
+/**
+ * The ControllerContextSnapshot is an immutable snapshot of the ControllorContext.
+ * The motivation for this class is that we don't need to calculate certain fields
+ * repeatedly, including liveBrokerIds and liveOrShuttingDownBrokerIds.
+ */
+case class ControllerContextSnapshot(controllerContext: ControllerContext) {
+  val liveBrokerIds = controllerContext.liveBrokerIds
+  val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+  val replicasOnOfflineDirs = controllerContext.replicasOnOfflineDirs
+
+  def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean = false): Boolean = {
+    val brokerOnline = {
+      if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
+      else liveBrokerIds.contains(brokerId)
+    }
+    brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
+  }
 }
