@@ -54,11 +54,11 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
 
   def get: T = {
     indexWrapper match {
-      case indexValue: IndexValue[T] => indexValue.index
+      case indexValue: IndexValue[_] => indexValue.index.asInstanceOf[T]
       case _: IndexFile =>
         inLock(lock) {
           indexWrapper match {
-            case indexValue: IndexValue[T] => indexValue.index
+            case indexValue: IndexValue[_] => indexValue.index.asInstanceOf[T]
             case indexFile: IndexFile =>
               val indexValue = new IndexValue(loadIndex(indexFile.file))
               indexWrapper = indexValue
