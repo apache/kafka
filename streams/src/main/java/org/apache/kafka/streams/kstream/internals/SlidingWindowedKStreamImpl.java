@@ -34,6 +34,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
@@ -204,8 +206,21 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                         + " retention=[" + retentionPeriod + "]");
             }
 
-            supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),
-                retentionPeriod, windows.timeDifferenceMs());
+            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
+                supplier = Stores.inMemoryWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.timeDifferenceMs()),
+                    false
+                );
+            } else {
+                supplier = Stores.persistentTimestampedWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.timeDifferenceMs()),
+                    false
+                );
+            }
         }
 
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(

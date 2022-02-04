@@ -70,7 +70,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     }
 
     public StoreType storeType() {
-        return storeType;
+        return storeType == null ? StoreType.ROCKS_DB : storeType;
     }
 
     public StoreSupplier<S> storeSupplier() {

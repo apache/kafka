@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -121,7 +122,17 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                     + " retention=[" + retentionPeriod + "]");
             }
 
-            supplier = Stores.sessionStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(), retentionPeriod);
+            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
+                supplier = Stores.inMemorySessionStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod)
+                );
+            } else {
+                supplier = Stores.persistentSessionStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod)
+                );
+            }
         }
 
         final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(

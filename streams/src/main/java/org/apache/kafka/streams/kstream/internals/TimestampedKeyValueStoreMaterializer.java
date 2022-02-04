@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -36,7 +37,11 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
     public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            supplier = Stores.keyValueStoreSupplierByStoreType(materialized.storeType(), materialized.storeName());
+            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
+                supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
+            } else {
+                supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
+            }
         }
 
         final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(

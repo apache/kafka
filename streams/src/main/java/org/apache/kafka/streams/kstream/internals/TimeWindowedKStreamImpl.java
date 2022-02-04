@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -221,8 +222,21 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                         + " retention=[" + retentionPeriod + "]");
             }
 
-            supplier = Stores.windowStoreSupplierByStoreType(materialized.storeType(), materialized.storeName(),
-                retentionPeriod, windows.size());
+            if (materialized.storeType().equals(Materialized.StoreType.IN_MEMORY)) {
+                supplier = Stores.inMemoryWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.size()),
+                    false
+                );
+            } else {
+                supplier = Stores.persistentTimestampedWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.size()),
+                    false
+                );
+            }
         }
 
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -448,83 +447,5 @@ public final class Stores {
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
-    }
-
-    /**
-     * Create a {@link SessionBytesStoreSupplier} by the provided {@code storeType}.
-     *
-     * @param storeType         {@link org.apache.kafka.streams.kstream.Materialized.StoreType} of the store
-     * @param storeName         name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
-     *                          (note that the retention period must be at least as long enough to
-     *                          contain the inactivity gap of the session and the entire grace period.)
-     * @return an instance of a {@link  SessionBytesStoreSupplier}
-     */
-    public static SessionBytesStoreSupplier sessionStoreSupplierByStoreType(final Materialized.StoreType storeType,
-                                                                            final String storeName,
-                                                                            final long retentionPeriod) {
-        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
-            return Stores.inMemorySessionStore(
-                storeName,
-                Duration.ofMillis(retentionPeriod)
-            );
-        }
-
-        return Stores.persistentSessionStore(
-            storeName,
-            Duration.ofMillis(retentionPeriod)
-        );
-    }
-
-    /**
-     * Create a persistent {@link WindowBytesStoreSupplier} by the provided {@code storeType}.
-     *
-     * @param storeType             {@link org.apache.kafka.streams.kstream.Materialized.StoreType} of the store
-     * @param storeName             name of the store (cannot be {@code null})
-     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
-     *                              (note that the retention period must be at least long enough to contain the
-     *                              windowed data's entire life cycle, from window-start through window-end,
-     *                              and for the entire grace period)
-     * @param windowSize            size of the windows (cannot be negative)
-     * @return an instance of {@link WindowBytesStoreSupplier}
-     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
-     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
-     */
-    public static WindowBytesStoreSupplier windowStoreSupplierByStoreType(final Materialized.StoreType storeType,
-                                                                          final String storeName,
-                                                                          final long retentionPeriod,
-                                                                          final long windowSize) {
-        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
-            return Stores.inMemoryWindowStore(
-                storeName,
-                Duration.ofMillis(retentionPeriod),
-                Duration.ofMillis(windowSize),
-                false
-            );
-        }
-
-        return Stores.persistentTimestampedWindowStore(
-            storeName,
-            Duration.ofMillis(retentionPeriod),
-            Duration.ofMillis(windowSize),
-            false
-        );
-    }
-
-    /**
-     * Create a persistent {@link KeyValueBytesStoreSupplier} by the provided {@code storeType}..
-     *
-     * @param storeType             {@link org.apache.kafka.streams.kstream.Materialized.StoreType} of the store
-     * @param storeName             name of the store (cannot be {@code null})
-     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
-     * to build a persistent key-(timestamp/value) store
-     */
-    public static KeyValueBytesStoreSupplier keyValueStoreSupplierByStoreType(final Materialized.StoreType storeType,
-                                                                              final String storeName) {
-        if (storeType != null && storeType.equals(Materialized.StoreType.IN_MEMORY)) {
-            return Stores.inMemoryKeyValueStore(storeName);
-        }
-
-        return Stores.persistentTimestampedKeyValueStore(storeName);
     }
 }
