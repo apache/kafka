@@ -22,15 +22,13 @@ import java.util.Collections
 import kafka.log.{OffsetIndex, OffsetPosition, TimeIndex}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-
-import org.easymock.EasyMock.anyObject
-import org.easymock.EasyMock.expect
-import org.easymock.EasyMock.reset
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.easymock.EasyMock.{anyObject, expect, reset, verify}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class RemoteIndexCacheTest {
 
@@ -49,22 +47,6 @@ class RemoteIndexCacheTest {
 
     appendIndexEntries()
 
-    // fetch indexes only once to build the cache, later it should be available in the cache
-    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.OFFSET)))
-      .andReturn(new FileInputStream(offsetIndex.file))
-      .times(1)
-    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.TIMESTAMP)))
-      .andReturn(new FileInputStream(timeIndex.file))
-      .times(1)
-    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.TRANSACTION)))
-      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txnIndex")))
-      .times(1)
-    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.PRODUCER_SNAPSHOT)))
-      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".snapshot")))
-      .times(1)
-
-    EasyMock.replay(rlsm)
-
     val logDir = Files.createTempDirectory("kafka-").toString
     cache = new RemoteIndexCache(remoteStorageManager = rlsm, logDir = logDir)
 
@@ -72,6 +54,28 @@ class RemoteIndexCacheTest {
     rlsMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
       baseOffset, offsetIndex.lastOffset, -1L, 1, 1024, 1024,
       Collections.singletonMap(0, 0L))
+  }
+
+  private def setupRlsm(transactionFileExists: Boolean) = {
+    // fetch indexes only once to build the cache, later it should be available in the cache
+    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.OFFSET)))
+      .andReturn(new FileInputStream(offsetIndex.file))
+      .times(1)
+    expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.TIMESTAMP)))
+      .andReturn(new FileInputStream(timeIndex.file))
+      .times(1)
+
+    if (transactionFileExists) {
+      expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.TRANSACTION)))
+        .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txnIndex")))
+        .times(1)
+    } else {
+      expect(rlsm.fetchIndex(anyObject(classOf[RemoteLogSegmentMetadata]), EasyMock.eq(IndexType.TRANSACTION)))
+        .andThrow(new RemoteResourceNotFoundException("Transaction file not found in remote tier"))
+        .times(1)
+    }
+
+    EasyMock.replay(rlsm)
   }
 
   private def appendIndexEntries(): Unit = {
@@ -101,6 +105,7 @@ class RemoteIndexCacheTest {
 
   @AfterEach
   def cleanup(): Unit = {
+    verify(rlsm)
     reset(rlsm)
 
     if (offsetIndex != null) offsetIndex.deleteIfExists()
@@ -108,8 +113,10 @@ class RemoteIndexCacheTest {
     cache.close()
   }
 
-  @Test
-  def testLoadingIndexFromRemoteStorage(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testLoadingIndexFromRemoteStorage(transactionFileExists: Boolean): Unit = {
+    setupRlsm(transactionFileExists)
 
     assertIndexEntries()
 
@@ -125,8 +132,11 @@ class RemoteIndexCacheTest {
     assertEquals(offsetPosition2.position, resultOffset2)
   }
 
-  @Test
-  def testPositionForNonExistingIndexFromRemoteStorage(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPositionForNonExistingIndexFromRemoteStorage(transactionFileExists: Boolean): Unit = {
+    setupRlsm(transactionFileExists)
+
     // offsets beyond this
     val lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset)
     val greaterOffsetThanLastOffset = offsetIndex.lastOffset + 1
@@ -137,5 +147,16 @@ class RemoteIndexCacheTest {
     val lowerOffsetThanBaseOffset = offsetIndex.baseOffset - 1
     val resultOffsetPosition2 = cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset)
     assertEquals(nonExistentOffsetPosition.position, resultOffsetPosition2)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTransactionIndexIsCached(transactionFileExists: Boolean): Unit = {
+    setupRlsm(transactionFileExists)
+
+    cache.getIndexEntry(rlsMetadata)
+    cache.getIndexEntry(rlsMetadata)
+
+    verify(rlsm)
   }
 }
