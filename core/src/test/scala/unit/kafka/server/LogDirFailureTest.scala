@@ -109,6 +109,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
 
@@ -140,6 +141,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
 
     val partition = new TopicPartition(topic, 0)

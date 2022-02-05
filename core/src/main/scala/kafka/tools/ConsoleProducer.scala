@@ -168,7 +168,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("request required acks")
       .ofType(classOf[java.lang.String])
-      .defaultsTo("1")
+      .defaultsTo("-1")
     val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero.")
       .withRequiredArg
       .describedAs("request timeout ms")
