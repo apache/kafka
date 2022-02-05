@@ -98,6 +98,11 @@
         understood by brokers or version 2.5 or higher, so you must upgrade your kafka cluster to get the stronger semantics. Otherwise, you can just pass
         in <code>new ConsumerGroupMetadata(consumerGroupId)</code> to work with older brokers. See <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
     </li>
+    <li>Idempotence for the producer is enabled by default. In 3.0.0, a bug prevented this default from being applied,
+        which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
+        (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details).
+        This issue was fixed and the default is properly applied in 3.0.1.
+    </li>
     <li>
         The Connect <code>internal.key.converter</code> and <code>internal.value.converter</code> properties have been completely <a href="https://cwiki.apache.org/confluence/x/2YDOCg">removed</a>.
         The use of these Connect worker properties has been deprecated since version 2.0.0. 
