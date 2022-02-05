@@ -37,6 +37,9 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @State(Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Fork(3)
+@Warmup(iterations = 5, time = 1)
+@Measurement(iterations = 10, time = 1)
 public class ByteUtilsBenchmark {
     private int input;
 
@@ -46,17 +49,11 @@ public class ByteUtilsBenchmark {
     }
 
     @Benchmark
-    @Fork(3)
-    @Warmup(iterations = 5, time = 1)
-    @Measurement(iterations = 10, time = 1)
     public int testSizeOfUnsignedVarint() {
         return ByteUtils.sizeOfUnsignedVarint(input);
     }
 
     @Benchmark
-    @Fork(3)
-    @Warmup(iterations = 5, time = 1)
-    @Measurement(iterations = 10, time = 1)
     public int testSizeOfUnsignedVarintSimple() {
         int value = input;
         int bytes = 1;
@@ -68,17 +65,11 @@ public class ByteUtilsBenchmark {
     }
 
     @Benchmark
-    @Fork(3)
-    @Warmup(iterations = 5, time = 1)
-    @Measurement(iterations = 10, time = 1)
     public int testSizeOfVarlong() {
         return ByteUtils.sizeOfVarlong(input);
     }
 
     @Benchmark
-    @Fork(3)
-    @Warmup(iterations = 5, time = 1)
-    @Measurement(iterations = 10, time = 1)
     public int testSizeOfVarlongSimple() {
         long v = (input << 1) ^ (input >> 63);
         int bytes = 1;

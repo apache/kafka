@@ -430,9 +430,7 @@ public final class ByteUtils {
         long v = (value << 1) ^ (value >> 63);
 
         // For implementation notes @see #sizeOfUnsignedVarint(int)
-
         // Similar logic is applied to allow for 64bit input -> 1-9byte output.
-
         // return (70 - leadingZeros) / 7 + leadingZeros / 64;
 
         int leadingZeros = Long.numberOfLeadingZeros(v);
