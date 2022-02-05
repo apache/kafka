@@ -517,7 +517,7 @@ public class ProducerConfig extends AbstractConfig {
         if (!idempotenceEnabled && userConfiguredTransactions)
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
 
-        return userConfiguredTransactions || idempotenceEnabled;
+        return idempotenceEnabled;
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {
