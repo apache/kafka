@@ -48,8 +48,8 @@ object ConsumerGroupCommand extends Logging {
 
     val opts = new ConsumerGroupCommandOptions(args)
     try {
-      opts.checkArgs()
       CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
+      opts.checkArgs()
 
       // should have exactly one action
       val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
