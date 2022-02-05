@@ -1011,7 +1011,7 @@ class ProducerStateManagerTest {
   @Test
   def testRemoveAndMarkSnapshotForDeletion(): Unit = {
     UnifiedLog.producerSnapshotFile(logDir, 5).createNewFile()
-    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, time = time)
+    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
     val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
     assertTrue(snapshot.file.toPath.toString.endsWith(UnifiedLog.DeletedFileSuffix))
@@ -1029,7 +1029,7 @@ class ProducerStateManagerTest {
   def testRemoveAndMarkSnapshotForDeletionAlreadyDeleted(): Unit = {
     val file = UnifiedLog.producerSnapshotFile(logDir, 5)
     file.createNewFile()
-    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, time = time)
+    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
     Files.delete(file.toPath)
     assertTrue(manager.removeAndMarkSnapshotForDeletion(5).isEmpty)

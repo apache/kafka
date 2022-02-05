@@ -483,11 +483,13 @@ object ProducerStateManager {
  * been deleted.
  */
 @nonthreadsafe
-class ProducerStateManager(val topicPartition: TopicPartition,
-                           @volatile var _logDir: File,
-                           val maxTransactionTimeoutMs: Int,
-                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-                           val time: Time = Time.SYSTEM) extends Logging {
+class ProducerStateManager(
+  val topicPartition: TopicPartition,
+  @volatile var _logDir: File,
+  val maxTransactionTimeoutMs: Int,
+  val maxProducerIdExpirationMs: Int,
+  val time: Time
+) extends Logging {
   import ProducerStateManager._
   import java.util
 
