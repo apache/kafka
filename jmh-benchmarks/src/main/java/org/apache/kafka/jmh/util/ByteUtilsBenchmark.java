@@ -41,21 +41,22 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 10, time = 1)
 public class ByteUtilsBenchmark {
-    private int input;
-
+    private int inputInt;
+    private long inputLong;
     @Setup(Level.Iteration)
     public void setUp() {
-        input = ThreadLocalRandom.current().nextInt(2 * 1024 * 1024);
+        inputInt = ThreadLocalRandom.current().nextInt();
+        inputLong = ThreadLocalRandom.current().nextLong();
     }
 
     @Benchmark
     public int testSizeOfUnsignedVarint() {
-        return ByteUtils.sizeOfUnsignedVarint(input);
+        return ByteUtils.sizeOfUnsignedVarint(inputInt);
     }
 
     @Benchmark
     public int testSizeOfUnsignedVarintSimple() {
-        int value = input;
+        int value = inputInt;
         int bytes = 1;
         while ((value & 0xffffff80) != 0L) {
             bytes += 1;
@@ -66,12 +67,14 @@ public class ByteUtilsBenchmark {
 
     @Benchmark
     public int testSizeOfVarlong() {
-        return ByteUtils.sizeOfVarlong(input);
+        return ByteUtils.sizeOfVarlong(inputLong);
     }
 
     @Benchmark
     public int testSizeOfVarlongSimple() {
-        long v = (input << 1) ^ (input >> 63);
+        // spotbugs does not like the >> 63 rightshift if input is an int
+        // quite reasonable
+        long v = (inputLong << 1) ^ (inputLong >> 63);
         int bytes = 1;
         while ((v & 0xffffffffffffff80L) != 0L) {
             bytes += 1;
