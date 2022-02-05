@@ -19,12 +19,12 @@ package kafka.server.metadata
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{UnifiedLog, LogManager}
-import kafka.server.ConfigType
-import kafka.server.{ConfigEntityName, ConfigHandler, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.server.ConfigAdminManager.toLoggableProps
+import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 
@@ -142,55 +142,23 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
         // Notify the replica manager about changes to topics.
         replicaManager.applyDelta(topicsDelta, newImage)
 
-        // Handle the case where the old consumer offsets topic was deleted.
-        if (topicsDelta.topicWasDeleted(Topic.GROUP_METADATA_TOPIC_NAME)) {
-          topicsDelta.image().getTopic(Topic.GROUP_METADATA_TOPIC_NAME).partitions().entrySet().forEach {
-            entry =>
-              if (entry.getValue().leader == brokerId) {
-                groupCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-              }
-          }
-        }
-        // Handle the case where we have new local leaders or followers for the consumer
-        // offsets topic.
-        getTopicDelta(Topic.GROUP_METADATA_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          val changes = topicDelta.localChanges(brokerId)
+        // Update the group coordinator of local changes
+        updateCoordinator(
+          newImage,
+          delta,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          groupCoordinator.onElection,
+          groupCoordinator.onResignation
+        )
 
-          changes.deletes.forEach { topicPartition =>
-            groupCoordinator.onResignation(topicPartition.partition, None)
-          }
-          changes.leaders.forEach { (topicPartition, partitionInfo) =>
-            groupCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
-          }
-          changes.followers.forEach { (topicPartition, partitionInfo) =>
-            groupCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
-          }
-        }
-
-        // Handle the case where the old transaction state topic was deleted.
-        if (topicsDelta.topicWasDeleted(Topic.TRANSACTION_STATE_TOPIC_NAME)) {
-          topicsDelta.image().getTopic(Topic.TRANSACTION_STATE_TOPIC_NAME).partitions().entrySet().forEach {
-            entry =>
-              if (entry.getValue().leader == brokerId) {
-                txnCoordinator.onResignation(entry.getKey(), Some(entry.getValue().leaderEpoch))
-              }
-          }
-        }
-        // If the transaction state topic changed in a way that's relevant to this broker,
-        // notify the transaction coordinator.
-        getTopicDelta(Topic.TRANSACTION_STATE_TOPIC_NAME, newImage, delta).foreach { topicDelta =>
-          val changes = topicDelta.localChanges(brokerId)
-
-          changes.deletes.forEach { topicPartition =>
-            txnCoordinator.onResignation(topicPartition.partition, None)
-          }
-          changes.leaders.forEach { (topicPartition, partitionInfo) =>
-            txnCoordinator.onElection(topicPartition.partition, partitionInfo.partition.leaderEpoch)
-          }
-          changes.followers.forEach { (topicPartition, partitionInfo) =>
-            txnCoordinator.onResignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
-          }
-        }
+        // Update the transaction coordinator of local changes
+        updateCoordinator(
+          newImage,
+          delta,
+          Topic.TRANSACTION_STATE_TOPIC_NAME,
+          txnCoordinator.onElection,
+          txnCoordinator.onResignation
+        )
 
         // Notify the group coordinator about deleted topics.
         val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
@@ -207,19 +175,31 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
 
       // Apply configuration deltas.
       Option(delta.configsDelta()).foreach { configsDelta =>
-        configsDelta.changes().keySet().forEach { configResource =>
-          val tag = configResource.`type`() match {
-            case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
-            case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
-            case _ => None
-          }
-          tag.foreach { t =>
-            val newProperties = newImage.configs().configProperties(configResource)
-            val maybeDefaultName = configResource.name() match {
-              case "" => ConfigEntityName.Default
-              case k => k
+        configsDelta.changes().keySet().forEach { resource =>
+          val props = newImage.configs().configProperties(resource)
+          resource.`type`() match {
+            case TOPIC =>
+              // Apply changes to a topic's dynamic configuration.
+              info(s"Updating topic ${resource.name()} with new configuration : " +
+                toLoggableProps(resource, props).mkString(","))
+              dynamicConfigHandlers(ConfigType.Topic).
+                processConfigChanges(resource.name(), props)
+              conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+            case BROKER => if (resource.name().isEmpty) {
+              // Apply changes to "cluster configs" (also known as default BROKER configs).
+              // These are stored in KRaft with an empty name field.
+              info(s"Updating cluster configuration : " +
+                toLoggableProps(resource, props).mkString(","))
+              dynamicConfigHandlers(ConfigType.Broker).
+                processConfigChanges(ConfigEntityName.Default, props)
+            } else if (resource.name().equals(brokerId.toString)) {
+              // Apply changes to this broker's dynamic configuration.
+              info(s"Updating broker ${brokerId} with new configuration : " +
+                toLoggableProps(resource, props).mkString(","))
+              dynamicConfigHandlers(ConfigType.Broker).
+                processConfigChanges(resource.name(), props)
             }
-            dynamicConfigHandlers(t).processConfigChanges(maybeDefaultName, newProperties)
+            case _ => // nothing to do
           }
         }
       }
@@ -240,10 +220,60 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
     }
   }
 
+  /**
+   * Update the coordinator of local replica changes: election and resignation.
+   *
+   * @param image latest metadata image
+   * @param delta metadata delta from the previous image and the latest image
+   * @param topicName name of the topic associated with the coordinator
+   * @param election function to call on election; the first parameter is the partition id;
+   *                 the second parameter is the leader epoch
+   * @param resignation function to call on resignation; the first parameter is the partition id;
+   *                    the second parameter is the leader epoch
+   */
+  private def updateCoordinator(
+    image: MetadataImage,
+    delta: MetadataDelta,
+    topicName: String,
+    election: (Int, Int) => Unit,
+    resignation: (Int, Option[Int]) => Unit
+  ): Unit = {
+    // Handle the case where the topic was deleted
+    Option(delta.topicsDelta()).foreach { topicsDelta =>
+      if (topicsDelta.topicWasDeleted(topicName)) {
+        topicsDelta.image.getTopic(topicName).partitions.entrySet.forEach { entry =>
+          if (entry.getValue.leader == brokerId) {
+            resignation(entry.getKey, Some(entry.getValue.leaderEpoch))
+          }
+        }
+      }
+    }
+
+    // Handle the case where the replica was reassigned, made a leader or made a follower
+    getTopicDelta(topicName, image, delta).foreach { topicDelta =>
+      val changes = topicDelta.localChanges(brokerId)
+
+      changes.deletes.forEach { topicPartition =>
+        resignation(topicPartition.partition, None)
+      }
+      changes.leaders.forEach { (topicPartition, partitionInfo) =>
+        election(topicPartition.partition, partitionInfo.partition.leaderEpoch)
+      }
+      changes.followers.forEach { (topicPartition, partitionInfo) =>
+        resignation(topicPartition.partition, Some(partitionInfo.partition.leaderEpoch))
+      }
+    }
+  }
+
   private def initializeManagers(): Unit = {
     // Start log manager, which will perform (potentially lengthy)
     // recovery-from-unclean-shutdown if required.
     logManager.startup(metadataCache.getAllTopics())
+
+    // Make the LogCleaner available for reconfiguration. We can't do this prior to this
+    // point because LogManager#startup creates the LogCleaner object, if
+    // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
+    Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
 
     // Start the replica manager.
     replicaManager.startup()

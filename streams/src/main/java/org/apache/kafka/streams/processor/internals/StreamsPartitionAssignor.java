@@ -178,6 +178,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private PartitionGrouper partitionGrouper;
     private AtomicInteger assignmentErrorCode;
     private AtomicLong nextScheduledRebalanceMs;
+    private Queue<StreamsException> nonFatalExceptionsToHandle;
     private Time time;
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
@@ -212,6 +213,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
         assignmentErrorCode = referenceContainer.assignmentErrorCode;
         nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
+        nonFatalExceptionsToHandle = referenceContainer.nonFatalExceptionsToHandle;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = new PartitionGrouper();
@@ -317,7 +319,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
         boolean shutdownRequested = false;
-        boolean assignementErrorFound = false;
+        boolean assignmentErrorFound = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
@@ -355,12 +357,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final int prevSize = allOwnedPartitions.size();
             allOwnedPartitions.addAll(subscription.ownedPartitions());
             if (allOwnedPartitions.size() < prevSize + subscription.ownedPartitions().size()) {
-                assignementErrorFound = true;
+                assignmentErrorFound = true;
             }
             clientMetadata.addPreviousTasksAndOffsetSums(consumerId, info.taskOffsetSums());
         }
 
-        if (assignementErrorFound) {
+        if (assignmentErrorFound) {
             log.warn("The previous assignment contains a partition more than once. " +
                 "\t Mapping: {}", subscriptions);
         }
@@ -380,7 +382,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // parse the topology to determine the repartition source topics,
             // making sure they are created with the number of partitions as
             // the maximum of the depending sub-topologies source topics' number of partitions
-            final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = prepareRepartitionTopics(metadata);
+            final RepartitionTopics repartitionTopics = prepareRepartitionTopics(metadata);
+            final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = repartitionTopics.topicPartitionsInfo();
+
             final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
             log.debug("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
 
@@ -388,7 +392,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // construct the assignment of tasks to clients
 
-            final Map<Subtopology, TopicsInfo> topicGroups = taskManager.topologyMetadata().topicGroups();
+            final Map<Subtopology, TopicsInfo> topicGroups =
+                taskManager.topologyMetadata().subtopologyTopicsInfoMapExcluding(repartitionTopics.topologiesWithMissingInputTopics());
 
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
@@ -488,12 +493,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * Computes and assembles all repartition topic metadata then creates the topics if necessary.
+     * Computes and assembles all repartition topic metadata then creates the topics if necessary. Also verifies
+     * that all user input topics of each topology have been created ahead of time. If any such source topics are
+     * missing from a NamedTopology, the assignor will skip distributing its tasks until they have been created
+     * and invoke the exception handler (without killing the thread) once for each topology to alert the user of
+     * the missing topics.
+     * <p>
+     * For regular applications without named topologies, the assignor will instead send a shutdown signal to
+     * all clients so the user can identify and resolve the problem.
      *
-     * @return map from repartition topic to its partition info
+     * @return application metadata such as partition info of repartition topics, missing external topics, etc
      */
-    private Map<TopicPartition, PartitionInfo> prepareRepartitionTopics(final Cluster metadata) {
-
+    private RepartitionTopics prepareRepartitionTopics(final Cluster metadata) {
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             taskManager.topologyMetadata(),
             internalTopicManager,
@@ -502,8 +513,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             logPrefix
         );
         repartitionTopics.setup();
-        return repartitionTopics.topicPartitionsInfo();
+        final boolean isMissingInputTopics = !repartitionTopics.missingSourceTopicExceptions().isEmpty();
+        if (isMissingInputTopics) {
+            if (!taskManager.topologyMetadata().hasNamedTopologies()) {
+                throw new MissingSourceTopicException("Missing source topics.");
+            } else {
+                nonFatalExceptionsToHandle.addAll(repartitionTopics.missingSourceTopicExceptions());
+            }
+        }
+        return repartitionTopics;
     }
+
 
     /**
      * Populates the taskForPartition and tasksForTopicGroup maps, and checks that partitions are assigned to exactly
@@ -680,7 +700,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             final UUID uuid = entry.getKey();
             final ClientState state = entry.getValue().state;
-            state.initializePrevTasks(taskForPartition);
+            state.initializePrevTasks(taskForPartition, taskManager.topologyMetadata().hasNamedTopologies());
 
             state.computeTaskLags(uuid, allTaskEndOffsetSums);
             clientStates.put(uuid, state);

@@ -49,6 +49,7 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -462,7 +463,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(false));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
+            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
             equalTo(true));
     }
 
@@ -490,7 +491,7 @@ public class StreamsBuilderTest {
             equalTo(true)
         );
         assertThat(
-            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog"))
         );
     }
@@ -513,7 +514,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(true));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 
@@ -996,6 +997,40 @@ public class StreamsBuilderTest {
             STREAM_OPERATION_NAME + "-sink",
             STREAM_OPERATION_NAME + "-source",
             STREAM_OPERATION_NAME);
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForGlobalStoreProcessor() {
+        builder.addGlobalStore(Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("store"),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "topic",
+                Consumed.with(Serdes.String(), Serdes.String()).withName("test"),
+                new MockApiProcessorSupplier<>()
+        );
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildGlobalStateTopology();
+        assertNamesForOperation(topology, "test-source", "test");
+    }
+
+    @Test
+    public void shouldUseDefaultNameForGlobalStoreProcessor() {
+        builder.addGlobalStore(Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("store"),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "topic",
+                Consumed.with(Serdes.String(), Serdes.String()),
+                new MockApiProcessorSupplier<>()
+        );
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildGlobalStateTopology();
+        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "KTABLE-SOURCE-0000000001");
     }
 
     @Test

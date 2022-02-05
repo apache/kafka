@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.fetchsession;
 
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -78,28 +79,27 @@ public class FetchSessionBenchmark {
         Uuid id = Uuid.randomUuid();
         topicIds.put("foo", id);
 
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("foo", i);
-            FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
-                    Optional.empty());
+            FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(id, 0, 0, 200, Optional.empty());
             fetches.put(tp, partitionData);
-            builder.add(tp, topicIds.get(tp.topic()), partitionData);
-            respMap.put(tp, new FetchResponseData.PartitionData()
+            builder.add(tp, partitionData);
+            respMap.put(new TopicIdPartition(id, tp), new FetchResponseData.PartitionData()
                             .setPartitionIndex(tp.partition())
                             .setLastStableOffset(0)
                             .setLogStartOffset(0));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap, topicIds), ApiKeys.FETCH.latestVersion());
+        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
-                fetches.put(topicPartition, new FetchRequest.PartitionData(50, 40, 200,
+                fetches.put(topicPartition, new FetchRequest.PartitionData(id, 50, 40, 200,
                         Optional.empty()));
             }
             counter++;
@@ -117,7 +117,7 @@ public class FetchSessionBenchmark {
 
         for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
-            builder.add(topicPartition, topicIds.get(topicPartition.topic()), entry.getValue());
+            builder.add(topicPartition, entry.getValue());
         }
 
         builder.build();

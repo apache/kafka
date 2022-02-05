@@ -482,7 +482,7 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
 
             this.baseOffset = baseOffset;
             this.records = Optional.of(records);
@@ -499,7 +499,7 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Exptected memory records to contain one batch");
+            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
 
             this.baseOffset = baseOffset;
             this.records = Optional.empty();

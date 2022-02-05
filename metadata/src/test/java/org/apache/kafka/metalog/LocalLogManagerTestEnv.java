@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metalog;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
@@ -36,6 +37,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
         LoggerFactory.getLogger(LocalLogManagerTestEnv.class);
+
+    private final String clusterId;
 
     /**
      * The first error we encountered during this test, or the empty string if we have
@@ -75,6 +78,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     }
 
     public LocalLogManagerTestEnv(int numManagers, Optional<RawSnapshotReader> snapshot) throws Exception {
+        clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
         shared = new SharedLogData(snapshot);
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
@@ -96,6 +100,10 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             throw t;
         }
         this.logManagers = newLogManagers;
+    }
+
+    public String clusterId() {
+        return clusterId;
     }
 
     AtomicReference<String> firstError() {

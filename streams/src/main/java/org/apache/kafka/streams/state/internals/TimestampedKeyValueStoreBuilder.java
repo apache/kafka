@@ -24,6 +24,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -75,7 +80,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore(inner);
+        return new CachingKeyValueStore(inner, true);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
@@ -182,6 +187,25 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         @Override
         public boolean isOpen() {
             return wrapped.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config) {
+
+            final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+            final QueryResult<R> result = wrapped.query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
+                final long end = System.nanoTime();
+                result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
+            }
+            return result;
+        }
+
+        @Override
+        public Position getPosition() {
+            return wrapped.getPosition();
         }
 
         @Override

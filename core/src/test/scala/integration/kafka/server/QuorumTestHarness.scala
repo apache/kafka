@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -44,8 +44,9 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 import scala.collection.{Seq, immutable}
 
 trait QuorumImplementation {
-  def createAndStartBroker(config: KafkaConfig,
-                           time: Time): KafkaBroker
+  def createBroker(config: KafkaConfig,
+                   time: Time,
+                   startup: Boolean): KafkaBroker
 
   def shutdown(): Unit
 }
@@ -54,10 +55,11 @@ class ZooKeeperQuorumImplementation(val zookeeper: EmbeddedZookeeper,
                                     val zkClient: KafkaZkClient,
                                     val adminZkClient: AdminZkClient,
                                     val log: Logging) extends QuorumImplementation {
-  override def createAndStartBroker(config: KafkaConfig,
-                                    time: Time): KafkaBroker = {
+  override def createBroker(config: KafkaConfig,
+                            time: Time,
+                            startup: Boolean): KafkaBroker = {
     val server = new KafkaServer(config, time, None, false)
-    server.startup()
+    if (startup) server.startup()
     server
   }
 
@@ -73,8 +75,9 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
                                 val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                                 val clusterId: String,
                                 val log: Logging) extends QuorumImplementation {
-  override def createAndStartBroker(config: KafkaConfig,
-                                    time: Time): KafkaBroker = {
+  override def createBroker(config: KafkaConfig,
+                            time: Time,
+                            startup: Boolean): KafkaBroker = {
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
@@ -84,7 +87,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
       initialOfflineDirs = Seq(),
       controllerQuorumVotersFuture = controllerQuorumVotersFuture,
       supportedFeatures = Collections.emptyMap())
-    broker.startup()
+    if (startup) broker.startup()
     broker
   }
 
@@ -106,7 +109,7 @@ abstract class QuorumTestHarness extends Logging {
    * When in KRaft mode, the security protocol to use for the controller listener.
    * Can be overridden by subclasses.
    */
-  protected def controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected val controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
   protected def kraftControllerConfigs(): Seq[Properties] = {
     Seq(new Properties())
@@ -163,6 +166,26 @@ abstract class QuorumTestHarness extends Logging {
   // That way you control the initialization order.
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {
+    Exit.setExitProcedure((code, message) => {
+      try {
+        throw new RuntimeException(s"exit(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
+    })
+    Exit.setHaltProcedure((code, message) => {
+      try {
+        throw new RuntimeException(s"halt(${code}, ${message}) called!")
+      } catch {
+        case e: Throwable => error("test error", e)
+          throw e
+      } finally {
+        tearDown()
+      }
+    })
     val name = if (testInfo.getTestMethod().isPresent()) {
       testInfo.getTestMethod().get().toString()
     } else {
@@ -177,13 +200,19 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  def createAndStartBroker(config: KafkaConfig,
-                           time: Time = Time.SYSTEM): KafkaBroker = {
-    implementation.createAndStartBroker(config,
-      time)
+  def createBroker(config: KafkaConfig,
+                   time: Time = Time.SYSTEM,
+                   startup: Boolean = true): KafkaBroker = {
+    implementation.createBroker(config, time, startup)
   }
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()
+
+  def shutdownKRaftController(): Unit = {
+    // Note that the RaftManager instance is left running; it will be shut down in tearDown()
+    val kRaftQuorumImplementation = asKRaft()
+    CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
+  }
 
   private def formatDirectories(directories: immutable.Seq[String],
                                 metaProperties: MetaProperties): Unit = {
@@ -254,7 +283,6 @@ abstract class QuorumTestHarness extends Logging {
       })
       controllerServer.startup()
       raftManager.startup()
-      controllerServer.startup()
     } catch {
       case e: Throwable =>
         CoreUtils.swallow(raftManager.shutdown(), this)
@@ -297,9 +325,12 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
+    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
 

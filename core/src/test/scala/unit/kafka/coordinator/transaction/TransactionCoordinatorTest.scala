@@ -51,7 +51,6 @@ class TransactionCoordinatorTest {
   private val scheduler = new MockScheduler(time)
 
   val coordinator = new TransactionCoordinator(
-    brokerId,
     TransactionConfig(),
     scheduler,
     () => pidGenerator,

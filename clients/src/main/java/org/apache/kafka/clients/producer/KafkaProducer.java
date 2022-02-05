@@ -100,8 +100,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code
  * Properties props = new Properties();
  * props.put("bootstrap.servers", "localhost:9092");
- * props.put("acks", "all");
- * props.put("retries", 0);
  * props.put("linger.ms", 1);
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
@@ -117,15 +115,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * as well as a background I/O thread that is responsible for turning these records into requests and transmitting them
  * to the cluster. Failure to close the producer after use will leak these resources.
  * <p>
- * The {@link #send(ProducerRecord) send()} method is asynchronous. When called it adds the record to a buffer of pending record sends
+ * The {@link #send(ProducerRecord) send()} method is asynchronous. When called, it adds the record to a buffer of pending record sends
  * and immediately returns. This allows the producer to batch together individual records for efficiency.
  * <p>
- * The <code>acks</code> config controls the criteria under which requests are considered complete. The "all" setting
- * we have specified will result in blocking on the full commit of the record, the slowest but most durable setting.
+ * The <code>acks</code> config controls the criteria under which requests are considered complete. The default setting "all"
+ * will result in blocking on the full commit of the record, the slowest but most durable setting.
  * <p>
- * If the request fails, the producer can automatically retry, though since we have specified <code>retries</code>
- * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on
- * <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
+ * If the request fails, the producer can automatically retry. The <code>retries</code> setting defaults to <code>Integer.MAX_VALUE</code>, and
+ * it's recommended to use <code>delivery.timeout.ms</code> to control retry behavior, instead of <code>retries</code>.
  * <p>
  * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
@@ -137,7 +134,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * arrive to fill up the same batch. This is analogous to Nagle's algorithm in TCP. For example, in the code snippet above,
  * likely all 100 records would be sent in a single request since we set our linger time to 1 millisecond. However this setting
  * would add 1 millisecond of latency to our request waiting for more records to arrive if we didn't fill up the buffer. Note that
- * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code> so under heavy load
+ * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code>. So, under heavy load,
  * batching will occur regardless of the linger configuration; however setting this to something larger than 0 can lead to fewer, more
  * efficient requests when not under maximal load at the cost of a small amount of latency.
  * <p>
@@ -156,7 +153,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * to multiple partitions (and topics!) atomically.
  * </p>
  * <p>
- * To enable idempotence, the <code>enable.idempotence</code> configuration must be set to true. If set, the
+ * From Kafka 3.0, the <code>enable.idempotence</code> configuration defaults to true. When enabling idempotence,
  * <code>retries</code> config will default to <code>Integer.MAX_VALUE</code> and the <code>acks</code> config will
  * default to <code>all</code>. There are no API changes for the idempotent producer, so existing applications will
  * not need to be modified to take advantage of this feature.
@@ -964,9 +961,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
-            if (transactionManager != null && transactionManager.isTransactional()) {
-                transactionManager.failIfNotReadyForSend();
+            if (transactionManager != null) {
+                transactionManager.maybeAddPartition(tp);
             }
+
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
 
@@ -985,9 +983,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
             }
 
-            if (transactionManager != null && transactionManager.isTransactional())
-                transactionManager.maybeAddPartitionToTransaction(tp);
-
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -998,10 +993,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
-            if (callback != null)
-                callback.onCompletion(null, e);
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            if (tp == null) {
+                // set topicPartition to -1 when null
+                tp = ProducerInterceptors.extractTopicPartition(record);
+            }
+
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+            // The onCompletion callback does expect a non-null metadata, but one will be created inside
+            // the interceptor's onCompletion implementation before the user's callback is invoked.
+            interceptCallback.onCompletion(null, e);
             this.errors.record();
             this.interceptors.onSendError(record, tp, e);
+            if (transactionManager != null) {
+                transactionManager.maybeTransitionToErrorState(e);
+            }
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();

@@ -74,7 +74,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def shouldFollowLeaderEpochBasicWorkflow(): Unit = {
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBroker(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
@@ -183,7 +183,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def offsetsShouldNotGoBackwards(): Unit = {
 
     //Given two brokers
-    brokers = (100 to 101).map(createBroker(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
@@ -258,7 +258,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBroker(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
@@ -298,7 +298,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def logsShouldNotDivergeOnUncleanLeaderElections(): Unit = {
 
     // Given two brokers, unclean leader election is enabled
-    brokers = (100 to 101).map(createBroker(_, enableUncleanLeaderElection = true))
+    brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
@@ -419,7 +419,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   private def getLogFile(broker: KafkaServer, partition: Int): File = {
     val log: UnifiedLog = getLog(broker, partition)
-    log.flush()
+    log.flush(false)
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
@@ -463,7 +463,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     brokers.filter(_.config.brokerId != leader).head
   }
 
-  private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
+  private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
     TestUtils.setIbpAndMessageFormatVersions(config, apiVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)

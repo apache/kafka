@@ -17,23 +17,28 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.processor.internals.StreamThread.State;
+import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig.TaskConfig;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,7 +59,7 @@ public class TopologyMetadata {
 
     // the "__" (double underscore) string is not allowed for topology names, so it's safe to use to indicate
     // that it's not a named topology
-    private static final String UNNAMED_TOPOLOGY = "__UNNAMED_TOPOLOGY__";
+    public static final String UNNAMED_TOPOLOGY = "__UNNAMED_TOPOLOGY__";
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
     private final StreamsConfig config;
@@ -65,11 +70,23 @@ public class TopologyMetadata {
     private ProcessorTopology globalTopology;
     private final Map<String, StateStore> globalStateStores = new HashMap<>();
     private final Set<String> allInputTopics = new HashSet<>();
+    private final Map<String, Long> threadVersions = new ConcurrentHashMap<>();
 
     public static class TopologyVersion {
         public AtomicLong topologyVersion = new AtomicLong(0L); // the local topology version
         public ReentrantLock topologyLock = new ReentrantLock();
         public Condition topologyCV = topologyLock.newCondition();
+        public List<TopologyVersionWaiters> activeTopologyWaiters = new LinkedList<>();
+    }
+
+    public static class TopologyVersionWaiters {
+        final long topologyVersion; // the (minimum) version to wait for these threads to cross
+        final KafkaFutureImpl<Void> future; // the future waiting on all threads to be updated
+
+        public TopologyVersionWaiters(final long topologyVersion, final KafkaFutureImpl<Void> future) {
+            this.topologyVersion = topologyVersion;
+            this.future = future;
+        }
     }
 
     public TopologyMetadata(final InternalTopologyBuilder builder,
@@ -107,6 +124,45 @@ public class TopologyMetadata {
         version.topologyLock.unlock();
     }
 
+    public Collection<String> sourceTopicsForTopology(final String name) {
+        return builders.get(name).fullSourceTopicNames();
+    }
+
+    public boolean needsUpdate(final String threadName) {
+        return threadVersions.get(threadName) < topologyVersion();
+    }
+
+    public void registerThread(final String threadName) {
+        threadVersions.put(threadName, 0L);
+    }
+
+    public void unregisterThread(final String threadName) {
+        threadVersions.remove(threadName);
+        maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(threadName);
+    }
+
+    public void maybeNotifyTopologyVersionWaitersAndUpdateThreadsTopologyVersion(final String threadName) {
+        try {
+            lock();
+            final Iterator<TopologyVersionWaiters> iterator = version.activeTopologyWaiters.listIterator();
+            TopologyVersionWaiters topologyVersionWaiters;
+            threadVersions.put(threadName, topologyVersion());
+            while (iterator.hasNext()) {
+                topologyVersionWaiters = iterator.next();
+                final long topologyVersionWaitersVersion = topologyVersionWaiters.topologyVersion;
+                if (topologyVersionWaitersVersion <= threadVersions.get(threadName)) {
+                    if (threadVersions.values().stream().allMatch(t -> t >= topologyVersionWaitersVersion)) {
+                        topologyVersionWaiters.future.complete(null);
+                        iterator.remove();
+                        log.info("All threads are now on topology version {}", topologyVersionWaiters.topologyVersion);
+                    }
+                }
+            }
+        } finally {
+            unlock();
+        }
+    }
+
     public void wakeupThreads() {
         try {
             lock();
@@ -116,7 +172,7 @@ public class TopologyMetadata {
         }
     }
 
-    public void maybeWaitForNonEmptyTopology(final Supplier<State> threadState) {
+    public void maybeWaitForNonEmptyTopology(final Supplier<StreamThread.State> threadState) {
         if (isEmpty() && threadState.get().isAlive()) {
             try {
                 lock();
@@ -134,31 +190,48 @@ public class TopologyMetadata {
         }
     }
 
-    public void registerAndBuildNewTopology(final InternalTopologyBuilder newTopologyBuilder) {
+    /**
+     * Adds the topology and registers a future that listens for all threads on the older version to see the update
+     */
+    public KafkaFuture<Void> registerAndBuildNewTopology(final InternalTopologyBuilder newTopologyBuilder) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         try {
             lock();
             version.topologyVersion.incrementAndGet();
-            log.info("Adding NamedTopology {}, latest topology version is {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             builders.put(newTopologyBuilder.topologyName(), newTopologyBuilder);
             buildAndVerifyTopology(newTopologyBuilder);
-            version.topologyCV.signalAll();
+            wakeupThreads();
         } finally {
             unlock();
         }
+        log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
+        return future;
     }
 
-    public void unregisterTopology(final String topologyName) {
+    /**
+     * Removes the topology and registers a future that listens for all threads on the older version to see the update
+     */
+    public KafkaFuture<Void> unregisterTopology(final String topologyName) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         try {
             lock();
+            log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            log.info("Removing NamedTopology {}, latest topology version is {}", topologyName, version.topologyVersion.get());
+            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
-            version.topologyCV.signalAll();
         } finally {
             unlock();
         }
+        log.info("Finished removing NamedTopology {}, topology version was updated to {}", topologyName, version.topologyVersion.get());
+        return future;
+    }
+
+    public TaskConfig getTaskConfigFor(final TaskId taskId) {
+        final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
+        return builder.topologyConfigs().getTaskConfig();
     }
 
     public void buildAndRewriteTopology() {
@@ -279,9 +352,14 @@ public class TopologyMetadata {
         return null;
     }
 
-    Collection<String> sourceTopicCollection() {
+    public Collection<String> fullSourceTopicNamesForTopology(final String topologyName) {
+        Objects.requireNonNull(topologyName, "topology name must not be null");
+        return lookupBuilderForNamedTopology(topologyName).fullSourceTopicNames();
+    }
+
+    public Collection<String> allFullSourceTopicNames() {
         final List<String> sourceTopics = new ArrayList<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicCollection()));
+        applyToEachBuilder(b -> sourceTopics.addAll(b.fullSourceTopicNames()));
         return sourceTopics;
     }
 
@@ -342,9 +420,13 @@ public class TopologyMetadata {
         return globalStateStores;
     }
 
+    public Map<String, List<String>> stateStoreNameToSourceTopicsForTopology(final String topologyName) {
+        return lookupBuilderForNamedTopology(topologyName).stateStoreNameToFullSourceTopicNames();
+    }
+
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         final Map<String, List<String>> stateStoreNameToSourceTopics = new HashMap<>();
-        applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToSourceTopics()));
+        applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToFullSourceTopicNames()));
         return stateStoreNameToSourceTopics;
     }
 
@@ -359,16 +441,42 @@ public class TopologyMetadata {
         return "";
     }
 
-    public Collection<String> sourceTopicsForStore(final String storeName) {
-        final List<String> sourceTopics = new ArrayList<>();
-        applyToEachBuilder(b -> sourceTopics.addAll(b.sourceTopicsForStore(storeName)));
-        return sourceTopics;
+    /**
+     * @param storeName       the name of the state store
+     * @param topologyName    the name of the topology to search for stores within
+     * @return topics subscribed from source processors that are connected to these state stores
+     */
+    public Collection<String> sourceTopicsForStore(final String storeName, final String topologyName) {
+        return lookupBuilderForNamedTopology(topologyName).sourceTopicsForStore(storeName);
     }
 
-    public Map<Subtopology, TopicsInfo> topicGroups() {
-        final Map<Subtopology, TopicsInfo> topicGroups = new HashMap<>();
-        applyToEachBuilder(b -> topicGroups.putAll(b.topicGroups()));
-        return topicGroups;
+    public static String getTopologyNameOrElseUnnamed(final String topologyName) {
+        return topologyName == null ? UNNAMED_TOPOLOGY : topologyName;
+    }
+
+    /**
+     * @param topologiesToExclude the names of any topologies to exclude from the returned topic groups,
+     *                            eg because they have missing source topics and can't be processed yet
+     *
+     * @return                    flattened map of all subtopologies (from all topologies) to topics info
+     */
+    public Map<Subtopology, TopicsInfo> subtopologyTopicsInfoMapExcluding(final Set<String> topologiesToExclude) {
+        final Map<Subtopology, TopicsInfo> subtopologyTopicsInfo = new HashMap<>();
+        applyToEachBuilder(b -> {
+            if (!topologiesToExclude.contains(b.topologyName())) {
+                subtopologyTopicsInfo.putAll(b.subtopologyToTopicsInfo());
+            }
+        });
+        return subtopologyTopicsInfo;
+    }
+
+    /**
+     * @return    map from topology to its subtopologies and their topics info
+     */
+    public Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap() {
+        final Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap = new HashMap<>();
+        applyToEachBuilder(b -> topologyToSubtopologyTopicsInfoMap.put(b.topologyName(), b.subtopologyToTopicsInfo()));
+        return  topologyToSubtopologyTopicsInfoMap;
     }
 
     public Map<String, List<String>> nodeToSourceTopics(final TaskId task) {
@@ -394,10 +502,16 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the InternalTopologyBuilder for a NamedTopology, or null if no such NamedTopology exists
+     * @return the InternalTopologyBuilder for the NamedTopology with the given {@code topologyName}
+     *         or the builder for a regular Topology if {@code topologyName} is {@code null},
+     *         else returns {@code null} if {@code topologyName} is non-null but no such NamedTopology exists
      */
-    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String name) {
-        return builders.get(name);
+    public InternalTopologyBuilder lookupBuilderForNamedTopology(final String topologyName) {
+        if (topologyName == null) {
+            return builders.get(UNNAMED_TOPOLOGY);
+        } else {
+            return builders.get(topologyName);
+        }
     }
 
     private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {

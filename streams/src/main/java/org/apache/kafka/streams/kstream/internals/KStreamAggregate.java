@@ -119,7 +119,9 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
             newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
             store.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp));
-            tupleForwarder.maybeForward(record.key(), newAgg, sendOldValues ? oldAgg : null, newTimestamp);
+            tupleForwarder.maybeForward(
+                record.withValue(new Change<>(newAgg, sendOldValues ? oldAgg : null))
+                    .withTimestamp(newTimestamp));
         }
     }
 
@@ -142,7 +144,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
         private TimestampedKeyValueStore<KIn, VAgg> store;
 
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<?, ?> context) {
             store = context.getStateStore(storeName);
         }
 

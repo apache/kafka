@@ -111,8 +111,8 @@ public class StreamsResetter {
 
     private final static String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
-            + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
-            + "intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
+            + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
+            + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
@@ -218,12 +218,14 @@ public class StreamsResetter {
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
-        inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool will reset the offset to the earliest available offset.")
+        inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
+                + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
+        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, "
+                + "e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')

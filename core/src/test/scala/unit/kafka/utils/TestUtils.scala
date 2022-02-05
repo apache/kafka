@@ -24,11 +24,12 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
+import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -48,7 +49,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -169,12 +170,12 @@ object TestUtils extends Logging {
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
-    createServer(config, time, threadNamePrefix, enableForwarding = false)
+    createServer(config, time, threadNamePrefix, enableForwarding = false, startup = true)
   }
 
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], enableForwarding: Boolean): KafkaServer = {
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], enableForwarding: Boolean, startup: Boolean): KafkaServer = {
     val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding)
-    server.startup()
+    if (startup) server.startup()
     server
   }
 
@@ -223,7 +224,7 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
     brokers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.securityProtocol == protocol).getOrElse(
+      val listener = s.config.effectiveAdvertisedListeners.find(_.securityProtocol == protocol).getOrElse(
         sys.error(s"Could not find listener with security protocol $protocol"))
       formatAddress(listener.host, boundPort(s, protocol))
     }.mkString(",")
@@ -231,7 +232,7 @@ object TestUtils extends Logging {
 
   def bootstrapServers[B <: KafkaBroker](brokers: Seq[B], listenerName: ListenerName): String = {
     brokers.map { s =>
-      val listener = s.config.advertisedListeners.find(_.listenerName == listenerName).getOrElse(
+      val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
@@ -240,12 +241,12 @@ object TestUtils extends Logging {
   /**
     * Shutdown `servers` and delete their log directories.
     */
-  def shutdownServers[B <: KafkaBroker](brokers: Seq[B]): Unit = {
+  def shutdownServers[B <: KafkaBroker](brokers: Seq[B], deleteLogDirs: Boolean = true): Unit = {
     import ExecutionContext.Implicits._
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        CoreUtils.delete(s.config.logDirs)
+        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
@@ -297,7 +298,7 @@ object TestUtils extends Logging {
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
       props.put(KafkaConfig.AdvertisedListenersProp, listeners)
-      props.put(KafkaConfig.ListenersProp, listeners + ",CONTROLLER://localhost:0")
+      props.put(KafkaConfig.ListenersProp, listeners)
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
@@ -381,22 +382,41 @@ object TestUtils extends Logging {
 
   def createTopicWithAdmin[B <: KafkaBroker](
       topic: String,
+      brokers: Seq[B],
       numPartitions: Int = 1,
       replicationFactor: Int = 1,
-      brokers: Seq[B],
+      replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
       topicConfig: Properties = new Properties,
       adminConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
+    val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
+      numPartitions
+    } else {
+      replicaAssignment.size
+    }
     val adminClient = createAdminClient(brokers, adminConfig)
     try {
-      val configsMap = new java.util.HashMap[String, String]()
+      val configsMap = new util.HashMap[String, String]()
       topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
       try {
-        adminClient.createTopics(Collections.singletonList(new NewTopic(
-          topic, numPartitions, replicationFactor.toShort).configs(configsMap))).all().get()
+        val result = if (replicaAssignment.isEmpty) {
+          adminClient.createTopics(Collections.singletonList(new NewTopic(
+            topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        } else {
+          val assignment = new util.HashMap[Integer, util.List[Integer]]()
+          replicaAssignment.forKeyValue { case (k, v) =>
+            val replicas = new util.ArrayList[Integer]
+            v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
+            assignment.put(k.asInstanceOf[Integer], replicas)
+          }
+          adminClient.createTopics(Collections.singletonList(new NewTopic(
+            topic, assignment).configs(configsMap)))
+        }
+        result.all().get()
       } catch {
         case e: ExecutionException => if (!(e.getCause != null &&
             e.getCause.isInstanceOf[TopicExistsException] &&
-            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic, numPartitions, replicationFactor))) {
+            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic,
+              effectiveNumPartitions, replicationFactor))) {
           throw e
         }
       }
@@ -404,9 +424,9 @@ object TestUtils extends Logging {
       adminClient.close()
     }
     // wait until we've propagated all partitions metadata to all brokers
-    val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, numPartitions)
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
 
-    (0 until numPartitions).map { i =>
+    (0 until effectiveNumPartitions).map { i =>
       i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
         throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
@@ -1063,7 +1083,8 @@ object TestUtils extends Logging {
    */
   def waitForAllPartitionsMetadata[B <: KafkaBroker](
       brokers: Seq[B],
-      topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
+      topic: String,
+      expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
@@ -1226,6 +1247,7 @@ object TestUtils extends Logging {
                    flushRecoveryOffsetCheckpointMs = 10000L,
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
+                   maxTransactionTimeoutMs = 5 * 60 * 1000,
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
@@ -1949,6 +1971,16 @@ object TestUtils extends Logging {
       s" does not contain expected error message : $message"))
   }
 
+  def assertBadConfigContainingMessage(props: Properties, expectedExceptionContainsText: String): Unit = {
+    try {
+      KafkaConfig.fromProps(props)
+      fail("Expected illegal configuration but instead it was legal")
+    } catch {
+      case caught @ (_: ConfigException | _: IllegalArgumentException) =>
+        assertTrue(caught.getMessage.contains(expectedExceptionContainsText))
+    }
+  }
+
   def totalMetricValue(broker: KafkaBroker, metricName: String): Long = {
     totalMetricValue(broker.metrics, metricName)
   }
@@ -1958,6 +1990,15 @@ object TestUtils extends Logging {
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
+  }
+
+  def yammerGaugeValue[T](metricName: String): Option[T] = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values
+      .headOption
+      .map(_.asInstanceOf[Gauge[T]])
+      .map(_.value)
   }
 
   def meterCount(metricName: String): Long = {

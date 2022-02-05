@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -49,11 +50,12 @@ public class ProducerIdControlManagerTest {
     @BeforeEach
     public void setUp() {
         final LogContext logContext = new LogContext();
+        String clusterId = Uuid.randomUuid().toString();
         final MockTime time = new MockTime();
         final Random random = new Random();
         snapshotRegistry = new SnapshotRegistry(logContext);
         clusterControl = new ClusterControlManager(
-            logContext, time, snapshotRegistry, 1000,
+            logContext, clusterId, time, snapshotRegistry, 1000,
             new StripedReplicaPlacer(random), new MockControllerMetrics());
 
         clusterControl.activate();
