@@ -454,8 +454,15 @@ public final class RecordAccumulator {
             final boolean backingOff;
             final boolean full;
 
-            // Collect as little as possible inside critical region, determine outcome after release
+            // This loop is especially hot with large partition counts.
+
+            // We are careful to only perform the minimum required inside the
+            // synchronized block, as this lock is also used to synchronize producer threads
+	    // attempting to append() to a partition/batch.
+
             synchronized (deque) {
+                // Deques are often empty in this path, esp with large partition counts,
+                // so we exit early if we can.
                 batch = deque.peekFirst();
                 if (batch == null) {
                     continue;
