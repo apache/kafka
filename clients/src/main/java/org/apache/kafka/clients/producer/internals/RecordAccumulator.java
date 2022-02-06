@@ -458,7 +458,7 @@ public final class RecordAccumulator {
 
             // We are careful to only perform the minimum required inside the
             // synchronized block, as this lock is also used to synchronize producer threads
-	    // attempting to append() to a partition/batch.
+            // attempting to append() to a partition/batch.
 
             synchronized (deque) {
                 // Deques are often empty in this path, esp with large partition counts,
