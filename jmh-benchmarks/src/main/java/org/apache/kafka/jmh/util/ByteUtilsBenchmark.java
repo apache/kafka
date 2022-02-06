@@ -72,8 +72,6 @@ public class ByteUtilsBenchmark {
 
     @Benchmark
     public int testSizeOfVarlongSimple() {
-        // spotbugs does not like the >> 63 rightshift if input is an int
-        // quite reasonable
         long v = (inputLong << 1) ^ (inputLong >> 63);
         int bytes = 1;
         while ((v & 0xffffffffffffff80L) != 0L) {
