@@ -214,7 +214,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                   case None =>
                 }
               } else {
-                info(s"OnlineReplica is in deleting state $partition. Not adding it to the LeaderAndIsrRequest")
+                info(s"Replica $replicaId for partition $partition is in deleting state. Not adding it to the LeaderAndIsrRequest.")
               }
           }
           if (traceEnabled)
