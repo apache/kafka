@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
@@ -31,11 +32,15 @@ import java.util.function.Consumer;
  */
 public final class MetadataImage {
     public final static MetadataImage EMPTY = new MetadataImage(
+        new OffsetAndEpoch(0, 0),
         FeaturesImage.EMPTY,
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
         ConfigurationsImage.EMPTY,
-        ClientQuotasImage.EMPTY);
+        ClientQuotasImage.EMPTY,
+        ProducerIdsImage.EMPTY);
+
+    private final OffsetAndEpoch highestOffsetAndEpoch;
 
     private final FeaturesImage features;
 
@@ -47,16 +52,24 @@ public final class MetadataImage {
 
     private final ClientQuotasImage clientQuotas;
 
-    public MetadataImage(FeaturesImage features,
-                         ClusterImage cluster,
-                         TopicsImage topics,
-                         ConfigurationsImage configs,
-                         ClientQuotasImage clientQuotas) {
+    private final ProducerIdsImage producerIds;
+
+    public MetadataImage(
+        OffsetAndEpoch highestOffsetAndEpoch,
+        FeaturesImage features,
+        ClusterImage cluster,
+        TopicsImage topics,
+        ConfigurationsImage configs,
+        ClientQuotasImage clientQuotas,
+        ProducerIdsImage producerIds
+    ) {
+        this.highestOffsetAndEpoch = highestOffsetAndEpoch;
         this.features = features;
         this.cluster = cluster;
         this.topics = topics;
         this.configs = configs;
         this.clientQuotas = clientQuotas;
+        this.producerIds = producerIds;
     }
 
     public boolean isEmpty() {
@@ -64,7 +77,12 @@ public final class MetadataImage {
             cluster.isEmpty() &&
             topics.isEmpty() &&
             configs.isEmpty() &&
-            clientQuotas.isEmpty();
+            clientQuotas.isEmpty() &&
+            producerIds.isEmpty();
+    }
+
+    public OffsetAndEpoch highestOffsetAndEpoch() {
+        return highestOffsetAndEpoch;
     }
 
     public FeaturesImage features() {
@@ -87,37 +105,52 @@ public final class MetadataImage {
         return clientQuotas;
     }
 
+    public ProducerIdsImage producerIds() {
+        return producerIds;
+    }
+
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
         features.write(out);
         cluster.write(out);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);
+        producerIds.write(out);
     }
 
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof MetadataImage)) return false;
         MetadataImage other = (MetadataImage) o;
-        return features.equals(other.features) &&
+        return highestOffsetAndEpoch.equals(other.highestOffsetAndEpoch) &&
+            features.equals(other.features) &&
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
             configs.equals(other.configs) &&
-            clientQuotas.equals(other.clientQuotas);
+            clientQuotas.equals(other.clientQuotas) &&
+            producerIds.equals(other.producerIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(features, cluster, topics, configs, clientQuotas);
+        return Objects.hash(highestOffsetAndEpoch,
+            features,
+            cluster,
+            topics,
+            configs,
+            clientQuotas,
+            producerIds);
     }
 
     @Override
     public String toString() {
-        return "MetadataImage(features=" + features +
+        return "MetadataImage(highestOffsetAndEpoch=" + highestOffsetAndEpoch +
+            ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +
             ", configs=" + configs +
             ", clientQuotas=" + clientQuotas +
+            ", producerIdsImage=" + producerIds +
             ")";
     }
 }

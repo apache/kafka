@@ -300,6 +300,9 @@ public class SslTransportLayer implements TransportLayer {
             // in the socket channel to read and unwrap, process the data so that any SSL handshake exceptions are reported.
             try {
                 do {
+                    log.trace("Process any available bytes from peer, netReadBuffer {} netWriterBuffer {} handshakeStatus {} readable? {}",
+                        netReadBuffer, netWriteBuffer, handshakeStatus, readable);
+                    handshakeWrapAfterFailure(false);
                     handshakeUnwrap(false, true);
                 } while (readable && readFromSocketChannel() > 0);
             } catch (SSLException e1) {
@@ -475,9 +478,13 @@ public class SslTransportLayer implements TransportLayer {
         //this should never be called with a network buffer that contains data
         //so we can clear it here.
         netWriteBuffer.clear();
-        SSLEngineResult result = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
-        //prepare the results to be written
-        netWriteBuffer.flip();
+        SSLEngineResult result;
+        try {
+            result = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
+        } finally {
+            //prepare the results to be written
+            netWriteBuffer.flip();
+        }
         handshakeStatus = result.getHandshakeStatus();
         if (result.getStatus() == SSLEngineResult.Status.OK &&
             result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
@@ -866,6 +873,7 @@ public class SslTransportLayer implements TransportLayer {
      */
     private void handshakeFailure(SSLException sslException, boolean flush) throws IOException {
         //Release all resources such as internal buffers that SSLEngine is managing
+        log.debug("SSL Handshake failed", sslException);
         sslEngine.closeOutbound();
         try {
             sslEngine.closeInbound();
@@ -879,13 +887,10 @@ public class SslTransportLayer implements TransportLayer {
         // Attempt to flush any outgoing bytes. If flush doesn't complete, delay exception handling until outgoing bytes
         // are flushed. If write fails because remote end has closed the channel, log the I/O exception and  continue to
         // handle the handshake failure as an authentication exception.
-        try {
-            if (!flush || flush(netWriteBuffer))
-                throw handshakeException;
-        } catch (IOException e) {
-            log.debug("Failed to flush all bytes before closing channel", e);
+        if (!flush || handshakeWrapAfterFailure(flush))
             throw handshakeException;
-        }
+        else
+            log.debug("Delay propagation of handshake exception till {} bytes remaining are flushed", netWriteBuffer.remaining());
     }
 
     // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
@@ -919,6 +924,42 @@ public class SslTransportLayer implements TransportLayer {
     private void maybeThrowSslAuthenticationException() {
         if (handshakeException != null)
             throw handshakeException;
+    }
+
+    /**
+     * Perform handshake wrap after an SSLException or any IOException.
+     *
+     * If `doWrite=false`, we are processing IOException after peer has disconnected, so we
+     * cannot send any more data. We perform any pending wraps so that we can unwrap any
+     * peer data that is already available.
+     *
+     * If `doWrite=true`, we are processing SSLException, we perform wrap and flush
+     * any data to notify the peer of the handshake failure.
+     *
+     * Returns true if no more wrap is required and any data is flushed or discarded.
+     */
+    private boolean handshakeWrapAfterFailure(boolean doWrite) {
+        try {
+            log.trace("handshakeWrapAfterFailure status {} doWrite {}", handshakeStatus, doWrite);
+            while (handshakeStatus == HandshakeStatus.NEED_WRAP && (!doWrite || flush(netWriteBuffer))) {
+                if (!doWrite)
+                    clearWriteBuffer();
+                handshakeWrap(doWrite);
+            }
+        } catch (Exception e) {
+            log.debug("Failed to wrap and flush all bytes before closing channel", e);
+            clearWriteBuffer();
+        }
+        if (!doWrite)
+            clearWriteBuffer();
+        return !netWriteBuffer.hasRemaining();
+    }
+
+    private void clearWriteBuffer() {
+        if (netWriteBuffer.hasRemaining())
+            log.debug("Discarding write buffer {} since peer has disconnected", netWriteBuffer);
+        netWriteBuffer.position(0);
+        netWriteBuffer.limit(0);
     }
 
     @Override

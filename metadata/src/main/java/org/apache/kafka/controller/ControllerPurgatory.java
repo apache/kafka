@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.TreeMap;
 
 /**
@@ -98,11 +98,11 @@ class ControllerPurgatory {
      * Get the offset of the highest pending event, or empty if there are no pending
      * events.
      */
-    Optional<Long> highestPendingOffset() {
+    OptionalLong highestPendingOffset() {
         if (pending.isEmpty()) {
-            return Optional.empty();
+            return OptionalLong.empty();
         } else {
-            return Optional.of(pending.lastKey());
+            return OptionalLong.of(pending.lastKey());
         }
     }
 }

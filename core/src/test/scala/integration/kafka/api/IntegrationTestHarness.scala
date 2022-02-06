@@ -30,7 +30,7 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.Seq
@@ -58,10 +58,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
     modifyConfigs(cfgs)
+    insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }
 
@@ -75,22 +76,40 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       val listenerSecurityMap = listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
 
       config.setProperty(KafkaConfig.ListenersProp, listeners)
+      config.setProperty(KafkaConfig.AdvertisedListenersProp, listeners)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
     }
   }
 
-  @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = true)
+  private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
+    if (isKRaftTest()) {
+      props.foreach { config =>
+        // Add a security protocol for the controller endpoints, if one is not already set.
+        val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
+        val toAdd = config.getProperty(KafkaConfig.ControllerListenerNamesProp, "").split(",").filter{
+          case e => !securityPairs.exists(_.startsWith(s"${e}:"))
+        }
+        if (toAdd.nonEmpty) {
+          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, (securityPairs ++
+            toAdd.map(e => s"${e}:${controllerListenerSecurityProtocol.toString}")).mkString(","))
+        }
+      }
+    }
   }
 
-  def doSetup(createOffsetsTopic: Boolean): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = true)
+  }
+
+  def doSetup(testInfo: TestInfo,
+              createOffsetsTopic: Boolean): Unit = {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
     adminClientConfig ++= clientSecurityProps("adminClient")
 
-    super.setUp()
+    super.setUp(testInfo)
 
     producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerConfig.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1")
@@ -105,8 +124,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
 
-    if (createOffsetsTopic)
-      TestUtils.createOffsetsTopic(zkClient, servers)
+    if (createOffsetsTopic) {
+      if (isKRaftTest()) {
+        TestUtils.createOffsetsTopicWithAdmin(brokers, adminClientConfig)
+      } else {
+        TestUtils.createOffsetsTopic(zkClient, servers)
+      }
+    }
   }
 
   def clientSecurityProps(certAlias: String): Properties = {

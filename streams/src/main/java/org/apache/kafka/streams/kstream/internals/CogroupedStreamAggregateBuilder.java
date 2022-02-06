@@ -201,10 +201,10 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
+                final String repartitionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
                     repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
 
-                createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
+                createRepartitionSource(repartitionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
                 if (!parentNodes.containsKey(repartitionReqs)) {
                     final GraphNode repartitionNode = repartitionNodeBuilder.build();
@@ -236,7 +236,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             "-cogroup-merge",
             builder,
             CogroupedKStreamImpl.MERGE_NAME);
-        final KTableNewProcessorSupplier<K, VOut, K, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
+        final KTableProcessorSupplier<K, VOut, K, VOut> passThrough = new KTablePassThrough<>(parentProcessors, storeName);
         final ProcessorParameters<K, VOut, ?, ?> processorParameters = new ProcessorParameters(passThrough, mergeProcessorName);
         final ProcessorGraphNode<K, VOut> mergeNode =
             new ProcessorGraphNode<>(mergeProcessorName, processorParameters);

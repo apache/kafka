@@ -21,12 +21,12 @@ import java.util.{Optional, Properties}
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -35,8 +35,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     initProducer()
   }
 
@@ -71,10 +71,11 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+                                 topicIds: Map[String, Uuid],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L,
+      partitionMap.put(tp, new FetchRequest.PartitionData(topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID), offsetMap.getOrElse(tp, 0), 0L,
         maxPartitionBytes, Optional.empty()))
     }
     partitionMap
@@ -95,7 +96,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build(1)
+      topicPartitions, topicIds.toMap)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
     topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -112,7 +113,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build()
+      topicPartitions, topicIds.toMap)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -129,7 +130,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions), topicIds.asJava).build(12)
+      topicPartitions, topicIds.toMap)).build(12)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 12)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -157,7 +158,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
     allTopics.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
-      allTopics), topicIds.asJava).build(1)
+      allTopics, topicIds.toMap)).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
@@ -186,7 +187,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
     allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic, "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0,
-      createPartitionMap(1024, allTopicPartitions), topicIds.asJava).build()
+      createPartitionMap(1024, allTopicPartitions, topicIds.toMap)).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
     allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))

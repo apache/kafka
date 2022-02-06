@@ -22,8 +22,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
@@ -57,7 +60,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -96,6 +98,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -126,6 +129,7 @@ public final class QuorumController implements Controller {
      */
     static public class Builder {
         private final int nodeId;
+        private final String clusterId;
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
@@ -140,9 +144,11 @@ public final class QuorumController implements Controller {
         private ControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
+        private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
 
-        public Builder(int nodeId) {
+        public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
+            this.clusterId = clusterId;
         }
 
         public Builder setTime(Time time) {
@@ -215,6 +221,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setConfigurationValidator(ConfigurationValidator configurationValidator) {
+            this.configurationValidator = configurationValidator;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -232,18 +243,60 @@ public final class QuorumController implements Controller {
             }
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
-                return new QuorumController(logContext, nodeId, queue, time, configDefs,
-                    raftClient, supportedFeatures, defaultReplicationFactor,
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
+                return new QuorumController(logContext, nodeId, clusterId, queue, time,
+                    configDefs, raftClient, supportedFeatures, defaultReplicationFactor,
                     defaultNumPartitions, replicaPlacer, snapshotMaxNewRecordBytes,
                     sessionTimeoutNs, controllerMetrics, createTopicPolicy,
-                    alterConfigPolicy);
+                    alterConfigPolicy, configurationValidator);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
             }
         }
     }
+
+    /**
+     * Checks that a configuration resource exists.
+     *
+     * This object must be used only from the controller event thread.
+     */
+    class ConfigResourceExistenceChecker implements Consumer<ConfigResource> {
+        @Override
+        public void accept(ConfigResource configResource) {
+            switch (configResource.type()) {
+                case BROKER_LOGGER:
+                    break;
+                case BROKER:
+                    // Cluster configs are always allowed.
+                    if (configResource.name().isEmpty()) break;
+
+                    // Otherwise, check that the broker ID is valid.
+                    int brokerId;
+                    try {
+                        brokerId = Integer.parseInt(configResource.name());
+                    } catch (NumberFormatException e) {
+                        throw new InvalidRequestException("Invalid broker name " +
+                            configResource.name());
+                    }
+                    if (!clusterControl.brokerRegistrations().containsKey(brokerId)) {
+                        throw new BrokerIdNotRegisteredException("No broker with id " +
+                            brokerId + " found.");
+                    }
+                    break;
+                case TOPIC:
+                    if (replicationControl.getTopicId(configResource.name()) == null) {
+                        throw new UnknownTopicOrPartitionException("The topic '" +
+                            configResource.name() + "' does not exist.");
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
     private static final String ACTIVE_CONTROLLER_EXCEPTION_TEXT_PREFIX =
         "The active controller appears to be node ";
@@ -276,7 +329,7 @@ public final class QuorumController implements Controller {
     }
 
     private Throwable handleEventException(String name,
-                                           Optional<Long> startProcessingTimeNs,
+                                           OptionalLong startProcessingTimeNs,
                                            Throwable exception) {
         if (!startProcessingTimeNs.isPresent()) {
             log.info("unable to start processing {} because of {}.", name,
@@ -288,7 +341,7 @@ public final class QuorumController implements Controller {
             }
         }
         long endProcessingTime = time.nanoseconds();
-        long deltaNs = endProcessingTime - startProcessingTimeNs.get();
+        long deltaNs = endProcessingTime - startProcessingTimeNs.getAsLong();
         long deltaUs = MICROSECONDS.convert(deltaNs, NANOSECONDS);
         if (exception instanceof ApiException) {
             log.info("{}: failed with {} in {} us", name,
@@ -311,7 +364,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final Runnable handler;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
 
         ControlEvent(String name, Runnable handler) {
             this.name = name;
@@ -322,10 +375,10 @@ public final class QuorumController implements Controller {
         public void run() throws Exception {
             long now = time.nanoseconds();
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             log.debug("Executing {}.", this);
             handler.run();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
+            handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
         }
 
         @Override
@@ -349,7 +402,6 @@ public final class QuorumController implements Controller {
     private static final int MAX_BATCHES_PER_GENERATE_CALL = 10;
 
     class SnapshotGeneratorManager implements Runnable {
-        private final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 2, 5000, 0);
         private SnapshotGenerator generator = null;
 
         void createSnapshotGenerator(long committedOffset, int committedEpoch, long committedTimestamp) {
@@ -374,7 +426,6 @@ public final class QuorumController implements Controller {
                     logContext,
                     writer.get(),
                     MAX_BATCHES_PER_GENERATE_CALL,
-                    exponentialBackoff,
                     Arrays.asList(
                         new Section("features", featureControl.iterator(committedOffset)),
                         new Section("cluster", clusterControl.iterator(committedOffset)),
@@ -458,7 +509,7 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
@@ -474,9 +525,9 @@ public final class QuorumController implements Controller {
         public void run() throws Exception {
             long now = time.nanoseconds();
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             T value = handler.get();
-            handleEventEnd(this.toString(), startProcessingTimeNs.get());
+            handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
             future.complete(value);
         }
 
@@ -546,7 +597,7 @@ public final class QuorumController implements Controller {
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
         private final long eventCreatedTimeNs = time.nanoseconds();
-        private Optional<Long> startProcessingTimeNs = Optional.empty();
+        private OptionalLong startProcessingTimeNs = OptionalLong.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
         ControllerWriteEvent(String name, ControllerWriteOperation<T> op) {
@@ -568,14 +619,14 @@ public final class QuorumController implements Controller {
             if (controllerEpoch == -1) {
                 throw newNotControllerException();
             }
-            startProcessingTimeNs = Optional.of(now);
+            startProcessingTimeNs = OptionalLong.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(writeOffset);
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                Optional<Long> maybeOffset = purgatory.highestPendingOffset();
+                OptionalLong maybeOffset = purgatory.highestPendingOffset();
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can return immediately.
@@ -587,7 +638,7 @@ public final class QuorumController implements Controller {
                 }
                 // If there are operations in the purgatory, we want to wait for the latest
                 // one to complete before returning our result to the user.
-                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.get(), result);
+                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.getAsLong(), result);
                 log.debug("Read-only operation {} will be completed when the log " +
                     "reaches offset {}", this, resultAndOffset.offset());
             } else {
@@ -622,7 +673,7 @@ public final class QuorumController implements Controller {
         @Override
         public void complete(Throwable exception) {
             if (exception == null) {
-                handleEventEnd(this.toString(), startProcessingTimeNs.get());
+                handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
                 future.complete(resultAndOffset.response());
             } else {
                 future.completeExceptionally(
@@ -719,7 +770,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController) {
                         throw new IllegalStateException(
                             String.format(
-                                "Asked to load snasphot (%s) when it is the active controller (%s)",
+                                "Asked to load snapshot (%s) when it is the active controller (%s)",
                                 reader.snapshotId(),
                                 curClaimEpoch
                             )
@@ -981,6 +1032,11 @@ public final class QuorumController implements Controller {
     private final int nodeId;
 
     /**
+     * The ID of this cluster.
+     */
+    private final String clusterId;
+
+    /**
      * The single-threaded queue that processes all of our events.
      * It also processes timeouts.
      */
@@ -1006,6 +1062,11 @@ public final class QuorumController implements Controller {
      * log's high water mark to advance.  This must be accessed only by the event queue thread.
      */
     private final ControllerPurgatory purgatory;
+
+    /**
+     * A predicate that returns information about whether a ConfigResource exists.
+     */
+    private final Consumer<ConfigResource> resourceExists;
 
     /**
      * An object which stores the controller's dynamic configuration.
@@ -1100,6 +1161,7 @@ public final class QuorumController implements Controller {
 
     private QuorumController(LogContext logContext,
                              int nodeId,
+                             String clusterId,
                              KafkaEventQueue queue,
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
@@ -1112,20 +1174,23 @@ public final class QuorumController implements Controller {
                              long sessionTimeoutNs,
                              ControllerMetrics controllerMetrics,
                              Optional<CreateTopicPolicy> createTopicPolicy,
-                             Optional<AlterConfigPolicy> alterConfigPolicy) {
+                             Optional<AlterConfigPolicy> alterConfigPolicy,
+                             ConfigurationValidator configurationValidator) {
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
+        this.clusterId = clusterId;
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.purgatory = new ControllerPurgatory();
+        this.resourceExists = new ConfigResourceExistenceChecker();
         this.configurationControl = new ConfigurationControlManager(logContext,
-            snapshotRegistry, configDefs, alterConfigPolicy);
+            snapshotRegistry, configDefs, alterConfigPolicy, configurationValidator);
         this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
-        this.clusterControl = new ClusterControlManager(logContext, time,
-            snapshotRegistry, sessionTimeoutNs, replicaPlacer);
+        this.clusterControl = new ClusterControlManager(logContext, clusterId, time,
+            snapshotRegistry, sessionTimeoutNs, replicaPlacer, controllerMetrics);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
@@ -1227,7 +1292,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges);
+                configurationControl.incrementalAlterConfigs(configChanges, resourceExists);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1267,7 +1332,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs);
+                configurationControl.legacyAlterConfigs(newConfigs, resourceExists);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1384,6 +1449,10 @@ public final class QuorumController implements Controller {
 
     public int nodeId() {
         return nodeId;
+    }
+
+    public String clusterId() {
+        return clusterId;
     }
 
     @Override

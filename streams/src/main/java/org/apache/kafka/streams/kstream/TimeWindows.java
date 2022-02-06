@@ -69,10 +69,14 @@ public final class TimeWindows extends Windows<TimeWindow> {
 
     private final long graceMs;
 
-    private TimeWindows(final long sizeMs, final long advanceMs, final long graceMs) {
+    // flag to check if the grace is already set via ofSizeAndGrace or ofSizeWithNoGrace
+    private final boolean hasSetGrace;
+
+    private TimeWindows(final long sizeMs, final long advanceMs, final long graceMs, final boolean hasSetGrace) {
         this.sizeMs = sizeMs;
         this.advanceMs = advanceMs;
         this.graceMs = graceMs;
+        this.hasSetGrace = hasSetGrace;
 
         if (sizeMs <= 0) {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
@@ -132,7 +136,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         final String afterWindowEndMsgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, afterWindowEndMsgPrefix);
 
-        return new TimeWindows(sizeMs, sizeMs, afterWindowEndMs);
+        return new TimeWindows(sizeMs, sizeMs, afterWindowEndMs, true);
     }
 
     /**
@@ -153,7 +157,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = validateMillisecondDuration(size, msgPrefix);
 
-        return new TimeWindows(sizeMs, sizeMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - sizeMs, 0));
+        return new TimeWindows(sizeMs, sizeMs, Math.max(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - sizeMs, 0), false);
     }
 
     /**
@@ -170,7 +174,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     public TimeWindows advanceBy(final Duration advance) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
         final long advanceMs = validateMillisecondDuration(advance, msgPrefix);
-        return new TimeWindows(sizeMs, advanceMs, graceMs);
+        return new TimeWindows(sizeMs, advanceMs, graceMs, false);
     }
 
     @Override
@@ -199,15 +203,20 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalStateException if {@link #grace(Duration)} is called after {@link #ofSizeAndGrace(Duration, Duration)} or {@link #ofSizeWithNoGrace(Duration)}
      * @deprecated since 3.0. Use {@link #ofSizeAndGrace(Duration, Duration)} instead
      */
     @Deprecated
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
-        //TODO KAFKA-13021: disallow calling grace() if it was already set via ofTimeDifferenceAndGrace/WithNoGrace()
+        if (this.hasSetGrace) {
+            throw new IllegalStateException(
+                "Cannot call grace() after setting grace value via ofSizeAndGrace or ofSizeWithNoGrace.");
+        }
+
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
         final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
 
-        return new TimeWindows(sizeMs, advanceMs, afterWindowEndMs);
+        return new TimeWindows(sizeMs, advanceMs, afterWindowEndMs, false);
     }
 
     @Override

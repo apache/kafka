@@ -24,7 +24,7 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.cluster.Broker.ServerInfo
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
-import kafka.network.SocketServer
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
@@ -160,7 +160,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      controller = new QuorumController.Builder(config.nodeId).
+      controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
@@ -173,6 +173,7 @@ class ControllerServer(
         setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
+        setConfigurationValidator(new ControllerConfigurationValidator()).
         build()
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
@@ -193,8 +194,8 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent",
-        SocketServer.DataPlaneThreadPrefix)
+        s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
+        DataPlaneAcceptor.ThreadPrefix)
       socketServer.startProcessingRequests(authorizerFutures)
     } catch {
       case e: Throwable =>

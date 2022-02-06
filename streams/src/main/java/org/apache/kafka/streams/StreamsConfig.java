@@ -349,7 +349,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
-    private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
+    public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -358,7 +358,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
-    private static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
@@ -380,7 +380,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
-    private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+    public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
     /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
@@ -423,11 +423,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
-    private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+    public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "This config controls whether joins and merges"
+    public static final String MAX_TASK_IDLE_MS_DOC = "This config controls whether joins and merges"
         + " may produce out-of-order results."
         + " The config value is the maximum amount of time in milliseconds a stream task will stay idle"
         + " when it is fully caught up on some (but not all) input partitions"
@@ -620,6 +620,11 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LIST,
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+            .define(NUM_STANDBY_REPLICAS_CONFIG,
+                    Type.INT,
+                    0,
+                    Importance.HIGH,
+                    NUM_STANDBY_REPLICAS_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -701,11 +706,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(1),
                     Importance.MEDIUM,
                     MAX_WARMUP_REPLICAS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
-                    Importance.MEDIUM,
-                    NUM_STANDBY_REPLICAS_DOC)
             .define(NUM_STREAM_THREADS_CONFIG,
                     Type.INT,
                     1,
@@ -947,6 +947,13 @@ public class StreamsConfig extends AbstractConfig {
         // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
 
+        // Private API used to control the usage of consistency offset vectors
+        public static final String IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED = "__iq.consistency.offset"
+            + ".vector.enabled__";
+
+        // Private API used to control the prefix of the auto created topics
+        public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
+
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
             if (value instanceof Boolean) {
@@ -967,6 +974,16 @@ public class StreamsConfig extends AbstractConfig {
                 return Long.parseLong((String) value);
             } else {
                 log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                return defaultValue;
+            }
+        }
+
+        public static String getString(final Map<String, Object> configs, final String key, final String defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof String) {
+                return (String) value;
+            } else {
+                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
                 return defaultValue;
             }
         }

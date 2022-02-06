@@ -912,7 +912,7 @@ public final class Utils {
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
      * This function also flushes the parent directory to guarantee crash consistency.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail, or parent dir flush fails.
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
         atomicMoveWithFallback(source, target, true);
@@ -924,7 +924,8 @@ public final class Utils {
      * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
      * to repeatedly flush the same parent directory.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail,
+     * or parent dir flush fails if needFlushParentDir is true.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
@@ -948,10 +949,12 @@ public final class Utils {
     /**
      * Flushes dirty directories to guarantee crash consistency.
      *
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     *
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null) {
+        if (path != null && !OperatingSystem.IS_WINDOWS) {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }

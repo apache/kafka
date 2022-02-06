@@ -17,22 +17,23 @@
 package kafka.server
 
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+
 import java.util
 import util.Arrays.asList
-
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.raft.{OffsetAndEpoch => RaftOffsetAndEpoch}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-import java.util.Collections
 
+import java.util.Collections
 import kafka.api.LeaderAndIsr
-import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage}
@@ -60,8 +61,10 @@ object MetadataCacheTest {
         // a partial list of partitions. Therefore, base our delta off a partial image that
         // contains no brokers, but which contains the previous partitions.
         val image = c.currentImage()
-        val partialImage = new MetadataImage(image.features(), ClusterImage.EMPTY,
-          image.topics(), image.configs(), image.clientQuotas())
+        val partialImage = new MetadataImage(
+          new RaftOffsetAndEpoch(100, 10),
+          image.features(), ClusterImage.EMPTY,
+          image.topics(), image.configs(), image.clientQuotas(), image.producerIds())
         val delta = new MetadataDelta(partialImage)
 
         def toRecord(broker: UpdateMetadataBroker): RegisterBrokerRecord = {
@@ -89,7 +92,7 @@ object MetadataCacheTest {
             setFenced(fenced)
         }
         request.liveBrokers().iterator().asScala.foreach { brokerInfo =>
-          delta.replay(toRecord(brokerInfo))
+          delta.replay(100, 10, toRecord(brokerInfo))
         }
 
         def toRecords(topic: UpdateMetadataTopicState): Seq[ApiMessage] = {
@@ -114,7 +117,7 @@ object MetadataCacheTest {
           results
         }
         request.topicStates().forEach { topic =>
-          toRecords(topic).foreach(delta.replay)
+          toRecords(topic).foreach(delta.replay(100, 10, _))
         }
         c.setImage(delta.apply())
       }

@@ -262,7 +262,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       0
     else
       watchers.tryCompleteWatched()
-    debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    if (numCompleted > 0) {
+      debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    }
     numCompleted
   }
 
@@ -326,8 +328,15 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * Shutdown the expire reaper thread
    */
   def shutdown(): Unit = {
-    if (reaperEnabled)
-      expirationReaper.shutdown()
+    if (reaperEnabled) {
+      expirationReaper.initiateShutdown()
+      // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+      timeoutTimer.add(new TimerTask {
+        override val delayMs: Long = 0
+        override def run(): Unit = {}
+      })
+      expirationReaper.awaitShutdown()
+    }
     timeoutTimer.shutdown()
     removeMetric("PurgatorySize", metricsTags)
     removeMetric("NumDelayedOperations", metricsTags)

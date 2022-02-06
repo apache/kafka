@@ -38,6 +38,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param record record that failed deserialization
      * @param exception the actual exception
      */
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     DeserializationHandlerResponse handle(final ProcessorContext context,
                                           final ConsumerRecord<byte[], byte[]> record,
                                           final Exception exception);
