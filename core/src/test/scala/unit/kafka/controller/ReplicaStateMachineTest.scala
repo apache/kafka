@@ -403,7 +403,6 @@ class ReplicaStateMachineTest {
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
     controllerContext.queueTopicDeletion(Set(replica.topic))
-    controllerContext.putReplicaState(replica, OnlineReplica)
     // we don't expect addLeaderAndIsrRequestForBrokers to be called for this partition
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
