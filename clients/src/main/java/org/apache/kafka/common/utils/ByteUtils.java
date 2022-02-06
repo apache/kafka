@@ -390,14 +390,25 @@ public final class ByteUtils {
      * Number of bytes needed to encode an integer in unsigned variable-length format.
      *
      * @param value The signed value
+     *
+     * @see #writeUnsignedVarint(int, DataOutput)
      */
     public static int sizeOfUnsignedVarint(int value) {
-        int bytes = 1;
-        while ((value & 0xffffff80) != 0L) {
-            bytes += 1;
-            value >>>= 7;
-        }
-        return bytes;
+        // Protocol buffers varint encoding is variable length, with a minimum of 1 byte
+        // (for zero). The values themselves are not important. What's important here is
+        // any leading zero bits are dropped from output. We can use this leading zero
+        // count w/ fast intrinsic to calc the output length directly.
+
+        // Test cases verify this matches the output for loop logic exactly.
+
+        // return (38 - leadingZeros) / 7 + leadingZeros / 32;
+
+        // The above formula provides the implementation, but the Java encoding is suboptimal
+        // when we have a narrow range of integers, so we can do better manually
+
+        int leadingZeros = Integer.numberOfLeadingZeros(value);
+        int leadingZerosBelow38DividedBy7 = ((38 - leadingZeros) * 0b10010010010010011) >>> 19;
+        return leadingZerosBelow38DividedBy7 + (leadingZeros >>> 5);
     }
 
     /**
@@ -413,15 +424,18 @@ public final class ByteUtils {
      * Number of bytes needed to encode a long in variable-length format.
      *
      * @param value The signed value
+     * @see #sizeOfUnsignedVarint(int)
      */
     public static int sizeOfVarlong(long value) {
         long v = (value << 1) ^ (value >> 63);
-        int bytes = 1;
-        while ((v & 0xffffffffffffff80L) != 0L) {
-            bytes += 1;
-            v >>>= 7;
-        }
-        return bytes;
+
+        // For implementation notes @see #sizeOfUnsignedVarint(int)
+        // Similar logic is applied to allow for 64bit input -> 1-9byte output.
+        // return (70 - leadingZeros) / 7 + leadingZeros / 64;
+
+        int leadingZeros = Long.numberOfLeadingZeros(v);
+        int leadingZerosBelow70DividedBy7 = ((70 - leadingZeros) * 0b10010010010010011) >>> 19;
+        return leadingZerosBelow70DividedBy7 + (leadingZeros >>> 6);
     }
 
     private static IllegalArgumentException illegalVarintException(int value) {
