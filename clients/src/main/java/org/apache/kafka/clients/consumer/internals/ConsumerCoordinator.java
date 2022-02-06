@@ -463,6 +463,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    private boolean coordinatorUnknownAndUnready(Timer timer) {
+        return coordinatorUnknown() && !ensureCoordinatorReady(timer);
+    }
+
     /**
      * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
      * has joined the group (if it is using group management). This also handles periodic offset commits
@@ -488,7 +492,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
             // group proactively due to application inactivity even if (say) the coordinator cannot be found.
             pollHeartbeat(timer.currentTimeMs());
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknownAndUnready(timer)) {
                 return false;
             }
 
@@ -530,7 +534,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // requests result in polls returning immediately, causing a tight loop of polls. Without
             // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
             // awaitMetadataUpdate() in ensureCoordinatorReady initiates new connections with configured backoff and avoids the busy loop.
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknownAndUnready(timer)) {
                 return false;
             }
         }
@@ -1028,7 +1032,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return true;
 
         do {
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknownAndUnready(timer)) {
                 return false;
             }
 
