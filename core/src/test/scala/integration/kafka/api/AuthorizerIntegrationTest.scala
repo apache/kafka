@@ -1038,7 +1038,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
 
     // in this case, we do an explicit seek, so there should be no need to query the coordinator at all
-    val consumer = createConsumer()
+    // remove the group.id config to avoid coordinator created
+    val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(tp).asJava)
     consumer.seekToBeginning(List(tp).asJava)
     consumeRecords(consumer)
