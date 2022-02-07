@@ -725,7 +725,6 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
             null
         ) {
             @Override
@@ -797,7 +796,6 @@ public class StreamThreadTest {
             activeTaskCreator,
             standbyTaskCreator,
             topologyMetadata,
-            null,
             null,
             null
         ) {

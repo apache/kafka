@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -102,7 +103,7 @@ class StandbyTaskCreator {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     Task.TaskType.STANDBY,
-                    StreamThread.eosEnabled(applicationConfig),
+                    eosEnabled(applicationConfig),
                     getLogContext(taskId),
                     stateDirectory,
                     storeChangelogReader,

@@ -22,8 +22,8 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,7 +107,7 @@ public class TopologyConfig extends AbstractConfig {
         super(CONFIG, topologyOverrides, false);
 
         this.topologyName = topologyName;
-        this.eosEnabled = StreamThread.eosEnabled(globalAppConfigs);
+        this.eosEnabled = StreamsConfigUtils.eosEnabled(globalAppConfigs);
 
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;

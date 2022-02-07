@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -114,9 +115,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -240,7 +241,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
-    private final StreamThread.ProcessingMode processingMode;
+    private final StreamsConfigUtils.ProcessingMode processingMode;
 
     private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
         @Override
@@ -322,7 +323,7 @@ public class TopologyTestDriver implements Closeable {
 
         logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
-        processingMode = StreamThread.processingMode(streamsConfig);
+        processingMode = StreamsConfigUtils.processingMode(streamsConfig);
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);

@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -116,7 +117,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({KafkaStreams.class, StreamThread.class, ClientMetrics.class})
+@PrepareForTest({KafkaStreams.class, StreamThread.class, ClientMetrics.class, StreamsConfigUtils.class})
 public class KafkaStreamsTest {
 
     private static final int NUM_THREADS = 2;
@@ -235,8 +236,9 @@ public class KafkaStreamsTest {
             anyObject()
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
 
-        EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
-        EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
+        PowerMock.mockStatic(StreamsConfigUtils.class);
+        EasyMock.expect(StreamsConfigUtils.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE).anyTimes();
+        EasyMock.expect(StreamsConfigUtils.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
         prepareStreamThread(streamThreadOne, 1, true);
@@ -290,6 +292,7 @@ public class KafkaStreamsTest {
 
         PowerMock.replay(
             StreamThread.class,
+            StreamsConfigUtils.class,
             Metrics.class,
             metrics,
             ClientMetrics.class,
