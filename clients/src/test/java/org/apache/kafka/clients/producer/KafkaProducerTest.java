@@ -1900,6 +1900,25 @@ public class KafkaProducerTest {
         }
     }
 
+    @Test
+    public void negativePartitionShouldThrow() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, BuggyPartitioner.class.getName());
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            assertThrows(IllegalArgumentException.class, () -> producer.send(new ProducerRecord<>("topic", "key", "value")));
+        }
+    }
+
     private static final List<String> CLIENT_IDS = new ArrayList<>();
 
     public static class SerializerForClientId implements Serializer<byte[]> {
@@ -1950,6 +1969,22 @@ public class KafkaProducerTest {
         @Override
         public void configure(Map<String, ?> configs) {
             CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+    }
+
+    public static class BuggyPartitioner implements Partitioner {
+
+        @Override
+        public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+            return -1;
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
         }
     }
 }
