@@ -31,7 +31,7 @@ buildscript {
 
 plugins {
   id 'com.diffplug.spotless' version '5.12.5'
-  id 'com.github.ben-manes.versions' version '0.41.0'
+  id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
   id 'org.owasp.dependencycheck' version '6.5.3'
