@@ -93,8 +93,8 @@ public class StandardAclTest {
         assertEquals(1, signum(TEST_ACLS.get(0).compareTo(TEST_ACLS.get(1))));
         assertEquals(-1, signum(TEST_ACLS.get(1).compareTo(TEST_ACLS.get(0))));
         assertEquals(-1, signum(TEST_ACLS.get(2).compareTo(TEST_ACLS.get(3))));
-        assertEquals(-1, signum(TEST_ACLS.get(4).compareTo(TEST_ACLS.get(3))));
-        assertEquals(1, signum(TEST_ACLS.get(3).compareTo(TEST_ACLS.get(4))));
+        assertEquals(1, signum(TEST_ACLS.get(4).compareTo(TEST_ACLS.get(3))));
+        assertEquals(-1, signum(TEST_ACLS.get(3).compareTo(TEST_ACLS.get(4))));
     }
 
     @Test

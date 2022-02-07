@@ -22,6 +22,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -173,6 +174,9 @@ public class StandardAuthorizerData {
                 throw new RuntimeException("Unable to add the ACL with ID " + id +
                     " to aclsByResource");
             }
+            if (log.isTraceEnabled()) {
+                log.trace("Added ACL " + id + ": " + acl);
+            }
         } catch (Throwable e) {
             log.error("addAcl error", e);
             throw e;
@@ -188,6 +192,9 @@ public class StandardAuthorizerData {
             if (!aclsByResource.remove(acl)) {
                 throw new RuntimeException("Unable to remove the ACL with ID " + id +
                     " from aclsByResource");
+            }
+            if (log.isTraceEnabled()) {
+                log.trace("Removed ACL " + id + ": " + acl);
             }
         } catch (Throwable e) {
             log.error("removeAcl error", e);
@@ -233,20 +240,31 @@ public class StandardAuthorizerData {
             return ALLOWED;
         }
 
-        AuthorizationResultBuilder builder = new AuthorizationResultBuilder();
-
         // This code relies on the ordering of StandardAcl within the NavigableMap.
-        // Because entries are arranged by (resource type, pattern type, name),
-        // we can find all the applicable ACLs by starting at (type, PREFIX, name) and
-        // stepping backwards.
+        // Entries are sorted by resource type first, then REVERSE resource name.
+        // Therefore, we can find all the applicable ACLs by starting at
+        // (resource_type, resource_name) and stepping forwards until we reach an ACL with
+        // a resource name which is not a prefix of the current one.
+        //
+        // For example, when trying to authorize a TOPIC resource named foobar, we would
+        // start at element 2, and continue on to 3 and 4 following map:
+        //
+        // 1. rs=TOPIC rn=gar pt=PREFIX
+        // 2. rs=TOPIC rn=foobar pt=PREFIX
+        // 3. rs=TOPIC rn=foob pt=LITERAL
+        // 4. rs=TOPIC rn=foo pt=PREFIX
+        // 5. rs=TOPIC rn=eeee pt=LITERAL
+        //
+        // Once we reached element 5, we would stop scanning.
+        AuthorizationResultBuilder builder = new AuthorizationResultBuilder();
         StandardAcl exemplar = new StandardAcl(
             action.resourcePattern().resourceType(),
             action.resourcePattern().name(),
-            PREFIXED,
+            PatternType.UNKNOWN,
             "",
             "",
-            AclOperation.ANY,
-            AclPermissionType.ANY);
+            AclOperation.UNKNOWN,
+            AclPermissionType.UNKNOWN);
         checkSection(action, exemplar, requestContext, builder);
         if (builder.foundDeny) return DENIED;
 
@@ -259,8 +277,8 @@ public class StandardAuthorizerData {
             LITERAL,
             "",
             "",
-            AclOperation.ANY,
-            AclPermissionType.ANY);
+            AclOperation.UNKNOWN,
+            AclPermissionType.UNKNOWN);
         checkSection(action, exemplar, requestContext, builder);
         if (builder.foundDeny) return DENIED;
 
@@ -285,11 +303,29 @@ public class StandardAuthorizerData {
                       StandardAcl exemplar,
                       AuthorizableRequestContext requestContext,
                       AuthorizationResultBuilder builder) {
-        NavigableSet<StandardAcl> headSet = aclsByResource.headSet(exemplar, true);
-        for (Iterator<StandardAcl> iterator = headSet.descendingIterator();
+        NavigableSet<StandardAcl> headSet = aclsByResource.tailSet(exemplar, true);
+        String resourceName = action.resourcePattern().name();
+        for (Iterator<StandardAcl> iterator = headSet.iterator();
              iterator.hasNext(); ) {
             StandardAcl acl = iterator.next();
-            if (!aclIsInCorrectSection(action, acl)) break;
+            if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
+                // We've stepped outside the section for the resource type we care about and
+                // should stop scanning.
+                break;
+            }
+            if (resourceName.startsWith(acl.resourceName())) {
+                if (acl.patternType() == LITERAL && !resourceName.equals(acl.resourceName())) {
+                    // This is a literal ACL whose name is a prefix of the resource name, but
+                    // which doesn't match it exactly. We should skip over this ACL, but keep
+                    // scanning in case there are any relevant PREFIX ACLs.
+                    continue;
+                }
+            } else if (!(acl.resourceName().equals(WILDCARD) && acl.patternType() == LITERAL)) {
+                // If the ACL resource name is NOT a prefix of the current resource name,
+                // and we're not dealing with the special case of a wildcard ACL, we've
+                // stepped outside of the section we care about and should stop scanning.
+                break;
+            }
             AuthorizationResult result = findResult(action, requestContext, acl);
             if (ALLOWED.equals(result)) {
                 builder.foundAllow = true;
@@ -302,17 +338,6 @@ public class StandardAuthorizerData {
                 return;
             }
         }
-    }
-
-    static boolean aclIsInCorrectSection(Action action, StandardAcl acl) {
-        if (!acl.resourceType().equals(action.resourcePattern().resourceType())) return false;
-        String name = action.resourcePattern().name();
-        if (acl.patternType() == PREFIXED) {
-            if (!name.startsWith(acl.resourceName())) return false;
-        } else if (!(name.equals(acl.resourceName()) || acl.resourceName().equals(WILDCARD))) {
-            return false;
-        }
-        return true;
     }
 
     /**

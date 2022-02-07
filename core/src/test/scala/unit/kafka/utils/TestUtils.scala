@@ -1495,7 +1495,8 @@ object TestUtils extends Logging {
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}")
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
+        45000)
   }
 
   /**
@@ -2131,9 +2132,9 @@ object TestUtils extends Logging {
     resource: ResourcePattern,
     controllers: Seq[ControllerServer] = Seq(),
   ): Unit = {
-    val authorizer = pickAuthorizerForWrite(brokers, controllers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
-    authorizer.createAcls(null, aclBindings.toList.asJava).asScala
+    authorizerForWrite.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
         result.exception.ifPresent { e => throw e }
@@ -2152,9 +2153,9 @@ object TestUtils extends Logging {
     resource: ResourcePattern,
     controllers: Seq[ControllerServer] = Seq(),
   ): Unit = {
-    val authorizer = pickAuthorizerForWrite(brokers, controllers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllers)
     val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
-    authorizer.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
+    authorizerForWrite.deleteAcls(null, aclBindingFilters.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
         result.exception.ifPresent { e => throw e }

@@ -142,29 +142,33 @@ final public class StandardAcl implements Comparable<StandardAcl> {
             permissionType);
     }
 
+    /**
+     * Compare two StandardAcl objects. See {@link StandardAuthorizerData#authorize} for an
+     * explanation of why we want this particular sort order.
+     */
     @Override
     public int compareTo(StandardAcl other) {
         int result;
         result = resourceType.compareTo(other.resourceType);
         if (result != 0) return result;
+        result = other.resourceName.compareTo(resourceName); // REVERSE sort by resource name.
+        if (result != 0) return result;
         result = patternType.compareTo(other.patternType);
         if (result != 0) return result;
-        result = resourceName.compareTo(other.resourceName);
+        result = operation.compareTo(other.operation);
         if (result != 0) return result;
         result = principal.compareTo(other.principal);
         if (result != 0) return result;
         result = host.compareTo(other.host);
         if (result != 0) return result;
-        result = operation.compareTo(other.operation);
-        if (result != 0) return result;
         result = permissionType.compareTo(other.permissionType);
-        return 0;
+        return result;
     }
 
     @Override
     public String toString() {
         return "StandardAcl(" +
-            ", resourceType=" + resourceType +
+            "resourceType=" + resourceType +
             ", resourceName=" + resourceName +
             ", patternType=" + patternType +
             ", principal=" + principal +

@@ -29,9 +29,12 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -229,5 +232,64 @@ public class StandardAuthorizerTest {
         assertContains(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
             TOPIC, null, PatternType.ANY), AccessControlEntryFilter.ANY)),
                 fooAcls.get(0).acl());
+    }
+
+    @Test
+    public void testSimpleAuthorizations() throws Exception {
+        StandardAuthorizer authorizer = new StandardAuthorizer();
+        authorizer.configure(Collections.emptyMap());
+        List<StandardAclWithId> fooAcls = asList(
+            withId(newFooAcl(READ, ALLOW)),
+            withId(newFooAcl(WRITE, ALLOW)));
+        List<StandardAclWithId> barAcls = asList(
+            withId(newBarAcl(DESCRIBE_CONFIGS, ALLOW)),
+            withId(newBarAcl(ALTER_CONFIGS, ALLOW)));
+        fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        assertEquals(Collections.singletonList(ALLOWED),
+            authorizer.authorize(new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                    Collections.singletonList(newAction(READ, TOPIC, "foo_"))));
+        assertEquals(Collections.singletonList(ALLOWED),
+            authorizer.authorize(new MockAuthorizableRequestContext.Builder().
+                    setPrincipal(new KafkaPrincipal(USER_TYPE, "fred")).build(),
+                Collections.singletonList(newAction(ALTER_CONFIGS, GROUP, "bar"))));
+    }
+
+    private static StandardAuthorizer createAuthorizerWithManyAcls() {
+        StandardAuthorizer authorizer = new StandardAuthorizer();
+        authorizer.configure(Collections.emptyMap());
+        List<StandardAcl> acls = Arrays.asList(
+            new StandardAcl(TOPIC, "green2", LITERAL, "User:*", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "green", PREFIXED, "User:bob", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "betamax4", LITERAL, "User:bob", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "betamax", LITERAL, "User:bob", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "beta", PREFIXED, "User:*", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "alpha", PREFIXED, "User:*", "*", READ, ALLOW),
+            new StandardAcl(TOPIC, "alp", PREFIXED, "User:bob", "*", READ, DENY),
+            new StandardAcl(GROUP, "*", LITERAL, "User:bob", "*", WRITE, ALLOW),
+            new StandardAcl(GROUP, "wheel", LITERAL, "User:*", "*", WRITE, DENY)
+        );
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+        return authorizer;
+    }
+
+    @Test
+    public void testAuthorizationWithManyAcls() throws Exception {
+        StandardAuthorizer authorizer = createAuthorizerWithManyAcls();
+        assertEquals(Arrays.asList(ALLOWED, DENIED),
+            authorizer.authorize(new MockAuthorizableRequestContext.Builder().
+                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                Arrays.asList(newAction(READ, TOPIC, "green1"),
+                    newAction(WRITE, GROUP, "wheel"))));
+        assertEquals(Arrays.asList(DENIED, ALLOWED, DENIED),
+            authorizer.authorize(new MockAuthorizableRequestContext.Builder().
+                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                Arrays.asList(newAction(READ, TOPIC, "alpha"),
+                    newAction(WRITE, GROUP, "arbitrary"),
+                    newAction(READ, TOPIC, "ala"))));
     }
 }

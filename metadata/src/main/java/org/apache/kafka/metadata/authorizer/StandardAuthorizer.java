@@ -110,7 +110,6 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         List<AuthorizationResult> results = new ArrayList<>(actions.size());
         for (Action action: actions) {
             AuthorizationResult result = curData.authorize(requestContext, action);
-            System.out.println("authorize(requestContext=" + requestContext + ", action=" + action + ", result=" + result + ")");
             results.add(result);
         }
         return results;
