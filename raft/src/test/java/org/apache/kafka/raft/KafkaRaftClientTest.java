@@ -1601,7 +1601,7 @@ public class KafkaRaftClientTest {
         correlationId = context.assertSentFetchRequest(epoch, 0L, 0);
         context.deliverResponse(correlationId, otherNodeId,
             new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
-        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        // Inconsistent cluster id are fatal if this is the first rpc request
         assertThrows(InconsistentClusterIdException.class, context.client::poll);
     }
 
@@ -1637,7 +1637,7 @@ public class KafkaRaftClientTest {
         // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
         assertDoesNotThrow(context.client::poll);
 
-        // It's impossible to receive a be begin quorum response before any other request so we don't test
+        // It's impossible to receive a BeginQuorumEpochResponse before any other request so we don't test
     }
 
     @Test
@@ -1674,7 +1674,7 @@ public class KafkaRaftClientTest {
         // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
         assertDoesNotThrow(context.client::poll);
 
-        // It's impossible to receive a be end quorum response before any other request so we don't test
+        // It's impossible to receive an EndQuorumEpochResponse before any other request so we don't test
     }
 
     @Test

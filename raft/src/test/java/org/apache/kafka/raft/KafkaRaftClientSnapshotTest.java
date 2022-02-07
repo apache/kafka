@@ -518,7 +518,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         context.client.poll();
 
-        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
+        context.assertSentFetchSnapshotResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
     @Test
@@ -1655,7 +1655,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
         assertDoesNotThrow(context.client::poll);
 
-        // It's impossible to receive a be begin quorum response before any other request so we don't test
+        // It's impossible to receive a FetchSnapshotResponse before any other request so we don't test
     }
 
     private static FetchSnapshotRequestData fetchSnapshotRequest(

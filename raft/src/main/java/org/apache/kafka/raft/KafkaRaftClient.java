@@ -99,7 +99,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
+import static org.apache.kafka.raft.RaftUtil.validateTopicPartition;
 
 /**
  * This class implements a Kafkaesque version of the Raft protocol. Leader election
@@ -537,6 +537,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
      *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#INVALID_REQUEST} if the last epoch or offset are invalid
+     * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition doesn't match metadata topic
      */
     private VoteResponseData handleVoteRequest(
         RaftRequest.Inbound requestMetadata
@@ -547,9 +548,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (!hasValidTopicPartition(request, log.topicPartition())) {
+        Errors topError = validateTopicPartition(request, log.topicPartition());
+        if (topError != Errors.NONE) {
             // Until we support multi-raft, we treat individual topic partition mismatches as invalid requests
-            return new VoteResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
+            return new VoteResponseData().setErrorCode(topError.code());
         }
 
         VoteRequestData.PartitionData partitionRequest =
@@ -597,7 +599,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         recordAcknowledgedClusterId();
 
-        if (!hasValidTopicPartition(response, log.topicPartition())) {
+        if (validateTopicPartition(response, log.topicPartition()) != Errors.NONE) {
             return false;
         }
 
@@ -684,6 +686,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
      *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition doesn't match metadata topic
      */
     private BeginQuorumEpochResponseData handleBeginQuorumEpochRequest(
         RaftRequest.Inbound requestMetadata,
@@ -695,9 +698,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return new BeginQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (!hasValidTopicPartition(request, log.topicPartition())) {
+        Errors topError = validateTopicPartition(request, log.topicPartition());
+        if (topError != Errors.NONE) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
-            return new BeginQuorumEpochResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
+            return new BeginQuorumEpochResponseData().setErrorCode(topError.code());
         }
 
         BeginQuorumEpochRequestData.PartitionData partitionRequest =
@@ -728,7 +732,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         recordAcknowledgedClusterId();
 
-        if (!hasValidTopicPartition(response, log.topicPartition())) {
+        if (validateTopicPartition(response, log.topicPartition()) != Errors.NONE) {
             return false;
         }
 
@@ -775,6 +779,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INCONSISTENT_VOTER_SET} if the request suggests inconsistent voter membership (e.g.
      *      if this node or the sender is not one of the current known voters)
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition doesn't match metadata topic
      */
     private EndQuorumEpochResponseData handleEndQuorumEpochRequest(
         RaftRequest.Inbound requestMetadata,
@@ -786,9 +791,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return new EndQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (!hasValidTopicPartition(request, log.topicPartition())) {
+        Errors topError = validateTopicPartition(request, log.topicPartition());
+        if (topError != Errors.NONE) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
-            return new EndQuorumEpochResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
+            return new EndQuorumEpochResponseData().setErrorCode(topError.code());
         }
 
         EndQuorumEpochRequestData.PartitionData partitionRequest =
@@ -842,7 +848,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         recordAcknowledgedClusterId();
 
-        if (!hasValidTopicPartition(response, log.topicPartition())) {
+        if (validateTopicPartition(response, log.topicPartition()) != Errors.NONE) {
             return false;
         }
 
@@ -939,6 +945,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
      *     or if either the fetch offset or the last fetched epoch is invalid
+     * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition doesn't match metadata topic
      */
     private CompletableFuture<FetchResponseData> handleFetchRequest(
         RaftRequest.Inbound requestMetadata,
@@ -950,9 +957,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return completedFuture(new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
         }
 
-        if (!hasValidTopicPartition(request, log.topicPartition(), log.topicId())) {
+        Errors topError = validateTopicPartition(request, log.topicPartition(), log.topicId());
+        if (topError != Errors.NONE) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
-            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_REQUEST.code()));
+            return completedFuture(new FetchResponseData().setErrorCode(topError.code()));
         }
         // If the ID is valid, we can set the topic name.
         request.topics().get(0).setTopic(log.topicPartition().topic());
@@ -1062,7 +1070,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         recordAcknowledgedClusterId();
 
-        if (!RaftUtil.hasValidTopicPartition(response, log.topicPartition(), log.topicId())) {
+        if (validateTopicPartition(response, log.topicPartition(), log.topicId()) != Errors.NONE) {
             return false;
         }
         // If the ID is valid, we can set the topic name.
@@ -1175,9 +1183,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         DescribeQuorumRequestData describeQuorumRequestData = (DescribeQuorumRequestData) requestMetadata.data;
-        if (!hasValidTopicPartition(describeQuorumRequestData, log.topicPartition())) {
-            return DescribeQuorumRequest.getPartitionLevelErrorResponse(
-                describeQuorumRequestData, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+
+        Errors topError = validateTopicPartition(describeQuorumRequestData, log.topicPartition());
+        if (topError != Errors.NONE) {
+            return DescribeQuorumRequest.getPartitionLevelErrorResponse(describeQuorumRequestData, topError);
         }
 
         if (!quorum.isLeader()) {
@@ -1208,6 +1217,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      *     or if either the fetch offset or the last fetched epoch is invalid
      * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exists
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
+     * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} if the topic or partition doesn't match metadata topic
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
         RaftRequest.Inbound requestMetadata
@@ -1218,14 +1228,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
         }
 
-        if (!RaftUtil.hasValidTopicPartition(data, log.topicPartition())) {
-            return FetchSnapshotResponse.withTopLevelError(Errors.INVALID_REQUEST);
+        Errors topError = validateTopicPartition(data, log.topicPartition());
+        if (topError != Errors.NONE) {
+            return FetchSnapshotResponse.withTopLevelError(topError);
         }
 
-        Optional<FetchSnapshotRequestData.PartitionSnapshot> partitionSnapshotOpt = FetchSnapshotRequest
-            .forTopicPartition(data, log.topicPartition());
+        FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = FetchSnapshotRequest
+            .forTopicPartition(data, log.topicPartition()).get();
 
-        FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = partitionSnapshotOpt.get();
         Optional<Errors> leaderValidation = validateLeaderOnlyRequest(
                 partitionSnapshot.currentLeaderEpoch()
         );
@@ -1308,7 +1318,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         recordAcknowledgedClusterId();
 
-        if (!RaftUtil.hasValidTopicPartition(data, log.topicPartition())) {
+        if (validateTopicPartition(data, log.topicPartition()) != Errors.NONE) {
             return false;
         }
 

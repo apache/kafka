@@ -99,80 +99,135 @@ public class RaftUtil {
             .setResponses(Collections.singletonList(fetchableTopic));
     }
 
-    static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {
-        return data.topics().size() == 1 &&
-            data.topics().get(0).topicId().equals(topicId) &&
-            data.topics().get(0).partitions().size() == 1 &&
-            data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
+    static Errors validateTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicId().equals(topicId) ||
+            data.topics().get(0).partitions().get(0).partition() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition, Uuid topicId) {
-        return data.responses().size() == 1 &&
-            data.responses().get(0).topicId().equals(topicId) &&
-            data.responses().get(0).partitions().size() == 1 &&
-            data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(FetchResponseData data, TopicPartition topicPartition, Uuid topicId) {
+        if (data.responses().size() != 1 ||
+            data.responses().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.responses().get(0).topicId().equals(topicId) ||
+            data.responses().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(BeginQuorumEpochRequestData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(BeginQuorumEpochRequestData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(BeginQuorumEpochResponseData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(BeginQuorumEpochResponseData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(EndQuorumEpochRequestData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(EndQuorumEpochRequestData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(EndQuorumEpochResponseData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(EndQuorumEpochResponseData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(DescribeQuorumRequestData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    static Errors validateTopicPartition(DescribeQuorumRequestData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).topicName().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partitionIndex() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(FetchSnapshotRequestData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-            data.topics().get(0).name().equals(topicPartition.topic()) &&
-            data.topics().get(0).partitions().size() == 1 &&
-            data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
+    static Errors validateTopicPartition(FetchSnapshotRequestData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).name().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).partition() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 
-    static boolean hasValidTopicPartition(FetchSnapshotResponseData data, TopicPartition topicPartition) {
-        return data.topics().size() == 1 &&
-            data.topics().get(0).name().equals(topicPartition.topic()) &&
-            data.topics().get(0).partitions().size() == 1 &&
-            data.topics().get(0).partitions().get(0).index() == topicPartition.partition();
+    static Errors validateTopicPartition(FetchSnapshotResponseData data, TopicPartition topicPartition) {
+        if (data.topics().size() != 1 ||
+            data.topics().get(0).partitions().size() != 1) {
+            return Errors.INVALID_REQUEST;
+        }
+        if (!data.topics().get(0).name().equals(topicPartition.topic()) ||
+            data.topics().get(0).partitions().get(0).index() != topicPartition.partition()) {
+            return Errors.UNKNOWN_TOPIC_OR_PARTITION;
+        }
+        return Errors.NONE;
     }
 }

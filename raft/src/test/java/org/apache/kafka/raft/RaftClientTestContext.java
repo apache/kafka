@@ -78,7 +78,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
+import static org.apache.kafka.raft.RaftUtil.validateTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -496,7 +496,7 @@ public final class RaftClientTestContext {
         RaftMessage raftMessage = sentMessages.get(0);
         assertTrue(raftMessage.data() instanceof VoteResponseData);
         VoteResponseData response = (VoteResponseData) raftMessage.data();
-        assertTrue(hasValidTopicPartition(response, metadataPartition));
+        assertEquals(Errors.NONE, validateTopicPartition(response, metadataPartition));
 
         VoteResponseData.PartitionData partitionResponse = response.topics().get(0).partitions().get(0);
 
@@ -914,7 +914,7 @@ public final class RaftClientTestContext {
     }
 
     private VoteRequestData.PartitionData unwrap(VoteRequestData voteRequest) {
-        assertTrue(RaftUtil.hasValidTopicPartition(voteRequest, metadataPartition));
+        assertEquals(Errors.NONE, validateTopicPartition(voteRequest, metadataPartition));
         return voteRequest.topics().get(0).partitions().get(0);
     }
 
