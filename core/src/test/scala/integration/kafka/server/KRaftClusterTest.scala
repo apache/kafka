@@ -296,7 +296,7 @@ class KRaftClusterTest {
   def testCreateClusterInvalidMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setInitialMetadataVersion(2).
+        setInitialMetadataVersion(-1).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {

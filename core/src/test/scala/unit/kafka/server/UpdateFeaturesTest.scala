@@ -214,7 +214,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_1",
       new FeatureUpdate(targetMaxVersionLevel, FeatureUpdate.DowngradeType.NONE),
-      ".*Can not downgrade finalized feature.*allowDowngrade.*".r)
+      ".*Can not downgrade finalized feature.*".r)
   }
 
   /**
@@ -227,7 +227,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_1",
       new FeatureUpdate(targetMaxVersionLevel,  FeatureUpdate.DowngradeType.SAFE),
-      ".*When the allowDowngrade flag set in the request, the provided maxVersionLevel:3.*existing maxVersionLevel:2.*".r)
+      ".*When the downgradeType is set to SAFE set in the request, the provided maxVersionLevel:3.*existing maxVersionLevel:2.*".r)
   }
 
   /**
@@ -264,7 +264,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
     assertNotNull(result.errorMessage)
     assertFalse(result.errorMessage.isEmpty)
-    val exceptionMsgPattern = ".*Can not provide maxVersionLevel: 0 less than 1.*allowDowngrade.*".r
+    val exceptionMsgPattern = ".*Can not provide maxVersionLevel: 0 less than 1.*".r
     assertTrue(exceptionMsgPattern.findFirstIn(result.errorMessage).isDefined, result.errorMessage)
     checkFeatures(
       adminClient,
@@ -495,7 +495,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     result.values().get("feature_1").get()
     // Expect update for "feature_2" to have failed.
     checkException[InvalidRequestException](
-      result, Map("feature_2" -> ".*Can not downgrade finalized feature.*allowDowngrade.*".r))
+      result, Map("feature_2" -> ".*Can not downgrade finalized feature.*".r))
     val expectedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
         Utils.mkEntry("feature_1", targetFinalizedFeatures.get("feature_1")),

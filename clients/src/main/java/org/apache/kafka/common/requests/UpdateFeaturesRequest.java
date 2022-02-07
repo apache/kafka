@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -52,6 +53,18 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         this.data = data;
     }
 
+    public FeatureUpdate.DowngradeType downgradeType(UpdateFeaturesRequestData.FeatureUpdateKey update) {
+        if (super.version() == 0) {
+            if (update.allowDowngrade()) {
+                return FeatureUpdate.DowngradeType.SAFE;
+            } else {
+                return FeatureUpdate.DowngradeType.NONE;
+            }
+        } else {
+            return FeatureUpdate.DowngradeType.fromCode(update.downgradeType());
+        }
+    }
+
     @Override
     public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return UpdateFeaturesResponse.createWithErrors(
@@ -70,7 +83,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
-    public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {
-        return update.maxVersionLevel() < 1 && update.allowDowngrade();
+    public static boolean isDeleteRequest(short versionLevel, FeatureUpdate.DowngradeType downgradeType) {
+        return versionLevel < 1 && !downgradeType.equals(FeatureUpdate.DowngradeType.NONE);
     }
 }

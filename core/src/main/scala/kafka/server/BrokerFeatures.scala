@@ -21,6 +21,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.metadata.MetadataVersion
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -32,7 +33,9 @@ import scala.jdk.CollectionConverters._
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange]) {
   // For testing only.
   def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
-    supportedFeatures = newFeatures
+    val combined = new util.HashMap[String, SupportedVersionRange](supportedFeatures.features())
+    combined.putAll(newFeatures.features())
+    supportedFeatures = Features.supportedFeatures(combined)
   }
 
   /**

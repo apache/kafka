@@ -39,6 +39,18 @@ public class FeatureUpdate {
         public byte code() {
             return code;
         }
+
+        public static DowngradeType fromCode(int code) {
+            if (code == 0) {
+                return NONE;
+            } else if (code == 1) {
+                return SAFE;
+            } else if (code == 2) {
+                return UNSAFE;
+            } else {
+                throw new IllegalArgumentException("No downgrade type for code " + code);
+            }
+        }
     }
 
     /**
