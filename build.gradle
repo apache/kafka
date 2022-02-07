@@ -31,16 +31,16 @@ buildscript {
 
 plugins {
   id 'com.diffplug.spotless' version '5.12.5'
-  id 'com.github.ben-manes.versions' version '0.38.0'
+  id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '6.1.6'
+  id 'org.owasp.dependencycheck' version '6.5.3'
   id 'org.nosphere.apache.rat' version "0.7.0"
 
-  id "com.github.spotbugs" version '4.7.1' apply false
+  id "com.github.spotbugs" version '5.0.5' apply false
   id 'org.gradle.test-retry' version '1.3.1' apply false
-  id 'org.scoverage' version '5.0.0' apply false
-  id 'com.github.johnrengelman.shadow' version '7.0.0' apply false
+  id 'org.scoverage' version '7.0.0' apply false
+  id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
 }
 
 spotless {
