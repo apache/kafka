@@ -1606,6 +1606,50 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testInconsistentClusterIdInVoteResponse() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+
+        // Send vote request
+        context.pollUntilRequest();
+        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+
+        // Firstly receive a response with a valid cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            context.voteResponse(false, Optional.empty(), epoch));
+        context.client.poll();
+
+        // Send vote request again
+        context.pollUntilRequest();
+        correlationId = context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
+
+        // Receive a response with an inconsistent cluster id
+        context.deliverResponse(correlationId, otherNodeId,
+            new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+
+        // Inconsistent cluster id are not fatal if a previous response contained a valid cluster id
+        assertDoesNotThrow(context.client::poll);
+
+        // This time we receive a inconsistent cluster id directly
+        context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
+            .build();
+
+        context.pollUntilRequest();
+        correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        context.deliverResponse(correlationId, otherNodeId,
+            new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+        // Inconsistent cluster id are fatal if this is the first rpc request
+        assertThrows(InconsistentClusterIdException.class, context.client::poll);
+    }
+
+    @Test
     public void testInconsistentClusterIdInBeginQuorumResponse() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
