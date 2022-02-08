@@ -51,50 +51,6 @@ spotless {
   }
 }
 
-allprojects {
-
-  repositories {
-    mavenCentral()
-  }
-
-  dependencyUpdates {
-    revision="release"
-    resolutionStrategy {
-      componentSelection { rules ->
-        rules.all { ComponentSelection selection ->
-          boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
-            selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
-          }
-          if (rejected) {
-            selection.reject('Release candidate')
-          }
-        }
-      }
-    }
-  }
-
-  configurations.all {
-    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
-    // that are unrelated to the project dependencies, we should not change them
-    if (name != "zinc") {
-      resolutionStrategy {
-        force(
-          // be explicit about the javassist dependency version instead of relying on the transitive version
-          libs.javassist,
-          // ensure we have a single version in the classpath despite transitive dependencies
-          libs.scalaLibrary,
-          libs.scalaReflect,
-          libs.jacksonAnnotations,
-          // be explicit about the Netty dependency version instead of relying on the version set by
-          // ZooKeeper (potentially older and containing CVEs)
-          libs.nettyHandler,
-          libs.nettyTransportNativeEpoll
-        )
-      }
-    }
-  }
-}
-
 ext {
   gradleVersion = versions.gradle
   minJavaVersion = "8"
@@ -102,7 +58,7 @@ ext {
 
   defaultMaxHeapSize = "2g"
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
-  
+
   // "JEP 403: Strongly Encapsulate JDK Internals" causes some tests to fail when they try
   // to access internals (often via mocking libraries). We use `--add-opens` as a workaround
   // for now and we'll fix it properly (where possible) via KAFKA-13275.
@@ -149,6 +105,50 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
   commitId = determineCommitId()
+}
+
+allprojects {
+
+  repositories {
+    mavenCentral()
+  }
+
+  dependencyUpdates {
+    revision="release"
+    resolutionStrategy {
+      componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+          boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
+            selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+          }
+          if (rejected) {
+            selection.reject('Release candidate')
+          }
+        }
+      }
+    }
+  }
+
+  configurations.all {
+    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+    // that are unrelated to the project dependencies, we should not change them
+    if (name != "zinc") {
+      resolutionStrategy {
+        force(
+          // be explicit about the javassist dependency version instead of relying on the transitive version
+          libs.javassist,
+          // ensure we have a single version in the classpath despite transitive dependencies
+          libs.scalaLibrary,
+          libs.scalaReflect,
+          libs.jacksonAnnotations,
+          // be explicit about the Netty dependency version instead of relying on the version set by
+          // ZooKeeper (potentially older and containing CVEs)
+          libs.nettyHandler,
+          libs.nettyTransportNativeEpoll
+        )
+      }
+    }
+  }
 }
 
 def determineCommitId() {
