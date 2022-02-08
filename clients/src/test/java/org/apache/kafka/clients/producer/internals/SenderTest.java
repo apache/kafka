@@ -1465,8 +1465,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.failIfNotReadyForSend();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
@@ -1751,7 +1750,8 @@ public class SenderTest {
         doInitTransactions(transactionManager, new ProducerIdAndEpoch(producerId, (short) 0));
         assertTrue(transactionManager.hasProducerId());
 
-        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce(); // Receive AddPartitions response
 
@@ -2307,8 +2307,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.failIfNotReadyForSend();
-        txnManager.maybeAddPartitionToTransaction(tp);
+        txnManager.maybeAddPartition(tp);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
 
@@ -2654,8 +2653,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
@@ -2697,7 +2695,7 @@ public class SenderTest {
 
             // Now begin the commit and assert that the Produce request is sent immediately
             // without waiting for the linger.
-            txnManager.beginCommit();
+            TransactionalRequestResult commitResult = txnManager.beginCommit();
             runUntil(sender, client::hasInFlightRequests);
 
             // Respond to the produce request and wait for the EndTxn request to be sent.
@@ -2707,6 +2705,9 @@ public class SenderTest {
             // Respond to the expected EndTxn request.
             respondToEndTxn(Errors.NONE);
             runUntil(sender, txnManager::isReady);
+
+            assertTrue(commitResult.isSuccessful());
+            commitResult.await();
 
             // Finally, we want to assert that the linger time is still effective
             // when the new transaction begins.
@@ -2772,7 +2773,7 @@ public class SenderTest {
     }
 
     private void addPartitionToTxn(Sender sender, TransactionManager txnManager, TopicPartition tp) {
-        txnManager.maybeAddPartitionToTransaction(tp);
+        txnManager.maybeAddPartition(tp);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
         runUntil(sender, () -> txnManager.isPartitionAdded(tp));
         assertFalse(txnManager.hasInFlightRequest());
@@ -2813,8 +2814,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
             sender.initiateClose();
@@ -2848,8 +2848,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
-            txnManager.failIfNotReadyForSend();
-            txnManager.maybeAddPartitionToTransaction(tp);
+            txnManager.maybeAddPartition(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
 
@@ -2874,7 +2873,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
         // Begin the transaction
         txnManager.beginTransaction();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         // Run it once so that the partition is added to the transaction.
         sender.runOnce();
@@ -2912,7 +2911,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.maybeAddPartitionToTransaction(tp0);
+        txnManager.maybeAddPartition(tp0);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
@@ -3191,7 +3190,7 @@ public class SenderTest {
     }
 
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
-        transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
         sender.runOnce();
         sender.runOnce();
@@ -3199,6 +3198,7 @@ public class SenderTest {
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         sender.runOnce();
         assertTrue(transactionManager.hasProducerId());
+        result.await();
     }
 
     private void prepareFindCoordinatorResponse(Errors error, String txnid) {

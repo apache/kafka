@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -176,7 +177,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,
@@ -259,7 +262,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,

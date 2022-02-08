@@ -57,6 +57,8 @@ public class ChangeLoggingWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
+    private final static Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+
     @Before
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
@@ -94,6 +96,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldLogPuts() {
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
 
@@ -114,6 +117,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldLogPutsWithPosition() {
+        EasyMock.expect(inner.getPosition()).andReturn(POSITION).anyTimes();
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
 
@@ -185,7 +189,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
-
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
 

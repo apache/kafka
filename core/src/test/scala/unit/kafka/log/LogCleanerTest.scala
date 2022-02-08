@@ -105,11 +105,13 @@ class LogCleanerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
+    val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val producerStateManager = new ProducerStateManager(topicPartition, dir,
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
+    val offsets = new LogLoader(
       dir,
       topicPartition,
       config,
@@ -120,9 +122,9 @@ class LogCleanerTest {
       logSegments,
       0L,
       0L,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
     val log = new UnifiedLog(offsets.logStartOffset,
@@ -1778,11 +1780,23 @@ class LogCleanerTest {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
-    UnifiedLog(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) = {
+    UnifiedLog(
+      dir = dir,
+      config = config,
+      logStartOffset = 0L,
+      recoveryPoint = recoveryPoint,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
+  }
 
   private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,

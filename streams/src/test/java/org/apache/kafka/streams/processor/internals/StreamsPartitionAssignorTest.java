@@ -816,7 +816,7 @@ public class StreamsPartitionAssignorTest {
         assertEquals(new HashSet<>(tasks), allTasks);
 
         // check tasks for state topics
-        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
 
         assertEquals(mkSet(TASK_0_0, TASK_0_1, TASK_0_2), tasksForState("store1", tasks, topicGroups));
         assertEquals(mkSet(TASK_1_0, TASK_1_1, TASK_1_2), tasksForState("store2", tasks, topicGroups));
@@ -2040,10 +2040,10 @@ public class StreamsPartitionAssignorTest {
         private Map<Subtopology, TopicsInfo> corruptedTopicGroups;
 
         @Override
-        public synchronized Map<Subtopology, TopicsInfo> topicGroups() {
+        public synchronized Map<Subtopology, TopicsInfo> subtopologyToTopicsInfo() {
             if (corruptedTopicGroups == null) {
                 corruptedTopicGroups = new HashMap<>();
-                for (final Map.Entry<Subtopology, TopicsInfo> topicGroupEntry : super.topicGroups().entrySet()) {
+                for (final Map.Entry<Subtopology, TopicsInfo> topicGroupEntry : super.subtopologyToTopicsInfo().entrySet()) {
                     final TopicsInfo originalInfo = topicGroupEntry.getValue();
                     corruptedTopicGroups.put(
                         topicGroupEntry.getKey(),

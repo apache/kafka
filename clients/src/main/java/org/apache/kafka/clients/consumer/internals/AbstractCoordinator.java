@@ -133,6 +133,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
 
     private Node coordinator = null;
+    private String rejoinReason = "";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private HeartbeatThread heartbeatThread = null;
@@ -473,7 +474,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
 
                 resetJoinGroupFuture();
-                rejoinNeeded = true;
+                synchronized (AbstractCoordinator.this) {
+                    rejoinReason = String.format("rebalance failed due to '%s' (%s)", exception.getMessage(), exception.getClass().getSimpleName());
+                    rejoinNeeded = true;
+                }
 
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof IllegalGenerationException ||
@@ -548,6 +552,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
+                        .setReason(this.rejoinReason)
         );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
@@ -719,7 +724,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
-            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, this.generation, requestBuilder);
+            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
             return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);
@@ -771,6 +776,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             } else {
                                 log.info("Successfully synced group in generation {}", generation);
                                 state = MemberState.STABLE;
+                                rejoinReason = "";
                                 rejoinNeeded = false;
                                 // record rebalance latency
                                 lastRebalanceEndMs = time.milliseconds();
@@ -1017,6 +1023,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     public synchronized void requestRejoin(final String reason) {
         log.info("Request joining group due to: {}", reason);
+        this.rejoinReason = reason;
         this.rejoinNeeded = true;
     }
 
@@ -1080,7 +1087,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(leaveReason))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));
@@ -1550,6 +1557,10 @@ public abstract class AbstractCoordinator implements Closeable {
     // For testing only below
     final Heartbeat heartbeat() {
         return heartbeat;
+    }
+
+    final String rejoinReason() {
+        return rejoinReason;
     }
 
     final synchronized void setLastRebalanceTime(final long timestamp) {

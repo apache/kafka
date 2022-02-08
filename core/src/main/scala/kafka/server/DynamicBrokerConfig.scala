@@ -22,7 +22,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
-import kafka.network.SocketServer
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
@@ -85,7 +85,7 @@ object DynamicBrokerConfig {
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs
 
-  private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
+  private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp, KafkaConfig.NumNetworkThreadsProp)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
   private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
@@ -252,8 +252,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 
     addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
-    if (kafkaServer.logManager.cleaner != null)
-      addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
@@ -687,7 +685,6 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 object DynamicThreadPool {
   val ReconfigurableConfigs = Set(
     KafkaConfig.NumIoThreadsProp,
-    KafkaConfig.NumNetworkThreadsProp,
     KafkaConfig.NumReplicaFetchersProp,
     KafkaConfig.NumRecoveryThreadsPerDataDirProp,
     KafkaConfig.BackgroundThreadsProp)
@@ -720,8 +717,6 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       server.dataPlaneRequestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
-    if (newConfig.numNetworkThreads != oldConfig.numNetworkThreads)
-      server.socketServer.resizeThreadPool(oldConfig.numNetworkThreads, newConfig.numNetworkThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
       server.replicaManager.resizeFetcherThreadPool(newConfig.numReplicaFetchers)
     if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)
@@ -733,7 +728,6 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
   private def currentValue(name: String): Int = {
     name match {
       case KafkaConfig.NumIoThreadsProp => server.config.numIoThreads
-      case KafkaConfig.NumNetworkThreadsProp => server.config.numNetworkThreads
       case KafkaConfig.NumReplicaFetchersProp => server.config.numReplicaFetchers
       case KafkaConfig.NumRecoveryThreadsPerDataDirProp => server.config.numRecoveryThreadsPerDataDir
       case KafkaConfig.BackgroundThreadsProp => server.config.backgroundThreads
@@ -863,7 +857,10 @@ object DynamicListenerConfig {
 
     // Connection limit configs
     KafkaConfig.MaxConnectionsProp,
-    KafkaConfig.MaxConnectionCreationRateProp
+    KafkaConfig.MaxConnectionCreationRateProp,
+
+    // Network threads
+    KafkaConfig.NumNetworkThreadsProp
   )
 }
 
@@ -920,7 +917,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
         kafkaConfig.originalsWithPrefix(prefix, true).asScala.filter { case (key, _) =>
           // skip the reconfigurable configs
-          !DynamicSecurityConfigs.contains(key) && !SocketServer.ListenerReconfigurableConfigs.contains(key)
+          !DynamicSecurityConfigs.contains(key) && !SocketServer.ListenerReconfigurableConfigs.contains(key) && !DataPlaneAcceptor.ListenerReconfigurableConfigs.contains(key)
         }
       }
       if (immutableListenerConfigs(newConfig, listenerName.configPrefix) != immutableListenerConfigs(oldConfig, listenerName.configPrefix))

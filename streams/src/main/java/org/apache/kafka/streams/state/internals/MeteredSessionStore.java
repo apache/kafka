@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -36,8 +37,10 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -74,7 +77,7 @@ public class MeteredSessionStore<K, V>
             mkMap(
                     mkEntry(
                             WindowRangeQuery.class,
-                            (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
+                            (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                     )
             );
 
@@ -136,10 +139,11 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
@@ -148,13 +152,26 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
+    }
+
+    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+        if (configs == null) {
+            return applicationId;
+        } else {
+            return StreamsConfig.InternalConfig.getString(
+                configs,
+                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                applicationId
+            );
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -389,14 +406,14 @@ public class MeteredSessionStore<K, V>
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
         if (handler == null) {
-            result = wrapped().query(query, positionBound, collectExecutionInfo);
-            if (collectExecutionInfo) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
@@ -404,10 +421,10 @@ public class MeteredSessionStore<K, V>
             result = (QueryResult<R>) handler.apply(
                 query,
                 positionBound,
-                collectExecutionInfo,
+                config,
                 this
             );
-            if (collectExecutionInfo) {
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " with serdes "
                         + serdes + " in " + (time.nanoseconds() - start) + "ns");
@@ -419,7 +436,7 @@ public class MeteredSessionStore<K, V>
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                              final PositionBound positionBound,
-                                             final boolean collectExecutionInfo) {
+                                             final QueryConfig config) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
         if (typedQuery.getKey().isPresent()) {
@@ -428,7 +445,7 @@ public class MeteredSessionStore<K, V>
                     Bytes.wrap(serdes.rawKey(typedQuery.getKey().get()))
                 );
             final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+                wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredWindowedKeyValueIterator<K, V> typedResult =
                     new MeteredWindowedKeyValueIterator<>(
@@ -440,7 +457,7 @@ public class MeteredSessionStore<K, V>
                         time
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
-                    QueryResult.forResult(typedResult);
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
                 // the generic type doesn't matter, since failed queries have no result set.

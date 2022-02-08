@@ -52,6 +52,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -315,19 +316,24 @@ public class IQv2IntegrationTest {
                     return new KeyValueStore<Bytes, byte[]>() {
                         private boolean open = false;
                         private Map<Bytes, byte[]> map = new HashMap<>();
+                        private Position position;
+                        private StateStoreContext context;
 
                         @Override
                         public void put(final Bytes key, final byte[] value) {
                             map.put(key, value);
+                            StoreQueryUtils.updatePosition(position,  context);
                         }
 
                         @Override
                         public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+                            StoreQueryUtils.updatePosition(position,  context);
                             return map.putIfAbsent(key, value);
                         }
 
                         @Override
                         public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+                            StoreQueryUtils.updatePosition(position,  context);
                             for (final KeyValue<Bytes, byte[]> entry : entries) {
                                 map.put(entry.key, entry.value);
                             }
@@ -335,6 +341,7 @@ public class IQv2IntegrationTest {
 
                         @Override
                         public byte[] delete(final Bytes key) {
+                            StoreQueryUtils.updatePosition(position,  context);
                             return map.remove(key);
                         }
 
@@ -353,6 +360,8 @@ public class IQv2IntegrationTest {
                         public void init(final StateStoreContext context, final StateStore root) {
                             context.register(root, (key, value) -> put(Bytes.wrap(key), value));
                             this.open = true;
+                            this.position = Position.emptyPosition();
+                            this.context = context;
                         }
 
                         @Override
@@ -374,6 +383,11 @@ public class IQv2IntegrationTest {
                         @Override
                         public boolean isOpen() {
                             return open;
+                        }
+
+                        @Override
+                        public Position getPosition() {
+                            return position;
                         }
 
                         @Override
