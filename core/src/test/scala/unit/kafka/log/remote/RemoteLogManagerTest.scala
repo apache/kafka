@@ -90,7 +90,7 @@ class RemoteLogManagerTest {
       (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
       override private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = rlmmManager
     }
-    assertEquals(Optional.of(-1L), remoteLogManager.findHighestRemoteOffset(topicIdPartition))
+    assertEquals(-1L, remoteLogManager.findHighestRemoteOffset(topicIdPartition))
   }
 
   @Test
@@ -112,7 +112,7 @@ class RemoteLogManagerTest {
       (_, _) => {}, rlmConfig, time, 1, clusterId, logsDir, brokerTopicStats) {
       override private[remote] def createRemoteLogMetadataManager(): RemoteLogMetadataManager = rlmmManager
     }
-    assertEquals(Optional.of(200L), remoteLogManager.findHighestRemoteOffset(topicIdPartition))
+    assertEquals(200L, remoteLogManager.findHighestRemoteOffset(topicIdPartition))
   }
 
   @Test

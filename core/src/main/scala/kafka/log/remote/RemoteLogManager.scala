@@ -344,11 +344,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     private def isLeader(): Boolean = leaderEpoch >= 0
 
-    // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
-    // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
-    // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
-    // epoch cache then it starts copying the segments from the earliest epoch entry’s offset.
-    private var readOffset: Long = -1
+    // The readOffset is None initially for a new leader RLMTask,
+    // and needs to be fetched inside the task's run() method.
+    private var readOffsetOption: Option[Long] = None
 
     //todo-updating log with remote index highest offset -- should this be required?
     // fetchLog(tp.topicPartition()).foreach { log => log.updateRemoteIndexHighestOffset(readOffset) }
@@ -359,9 +357,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       }
       if (this.leaderEpoch != leaderEpochVal) {
         leaderEpoch = leaderEpochVal
-        info(s"Find the highest remote offset for partition: $tpId after becoming leader, leaderEpoch: $leaderEpoch")
-        readOffset = findHighestRemoteOffset(tpId).get()
       }
+      // Reset readOffset, so that it is set in next run of RLMTask
+      readOffsetOption = None
     }
 
     def convertToFollower(): Unit = {
@@ -372,7 +370,21 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       if (isCancelled())
         return
 
+      def maybeUpdateReadOffset(): Unit = {
+        if (readOffsetOption.isEmpty) {
+          info(s"Find the highest remote offset for partition: $tpId after becoming leader, leaderEpoch: $leaderEpoch")
+
+          // This is found by traversing from the latest leader epoch from leader epoch history and find the highest offset
+          // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
+          // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
+          // epoch cache then it starts copying the segments from the earliest epoch entry’s offset.
+          readOffsetOption = Some(findHighestRemoteOffset(tpId))
+        }
+      }
+
       try {
+        maybeUpdateReadOffset()
+        val readOffset = readOffsetOption.get
         fetchLog(tpId.topicPartition()).foreach { log =>
           // LSO indicates the offset below are ready to be consumed(high-watermark or committed)
           val lso = log.lastStableOffset
@@ -438,9 +450,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 brokerTopicStats.topicStats(tpId.topicPartition().topic())
                   .remoteBytesOutRate.mark(remoteLogSegmentMetadata.segmentSizeInBytes())
                 brokerTopicStats.allTopicsStats.remoteBytesOutRate.mark(remoteLogSegmentMetadata.segmentSizeInBytes())
-                readOffset = endOffset
+                readOffsetOption = Some(endOffset)
                 //todo-tier-storage
-                log.updateRemoteIndexHighestOffset(readOffset)
+                log.updateRemoteIndexHighestOffset(endOffset)
                 info(s"Copied $fileName to remote storage with segment-id: ${rlsmAfterCreate.remoteLogSegmentId()}")
               }
             }
@@ -548,11 +560,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           // We do not need any cleanup on followers from remote segments perspective.
           handleExpiredRemoteLogSegments()
         } else {
-          val offset = findHighestRemoteOffset(tpId)
-          if (offset.isPresent) {
-            fetchLog(tpId.topicPartition()).foreach { log =>
-              log.updateRemoteIndexHighestOffset(offset.get())
-            }
+          fetchLog(tpId.topicPartition()).foreach { log =>
+            val offset = findHighestRemoteOffset(tpId)
+            log.updateRemoteIndexHighestOffset(offset)
           }
         }
       } catch {
@@ -574,7 +584,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
   }
 
-  def findHighestRemoteOffset(topicIdPartition: TopicIdPartition): Optional[lang.Long] = {
+  def findHighestRemoteOffset(topicIdPartition: TopicIdPartition): Long = {
     var offset: Optional[lang.Long] = Optional.empty()
     fetchLog(topicIdPartition.topicPartition()).foreach { log =>
       log.leaderEpochCache.foreach(cache => {
@@ -585,10 +595,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         }
       })
     }
-    if (!offset.isPresent) {
-      offset = Optional.of(-1L)
-    }
-    offset
+    offset.orElse(-1L)
   }
 
   def lookupPositionForOffset(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset: Long): Int = {
