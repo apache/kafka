@@ -17,32 +17,35 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.RecordValue;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
-class KStreamMapRecordValue<K, V> implements ProcessorSupplier<K, V> {
+class KStreamMapRecordValue<K, V> implements ProcessorSupplier<K, V, K, RecordValue<V>> {
 
     public KStreamMapRecordValue() {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, V, K, RecordValue<V>> get() {
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends AbstractProcessor<K, V> {
+    private class KStreamMapProcessor extends ContextualProcessor<K, V, K, RecordValue<V>> {
 
         @Override
-        public void process(final K readOnlyKey, final V value) {
-            final RecordValue<V> newValue = new RecordValue<>(
-                context().topic(),
-                context().partition(),
-                context().offset(),
-                value,
-                context().timestamp(),
-                context().headers());
-            context().forward(readOnlyKey, newValue);
+        public void process(final Record<K, V> record) {
+            final RecordValue<V> newValue = context().recordMetadata()
+                .map(meta -> new RecordValue<>(
+                    meta.topic(),
+                    meta.partition(),
+                    meta.offset(),
+                    record.value(),
+                    record.timestamp(),
+                    record.headers()))
+                .orElse(new RecordValue<>(record.value(), record.timestamp(), record.headers()));
+            context().forward(record.withValue(newValue));
         }
     }
 }

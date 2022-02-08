@@ -18,12 +18,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.header.Headers;
 import org.apache.kafka.streams.kstream.RecordHeadersMapper;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 
-public class KStreamSetRecordHeaders<K, V> implements ProcessorSupplier<K, V> {
+public class KStreamSetRecordHeaders<K, V> implements ProcessorSupplier<K, V, K, V> {
 
     final RecordHeadersMapper<K, V> mapper;
 
@@ -32,20 +32,16 @@ public class KStreamSetRecordHeaders<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public Processor<K, V, K, V> get() {
         return new KStreamSetRecordHeadersProcessor();
     }
 
-    private class KStreamSetRecordHeadersProcessor extends AbstractProcessor<K, V> {
+    private class KStreamSetRecordHeadersProcessor extends ContextualProcessor<K, V, K, V> {
 
         @Override
-        public void process(final K key, final V value) {
-            final Headers headers = mapper.get(key, value);
-            context().forward(key, value, To.all().withHeaders(headers.unwrap()));
-        }
-
-        @Override
-        public void close() {
+        public void process(final Record<K, V> record) {
+            final Headers headers = mapper.get(record.key(), record.value());
+            context().forward(record.withHeaders(headers.unwrap()));
         }
     }
 }

@@ -35,6 +35,22 @@ public class RecordValue<V> {
     final Headers headers;
 
     public RecordValue(
+        final V value,
+        final long timestamp,
+        final org.apache.kafka.common.header.Headers headers
+    ) {
+        this("", -1, -1L, value, timestamp, headers);
+    }
+
+    public RecordValue(
+        final V value,
+        final long timestamp,
+        final org.apache.kafka.common.header.Header[] headers
+    ) {
+        this("", -1, -1L, value, timestamp, headers);
+    }
+
+    public RecordValue(
         final String topic,
         final int partition,
         final long offset,
