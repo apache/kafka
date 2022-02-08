@@ -119,7 +119,9 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
-  userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
+  maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacParallelism.toInteger() :
+      Math.min(Runtime.runtime.availableProcessors(), 8)
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
@@ -146,7 +148,26 @@ ext {
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
-  commitId = project.hasProperty('commitId') ? commitId : null
+  commitId = determineCommitId()
+}
+
+def determineCommitId() {
+  def takeFromHash = 16
+  if (project.hasProperty('commitId2')) {
+    commitId2.take(takeFromHash)
+  } else if (file("$rootDir/.git/HEAD").exists()) {
+    def headRef = file("$rootDir/.git/HEAD").text
+    if (headRef.contains('ref: ')) {
+      headRef = headRef.replaceAll('ref: ', '').trim()
+      if (file("$rootDir/.git/$headRef").exists()) {
+        file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+      }
+    } else {
+      headRef.trim().take(takeFromHash)
+    }
+  } else {
+    "unknown"
+  }
 }
 
 apply from: file('wrapper.gradle')
@@ -186,7 +207,8 @@ if (file('.git').exists()) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
 
@@ -391,7 +413,7 @@ subprojects {
   }
 
   test {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
@@ -416,7 +438,7 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
@@ -449,7 +471,7 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
@@ -561,6 +583,7 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
+
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
@@ -570,6 +593,7 @@ subprojects {
       "-language:postfixOps",
       "-language:implicitConversions",
       "-language:existentials",
+      "-Ybackend-parallelism", maxScalacThreads.toString(),
       "-Xlint:constant",
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
@@ -687,25 +711,6 @@ subprojects {
   if (userEnableTestCoverage) {
     def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
     task reportCoverage(dependsOn: [coverageGen])
-  }
-
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
   }
 
 }
@@ -1214,7 +1219,7 @@ project(':clients') {
     testImplementation libs.jacksonJaxrsJsonProvider
   }
 
-  task createVersionFile(dependsOn: determineCommitId) {
+  task createVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
@@ -1329,7 +1334,7 @@ project(':raft') {
     testRuntimeOnly libs.slf4jlog4j
   }
 
-  task createVersionFile(dependsOn: determineCommitId) {
+  task createVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
@@ -1408,7 +1413,7 @@ project(':server-common') {
     testRuntimeOnly libs.slf4jlog4j
   }
 
-  task createVersionFile(dependsOn: determineCommitId) {
+  task createVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
@@ -1464,7 +1469,7 @@ project(':storage:api') {
     testRuntimeOnly libs.slf4jlog4j
   }
 
-  task createVersionFile(dependsOn: determineCommitId) {
+  task createVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
@@ -1530,7 +1535,7 @@ project(':storage') {
     testRuntimeOnly libs.slf4jlog4j
   }
 
-  task createVersionFile(dependsOn: determineCommitId) {
+  task createVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
@@ -1806,7 +1811,7 @@ project(':streams') {
     duplicatesStrategy 'exclude'
   }
 
-  task createStreamsVersionFile(dependsOn: determineCommitId) {
+  task createStreamsVersionFile() {
     ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
     outputs.file receiptFile
     outputs.upToDateWhen { false }
