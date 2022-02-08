@@ -91,6 +91,6 @@ public final class AclsDelta {
         return "AclsDelta(isSnapshotDelta=" + isSnapshotDelta +
             ", changes=" + changes.entrySet().stream().
                 map(e -> "" + e.getKey() + "=" + e.getValue()).
-                collect(Collectors.joining(", "));
+                collect(Collectors.joining(", ")) + ")";
     }
 }

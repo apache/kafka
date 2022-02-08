@@ -69,6 +69,7 @@ import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -80,8 +81,13 @@ public class StandardAuthorizerTest {
             getConfiguredSuperUsers(Collections.emptyMap()));
         assertEquals(Collections.emptySet(),
             getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, " ")));
-        assertEquals(new HashSet<>(asList("bob", "alice")),
-            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, "bob;alice ")));
+        assertEquals(new HashSet<>(asList("User:bob", "User:alice")),
+            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, "User:bob;User:alice ")));
+        assertEquals(new HashSet<>(asList("User:bob", "User:alice")),
+            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, ";  User:bob  ;  User:alice ")));
+        assertEquals("expected a string in format principalType:principalName but got bob",
+            assertThrows(IllegalArgumentException.class, () -> getConfiguredSuperUsers(
+                Collections.singletonMap(SUPER_USERS_CONFIG, "bob;:alice"))).getMessage());
     }
 
     @Test
@@ -97,10 +103,10 @@ public class StandardAuthorizerTest {
     public void testConfigure() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         HashMap<String, Object> configs = new HashMap<>();
-        configs.put(SUPER_USERS_CONFIG, "alice;chris");
+        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
         configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
         authorizer.configure(configs);
-        assertEquals(new HashSet<>(asList("alice", "chris")), authorizer.superUsers());
+        assertEquals(new HashSet<>(asList("User:alice", "User:chris")), authorizer.superUsers());
         assertEquals(ALLOWED, authorizer.defaultResult());
     }
 

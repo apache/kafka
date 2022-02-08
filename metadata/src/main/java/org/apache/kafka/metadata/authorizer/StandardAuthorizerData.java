@@ -327,9 +327,9 @@ public class StandardAuthorizerData {
                 break;
             }
             AuthorizationResult result = findResult(action, requestContext, acl);
-            if (ALLOWED.equals(result)) {
+            if (ALLOWED == result) {
                 builder.foundAllow = true;
-            } else if (DENIED.equals(result)) {
+            } else if (DENIED == result) {
                 if (log.isTraceEnabled()) {
                     log.trace("authorize(requestContext=" + requestContext + ", action=" +
                         action + "): DENIED because of " + acl);

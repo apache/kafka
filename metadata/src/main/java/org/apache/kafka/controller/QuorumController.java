@@ -1491,7 +1491,6 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("deleteAcls", () -> aclControlManager.deleteAcls(filters));
     }
 
-
     @Override
     public CompletableFuture<Void> waitForReadyBrokers(int minBrokers) {
         final CompletableFuture<Void> future = new CompletableFuture<>();

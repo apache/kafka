@@ -33,8 +33,21 @@ import java.util.concurrent.CompletableFuture;
  * These methods must all be thread-safe.
  */
 public interface AclMutator {
+    /**
+     * Create the specified ACLs. If any ACL already exists, nothing will be done for that
+     * one, and we will return a success result for it.
+     *
+     * @param aclBindings   The ACLs to create.
+     * @return              The results for each AclBinding, in the order they were passed.
+     */
     CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings);
 
+    /**
+     * Delete some ACLs based on the set of filters that is passed in.
+     *
+     * @param aclBindingFilters     The filters.
+     * @return                      The results for each filter, in the order they were passed.
+     */
     CompletableFuture<List<AclDeleteResult>> deleteAcls(
             List<AclBindingFilter> aclBindingFilters);
 }

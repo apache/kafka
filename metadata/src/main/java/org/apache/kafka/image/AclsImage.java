@@ -76,8 +76,8 @@ public final class AclsImage {
 
     @Override
     public String toString() {
-        return acls.values().stream().
+        return "AclsImage(" + acls.values().stream().
             map(a -> a.toString()).
-            collect(Collectors.joining(", "));
+            collect(Collectors.joining(", ")) + ")";
     }
 }

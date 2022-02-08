@@ -88,10 +88,10 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
                     futures.get(i).complete(results.get(i));
                 }
             } else {
-                for (int i = 0; i < futures.size(); i++) {
+                for (CompletableFuture<AclCreateResult> future : futures) {
                     ApiException e = (throwable instanceof ApiException) ? (ApiException) throwable :
                         ApiError.fromThrowable(throwable).exception();
-                    futures.get(i).complete(new AclCreateResult(e));
+                    future.complete(new AclCreateResult(e));
                 }
             }
         });
@@ -115,10 +115,10 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
                     futures.get(i).complete(results.get(i));
                 }
             } else {
-                for (int i = 0; i < futures.size(); i++) {
+                for (CompletableFuture<AclDeleteResult> future : futures) {
                     ApiException e = (throwable instanceof ApiException) ? (ApiException) throwable :
                         ApiError.fromThrowable(throwable).exception();
-                    futures.get(i).complete(new AclDeleteResult(e));
+                    future.complete(new AclDeleteResult(e));
                 }
             }
         });

@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -54,7 +55,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     /**
      * A future which is completed once we have loaded a snapshot.
-     * TODO: complete this when we reach the high water mark.
+     * TODO: KAFKA-13649: StandardAuthorizer should not finish loading until it reads up to the high water mark.
      */
     private final CompletableFuture<Void> initialLoadFuture = CompletableFuture.completedFuture(null);
 
@@ -128,8 +129,8 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     @Override
     public void close() throws IOException {
         // Complete the initialLoadFuture, if it hasn't been completed already.
-        initialLoadFuture.completeExceptionally(new TimeoutException());
-
+        initialLoadFuture.completeExceptionally(new TimeoutException("The authorizer was " +
+            "closed before the initial load could complete."));
         // Nothing else to do here.
     }
 
@@ -160,12 +161,14 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     static Set<String> getConfiguredSuperUsers(Map<String, ?> configs) {
         Object configValue = configs.get(SUPER_USERS_CONFIG);
         if (configValue == null) return Collections.emptySet();
-        String stringValue = configValue.toString().trim();
-        if (stringValue.isEmpty()) return Collections.emptySet();
-        String[] values = stringValue.split(";");
+        String[] values = configValue.toString().split(";");
         Set<String> result = new HashSet<>();
         for (String value : values) {
-            result.add(value);
+            String v = value.trim();
+            if (!v.isEmpty()) {
+                SecurityUtils.parseKafkaPrincipal(v);
+                result.add(v);
+            }
         }
         return result;
     }

@@ -3366,7 +3366,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
   }
 
-  def handleala(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleEnvelope(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,

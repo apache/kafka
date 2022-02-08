@@ -92,7 +92,7 @@ public interface Controller extends AclMutator, AutoCloseable {
                                                                      Collection<String> topicNames);
 
     /**
-     * Find the ids for all topic names. Note that this function should only used for
+     * Find the ids for all topic names. Note that this function should only be used for
      * integration tests.
      *
      * @param deadlineNs    The time by which this operation needs to be complete, before
