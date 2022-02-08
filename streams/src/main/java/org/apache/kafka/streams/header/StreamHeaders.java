@@ -269,7 +269,7 @@ public class StreamHeaders implements Headers {
 
     @Override
     public String toString() {
-        return "ConnectHeaders(headers=" + (headers != null ? headers : "") + ")";
+        return "StreamHeaders(headers=" + (headers != null ? headers : "") + ")";
     }
 
     @Override
