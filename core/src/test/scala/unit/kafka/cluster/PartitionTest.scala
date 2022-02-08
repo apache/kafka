@@ -214,8 +214,13 @@ class PartitionTest extends AbstractPartitionTest {
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val maxProducerIdExpirationMs = 60 * 60 * 1000
-        val producerStateManager = new ProducerStateManager(log.topicPartition, log.dir,
-          maxTransactionTimeoutMs, maxProducerIdExpirationMs)
+        val producerStateManager = new ProducerStateManager(
+          log.topicPartition,
+          log.dir,
+          maxTransactionTimeoutMs,
+          maxProducerIdExpirationMs,
+          mockTime
+        )
         val offsets = new LogLoader(
           log.dir,
           log.topicPartition,

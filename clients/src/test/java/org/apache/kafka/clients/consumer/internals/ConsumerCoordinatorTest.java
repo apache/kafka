@@ -478,6 +478,21 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCoordinatorNotAvailableWithUserAssignedType() {
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        // set timeout to 0 because we don't want to retry after the error
+        coordinator.poll(time.timer(0));
+        assertTrue(coordinator.coordinatorUnknown());
+
+        // should find an available node in next find coordinator request
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertFalse(coordinator.coordinatorUnknown());
+    }
+
+    @Test
     public void testCoordinatorNotAvailable() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));

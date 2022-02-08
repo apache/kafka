@@ -1775,7 +1775,7 @@ object UnifiedLog extends Logging {
             recoveryPoint: Long,
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
-            time: Time = Time.SYSTEM,
+            time: Time,
             maxTransactionTimeoutMs: Int,
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
@@ -1794,7 +1794,7 @@ object UnifiedLog extends Logging {
       config.recordVersion,
       s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
-      maxTransactionTimeoutMs, maxProducerIdExpirationMs)
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     val offsets = new LogLoader(
       dir,
       topicPartition,
