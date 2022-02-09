@@ -620,10 +620,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                        String assignmentStrategy,
-                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
-                                                        Boolean skipAssignment) {
+    protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                      String assignmentStrategy,
+                                                      List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
+                                                      boolean skipAssignment) {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -648,10 +648,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         updateGroupSubscription(allSubscribedTopics);
 
         isLeader = true;
-        assignmentSnapshot = metadataSnapshot;
 
-        if (skipAssignment)
+
+        if (skipAssignment) {
+            log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
+                "will collect its existing assignment.", generation().generationId);
+            assignmentSnapshot = metadataSnapshot;
             return Collections.emptyMap();
+        }
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
 
@@ -666,6 +670,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
+
+        // metadataSnapshot could be updated when the subscription is updated therefore
+        // we must take the assignment snapshot after.
+        assignmentSnapshot = metadataSnapshot;
 
         log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
 

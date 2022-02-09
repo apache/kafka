@@ -63,6 +63,7 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
 
@@ -404,7 +405,7 @@ public class WorkerCoordinatorTest {
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers, false);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState1 has 1 connector, 1 task
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -447,7 +448,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers, false);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -490,7 +491,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers, false);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -512,30 +513,17 @@ public class WorkerCoordinatorTest {
     }
 
     @Test
-    public void testLeaderSkipAssignment() {
-        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
-        // output. So we test it directly here.
-
+    public void testSkippingAssignmentFails() {
+        // Connect does not support static membership so skipping assignment should
+        // never be set to true by the group coordinator. It is treated as an
+        // illegal state if it would.
         EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
-
         PowerMock.replayAll();
 
-        // Prime the current configuration state
         coordinator.metadata();
 
-        // Mark everyone as in sync with configState1
-        List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-            .setMemberId("leader")
-            .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
-        );
-        responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
-            .setMemberId("member")
-            .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
-        );
-
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers, true);
-        assertEquals(Collections.emptyMap(), result);
+        assertThrows(IllegalStateException.class,
+            () -> coordinator.onLeaderElected("leader", EAGER.protocol(), Collections.emptyList(), true));
 
         PowerMock.verifyAll();
     }

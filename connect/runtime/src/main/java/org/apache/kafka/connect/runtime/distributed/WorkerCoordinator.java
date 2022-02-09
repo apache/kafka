@@ -211,14 +211,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                        String protocol,
-                                                        List<JoinGroupResponseMember> allMemberMetadata,
-                                                        Boolean skipAssignment) {
-        // Connect does not support static membership so skipping the
-        // assignment should never happen in practice.
+    protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                      String protocol,
+                                                      List<JoinGroupResponseMember> allMemberMetadata,
+                                                      boolean skipAssignment) {
         if (skipAssignment)
-            return Collections.emptyMap();
+            throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)

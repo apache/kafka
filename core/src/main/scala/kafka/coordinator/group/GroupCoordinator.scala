@@ -1329,45 +1329,43 @@ class GroupCoordinator(val brokerId: Int,
                 skipAssignment = false,
                 error = error
               ))
+            } else if (supportSkippingAssignment) {
+              // Starting from version 9 of the JoinGroup API, static members are able to
+              // skip running the assignor based on the `SkipAssignment` field. We leverage
+              // this to tell the leader that it is the leader of the group but by skipping
+              // running the assignor while the group is in stable state.
+              val isLeader = group.isLeader(newMemberId)
+              group.maybeInvokeJoinCallback(member, JoinGroupResult(
+                members = if (isLeader) {
+                  group.currentMemberMetadata
+                } else {
+                  List.empty
+                },
+                memberId = newMemberId,
+                generationId = group.generationId,
+                protocolType = group.protocolType,
+                protocolName = group.protocolName,
+                leaderId = group.leaderOrNull,
+                skipAssignment = isLeader,
+                error = Errors.NONE
+              ))
             } else {
-              if (supportSkippingAssignment) {
-                // Starting from version 8 of the JoinGroup API, static members are able to
-                // skip running the assignor based on the `SkipAssignment` field. We leverage
-                // this to tell the leader that it is the leader of the group but by skipping
-                // running the assignor while the group is in stable state.
-                val isLeader = group.isLeader(newMemberId)
-                group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                  members = if (isLeader) {
-                    group.currentMemberMetadata
-                  } else {
-                    List.empty
-                  },
-                  memberId = newMemberId,
-                  generationId = group.generationId,
-                  protocolType = group.protocolType,
-                  protocolName = group.protocolName,
-                  leaderId = group.leaderOrNull,
-                  skipAssignment = isLeader,
-                  error = Errors.NONE
-                ))
-              } else {
-                // Prior to version 8 of the JoinGroup API, we wanted to avoid current leader
-                // performing trivial assignment while the group is in stable stage, because
-                // the new assignment in leader's next sync call won't be broadcast by a stable group.
-                // This could be guaranteed by always returning the old leader id so that the current
-                // leader won't assume itself as a leader based on the returned message, since the new
-                // member.id won't match returned leader id, therefore no assignment will be performed.
-                group.maybeInvokeJoinCallback(member, JoinGroupResult(
-                  members = List.empty,
-                  memberId = newMemberId,
-                  generationId = group.generationId,
-                  protocolType = group.protocolType,
-                  protocolName = group.protocolName,
-                  leaderId = currentLeader,
-                  skipAssignment = false,
-                  error = Errors.NONE
-                ))
-              }
+              // Prior to version 9 of the JoinGroup API, we wanted to avoid current leader
+              // performing trivial assignment while the group is in stable stage, because
+              // the new assignment in leader's next sync call won't be broadcast by a stable group.
+              // This could be guaranteed by always returning the old leader id so that the current
+              // leader won't assume itself as a leader based on the returned message, since the new
+              // member.id won't match returned leader id, therefore no assignment will be performed.
+              group.maybeInvokeJoinCallback(member, JoinGroupResult(
+                members = List.empty,
+                memberId = newMemberId,
+                generationId = group.generationId,
+                protocolType = group.protocolType,
+                protocolName = group.protocolName,
+                leaderId = currentLeader,
+                skipAssignment = false,
+                error = Errors.NONE
+              ))
             }
           }, requestLocal)
         } else {

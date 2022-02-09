@@ -1793,6 +1793,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(records2.count() == 1 && records2.records(tp).asScala.head.offset == 1,
       "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
   }
+
   @Test
   def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(): Unit = {
     val foo = "foo"
