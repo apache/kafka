@@ -763,8 +763,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
 
     val expiredOffsets: Map[TopicPartition, OffsetAndMetadata] = protocolType match {
-      case Some(_) if is(Empty) || !is(Stable)=>
-        // no consumer exists in the group =>
+      case Some(_) if is(Empty) =>
+        // no consumer exists in the group || group is not stable =>
         // - if current state timestamp exists and retention period has passed since group became Empty,
         //   expire all offsets with no pending offset commit;
         // - if there is no current state timestamp (old group metadata schema) and retention period has passed
@@ -774,7 +774,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
             .getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp)
         )
 
-      case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined =>
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined && is(Stable) =>
         // consumers exist in the group =>
         // - if the group is aware of the subscribed topics and retention period had passed since the
         //   the last commit timestamp, expire the offset. offset with pending offset commit are not

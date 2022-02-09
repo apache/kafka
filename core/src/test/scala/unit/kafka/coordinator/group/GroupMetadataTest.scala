@@ -264,6 +264,7 @@ class GroupMetadataTest {
     val topic = "foo"
     val partition = new TopicPartition(topic, 0)
     val time = new MockTime()
+    group = new GroupMetadata("groupId", Empty, time)
 
     // Rebalance once in order to commit offsets
     val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs,
