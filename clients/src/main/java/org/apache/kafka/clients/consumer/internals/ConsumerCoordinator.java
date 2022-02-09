@@ -714,7 +714,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // return true when
         // 1. future is null, which means no commit request sent, so it is still considered completed
         // 2. offset commit completed
-        // 3. offset commit failed with non-retriable error
+        // 3. offset commit failed with non-retriable exception
         if (future == null)
             onJoinPrepareAsyncCommitCompleted = true;
         else if (future.succeeded())
