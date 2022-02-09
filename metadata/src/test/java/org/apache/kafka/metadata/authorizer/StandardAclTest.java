@@ -82,7 +82,7 @@ public class StandardAclTest {
             AclPermissionType.DENY));
     }
 
-    private static final int signum(int input) {
+    private static int signum(int input) {
         if (input < 0) return -1;
         else if (input > 0) return 1;
         else return 0;

@@ -29,10 +29,9 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.NavigableSet;
@@ -91,7 +90,7 @@ public class StandardAuthorizerData {
     private final AuthorizationResult defaultResult;
 
     /**
-     * Contains all of the current ACLs sorted by (resource type, pattern type, resource name).
+     * Contains all of the current ACLs sorted by (resource type, resource name).
      */
     private final ConcurrentSkipListSet<StandardAcl> aclsByResource;
 
@@ -259,7 +258,7 @@ public class StandardAuthorizerData {
         StandardAcl exemplar = new StandardAcl(
             action.resourcePattern().resourceType(),
             action.resourcePattern().name(),
-            PatternType.UNKNOWN,
+            PatternType.UNKNOWN, // Note that the UNKNOWN value sorts before all others.
             "",
             "",
             AclOperation.UNKNOWN,
@@ -302,9 +301,9 @@ public class StandardAuthorizerData {
                       StandardAcl exemplar,
                       AuthorizableRequestContext requestContext,
                       AuthorizationResultBuilder builder) {
-        NavigableSet<StandardAcl> headSet = aclsByResource.tailSet(exemplar, true);
+        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
         String resourceName = action.resourcePattern().name();
-        for (Iterator<StandardAcl> iterator = headSet.iterator();
+        for (Iterator<StandardAcl> iterator = tailSet.iterator();
              iterator.hasNext(); ) {
             StandardAcl acl = iterator.next();
             if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
@@ -343,13 +342,13 @@ public class StandardAuthorizerData {
      * The set of operations which imply DESCRIBE permission, when used in an ALLOW acl.
      */
     private static final Set<AclOperation> IMPLIES_DESCRIBE = Collections.unmodifiableSet(
-        new HashSet<>(Arrays.asList(DESCRIBE, READ, WRITE, DELETE, ALTER)));
+        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER));
 
     /**
      * The set of operations which imply DESCRIBE_CONFIGS permission, when used in an ALLOW acl.
      */
     private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS = Collections.unmodifiableSet(
-        new HashSet<>(Arrays.asList(DESCRIBE_CONFIGS, ALTER_CONFIGS)));
+        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS));
 
     /**
      * Determine what the result of applying an ACL to the given action and request

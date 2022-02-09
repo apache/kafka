@@ -71,6 +71,17 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
      */
     void removeAcl(Uuid id);
 
+    /**
+     * Create ACLs. This function must be called on the active controller, or else
+     * the futures will fail with NOT_CONTROLLER.
+     *
+     * @param requestContext    The request context.
+     * @param aclBindings       The ACL bindings to create.
+     *
+     * @return a list of futures, one per input acl binding. Each future will be completed
+     * once addAcl has been called on the controller, and the ACL has been persisted to
+     * the cluster metadata log.
+     */
     default List<? extends CompletionStage<AclCreateResult>> createAcls(
             AuthorizableRequestContext requestContext,
             List<AclBinding> aclBindings) {
@@ -98,6 +109,17 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         return futures;
     }
 
+    /**
+     * Delete ACLs based on filters. This function must be called on the active
+     * controller, or else the futures will fail with NOT_CONTROLLER.
+     *
+     * @param requestContext    The request context.
+     * @param filters           The ACL filters.
+     *
+     * @return a list of futures, one per input acl filter. Each future will be completed
+     * once the relevant deleteAcls have been called on the controller (if any), and th
+     * ACL deletions have been persisted to the cluster metadata log (if any).
+     */
     default List<? extends CompletionStage<AclDeleteResult>> deleteAcls(
             AuthorizableRequestContext requestContext,
             List<AclBindingFilter> filters) {
