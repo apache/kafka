@@ -51,7 +51,7 @@
       "about": "The group protocol selected by the coordinator." },
     { "name": "Leader", "type": "string", "versions": "0+",
       "about": "The leader of the group." },
-    { "name": "SkipAssignment", "type": "bool", "versions": "8+", "default": "false",
+    { "name": "SkipAssignment", "type": "bool", "versions": "9+", "default": "false",
       "about": "True is the leader must skip running the assignment." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID assigned by the group coordinator." },
