@@ -29,6 +29,20 @@ import org.apache.kafka.common.internals.Topic
 
 import scala.collection.mutable
 
+/**
+ * The validator that the controller uses for dynamic configuration changes.
+ * It performs the generic validation, which can't be bypassed. If an AlterConfigPolicy
+ * is configured, the controller will check that after verifying that this passes.
+ *
+ * For changes to BROKER resources, the forwarding broker performs an extra validation step
+ * in {@link kafka.server.ConfigAdminManager#preprocess()} before sending the change to
+ * the controller. Therefore, the validation here is just a kind of sanity check, which
+ * should never fail under normal conditions.
+ *
+ * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
+ * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
+ * as the others. It is not persisted to the metadata log (or to ZK, when we're in that mode).
+ */
 class ControllerConfigurationValidator extends ConfigurationValidator {
   override def validate(resource: ConfigResource, config: util.Map[String, String]): Unit = {
     resource.`type`() match {

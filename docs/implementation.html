@@ -47,9 +47,10 @@ attributes: int16
     bit 3: timestampType
     bit 4: isTransactional (0 means not transactional)
     bit 5: isControlBatch (0 means not a control batch)
-    bit 6~15: unused
+    bit 6: hasDeleteHorizonMs (0 means baseTimestamp is not set as the delete horizon for compaction)
+    bit 7~15: unused
 lastOffsetDelta: int32
-firstTimestamp: int64
+baseTimestamp: int64
 maxTimestamp: int64
 producerId: int64
 producerEpoch: int16
@@ -65,8 +66,11 @@ records: [Record]</code></pre>
     <p>On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
     producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
     be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying that the first and last sequence numbers of the incoming batch match the last from that producer). As a result,
-    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the firstTimestamp
+    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the baseTimestamp
     field is not preserved during compaction, so it will change if the first record in the batch is compacted away.</p>
+
+    <p>Compaction may also modify the baseTimestamp if the record batch contains records with a null payload or aborted transaction markers. The baseTimestamp will be set to the timestamp of when those records should be deleted
+    with the delete horizon attribute bit also set.</p>
 
     <h5 class="anchor-heading"><a id="controlbatch" class="anchor-link"></a><a href="#controlbatch">5.3.1.1 Control Batches</a></h5>
     <p>A control batch contains a single record called the control record. Control records should not be passed on to applications. Instead, they are used by consumers to filter out aborted transactional messages.</p>

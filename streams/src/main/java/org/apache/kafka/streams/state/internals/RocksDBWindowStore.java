@@ -20,9 +20,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -37,7 +37,6 @@ public class RocksDBWindowStore
 
     private int seqnum = 0;
 
-    private final Position position;
     private StateStoreContext stateStoreContext;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
@@ -46,17 +45,12 @@ public class RocksDBWindowStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.windowSize = windowSize;
-        this.position = Position.emptyPosition();
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        super.init(context, root);
+        wrapped().init(context, root);
         this.stateStoreContext = context;
-    }
-
-    Position getPosition() {
-        return position;
     }
 
     @Override
@@ -65,7 +59,6 @@ public class RocksDBWindowStore
         if (!(value == null && retainDuplicates)) {
             maybeUpdateSeqnumForDups();
             wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 
@@ -131,15 +124,15 @@ public class RocksDBWindowStore
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
-            collectExecutionInfo,
+            config,
             this,
-            position,
-            stateStoreContext.taskId().partition()
+            getPosition(),
+            stateStoreContext
         );
     }
 

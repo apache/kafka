@@ -20,7 +20,7 @@ package kafka.tools
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.util.Properties
-
+import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
@@ -30,7 +30,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
-
 import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
@@ -169,7 +168,7 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("request required acks")
       .ofType(classOf[java.lang.String])
-      .defaultsTo("1")
+      .defaultsTo("-1")
     val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero.")
       .withRequiredArg
       .describedAs("request timeout ms")
@@ -215,11 +214,26 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024*100)
-    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
-      "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
-      "\tparse.key=true|false\n" +
-      "\tkey.separator=<key.separator>\n" +
-      "\tignore.error=true|false")
+    val propertyOpt = parser.accepts("property",
+      """A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader.
+        |Default properties include:
+        | parse.key=false
+        | parse.headers=false
+        | ignore.error=false
+        | key.separator=\t
+        | headers.delimiter=\t
+        | headers.separator=,
+        | headers.key.separator=:
+        | null.marker=   When set, any fields (key, value and headers) equal to this will be replaced by null
+        |Default parsing pattern when:
+        | parse.headers=true and parse.key=true:
+        |  "h1:v1,h2:v2...\tkey\tvalue"
+        | parse.key=true:
+        |  "key\tvalue"
+        | parse.headers=true:
+        |  "h1:v1,h2:v2...\tvalue"
+      """.stripMargin
+      )
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -273,9 +287,15 @@ object ConsoleProducer {
     var reader: BufferedReader = null
     var parseKey = false
     var keySeparator = "\t"
+    var parseHeaders = false
+    var headersDelimiter = "\t"
+    var headersSeparator = ","
+    var headersKeySeparator = ":"
     var ignoreError = false
     var lineNumber = 0
     var printPrompt = System.console != null
+    var headersSeparatorPattern: Pattern = _
+    var nullMarker: String = _
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -283,28 +303,93 @@ object ConsoleProducer {
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
       if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
+      if (props.containsKey("parse.headers"))
+        parseHeaders = props.getProperty("parse.headers").trim.equalsIgnoreCase("true")
+      if (props.containsKey("headers.delimiter"))
+        headersDelimiter = props.getProperty("headers.delimiter")
+      if (props.containsKey("headers.separator"))
+        headersSeparator = props.getProperty("headers.separator")
+      headersSeparatorPattern = Pattern.compile(headersSeparator)
+      if (props.containsKey("headers.key.separator"))
+        headersKeySeparator = props.getProperty("headers.key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
+      if (headersDelimiter == headersSeparator)
+        throw new KafkaException("headers.delimiter and headers.separator may not be equal")
+      if (headersDelimiter == headersKeySeparator)
+        throw new KafkaException("headers.delimiter and headers.key.separator may not be equal")
+      if (headersSeparator == headersKeySeparator)
+        throw new KafkaException("headers.separator and headers.key.separator may not be equal")
+      if (props.containsKey("null.marker"))
+        nullMarker = props.getProperty("null.marker")
+      if (nullMarker == keySeparator)
+        throw new KafkaException("null.marker and key.separator may not be equal")
+      if (nullMarker == headersSeparator)
+        throw new KafkaException("null.marker and headers.separator may not be equal")
+      if (nullMarker == headersDelimiter)
+        throw new KafkaException("null.marker and headers.delimiter may not be equal")
+      if (nullMarker == headersKeySeparator)
+        throw new KafkaException("null.marker and headers.key.separator may not be equal")
       reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
-    override def readMessage() = {
+    override def readMessage(): ProducerRecord[Array[Byte], Array[Byte]] = {
       lineNumber += 1
-      if (printPrompt)
-        print(">")
-      (reader.readLine(), parseKey) match {
-        case (null, _) => null
-        case (line, true) =>
-          line.indexOf(keySeparator) match {
-            case -1 =>
-              if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
-              else throw new KafkaException(s"No key found on line $lineNumber: $line")
-            case n =>
-              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
-              new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
+      if (printPrompt) print(">")
+      val line = reader.readLine()
+      line match {
+        case null => null
+        case line =>
+          val headers = parse(parseHeaders, line, 0, headersDelimiter, "headers delimiter")
+          val headerOffset = if (headers == null) 0 else headers.length + headersDelimiter.length
+
+          val key = parse(parseKey, line, headerOffset, keySeparator, "key separator")
+          val keyOffset = if (key == null) 0 else key.length + keySeparator.length
+
+          val value = line.substring(headerOffset + keyOffset)
+
+          val record = new ProducerRecord[Array[Byte], Array[Byte]](
+            topic,
+            if (key != null && key != nullMarker) key.getBytes(StandardCharsets.UTF_8) else null,
+            if (value != null && value != nullMarker) value.getBytes(StandardCharsets.UTF_8) else null,
+          )
+
+          if (headers != null && headers != nullMarker) {
+            splitHeaders(headers)
+              .foreach(header => record.headers.add(header._1, header._2))
           }
-        case (line, false) =>
-          new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
+
+          record
+      }
+    }
+
+    private def parse(enabled: Boolean, line: String, startIndex: Int, demarcation: String, demarcationName: String): String = {
+      (enabled, line.indexOf(demarcation, startIndex)) match {
+        case (false, _) => null
+        case (_, -1) =>
+          if (ignoreError) null
+          else throw new KafkaException(s"No $demarcationName found on line number $lineNumber: '$line'")
+        case (_, index) => line.substring(startIndex, index)
+      }
+    }
+
+    private def splitHeaders(headers: String): Array[(String, Array[Byte])] = {
+      headersSeparatorPattern.split(headers).map { pair =>
+        (pair.indexOf(headersKeySeparator), ignoreError) match {
+          case (-1, false) => throw new KafkaException(s"No header key separator found in pair '$pair' on line number $lineNumber")
+          case (-1, true) => (pair, null)
+          case (i, _) =>
+            val headerKey = pair.substring(0, i) match {
+              case k if k == nullMarker =>
+                throw new KafkaException(s"Header keys should not be equal to the null marker '$nullMarker' as they can't be null")
+              case k => k
+            }
+            val headerValue = pair.substring(i + headersKeySeparator.length) match {
+              case v if v == nullMarker => null
+              case v => v.getBytes(StandardCharsets.UTF_8)
+            }
+            (headerKey, headerValue)
+        }
       }
     }
   }

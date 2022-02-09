@@ -27,7 +27,7 @@ import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
-import kafka.log.{AppendOrigin, UnifiedLog, LogAppendInfo}
+import kafka.log.{AppendOrigin, LogAppendInfo, UnifiedLog}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager, RequestLocal}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
@@ -42,9 +42,11 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
-import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
+import org.mockito.Mockito.{mock, reset, times, verify, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -88,11 +90,11 @@ class GroupMetadataManagerTest {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
     metrics = new kMetrics()
     time = new MockTime
-    replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+    replicaManager = mock(classOf[ReplicaManager])
     groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager,
       time, metrics)
     groupMetadataManager.startup(() => numOffsetsPartitions, false)
-    partition = EasyMock.niceMock(classOf[Partition])
+    partition = mock(classOf[Partition])
   }
 
   @AfterEach
@@ -140,8 +142,6 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, offsetCommitRecords.toArray: _*)
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -172,8 +172,6 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -211,8 +209,6 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -246,8 +242,6 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     // Since there are no committed offsets for the group, and there is no other group metadata, we don't expect the
@@ -278,8 +272,6 @@ class GroupMetadataManagerTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -326,8 +318,6 @@ class GroupMetadataManagerTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -382,8 +372,6 @@ class GroupMetadataManagerTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -447,8 +435,6 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -494,8 +480,6 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     // The group should be loaded with pending offsets.
@@ -536,8 +520,6 @@ class GroupMetadataManagerTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -622,8 +604,6 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -661,8 +641,6 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -743,7 +721,6 @@ class GroupMetadataManagerTest {
     assertEquals(groupEpoch, groupMetadataManager.epochForPartitionId.get(groupTopicPartition.partition()),
     "Replica which was stopped still in epochForPartitionId")
 
-    EasyMock.reset(replicaManager)
     loadOffsetsAndGroup(groupTopicPartition, groupEpoch + 1)
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
     assertEquals(initiallyLoaded.groupId, group.groupId)
@@ -774,8 +751,6 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     assertEquals(None, groupMetadataManager.getGroup(groupId))
@@ -804,8 +779,6 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -823,18 +796,19 @@ class GroupMetadataManagerTest {
     val endOffset = 10L
     val groupEpoch = 2
 
-    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    when(replicaManager.getLog(groupTopicPartition)).thenReturn(Some(logMock))
     expectGroupMetadataLoad(logMock, startOffset, MemoryRecords.EMPTY)
-    EasyMock.expect(replicaManager.getLogEndOffset(groupTopicPartition)).andStubReturn(Some(endOffset))
-    EasyMock.replay(logMock)
-
-    EasyMock.replay(replicaManager)
-
+    when(replicaManager.getLogEndOffset(groupTopicPartition)).thenReturn(Some(endOffset))
     groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, groupEpoch, _ => (), 0L)
 
-    EasyMock.verify(logMock)
-    EasyMock.verify(replicaManager)
+    verify(logMock).logStartOffset
+    verify(logMock).read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true))
+    verify(replicaManager).getLog(groupTopicPartition)
+    verify(replicaManager, times(2)).getLogEndOffset(groupTopicPartition)
 
     assertFalse(groupMetadataManager.isPartitionLoading(groupTopicPartition.partition()))
   }
@@ -866,8 +840,6 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -891,26 +863,54 @@ class GroupMetadataManagerTest {
     val tp2 = new TopicPartition("bar", 0)
     val tp3 = new TopicPartition("xxx", 0)
 
-    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
+    val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    when(replicaManager.getLog(groupTopicPartition)).thenReturn(Some(logMock))
 
     val segment1MemberId = "a"
     val segment1Offsets = Map(tp0 -> 23L, tp1 -> 455L, tp3 -> 42L)
     val segment1Records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (createCommittedOffsetRecords(segment1Offsets) ++ Seq(buildStableGroupRecordWithMember(
         generation, protocolType, protocol, segment1MemberId))).toArray: _*)
-    val segment1End = expectGroupMetadataLoad(logMock, startOffset, segment1Records)
+    val segment1End = startOffset + segment1Records.records.asScala.size
 
     val segment2MemberId = "b"
     val segment2Offsets = Map(tp0 -> 33L, tp2 -> 8992L, tp3 -> 10L)
     val segment2Records = MemoryRecords.withRecords(segment1End, CompressionType.NONE,
       (createCommittedOffsetRecords(segment2Offsets) ++ Seq(buildStableGroupRecordWithMember(
         generation, protocolType, protocol, segment2MemberId))).toArray: _*)
-    val segment2End = expectGroupMetadataLoad(logMock, segment1End, segment2Records)
+    val segment2End = segment1End + segment2Records.records.asScala.size
 
-    EasyMock.expect(replicaManager.getLogEndOffset(groupTopicPartition)).andStubReturn(Some(segment2End))
+    when(logMock.logStartOffset)
+      .thenReturn(segment1End)
+      .thenReturn(segment2End)
+    when(logMock.read(ArgumentMatchers.eq(segment1End),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(segment1End), fileRecordsMock))
+    when(logMock.read(ArgumentMatchers.eq(segment2End),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(segment2End), fileRecordsMock))
+    when(fileRecordsMock.sizeInBytes())
+      .thenReturn(segment1Records.sizeInBytes)
+      .thenReturn(segment2Records.sizeInBytes)
 
-    EasyMock.replay(logMock, replicaManager)
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCapture.capture(), anyInt()))
+      .thenAnswer(_ => {
+      val buffer = bufferCapture.getValue
+      buffer.put(segment1Records.buffer.duplicate)
+      buffer.flip()
+    }).thenAnswer(_ => {
+      val buffer = bufferCapture.getValue
+      buffer.put(segment2Records.buffer.duplicate)
+      buffer.flip()
+    })
+
+    when(replicaManager.getLogEndOffset(groupTopicPartition)).thenReturn(Some(segment2End))
 
     groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -1099,8 +1099,6 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val capturedRecords = expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var maybeError: Option[Errors] = None
     def callback(error: Errors): Unit = {
       maybeError = Some(error)
@@ -1108,7 +1106,6 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(Errors.NONE), maybeError)
-    assertTrue(capturedRecords.hasCaptured)
     val records = capturedRecords.getValue()(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId))
         .records.asScala.toList
     assertEquals(1, records.size)
@@ -1126,8 +1123,6 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val capturedRecords = expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var maybeError: Option[Errors] = None
     def callback(error: Errors): Unit = {
       maybeError = Some(error)
@@ -1135,9 +1130,6 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(Errors.NONE), maybeError)
-    assertTrue(capturedRecords.hasCaptured)
-
-    assertTrue(capturedRecords.hasCaptured)
     val records = capturedRecords.getValue()(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId))
       .records.asScala.toList
     assertEquals(1, records.size)
@@ -1163,14 +1155,11 @@ class GroupMetadataManagerTest {
   }
 
   private def assertStoreGroupErrorMapping(appendError: Errors, expectedError: Errors): Unit = {
-    EasyMock.reset(replicaManager)
-
+    reset(replicaManager)
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
     expectAppendMessage(appendError)
-    EasyMock.replay(replicaManager)
-
     var maybeError: Option[Errors] = None
     def callback(error: Errors): Unit = {
       maybeError = Some(error)
@@ -1179,7 +1168,16 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(expectedError), maybeError)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -1198,8 +1196,6 @@ class GroupMetadataManagerTest {
     group.initNextGeneration()
 
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var maybeError: Option[Errors] = None
     def callback(error: Errors): Unit = {
       maybeError = Some(error)
@@ -1208,12 +1204,21 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NONE), maybeError)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
   def testStoreNonEmptyGroupWhenCoordinatorHasMoved(): Unit = {
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
+    when(replicaManager.getMagic(any())).thenReturn(None)
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -1226,8 +1231,6 @@ class GroupMetadataManagerTest {
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
-    EasyMock.replay(replicaManager)
-
     var maybeError: Option[Errors] = None
     def callback(error: Errors): Unit = {
       maybeError = Some(error)
@@ -1236,7 +1239,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -1253,8 +1256,6 @@ class GroupMetadataManagerTest {
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1277,7 +1278,15 @@ class GroupMetadataManagerTest {
     assertEquals(Errors.NONE, partitionResponse.error)
     assertEquals(offset, partitionResponse.offset)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
@@ -1298,9 +1307,8 @@ class GroupMetadataManagerTest {
     val offsetAndMetadata = OffsetAndMetadata(offset, "", time.milliseconds())
     val offsets = immutable.Map(topicPartition -> offsetAndMetadata)
 
-    val capturedResponseCallback = appendAndCaptureCallback()
-    EasyMock.replay(replicaManager)
-
+    val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1309,6 +1317,17 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
+
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedResponseCallback.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1319,8 +1338,6 @@ class GroupMetadataManagerTest {
     assertTrue(group.hasOffsets)
     assertFalse(group.allOffsets.isEmpty)
     assertEquals(Some(offsetAndMetadata), group.offset(topicPartition))
-
-    EasyMock.verify(replicaManager)
   }
 
   @Test
@@ -1338,9 +1355,8 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    val capturedResponseCallback = appendAndCaptureCallback()
-    EasyMock.replay(replicaManager)
 
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1349,6 +1365,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
+    val capturedResponseCallback = verifyAppendAndCaptureCallback()
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NOT_ENOUGH_REPLICAS, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1359,7 +1376,16 @@ class GroupMetadataManagerTest {
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -1377,8 +1403,7 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    val capturedResponseCallback = appendAndCaptureCallback()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
@@ -1388,6 +1413,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
+    val capturedResponseCallback = verifyAppendAndCaptureCallback()
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1398,12 +1424,21 @@ class GroupMetadataManagerTest {
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
   def testCommitOffsetWhenCoordinatorHasMoved(): Unit = {
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
+    when(replicaManager.getMagic(any())).thenReturn(None)
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -1414,8 +1449,6 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
-
-    EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
@@ -1428,7 +1461,7 @@ class GroupMetadataManagerTest {
     val maybeError = commitErrors.get.get(topicPartition)
     assertEquals(Some(Errors.NOT_COORDINATOR), maybeError)
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -1444,8 +1477,7 @@ class GroupMetadataManagerTest {
   }
 
   private def assertCommitOffsetErrorMapping(appendError: Errors, expectedError: Errors): Unit = {
-    EasyMock.reset(replicaManager)
-
+    reset(replicaManager)
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -1457,8 +1489,7 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    val capturedResponseCallback = appendAndCaptureCallback()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
@@ -1468,6 +1499,7 @@ class GroupMetadataManagerTest {
     assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
+    val capturedResponseCallback = verifyAppendAndCaptureCallback()
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1479,15 +1511,13 @@ class GroupMetadataManagerTest {
     val cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).getMagic(any())
     // Will not update sensor if failed
     assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
   @Test
   def testCommitOffsetPartialFailure(): Unit = {
-    EasyMock.reset(replicaManager)
-
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val topicPartitionFailed = new TopicPartition("foo", 1)
@@ -1504,8 +1534,7 @@ class GroupMetadataManagerTest {
       topicPartitionFailed -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds())
     )
 
-    val capturedResponseCallback = appendAndCaptureCallback()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
@@ -1515,6 +1544,7 @@ class GroupMetadataManagerTest {
     assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
     assertTrue(group.hasOffsets)
+    val capturedResponseCallback = verifyAppendAndCaptureCallback()
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1527,7 +1557,16 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicPartition).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartitionFailed).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
   }
 
@@ -1585,8 +1624,6 @@ class GroupMetadataManagerTest {
 
     mockGetPartition()
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1601,12 +1638,9 @@ class GroupMetadataManagerTest {
     // expire only one of the offsets
     time.sleep(2)
 
-    EasyMock.reset(partition)
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1617,7 +1651,16 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition2).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any(),
+      any(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    verify(replicaManager, times(2)).getMagic(any())
   }
 
   @Test
@@ -1632,19 +1675,14 @@ class GroupMetadataManagerTest {
     group.generationId = 5
 
     // expect the group metadata tombstone
-    EasyMock.reset(partition)
-    val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
+    val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(replicaManager, partition)
-
+    when(partition.appendRecordsToLeader(recordsCapture.capture(),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
-
-    assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
     recordsCapture.getValue.batches.forEach { batch =>
@@ -1680,19 +1718,14 @@ class GroupMetadataManagerTest {
     group.generationId = 5
 
     // expect the group metadata tombstone
-    EasyMock.reset(partition)
-    val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
+    val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(replicaManager, partition)
-
+    when(partition.appendRecordsToLeader(recordsCapture.capture(),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
-
-    assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
     recordsCapture.getValue.batches.forEach { batch =>
@@ -1740,8 +1773,6 @@ class GroupMetadataManagerTest {
 
     mockGetPartition()
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1757,17 +1788,12 @@ class GroupMetadataManagerTest {
     time.sleep(4)
 
     // expect the offset tombstone
-    EasyMock.reset(partition)
-    val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
+    val recordsCapture: ArgumentCaptor[MemoryRecords] = ArgumentCaptor.forClass(classOf[MemoryRecords])
 
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(recordsCapture.capture(),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
-
-    assertTrue(recordsCapture.hasCaptured)
 
     // verify the tombstones are correct and only for the expired offsets
     val records = recordsCapture.getValue.records.asScala.toList
@@ -1786,7 +1812,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).onlinePartition(groupTopicPartition)
   }
 
   @Test
@@ -1825,8 +1851,6 @@ class GroupMetadataManagerTest {
 
     mockGetPartition()
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1854,18 +1878,15 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicPartition2).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition3).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
 
     // expect the offset tombstone
-    EasyMock.reset(partition)
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group is empty now, only one offset should expire
@@ -1879,17 +1900,14 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topicPartition2).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition3).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     time.sleep(2)
 
     // expect the offset tombstone
-    EasyMock.reset(partition)
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
     // one more offset should expire
@@ -1903,7 +1921,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition3).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, times(3)).onlinePartition(groupTopicPartition)
 
     // advance time to just before the offset of last partition is to be expired, no offset should expire
     time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.milliseconds() - 1)
@@ -1921,18 +1939,15 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition3).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, times(4)).onlinePartition(groupTopicPartition)
 
     // advance time enough for that last offset to expire
     time.sleep(2)
 
     // expect the offset tombstone
-    EasyMock.reset(partition)
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group and all its offsets should be gone now
@@ -1946,7 +1961,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition3).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, times(5)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -1973,8 +1988,6 @@ class GroupMetadataManagerTest {
 
     mockGetPartition()
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -1999,18 +2012,15 @@ class GroupMetadataManagerTest {
     var cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition1)))
     assertEquals(Some(offset), cachedOffsets.get(topicPartition1).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).onlinePartition(groupTopicPartition)
 
     // advance time to enough for offsets to expire
     time.sleep(2)
 
     // expect the offset tombstone
-    EasyMock.reset(partition)
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.replay(partition)
-
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
     groupMetadataManager.cleanupGroupMetadata()
 
     // group and all its offsets should be gone now
@@ -2020,7 +2030,7 @@ class GroupMetadataManagerTest {
     cachedOffsets = groupMetadataManager.getOffsets(groupId, defaultRequireStable, Some(Seq(topicPartition1)))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     assert(group.is(Dead))
   }
@@ -2081,8 +2091,6 @@ class GroupMetadataManagerTest {
 
     mockGetPartition()
     expectAppendMessage(Errors.NONE)
-    EasyMock.replay(replicaManager)
-
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
@@ -2115,7 +2123,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(offset), cachedOffsets.get(topic2Partition0).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topic2Partition1).map(_.offset))
 
-    EasyMock.verify(replicaManager)
+    verify(replicaManager).onlinePartition(groupTopicPartition)
 
     group.transitionTo(PreparingRebalance)
 
@@ -2132,17 +2140,16 @@ class GroupMetadataManagerTest {
     group.transitionTo(Stable)
 
     // expect the offset tombstone
-    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      origin = EasyMock.eq(AppendOrigin.Coordinator), requiredAcks = EasyMock.anyInt(),
-      EasyMock.anyObject())).andReturn(LogAppendInfo.UnknownLogAppendInfo)
-    EasyMock.expectLastCall().times(1)
-
-    EasyMock.replay(partition)
+    when(partition.appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())).thenReturn(LogAppendInfo.UnknownLogAppendInfo)
 
     groupMetadataManager.cleanupGroupMetadata()
 
-    EasyMock.verify(partition)
-    EasyMock.verify(replicaManager)
+    verify(partition).appendRecordsToLeader(any[MemoryRecords],
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator), requiredAcks = anyInt(),
+      any())
+    verify(replicaManager, times(2)).onlinePartition(groupTopicPartition)
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assert(group.is(Stable))
@@ -2183,8 +2190,6 @@ class GroupMetadataManagerTest {
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
-    EasyMock.replay(replicaManager)
-
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     val group = groupMetadataManager.getGroup(groupId).getOrElse(throw new AssertionError("Group was not loaded into the cache"))
@@ -2223,8 +2228,6 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
-
-    EasyMock.replay(replicaManager)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
@@ -2354,30 +2357,24 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     // Prepend empty control batch to valid records
-    val mockBatch: MutableRecordBatch = EasyMock.createMock(classOf[MutableRecordBatch])
-    EasyMock.expect(mockBatch.iterator).andReturn(Collections.emptyIterator[Record])
-    EasyMock.expect(mockBatch.isControlBatch).andReturn(true)
-    EasyMock.expect(mockBatch.isTransactional).andReturn(true)
-    EasyMock.expect(mockBatch.nextOffset).andReturn(16L)
-    EasyMock.replay(mockBatch)
-    val mockRecords: MemoryRecords = EasyMock.createMock(classOf[MemoryRecords])
-    EasyMock.expect(mockRecords.batches).andReturn((Iterable[MutableRecordBatch](mockBatch) ++ records.batches.asScala).asJava).anyTimes()
-    EasyMock.expect(mockRecords.records).andReturn(records.records()).anyTimes()
-    EasyMock.expect(mockRecords.sizeInBytes()).andReturn(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + records.sizeInBytes()).anyTimes()
-    EasyMock.replay(mockRecords)
-
-    val logMock: UnifiedLog = EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(logMock.logStartOffset).andReturn(startOffset).anyTimes()
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true)))
-      .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
-    EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(18))
-    EasyMock.replay(logMock)
-    EasyMock.replay(replicaManager)
-
+    val mockBatch: MutableRecordBatch = mock(classOf[MutableRecordBatch])
+    when(mockBatch.iterator).thenReturn(Collections.emptyIterator[Record])
+    when(mockBatch.isControlBatch).thenReturn(true)
+    when(mockBatch.isTransactional).thenReturn(true)
+    when(mockBatch.nextOffset).thenReturn(16L)
+    val mockRecords: MemoryRecords = mock(classOf[MemoryRecords])
+    when(mockRecords.batches).thenReturn((Iterable[MutableRecordBatch](mockBatch) ++ records.batches.asScala).asJava)
+    when(mockRecords.records).thenReturn(records.records())
+    when(mockRecords.sizeInBytes()).thenReturn(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + records.sizeInBytes())
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
+    when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
+    when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some[Long](18))
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
 
     // Empty control batch should not have caused the load to fail
@@ -2449,41 +2446,39 @@ class GroupMetadataManagerTest {
     assertEquals(Some("<DELETE>"), valueStringOpt)
   }
 
-  private def appendAndCaptureCallback(): Capture[Map[TopicPartition, PartitionResponse] => Unit] = {
-    val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject(),
-      EasyMock.anyObject())
-    )
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+  private def verifyAppendAndCaptureCallback(): ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = {
+    val capturedArgument: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
     capturedArgument
   }
 
-  private def expectAppendMessage(error: Errors): Capture[Map[TopicPartition, MemoryRecords]] = {
-    val capturedCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
-    val capturedRecords: Capture[Map[TopicPartition, MemoryRecords]] = EasyMock.newCapture()
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.capture(capturedRecords),
-      EasyMock.capture(capturedCallback),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject(),
-      EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = capturedCallback.getValue.apply(
+  private def expectAppendMessage(error: Errors): ArgumentCaptor[Map[TopicPartition, MemoryRecords]] = {
+    val capturedCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val capturedRecords: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    when(replicaManager.appendRecords(anyLong(),
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      capturedRecords.capture(),
+      capturedCallback.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      capturedCallback.getValue.apply(
         Map(groupTopicPartition ->
           new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
       )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     capturedRecords
   }
 
@@ -2512,11 +2507,10 @@ class GroupMetadataManagerTest {
   private def expectGroupMetadataLoad(groupMetadataTopicPartition: TopicPartition,
                                       startOffset: Long,
                                       records: MemoryRecords): Unit = {
-    val logMock: UnifiedLog =  EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
+    val logMock: UnifiedLog =  mock(classOf[UnifiedLog])
+    when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
     val endOffset = expectGroupMetadataLoad(logMock, startOffset, records)
-    EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(endOffset))
-    EasyMock.replay(logMock)
+    when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some(endOffset))
   }
 
   /**
@@ -2528,29 +2522,23 @@ class GroupMetadataManagerTest {
                                       startOffset: Long,
                                       records: MemoryRecords): Long = {
     val endOffset = startOffset + records.records.asScala.size
-    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
+    val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
 
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true)))
-      .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
-    EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
+    when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
 
-    val bufferCapture = EasyMock.newCapture[ByteBuffer]
-    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
-    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = {
-        val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate)
-        buffer.flip()
-      }
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCapture.capture(), anyInt())).thenAnswer(_ => {
+      val buffer = bufferCapture.getValue
+      buffer.put(records.buffer.duplicate)
+      buffer.flip()
     })
-
-    EasyMock.replay(fileRecordsMock)
-
     endOffset
   }
 
@@ -2574,8 +2562,8 @@ class GroupMetadataManagerTest {
   }
 
   private def mockGetPartition(): Unit = {
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
   }
 
   private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
@@ -2638,8 +2626,6 @@ class GroupMetadataManagerTest {
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
-    EasyMock.replay(replicaManager)
-
     // When passed a specific start offset, assert that the measured values are in excess of that.
     val now = time.milliseconds()
     val diff = 1000

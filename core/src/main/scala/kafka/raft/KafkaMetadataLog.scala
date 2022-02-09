@@ -211,8 +211,8 @@ final class KafkaMetadataLog private (
     new LogOffsetMetadata(hwm.messageOffset, segmentPosition)
   }
 
-  override def flush(): Unit = {
-    log.flush()
+  override def flush(forceFlushActiveSegment: Boolean): Unit = {
+    log.flush(forceFlushActiveSegment)
   }
 
   override def lastFlushedOffset(): Long = {
@@ -571,6 +571,7 @@ object KafkaMetadataLog {
       scheduler = scheduler,
       brokerTopicStats = new BrokerTopicStats,
       time = time,
+      maxTransactionTimeoutMs = Int.MaxValue,
       maxProducerIdExpirationMs = Int.MaxValue,
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
