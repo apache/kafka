@@ -649,10 +649,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
-
         if (skipAssignment) {
             log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
-                "will collect its existing assignment.", generation().generationId);
+                "will continue with its existing assignment.", generation().generationId);
             assignmentSnapshot = metadataSnapshot;
             return Collections.emptyMap();
         }
