@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,7 +60,18 @@ public class RecordTestUtils {
                 Method method = target.getClass().getMethod("replay", record.getClass());
                 method.invoke(target, record);
             } catch (NoSuchMethodException e) {
-                // ignore
+                try {
+                    Method method = target.getClass().getMethod("replay",
+                        record.getClass(),
+                        Optional.class);
+                    method.invoke(target, record, Optional.empty());
+                } catch (NoSuchMethodException t) {
+                    // ignore
+                } catch (InvocationTargetException t) {
+                    throw new RuntimeException(t);
+                } catch (IllegalAccessException t) {
+                    throw new RuntimeException(t);
+                }
             } catch (InvocationTargetException e) {
                 throw new RuntimeException(e);
             } catch (IllegalAccessException e) {

@@ -254,11 +254,23 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   def getTopicIds(): Map[String, Uuid] = {
-    getController().kafkaController.controllerContext.topicIds.toMap
+    if (isKRaftTest()) {
+      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().asScala.toMap
+    } else {
+      getController().kafkaController.controllerContext.topicIds.toMap
+    }
   }
 
   def getTopicNames(): Map[Uuid, String] = {
-    getController().kafkaController.controllerContext.topicNames.toMap
+    if (isKRaftTest()) {
+      val result = new util.HashMap[Uuid, String]()
+      controllerServer.controller.findAllTopicIds(Long.MaxValue).get().entrySet().forEach {
+        e => result.put(e.getValue(), e.getKey())
+      }
+      result.asScala.toMap
+    } else {
+      getController().kafkaController.controllerContext.topicNames.toMap
+    }
   }
 
   private def createBrokers(startup: Boolean): Unit = {
