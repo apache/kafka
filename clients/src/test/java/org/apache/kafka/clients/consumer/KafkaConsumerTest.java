@@ -2182,7 +2182,7 @@ public class KafkaConsumerTest {
         }
 
         // accessing closed consumer is illegal
-        consumer.close(Duration.ofSeconds(5));
+        consumer.close(Duration.ZERO);
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
@@ -2766,6 +2766,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testClosingConsumerUnregistersConsumerMetrics() {
+        Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
