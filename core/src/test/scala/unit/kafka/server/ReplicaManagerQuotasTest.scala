@@ -160,7 +160,6 @@ class ReplicaManagerQuotasTest {
 
     val quota = mockQuota()
     when(quota.isQuotaExceeded).thenReturn(true)
-//    expect(quota.isQuotaExceeded).andReturn(true).once()
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = FetchRequest.CONSUMER_REPLICA_ID,
