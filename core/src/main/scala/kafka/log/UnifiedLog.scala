@@ -614,6 +614,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       reloadFromCleanShutdown = false, logIdent)
   }
 
+  @threadsafe
+  def hasLateTransaction(currentTimeMs: Long): Boolean = {
+    producerStateManager.hasLateTransaction(currentTimeMs)
+  }
+
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
     lock synchronized {
       producerStateManager.activeProducers.map { case (producerId, state) =>
@@ -1770,7 +1775,8 @@ object UnifiedLog extends Logging {
             recoveryPoint: Long,
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
-            time: Time = Time.SYSTEM,
+            time: Time,
+            maxTransactionTimeoutMs: Int,
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
@@ -1787,7 +1793,8 @@ object UnifiedLog extends Logging {
       logDirFailureChannel,
       config.recordVersion,
       s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    val producerStateManager = new ProducerStateManager(topicPartition, dir,
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     val offsets = new LogLoader(
       dir,
       topicPartition,
@@ -1799,7 +1806,6 @@ object UnifiedLog extends Logging {
       segments,
       logStartOffset,
       recoveryPoint,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
       producerStateManager
     ).load()
