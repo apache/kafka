@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
+import java.util.Optional;
 import java.util.Properties;
 
 public interface ClusterInstance {
@@ -43,7 +44,7 @@ public interface ClusterInstance {
 
     /**
      * The cluster configuration used to create this cluster. Changing data in this instance through this accessor will
-     * have no affect on the cluster since it is already provisioned.
+     * have no effect on the cluster since it is already provisioned.
      */
     ClusterConfig config();
 
@@ -52,6 +53,20 @@ public interface ClusterInstance {
      * unspecified by those sources, this will return the listener for the default security protocol PLAINTEXT
      */
     ListenerName clientListener();
+
+    /**
+     * The listener for the kraft cluster controller configured by controller.listener.names. In ZK-based clusters, return Optional.empty
+     */
+    default Optional<ListenerName> controllerListenerName() {
+        return Optional.empty();
+    }
+
+    /**
+     * The listener for the zk controller configured by control.plane.listener.name. In Raft-based clusters, return Optional.empty
+     */
+    default Optional<ListenerName> controlPlaneListenerName() {
+        return Optional.empty();
+    }
 
     /**
      * The broker connect string which can be used by clients for bootstrapping

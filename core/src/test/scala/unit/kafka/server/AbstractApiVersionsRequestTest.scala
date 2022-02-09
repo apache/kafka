@@ -30,13 +30,15 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 @Tag("integration")
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    val socket = if (listenerName == controlPlaneListenerName) {
+    val socket = if (cluster.controlPlaneListenerName().asScala.contains(listenerName) ||
+      cluster.controllerListenerName().asScala.contains(listenerName)) {
       cluster.controllerSocketServers().asScala.head
     } else {
       cluster.brokerSocketServers().asScala.head
@@ -44,16 +46,15 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket, listenerName)
   }
 
-  def controlPlaneListenerName = new ListenerName("CONTROLLER")
-
   // Configure control plane listener to make sure we have separate listeners for testing.
   def brokerPropertyOverrides(properties: Properties): Unit = {
-    val securityProtocol = cluster.config().securityProtocol()
     if (!cluster.isKRaftTest) {
-      properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName.value())
-      properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${controlPlaneListenerName.value()}:$securityProtocol,$securityProtocol:$securityProtocol")
-      properties.setProperty("listeners", s"$securityProtocol://localhost:0,${controlPlaneListenerName.value()}://localhost:0")
-      properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,${controlPlaneListenerName.value()}://localhost:0")
+      val controlPlaneListenerName = "CONTROLLER"
+      val securityProtocol = cluster.config().securityProtocol()
+      properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
+      properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
+      properties.setProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
+      properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,${controlPlaneListenerName}://localhost:0")
     }
   }
 
@@ -68,10 +69,10 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } finally socket.close()
   }
 
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, controllerApi: Boolean = false): Unit = {
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = cluster.clientListener()): Unit = {
     val expectedApis = if (!cluster.isKRaftTest) {
       ApiKeys.zkBrokerApis()
-    } else if (controllerApi) {
+    } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
       ApiKeys.controllerApis()
     } else {
       val apis = ApiVersionsResponse.intersectForwardableApis(
@@ -93,7 +94,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
       ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.ZK_BROKER)
-    } else if(controllerApi) {
+    } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
       ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.CONTROLLER)
     } else {
       ApiVersionsResponse.createApiVersionsResponse(0, expectedApis.asInstanceOf[ApiVersionsResponseData.ApiVersionCollection])

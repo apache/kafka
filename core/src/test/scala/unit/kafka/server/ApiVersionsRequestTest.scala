@@ -44,11 +44,18 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     validateApiVersionsResponse(apiVersionsResponse)
   }
 
-  @ClusterTest
+  @ClusterTest(clusterType = Type.ZK)
   def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse, controllerApi = true)
+    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+  }
+
+  @ClusterTest(clusterType = Type.KRAFT)
+  def testApiVersionsRequestThroughControllerListener(): Unit = {
+    val request = new ApiVersionsRequest.Builder().build()
+    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName.get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get())
   }
 
   @ClusterTest
@@ -70,11 +77,18 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     validateApiVersionsResponse(apiVersionsResponse)
   }
 
-  @ClusterTest
+  @ClusterTest(clusterType = Type.ZK)
   def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse, controllerApi = true)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controlPlaneListenerName().get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get())
+  }
+
+  @ClusterTest(clusterType = Type.KRAFT)
+  def testApiVersionsRequestValidationV0ThroughControllerListener(): Unit = {
+    val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controllerListenerName.get())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get())
   }
 
   @ClusterTest
