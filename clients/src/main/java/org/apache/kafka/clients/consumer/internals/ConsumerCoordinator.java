@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.io.Serializable;
-import java.util.Comparator;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -33,6 +31,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -1526,21 +1525,5 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     boolean poll(Timer timer) {
         return poll(timer, true);
-    }
-
-
-
-    final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
-        @Override
-        public int compare(TopicPartition topicPartition1, TopicPartition topicPartition2) {
-            String topic1 = topicPartition1.topic();
-            String topic2 = topicPartition2.topic();
-
-            if (topic1.equals(topic2)) {
-                return topicPartition1.partition() - topicPartition2.partition();
-            } else {
-                return topic1.compareTo(topic2);
-            }
-        }
     }
 }

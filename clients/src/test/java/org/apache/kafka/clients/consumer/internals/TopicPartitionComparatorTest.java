@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +29,7 @@ public class TopicPartitionComparatorTest {
     private final static TopicPartition TP2 = new TopicPartition("t1", 1);
     private final static TopicPartition TP3 = new TopicPartition("t11", 1);
 
-    private final ConsumerCoordinator.TopicPartitionComparator comparator = new ConsumerCoordinator.TopicPartitionComparator();
+    private final TopicPartitionComparator comparator = new TopicPartitionComparator();
 
     @Test
     public void shouldBeEqual() {

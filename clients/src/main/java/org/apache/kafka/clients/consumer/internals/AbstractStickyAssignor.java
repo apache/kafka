@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.apache.kafka.clients.consumer.internals.Utils.PartitionComparator;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1013,26 +1014,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             int ret = map.get(o1).size() - map.get(o2).size();
             if (ret == 0) {
                 ret = o1.compareTo(o2);
-            }
-            return ret;
-        }
-    }
-
-    private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
-        private static final long serialVersionUID = 1L;
-        private Map<String, List<String>> map;
-
-        PartitionComparator(Map<String, List<String>> map) {
-            this.map = map;
-        }
-
-        @Override
-        public int compare(TopicPartition o1, TopicPartition o2) {
-            int ret = map.get(o1.topic()).size() - map.get(o2.topic()).size();
-            if (ret == 0) {
-                ret = o1.topic().compareTo(o2.topic());
-                if (ret == 0)
-                    ret = o1.partition() - o2.partition();
             }
             return ret;
         }
