@@ -37,8 +37,7 @@ import scala.jdk.CollectionConverters._
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    val socket = if (cluster.controlPlaneListenerName().asScala.contains(listenerName) ||
-      cluster.controllerListenerName().asScala.contains(listenerName)) {
+    val socket = if (cluster.controllerListenerName().asScala.contains(listenerName)) {
       cluster.controllerSocketServers().asScala.head
     } else {
       cluster.brokerSocketServers().asScala.head
@@ -49,7 +48,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
   // Configure control plane listener to make sure we have separate listeners for testing.
   def brokerPropertyOverrides(properties: Properties): Unit = {
     if (!cluster.isKRaftTest) {
-      val controlPlaneListenerName = "CONTROLLER"
+      val controlPlaneListenerName = "CONTROL_PLANE"
       val securityProtocol = cluster.config().securityProtocol()
       properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
       properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
