@@ -1582,7 +1582,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            log.info("Seeking to offset {} for partition {}", offset, partition);
+            log.debug("Seeking to offset {} for partition {}", offset, partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                     offset,
                     Optional.empty(), // This will ensure we skip validation
@@ -1612,10 +1612,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             if (offsetAndMetadata.leaderEpoch().isPresent()) {
-                log.info("Seeking to offset {} for partition {} with epoch {}",
+                log.debug("Seeking to offset {} for partition {} with epoch {}",
                         offset, partition, offsetAndMetadata.leaderEpoch().get());
             } else {
-                log.info("Seeking to offset {} for partition {}", offset, partition);
+                log.debug("Seeking to offset {} for partition {}", offset, partition);
             }
             Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
