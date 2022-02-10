@@ -66,6 +66,9 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
+    val existingTopic = "existing-topic"
+    createTopic(existingTopic, 5, 1)
+
     // Policy violations
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic1",
       numPartitions = 4, replicationFactor = 1))),
@@ -92,6 +95,12 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       config = Map(LogConfig.RetentionMsProp -> 5001.toString))), validateOnly = true),
       Map("policy-topic5" -> error(Errors.POLICY_VIOLATION,
         Some("Topic partitions should have at least 2 partitions, received 1 for partition 0"))))
+
+    // Check that basic errors still work
+    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic,
+      numPartitions = 5, replicationFactor = 1))),
+      Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS,
+        Some("Topic 'existing-topic' already exists."))))
 
     var errorMsg = if (isKRaftTest()) {
       "Unable to replicate the partition 4 time(s): The target replication factor of 4 cannot be reached because only 3 broker(s) are registered."
@@ -122,19 +131,6 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       numPartitions = -2, replicationFactor = 1)), validateOnly = true),
       Map("error-partitions" -> error(Errors.INVALID_PARTITIONS,
         Some(errorMsg))))
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testErrorCreateExistingTopicsRequests(): Unit = {
-    val existingTopic = "existing-topic"
-    createTopic(existingTopic, 1, 1)
-
-    // Check that basic errors still work
-    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic,
-      numPartitions = 5, replicationFactor = 1))),
-      Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS,
-        Some("Topic 'existing-topic' already exists."))))
   }
 
 }
