@@ -1099,7 +1099,7 @@ class UnifiedLogTest {
 
     // even if we flush within the active segment, the snapshot should remain
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
-    log.flush(4L)
+    log.flushUptoOffsetExclusive(4L)
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
   }
 
@@ -1293,7 +1293,7 @@ class UnifiedLogTest {
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
     log.appendAsFollower(memoryRecords)
-    log.flush()
+    log.flush(false)
 
     val fetchedData = LogTestUtils.readLog(log, 0, Int.MaxValue)
 
@@ -1630,6 +1630,21 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => LogTestUtils.readLog(log, 1026, 1000))
   }
 
+  @Test
+  def testFlushingEmptyActiveSegments(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val message = TestUtils.singletonRecords(value = "Test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(message, leaderEpoch = 0)
+    log.roll()
+    assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
+    assertEquals(1, logDir.listFiles(_.getName.endsWith(".index")).length)
+    assertEquals(0, log.activeSegment.size)
+    log.flush(true)
+    assertEquals(2, logDir.listFiles(_.getName.endsWith(".log")).length)
+    assertEquals(2, logDir.listFiles(_.getName.endsWith(".index")).length)
+  }
+
   /**
    * Test that covers reads and writes on a multisegment log. This test appends a bunch of messages
    * and then reads them all back and checks that the message read and offset matches what was appended.
@@ -1643,7 +1658,7 @@ class UnifiedLogTest {
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
                                                                                 timestamp = mockTime.milliseconds))
     messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
-    log.flush()
+    log.flush(false)
 
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
@@ -3358,13 +3373,15 @@ class UnifiedLogTest {
                         recoveryPoint: Long = 0L,
                         scheduler: Scheduler = mockTime.scheduler,
                         time: Time = mockTime,
+                        maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
                         keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
     LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs, lastShutdownClean, topicId = topicId, keepPartitionMetadataFile = keepPartitionMetadataFile)
+      maxTransactionTimeoutMs, maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs,
+      lastShutdownClean, topicId, keepPartitionMetadataFile)
   }
 
   private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {

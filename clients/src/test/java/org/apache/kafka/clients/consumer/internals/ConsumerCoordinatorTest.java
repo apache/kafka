@@ -478,6 +478,21 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCoordinatorNotAvailableWithUserAssignedType() {
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        // should mark coordinator unknown after COORDINATOR_NOT_AVAILABLE error
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        // set timeout to 0 because we don't want to retry after the error
+        coordinator.poll(time.timer(0));
+        assertTrue(coordinator.coordinatorUnknown());
+
+        // should find an available node in next find coordinator request
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertFalse(coordinator.coordinatorUnknown());
+    }
+
+    @Test
     public void testCoordinatorNotAvailable() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -1154,6 +1169,132 @@ public abstract class ConsumerCoordinatorTest {
         metadata.requestUpdate();
         consumerClient.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
+    public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
+            subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+                {
+                    put(topic1, 1);
+                    put(topic2, 1);
+                }
+            }));
+            coordinator.maybeUpdateSubscriptionMetadata();
+            assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), subscriptions.subscription());
+
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+            coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+            MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+                {
+                    put(topic1, 1);
+                }
+            });
+            // Instrument the test so that metadata will contain only one topic after next refresh.
+            client.prepareMetadataUpdate(deletedMetadataResponse);
+
+            client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+            client.prepareResponse(body -> {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().isEmpty();
+            }, syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+            // This will trigger rebalance.
+            coordinator.poll(time.timer(Long.MAX_VALUE));
+
+            // Make sure that the metadata was refreshed during the rebalance and thus subscriptions now contain only one topic.
+            assertEquals(singleton(topic1), subscriptions.subscription());
+
+            // Refresh the metadata again. Since there have been no changes since the last refresh, it won't trigger
+            // rebalance again.
+            metadata.requestUpdate();
+            consumerClient.poll(time.timer(Long.MAX_VALUE));
+            assertFalse(coordinator.rejoinNeededOrPending());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareWithDisableAutoCommit() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+
+            assertTrue(res);
+            assertTrue(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitCompleted() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitWithCoordinatorNotAvailable() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_NOT_AVAILABLE);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertTrue(coordinator.coordinatorUnknown());
+        }
+    }
+
+    @Test
+    public void testJoinPrepareAndCommitWithUnknownMemberId() {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_MEMBER_ID);
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            coordinator.invokeCompletedOffsetCommitCallbacks();
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+            assertFalse(coordinator.coordinatorUnknown());
+        }
     }
 
     /**
@@ -3257,12 +3398,18 @@ public abstract class ConsumerCoordinatorTest {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
             return commitRequest.data().groupId().equals(groupId);
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
+        if (shouldLeaveGroup)
+            client.prepareResponse(body -> {
+                leaveGroupRequested.set(true);
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+                return leaveRequest.data().groupId().equals(groupId);
+            }, new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.NONE.code())));
         client.prepareResponse(body -> {
-            leaveGroupRequested.set(true);
-            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return leaveRequest.data().groupId().equals(groupId);
-        }, new LeaveGroupResponse(new LeaveGroupResponseData()
-                .setErrorCode(Errors.NONE.code())));
+            commitRequested.set(true);
+            OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+            return commitRequest.data().groupId().equals(groupId);
+        }, new OffsetCommitResponse(new OffsetCommitResponseData()));
 
         coordinator.close();
         assertTrue(commitRequested.get(), "Commit not requested");

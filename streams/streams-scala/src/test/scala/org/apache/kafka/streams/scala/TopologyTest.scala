@@ -80,7 +80,7 @@ class TopologyTest {
     def getTopologyJava: TopologyDescription = {
       val streamBuilder = new StreamsBuilderJ
       val textLines = streamBuilder.stream[String, String](inputTopic)
-      val _: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+      val _: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toBuffer.asJava)
       streamBuilder.build().describe()
     }
 
@@ -114,7 +114,7 @@ class TopologyTest {
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
       val splits: KStreamJ[String, String] =
-        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toBuffer.asJava)
 
       val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_, v) => v)
 

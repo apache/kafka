@@ -21,8 +21,7 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
-
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -408,9 +407,16 @@ class BrokerServer(
       lifecycleManager.initialCatchUpFuture.get()
 
       // Apply the metadata log changes that we've accumulated.
-      metadataPublisher = new BrokerMetadataPublisher(config, metadataCache,
-        logManager, replicaManager, groupCoordinator, transactionCoordinator,
-        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap)
+      metadataPublisher = new BrokerMetadataPublisher(config,
+        metadataCache,
+        logManager,
+        replicaManager,
+        groupCoordinator,
+        transactionCoordinator,
+        clientQuotaMetadataManager,
+        featureCache,
+        dynamicConfigHandlers.toMap,
+        authorizer)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,
@@ -434,7 +440,7 @@ class BrokerServer(
         maybeChangeStatus(STARTING, STARTED)
         fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
-        throw e
+        throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
     }
   }
 

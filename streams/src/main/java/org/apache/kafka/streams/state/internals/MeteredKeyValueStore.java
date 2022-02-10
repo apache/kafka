@@ -36,8 +36,10 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
@@ -97,11 +99,11 @@ public class MeteredKeyValueStore<K, V>
         mkMap(
             mkEntry(
                 RangeQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> runRangeQuery(query, positionBound, collectExecutionInfo)
+                (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
             ),
             mkEntry(
                 KeyQuery.class,
-                (query, positionBound, collectExecutionInfo, store) -> runKeyQuery(query, positionBound, collectExecutionInfo)
+                (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
             )
         );
 
@@ -230,15 +232,15 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
-                                    final boolean collectExecutionInfo) {
+                                    final QueryConfig config) {
 
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
         final QueryHandler handler = queryHandlers.get(query.getClass());
         if (handler == null) {
-            result = wrapped().query(query, positionBound, collectExecutionInfo);
-            if (collectExecutionInfo) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
@@ -246,10 +248,10 @@ public class MeteredKeyValueStore<K, V>
             result = (QueryResult<R>) handler.apply(
                 query,
                 positionBound,
-                collectExecutionInfo,
+                config,
                 this
             );
-            if (collectExecutionInfo) {
+            if (config.isCollectExecutionInfo()) {
                 result.addExecutionInfo(
                     "Handled in " + getClass() + " with serdes "
                         + serdes + " in " + (time.nanoseconds() - start) + "ns");
@@ -258,10 +260,15 @@ public class MeteredKeyValueStore<K, V>
         return result;
     }
 
+    @Override
+    public Position getPosition() {
+        return wrapped().getPosition();
+    }
+
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                              final PositionBound positionBound,
-                                             final boolean collectExecutionInfo) {
+                                             final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -279,7 +286,7 @@ public class MeteredKeyValueStore<K, V>
             rawRangeQuery = RangeQuery.withNoBounds();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-            wrapped().query(rawRangeQuery, positionBound, collectExecutionInfo);
+            wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
             final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
@@ -304,13 +311,13 @@ public class MeteredKeyValueStore<K, V>
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runKeyQuery(final Query<R> query,
                                            final PositionBound positionBound,
-                                           final boolean collectExecutionInfo) {
+                                           final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
             KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
-            wrapped().query(rawKeyQuery, positionBound, collectExecutionInfo);
+            wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], V> deserializer = getDeserializeValue(serdes, wrapped());
             final V value = deserializer.apply(rawResult.getResult());

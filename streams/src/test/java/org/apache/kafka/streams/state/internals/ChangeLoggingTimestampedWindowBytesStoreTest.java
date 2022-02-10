@@ -58,6 +58,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingTimestampedWindowBytesStore store;
 
+    private final static Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
 
     @Before
     public void setUp() {
@@ -97,6 +98,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldLogPuts() {
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall();
 
@@ -116,6 +118,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
     @Test
     public void shouldLogPutsWithPosition() {
+        EasyMock.expect(inner.getPosition()).andReturn(POSITION).anyTimes();
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall();
 
@@ -163,6 +166,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingTimestampedWindowBytesStore(inner, true);
+        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
         inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall().times(2);
 

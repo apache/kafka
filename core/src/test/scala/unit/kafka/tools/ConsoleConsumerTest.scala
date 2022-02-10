@@ -20,8 +20,9 @@ package kafka.tools
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.file.Files
 import java.util.{HashMap, Optional, Map => JMap}
+import java.time.Duration
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
-import kafka.utils.{Exit, TestUtils}
+import kafka.utils.{Exit, MockTime, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.record.TimestampType
@@ -30,6 +31,9 @@ import org.apache.kafka.test.MockDeserializer
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers
 import ArgumentMatchers._
+import org.apache.kafka.clients.consumer.Consumer
+import org.apache.kafka.clients.consumer.ConsumerRecords
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.header.internals.RecordHeaders
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -41,6 +45,32 @@ class ConsoleConsumerTest {
   @BeforeEach
   def setup(): Unit = {
     ConsoleConsumer.messageCount = 0
+  }
+
+  @Test
+  def shouldThrowTimeoutExceptionWhenTimeoutIsReached(): Unit = {
+    val topic = "test"
+    val time = new MockTime
+    val timeoutMs = 1000
+
+    val mockConsumer = mock(classOf[Consumer[Array[Byte], Array[Byte]]])
+
+    when(mockConsumer.poll(Duration.ofMillis(timeoutMs))).thenAnswer { _ =>
+      time.sleep(timeoutMs / 2 + 1)
+      ConsumerRecords.EMPTY
+    }
+
+    val consumer = new ConsumerWrapper(
+      topic = Some(topic),
+      partitionId = None,
+      offset = None,
+      includedTopics = None,
+      consumer = mockConsumer,
+      timeoutMs = timeoutMs,
+      time = time
+    )
+
+    assertThrows(classOf[TimeoutException], () => consumer.receive())
   }
 
   @Test

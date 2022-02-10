@@ -587,6 +587,14 @@ public class ReplicationControlManager {
         return results;
     }
 
+    Map<String, Uuid> findAllTopicIds(long offset) {
+        HashMap<String, Uuid> result = new HashMap<>(topicsByName.size(offset));
+        for (Entry<String, Uuid> entry : topicsByName.entrySet(offset)) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
     Map<Uuid, ResultOrError<String>> findTopicNames(long offset, Collection<Uuid> ids) {
         Map<Uuid, ResultOrError<String>> results = new HashMap<>(ids.size());
         for (Uuid id : ids) {

@@ -30,7 +30,7 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerGroupMetadata, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -604,7 +604,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
-    assertThrows(classOf[KafkaException], () => producer.initTransactions())
+    assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
   @Test
