@@ -305,13 +305,16 @@ public class MetadataNodeManagerTest {
 
         assertEquals(
             "0",
-            metadataNodeManager.getData().root().directory("producerIds").file("broker").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerId").contents());
+        assertEquals(
+            "1",
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
         assertEquals(
             10000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
-            metadataNodeManager.getData().root().directory("producerIds").file("blockStart").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockStart").contents());
         assertEquals(
             "9999",
-            metadataNodeManager.getData().root().directory("producerIds").file("blockEnd").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockEnd").contents());
 
         // generate another brokerId
         ProducerIdsRecord record2 = new ProducerIdsRecord()
@@ -322,12 +325,15 @@ public class MetadataNodeManagerTest {
 
         assertEquals(
             "1",
-            metadataNodeManager.getData().root().directory("producerIds").file("broker").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerId").contents());
+        assertEquals(
+            "2",
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
         assertEquals(
             11000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
-            metadataNodeManager.getData().root().directory("producerIds").file("blockStart").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockStart").contents());
         assertEquals(
             "10999",
-            metadataNodeManager.getData().root().directory("producerIds").file("blockEnd").contents());
+            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockEnd").contents());
     }
 }
