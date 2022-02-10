@@ -343,7 +343,7 @@ public class TestSslUtils {
                 pemWriter.writeObject(new JcaPKCS8Generator(privateKey, null));
             } else {
                 JceOpenSSLPKCS8EncryptorBuilder encryptorBuilder = new JceOpenSSLPKCS8EncryptorBuilder(PKCS8Generator.PBE_SHA1_3DES);
-                encryptorBuilder.setPasssword(password.value().toCharArray());
+                encryptorBuilder.setPassword(password.value().toCharArray());
                 try {
                     pemWriter.writeObject(new JcaPKCS8Generator(privateKey, encryptorBuilder.build()));
                 } catch (Exception e) {

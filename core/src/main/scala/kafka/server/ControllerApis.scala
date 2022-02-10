@@ -112,8 +112,12 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: ExecutionException => requestHelper.handleError(request, e.getCause)
-      case e: Throwable => requestHelper.handleError(request, e)
+      case e: Throwable => {
+        val t = if (e.isInstanceOf[ExecutionException]) e.getCause() else e
+        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+          s"with context ${request.context}", t)
+        requestHelper.handleError(request, t)
+      }
     }
   }
 
@@ -152,7 +156,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
     val future = deleteTopics(deleteTopicsRequest.data,
       request.context.apiVersion,
-      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME),
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.whenComplete { (results, exception) =>
@@ -311,7 +315,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val future = createTopics(createTopicsRequest.data(),
-        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
         names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
     future.whenComplete { (result, exception) =>
       requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
@@ -684,8 +688,8 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleCreatePartitions(request: RequestChannel.Request): Unit = {
     val future = createPartitions(request.body[CreatePartitionsRequest].data,
-      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
-      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
+      names => authHelper.filterByAuthorized(request.context, ALTER, TOPIC, names)(n => n))
     future.whenComplete { (responses, exception) =>
       if (exception != null) {
         requestHelper.handleError(request, exception)

@@ -309,7 +309,7 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         final TestCondition stateStoreNameBoundToSourceTopic = () -> {
-            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
+            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToFullSourceTopicNames();
             final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
             return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
         };

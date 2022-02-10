@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -33,13 +34,24 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class MeteredSessionStore<K, V>
@@ -59,6 +71,15 @@ public class MeteredSessionStore<K, V>
     private Sensor e2eLatencySensor;
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
+
+    @SuppressWarnings("rawtypes")
+    private final Map<Class, QueryHandler> queryHandlers =
+            mkMap(
+                    mkEntry(
+                            WindowRangeQuery.class,
+                            (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
+                    )
+            );
 
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -118,10 +139,11 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
@@ -130,13 +152,26 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName, taskId.topologyName()),
+                ProcessorStateManager.storeChangelogTopic(prefix, storeName, taskId.topologyName()),
             WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
             WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
         );
+    }
+
+    private static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+        if (configs == null) {
+            return applicationId;
+        } else {
+            return StreamsConfig.InternalConfig.getString(
+                configs,
+                StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
+                applicationId
+            );
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -230,7 +265,8 @@ public class MeteredSessionStore<K, V>
             wrapped().fetch(keyBytes(key)),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -241,7 +277,8 @@ public class MeteredSessionStore<K, V>
             wrapped().backwardFetch(keyBytes(key)),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time
         );
     }
@@ -253,7 +290,8 @@ public class MeteredSessionStore<K, V>
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -264,7 +302,8 @@ public class MeteredSessionStore<K, V>
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time
         );
     }
@@ -282,7 +321,8 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -300,7 +340,8 @@ public class MeteredSessionStore<K, V>
             ),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time
         );
     }
@@ -320,7 +361,8 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time);
     }
 
@@ -340,7 +382,8 @@ public class MeteredSessionStore<K, V>
             ),
             fetchSensor,
             streamsMetrics,
-            serdes,
+            serdes::keyFrom,
+            serdes::valueFrom,
             time
         );
     }
@@ -357,6 +400,81 @@ public class MeteredSessionStore<K, V>
         } finally {
             streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = time.nanoseconds();
+        final QueryResult<R> result;
+
+        final QueryHandler handler = queryHandlers.get(query.getClass());
+        if (handler == null) {
+            result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        } else {
+            result = (QueryResult<R>) handler.apply(
+                query,
+                positionBound,
+                config,
+                this
+            );
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + getClass() + " with serdes "
+                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
+        final QueryResult<R> result;
+        final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
+        if (typedQuery.getKey().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                WindowRangeQuery.withKey(
+                    Bytes.wrap(serdes.rawKey(typedQuery.getKey().get()))
+                );
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final MeteredWindowedKeyValueIterator<K, V> typedResult =
+                    new MeteredWindowedKeyValueIterator<>(
+                        rawResult.getResult(),
+                        fetchSensor,
+                        streamsMetrics,
+                        serdes::keyFrom,
+                        StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
+                        time
+                    );
+                final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                // the generic type doesn't matter, since failed queries have no result set.
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+
+            result = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " SessionStores only support WindowRangeQuery.withKey."
+                    + " Contact the store maintainer if you need support"
+                    + " for a new query type."
+            );
+        }
+        return result;
     }
 
     private Bytes keyBytes(final K key) {

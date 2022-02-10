@@ -317,7 +317,7 @@ object DumpLogSegments {
         " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
         " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
         " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional +
-        " isControl: " + batch.isControlBatch)
+        " isControl: " + batch.isControlBatch + " deleteHorizonMs: " + batch.deleteHorizonMs)
     else
       print("offset: " + batch.lastOffset)
 
