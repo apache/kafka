@@ -50,7 +50,7 @@ public final class ProducerIdsImage {
                 new ProducerIdsRecord().
                     setBrokerId(-1).
                     setBrokerEpoch(-1).
-                    setProducerIdsEnd(highestSeenProducerId), (short) 0)));
+                    setNextProducerId(highestSeenProducerId), (short) 0)));
         }
     }
 

@@ -1451,8 +1451,8 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("allocateProducerIds",
             () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
             .thenApply(result -> new AllocateProducerIdsResponseData()
-                    .setProducerIdStart(result.producerIdStart())
-                    .setProducerIdLen(result.producerIdLen()));
+                    .setProducerIdStart(result.firstProducerId())
+                    .setProducerIdLen(result.size()));
     }
 
     @Override

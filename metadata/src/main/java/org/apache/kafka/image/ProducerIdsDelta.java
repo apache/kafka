@@ -27,11 +27,11 @@ public final class ProducerIdsDelta {
         this.highestSeenProducerId = image.highestSeenProducerId();
     }
 
-    public void setHighestSeenProducerId(long highestSeenProducerId) {
+    public void setNextProducerId(long highestSeenProducerId) {
         this.highestSeenProducerId = highestSeenProducerId;
     }
 
-    public long highestSeenProducerId() {
+    public long nextProducerId() {
         return highestSeenProducerId;
     }
 
@@ -40,7 +40,7 @@ public final class ProducerIdsDelta {
     }
 
     public void replay(ProducerIdsRecord record) {
-        highestSeenProducerId = record.producerIdsEnd();
+        highestSeenProducerId = record.nextProducerId();
     }
 
     public ProducerIdsImage apply() {

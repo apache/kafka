@@ -565,7 +565,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
-                setProducerIdsEnd(1000), (short) 0)
+                setNextProducerId(1000), (short) 0)
         );
     }
 
