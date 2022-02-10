@@ -1801,7 +1801,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val foo1 = new TopicPartition(foo, 1)
 
     val admin = createAdminClient()
-    admin.createTopics(Seq(new NewTopic(foo, 1, 1.asInstanceOf[Short])).asJava).all.get
+    admin.createTopics(Seq(new NewTopic(foo, 1, 1.toShort)).asJava).all.get
 
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group-id")

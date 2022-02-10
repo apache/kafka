@@ -52,7 +52,7 @@
     { "name": "Leader", "type": "string", "versions": "0+",
       "about": "The leader of the group." },
     { "name": "SkipAssignment", "type": "bool", "versions": "9+", "default": "false",
-      "about": "True is the leader must skip running the assignment." },
+      "about": "True if the leader must skip running the assignment." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID assigned by the group coordinator." },
     { "name": "Members", "type": "[]JoinGroupResponseMember", "versions": "0+", "fields": [

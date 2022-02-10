@@ -1333,7 +1333,9 @@ class GroupCoordinator(val brokerId: Int,
               // Starting from version 9 of the JoinGroup API, static members are able to
               // skip running the assignor based on the `SkipAssignment` field. We leverage
               // this to tell the leader that it is the leader of the group but by skipping
-              // running the assignor while the group is in stable state.
+              // running the assignor while the group is in stable state. This allows the
+              // leader to continue monitoring metadata changes for the group. Note that any
+              // metadata changes happening while the static leader is down won't be noticed.
               val isLeader = group.isLeader(newMemberId)
               group.maybeInvokeJoinCallback(member, JoinGroupResult(
                 members = if (isLeader) {

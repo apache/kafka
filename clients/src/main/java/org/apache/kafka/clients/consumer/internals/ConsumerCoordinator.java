@@ -213,6 +213,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return this.isLeader;
     }
 
+    // package private for testing
+    SubscriptionState subscriptionState() {
+        return this.subscriptions;
+    }
+
     @Override
     public String protocolType() {
         return ConsumerProtocol.PROTOCOL_TYPE;
@@ -658,8 +663,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return Collections.emptyMap();
         }
 
-        Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
@@ -678,6 +681,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
 
+        Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
             groupAssignment.put(assignmentEntry.getKey(), buffer);
