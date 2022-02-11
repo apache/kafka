@@ -310,13 +310,10 @@ public class MetadataNodeManagerTest {
             "1",
             metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
         assertEquals(
-            10000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockStart").contents());
-        assertEquals(
-            "9999",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockEnd").contents());
+            10000 + "",
+            metadataNodeManager.getData().root().directory("nextProducerIdBlock").file("firstProducerId").contents());
 
-        // generate another brokerId
+        // generate another producerId record
         ProducerIdsRecord record2 = new ProducerIdsRecord()
             .setBrokerId(1)
             .setBrokerEpoch(2)
@@ -330,10 +327,7 @@ public class MetadataNodeManagerTest {
             "2",
             metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
         assertEquals(
-            11000 - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockStart").contents());
-        assertEquals(
-            "10999",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("blockEnd").contents());
+            11000 + "",
+            metadataNodeManager.getData().root().directory("nextProducerIdBlock").file("firstProducerId").contents());
     }
 }

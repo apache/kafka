@@ -322,12 +322,12 @@ public final class MetadataNodeManager implements AutoCloseable {
             }
             case PRODUCER_IDS_RECORD: {
                 ProducerIdsRecord record = (ProducerIdsRecord) message;
-                DirectoryNode producerIdNode = data.root.mkdirs("lastProducerIdBlock");
-                producerIdNode.create("assignedBrokerId").setContents(record.brokerId() + "");
-                producerIdNode.create("assignedBrokerEpoch").setContents(record.brokerEpoch() + "");
-                producerIdNode.create("blockStart")
-                    .setContents(record.producerIdsEnd() - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE + "");
-                producerIdNode.create("blockEnd").setContents(record.producerIdsEnd() - 1 + "");
+                DirectoryNode lastBlockNode = data.root.mkdirs("lastProducerIdBlock");
+                lastBlockNode.create("assignedBrokerId").setContents(record.brokerId() + "");
+                lastBlockNode.create("assignedBrokerEpoch").setContents(record.brokerEpoch() + "");
+
+                DirectoryNode producerIdsNode = data.root.mkdirs("nextProducerIdBlock");
+                producerIdsNode.create("firstProducerId").setContents(record.producerIdsEnd() + "");
                 break;
             }
             default:
