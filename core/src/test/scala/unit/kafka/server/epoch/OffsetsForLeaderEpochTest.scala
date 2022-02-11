@@ -29,9 +29,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 
@@ -57,11 +57,10 @@ class OffsetsForLeaderEpochTest {
     val request = Seq(newOffsetForLeaderTopic(tp, RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //Stubs
-    val mockLog: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(mockLog.endOffsetForEpoch(epochRequested)).andReturn(Some(offsetAndEpoch))
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(mockLog, logManager)
+    val mockLog: UnifiedLog = mock(classOf[UnifiedLog])
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(mockLog.endOffsetForEpoch(epochRequested)).thenReturn(Some(offsetAndEpoch))
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     // create a replica manager with 1 partition that has 1 replica
     replicaManager = new ReplicaManager(
@@ -89,9 +88,8 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(logManager)
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 1 partition that has 0 replica
     replicaManager = new ReplicaManager(
@@ -121,9 +119,8 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnUnknownTopicOrPartitionIfThrown(): Unit = {
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(logManager)
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 0 partition
     replicaManager = new ReplicaManager(
