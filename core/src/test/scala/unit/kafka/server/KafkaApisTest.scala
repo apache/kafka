@@ -83,6 +83,8 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Arrays
 
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+
 class KafkaApisTest {
 
   private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
@@ -794,6 +796,72 @@ class KafkaApisTest {
           new CreatableTopic().setName("topic").setNumPartitions(1).
             setReplicationFactor(1.toShort)).iterator())))
     testForwardableApi(ApiKeys.CREATE_TOPICS, requestBuilder)
+  }
+
+  @Test
+  def testCreatePartitionsAuthorization(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    val timeoutMs = 35000
+    val requestData = new CreatePartitionsRequestData()
+      .setTimeoutMs(timeoutMs)
+      .setValidateOnly(false)
+    val fooCreatePartitionsData = new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2)
+    val barCreatePartitionsData = new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10)
+    requestData.topics().add(fooCreatePartitionsData)
+    requestData.topics().add(barCreatePartitionsData)
+
+    val fooResource = new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL)
+    val fooAction = new Action(AclOperation.ALTER, fooResource, 1, true, true)
+
+    val barResource = new ResourcePattern(ResourceType.TOPIC, "bar", PatternType.LITERAL)
+    val barAction = new Action(AclOperation.ALTER, barResource, 1, true, true)
+
+    val actionsCapture = EasyMock.newCapture[util.List[Action]]()
+    EasyMock.expect(authorizer.authorize(
+      anyObject[RequestContext],
+      EasyMock.capture(actionsCapture)
+    )).andAnswer(() => {
+      val actions = actionsCapture.getValue.asScala
+      val results = actions.map { action =>
+        if (action == fooAction) AuthorizationResult.ALLOWED
+        else if (action == barAction) AuthorizationResult.DENIED
+        else throw new AssertionError(s"Unexpected action $action")
+      }
+      new util.ArrayList[AuthorizationResult](results.asJava)
+    })
+
+    val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build())
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.expect(controller.isActive).andReturn(true)
+    EasyMock.expect(controller.isTopicQueuedForDeletion("foo")).andReturn(false)
+
+    EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
+      EasyMock.eq(request), EasyMock.anyShort())
+    ).andReturn(UnboundedControllerMutationQuota)
+
+    val callbackCapture = EasyMock.newCapture[Map[String, ApiError] => Unit]()
+    EasyMock.expect(adminManager.createPartitions(
+      timeoutMs = EasyMock.eq(timeoutMs),
+      newPartitions = EasyMock.eq(Seq(fooCreatePartitionsData)),
+      validateOnly = EasyMock.eq(false),
+      controllerMutationQuota = EasyMock.eq(UnboundedControllerMutationQuota),
+      callback = EasyMock.capture(callbackCapture)
+    )).andAnswer(() => {
+      val callback = callbackCapture.getValue
+      callback.apply(Map("foo" -> ApiError.NONE))
+    })
+
+    EasyMock.replay(authorizer, adminManager, replicaManager, clientRequestQuotaManager,
+      requestChannel, controller, clientControllerQuotaManager)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+
+    val response = capturedResponse.getValue.asInstanceOf[CreatePartitionsResponse]
+    val results = response.data.results.asScala
+    assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
+    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,
