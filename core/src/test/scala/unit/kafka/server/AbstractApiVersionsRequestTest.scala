@@ -74,18 +74,11 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
       ApiKeys.controllerApis()
     } else {
-      val apis = ApiVersionsResponse.intersectForwardableApis(
+      ApiVersionsResponse.intersectForwardableApis(
         ApiMessageType.ListenerType.BROKER,
         RecordVersion.current,
         new NodeApiVersions(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions()
       )
-      apis.add(
-        new ApiVersionsResponseData.ApiVersion()
-          .setApiKey(ApiKeys.ENVELOPE.id)
-          .setMinVersion(ApiKeys.ENVELOPE.oldestVersion)
-          .setMaxVersion(ApiKeys.ENVELOPE.latestVersion)
-      )
-      apis
     }
 
     assertEquals(expectedApis.size(), apiVersionsResponse.data.apiKeys().size(),
