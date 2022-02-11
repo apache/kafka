@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -29,6 +31,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -88,6 +91,8 @@ import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPER
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
+    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
     private final List<ConsumerPartitionAssignor> assignors;
@@ -287,7 +292,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception invokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
+    private Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
@@ -306,7 +311,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception invokePartitionsRevoked(final Set<TopicPartition> revokedPartitions) {
+    private Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
@@ -329,7 +334,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception invokePartitionsLost(final Set<TopicPartition> lostPartitions) {
+    private Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
@@ -370,7 +375,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Give the assignor a chance to update internal state based on the received assignment
         groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
 
-        Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
+        ownedPartitions.addAll(subscriptions.assignedPartitions());
 
         // should at least encode the short version
         if (assignmentBuffer.remaining() < 2)
@@ -381,7 +387,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
+        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
+        assignedPartitions.addAll(assignment.partitions());
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
             final String reason = String.format("received assignment %s does not match the current subscription %s; " +
@@ -393,11 +400,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
-        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
+        addedPartitions.addAll(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
         if (protocol == RebalanceProtocol.COOPERATIVE) {
-            Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
+            SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
+            revokedPartitions.addAll(ownedPartitions);
             revokedPartitions.removeAll(assignedPartitions);
 
             log.info("Updating assignment with\n" +
@@ -599,13 +608,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
 
             if (!assignedTopics.containsAll(allSubscribedTopics)) {
-                Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
+                SortedSet<String> notAssignedTopics = new TreeSet<>(allSubscribedTopics);
                 notAssignedTopics.removeAll(assignedTopics);
                 log.warn("The following subscribed topics are not assigned to any members: {} ", notAssignedTopics);
             }
 
             if (!allSubscribedTopics.containsAll(assignedTopics)) {
-                Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
+                SortedSet<String> newlyAddedTopics = new TreeSet<>(assignedTopics);
                 newlyAddedTopics.removeAll(allSubscribedTopics);
                 log.info("The following not-subscribed topics are assigned, and their metadata will be " +
                     "fetched from the brokers: {}", newlyAddedTopics);
@@ -681,7 +690,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void validateCooperativeAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
                                                final Map<String, Assignment> assignments) {
         Set<TopicPartition> totalRevokedPartitions = new HashSet<>();
-        Set<TopicPartition> totalAddedPartitions = new HashSet<>();
+        SortedSet<TopicPartition> totalAddedPartitions = new TreeSet<>(COMPARATOR);
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
@@ -732,10 +741,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // and in that case we should only change the assignment AFTER the revoke callback is triggered
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
-        final Set<TopicPartition> revokedPartitions;
+        final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
         if (generation == Generation.NO_GENERATION.generationId ||
             memberId.equals(Generation.NO_GENERATION.memberId)) {
-            revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            revokedPartitions.addAll(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
                 log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
@@ -748,7 +757,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             switch (protocol) {
                 case EAGER:
                     // revoke all partitions
-                    revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                    revokedPartitions.addAll(subscriptions.assignedPartitions());
                     exception = invokePartitionsRevoked(revokedPartitions);
 
                     subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -758,9 +767,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 case COOPERATIVE:
                     // only revoke those partitions that are not in the subscription any more.
                     Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                    revokedPartitions = ownedPartitions.stream()
+                    revokedPartitions.addAll(ownedPartitions.stream()
                         .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
-                        .collect(Collectors.toSet());
+                        .collect(Collectors.toSet()));
 
                     if (!revokedPartitions.isEmpty()) {
                         exception = invokePartitionsRevoked(revokedPartitions);
@@ -790,7 +799,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Executing onLeavePrepare with generation {}", currentGeneration);
 
         // we should reset assignment and trigger the callback before leaving group
-        Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(COMPARATOR);
+        droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
