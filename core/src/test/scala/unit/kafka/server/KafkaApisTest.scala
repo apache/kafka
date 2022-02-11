@@ -93,6 +93,8 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
@@ -764,6 +766,66 @@ class KafkaApisTest {
           new CreatableTopic().setName("topic").setNumPartitions(1).
             setReplicationFactor(1.toShort)).iterator())))
     testForwardableApi(ApiKeys.CREATE_TOPICS, requestBuilder)
+  }
+
+  @Test
+  def testCreatePartitionsAuthorization(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    val timeoutMs = 35000
+    val requestData = new CreatePartitionsRequestData()
+      .setTimeoutMs(timeoutMs)
+      .setValidateOnly(false)
+    val fooCreatePartitionsData = new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2)
+    val barCreatePartitionsData = new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10)
+    requestData.topics().add(fooCreatePartitionsData)
+    requestData.topics().add(barCreatePartitionsData)
+
+    val fooResource = new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL)
+    val fooAction = new Action(AclOperation.ALTER, fooResource, 1, true, true)
+
+    val barResource = new ResourcePattern(ResourceType.TOPIC, "bar", PatternType.LITERAL)
+    val barAction = new Action(AclOperation.ALTER, barResource, 1, true, true)
+
+    when(authorizer.authorize(
+      any[RequestContext](),
+      any[util.List[Action]]()
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1).asScala
+      val results = actions.map { action =>
+        if (action == fooAction) AuthorizationResult.ALLOWED
+        else if (action == barAction) AuthorizationResult.DENIED
+        else throw new AssertionError(s"Unexpected action $action")
+      }
+      new util.ArrayList[AuthorizationResult](results.asJava)
+    }
+
+    val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build())
+
+    when(controller.isActive).thenReturn(true)
+    when(controller.isTopicQueuedForDeletion("foo")).thenReturn(false)
+    when(clientControllerQuotaManager.newQuotaFor(
+      ArgumentMatchers.eq(request), ArgumentMatchers.anyShort())
+    ).thenReturn(UnboundedControllerMutationQuota)
+    when(adminManager.createPartitions(
+      timeoutMs = ArgumentMatchers.eq(timeoutMs),
+      newPartitions = ArgumentMatchers.eq(Seq(fooCreatePartitionsData)),
+      validateOnly = ArgumentMatchers.eq(false),
+      controllerMutationQuota = ArgumentMatchers.eq(UnboundedControllerMutationQuota),
+      callback = ArgumentMatchers.any[Map[String, ApiError] => Unit]()
+    )).thenAnswer { invocation =>
+      val callback = invocation.getArgument[Map[String, ApiError] => Unit](4)
+      callback.apply(Map("foo" -> ApiError.NONE))
+    }
+
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+
+    val capturedResponse = verifyNoThrottling(request)
+    val response = capturedResponse.getValue.asInstanceOf[CreatePartitionsResponse]
+    val results = response.data.results.asScala
+    assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
+    assertEquals(Some(Errors.TOPIC_AUTHORIZATION_FAILED), results.find(_.name == "bar").map(result => Errors.forCode(result.errorCode)))
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,

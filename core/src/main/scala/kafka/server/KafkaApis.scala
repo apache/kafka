@@ -1998,7 +1998,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         notDuped)(_.name)
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
-        zkSupport.controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
+        zkSupport.controller.isTopicQueuedForDeletion(topic.name)
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
