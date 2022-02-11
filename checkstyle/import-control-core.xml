@@ -28,7 +28,6 @@
   <allow pkg="javax.management" />
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
-  <allow pkg="org.easymock" />
   <allow pkg="java.security" />
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
