@@ -58,7 +58,7 @@ public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
         }
     }
 
-    /** Unlike DefaultReplicationPolicy, IdendityReplicationPolicy cannot know the source of
+    /** Unlike DefaultReplicationPolicy, IdentityReplicationPolicy cannot know the source of
       * a remote topic based on its name alone. If `source.cluster.alias` is provided,
       * `topicSource` will return that.
       *
