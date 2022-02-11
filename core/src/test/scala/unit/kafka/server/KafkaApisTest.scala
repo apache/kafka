@@ -788,46 +788,40 @@ class KafkaApisTest {
     val barResource = new ResourcePattern(ResourceType.TOPIC, "bar", PatternType.LITERAL)
     val barAction = new Action(AclOperation.ALTER, barResource, 1, true, true)
 
-    val actionsCapture = EasyMock.newCapture[util.List[Action]]()
-    EasyMock.expect(authorizer.authorize(
-      anyObject[RequestContext],
-      EasyMock.capture(actionsCapture)
-    )).andAnswer(() => {
-      val actions = actionsCapture.getValue.asScala
+    when(authorizer.authorize(
+      any[RequestContext](),
+      any[util.List[Action]]()
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1).asScala
       val results = actions.map { action =>
         if (action == fooAction) AuthorizationResult.ALLOWED
         else if (action == barAction) AuthorizationResult.DENIED
         else throw new AssertionError(s"Unexpected action $action")
       }
       new util.ArrayList[AuthorizationResult](results.asJava)
-    })
+    }
 
     val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build())
-    val capturedResponse = expectNoThrottling(request)
 
-    EasyMock.expect(controller.isActive).andReturn(true)
-    EasyMock.expect(controller.isTopicQueuedForDeletion("foo")).andReturn(false)
-
-    EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
-      EasyMock.eq(request), EasyMock.anyShort())
-    ).andReturn(UnboundedControllerMutationQuota)
-
-    val callbackCapture = EasyMock.newCapture[Map[String, ApiError] => Unit]()
-    EasyMock.expect(adminManager.createPartitions(
-      timeoutMs = EasyMock.eq(timeoutMs),
-      newPartitions = EasyMock.eq(Seq(fooCreatePartitionsData)),
-      validateOnly = EasyMock.eq(false),
-      controllerMutationQuota = EasyMock.eq(UnboundedControllerMutationQuota),
-      callback = EasyMock.capture(callbackCapture)
-    )).andAnswer(() => {
-      val callback = callbackCapture.getValue
+    when(controller.isActive).thenReturn(true)
+    when(controller.isTopicQueuedForDeletion("foo")).thenReturn(false)
+    when(clientControllerQuotaManager.newQuotaFor(
+      ArgumentMatchers.eq(request), ArgumentMatchers.anyShort())
+    ).thenReturn(UnboundedControllerMutationQuota)
+    when(adminManager.createPartitions(
+      timeoutMs = ArgumentMatchers.eq(timeoutMs),
+      newPartitions = ArgumentMatchers.eq(Seq(fooCreatePartitionsData)),
+      validateOnly = ArgumentMatchers.eq(false),
+      controllerMutationQuota = ArgumentMatchers.eq(UnboundedControllerMutationQuota),
+      callback = ArgumentMatchers.any[Map[String, ApiError] => Unit]()
+    )).thenAnswer { invocation =>
+      val callback = invocation.getArgument[Map[String, ApiError] => Unit](4)
       callback.apply(Map("foo" -> ApiError.NONE))
-    })
+    }
 
-    EasyMock.replay(authorizer, adminManager, replicaManager, clientRequestQuotaManager,
-      requestChannel, controller, clientControllerQuotaManager)
     kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
+    val capturedResponse = verifyNoThrottling(request)
     val response = capturedResponse.getValue.asInstanceOf[CreatePartitionsResponse]
     val results = response.data.results.asScala
     assertEquals(Some(Errors.NONE), results.find(_.name == "foo").map(result => Errors.forCode(result.errorCode)))
