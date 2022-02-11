@@ -40,7 +40,7 @@ public class ProducerIdsBlock {
     }
 
     /**
-     * Get the ID of the broker that this block was assigned to
+     * Get the ID of the broker that this block was assigned to.
      */
     public int assignedBrokerId() {
         return assignedBrokerId;
@@ -54,19 +54,25 @@ public class ProducerIdsBlock {
     }
 
     /**
-     * Get the number of IDs contained in this block
+     * Get the number of IDs contained in this block.
      */
     public int size() {
         return blockSize;
     }
 
     /**
-     * Get the last ID (inclusive) to be assigned from this block
+     * Get the last ID (inclusive) to be assigned from this block.
      */
     public long lastProducerId() {
         return firstProducerId + blockSize - 1;
     }
 
+    /**
+     * Get the first ID of the next block following this one.
+     */
+    public long nextBlockFirstId() {
+        return firstProducerId + blockSize;
+    }
 
     @Override
     public String toString() {

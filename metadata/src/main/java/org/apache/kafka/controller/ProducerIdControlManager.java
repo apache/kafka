@@ -49,12 +49,13 @@ public class ProducerIdControlManager {
                 "has exceeded the int64 type limit");
         }
 
-        long newNextProducerId = firstProducerIdInBlock + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE;
+        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, firstProducerIdInBlock, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
+        long newNextProducerId = block.nextBlockFirstId();
+
         ProducerIdsRecord record = new ProducerIdsRecord()
             .setNextProducerId(newNextProducerId)
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
-        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, firstProducerIdInBlock, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
         return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 

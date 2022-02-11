@@ -82,7 +82,7 @@ object ZkProducerIdManager {
             throw new KafkaException("Have exhausted all producerIds.")
           }
 
-          new ProducerIdsBlock(brokerId, currProducerIdBlock.lastProducerId + 1L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
+          new ProducerIdsBlock(brokerId, currProducerIdBlock.nextBlockFirstId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
         case None =>
           logger.debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
           new ProducerIdsBlock(brokerId, 0L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
