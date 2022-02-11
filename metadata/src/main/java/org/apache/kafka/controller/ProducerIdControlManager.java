@@ -33,7 +33,7 @@ import java.util.List;
 public class ProducerIdControlManager {
 
     private final ClusterControlManager clusterControlManager;
-    private final TimelineLong nextProducerId;
+    private final TimelineLong nextProducerId; // Initializes to 0
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
