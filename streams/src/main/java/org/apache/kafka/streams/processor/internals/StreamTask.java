@@ -190,6 +190,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
             TaskMetrics.totalBytesSensor(threadId, taskId, streamsMetrics),
+            TaskMetrics.totalCacheSizeBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );

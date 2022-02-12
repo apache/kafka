@@ -330,7 +330,7 @@ public class TopologyTestDriver implements Closeable {
 
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, streamsConfig.getLong(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG)),
+            Math.max(0, streamsConfig.getTotalCacheSize()),
             streamsMetrics
         );
 

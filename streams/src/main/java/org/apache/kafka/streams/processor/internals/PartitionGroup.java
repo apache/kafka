@@ -65,6 +65,7 @@ public class PartitionGroup {
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
     private final Sensor totalBytesSensor;
+    private final Sensor totalCacheSizeSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
@@ -95,6 +96,7 @@ public class PartitionGroup {
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
                    final Sensor totalBytesSensor,
+                   final Sensor totalCacheSizeSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
@@ -104,6 +106,7 @@ public class PartitionGroup {
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
         this.totalBytesSensor = totalBytesSensor;
+        this.totalCacheSizeSensor = totalCacheSizeSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;

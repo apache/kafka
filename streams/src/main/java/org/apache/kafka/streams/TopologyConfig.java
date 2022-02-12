@@ -159,7 +159,7 @@ public class TopologyConfig extends AbstractConfig {
                 log.info("Topology {} is overriding {} to {}", topologyName, STATESTORE_CACHE_MAX_BYTES_CONFIG, cacheSize);
             }
         } else {
-            cacheSize = globalAppConfigs.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+            cacheSize = globalAppConfigs.getTotalCacheSize();
         }
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
