@@ -300,7 +300,7 @@ public class MetadataNodeManagerTest {
         ProducerIdsRecord record1 = new ProducerIdsRecord()
             .setBrokerId(0)
             .setBrokerEpoch(1)
-            .setProducerIdsEnd(10000);
+            .setNextProducerId(10000);
         metadataNodeManager.handleMessage(record1);
 
         assertEquals(
@@ -317,7 +317,7 @@ public class MetadataNodeManagerTest {
         ProducerIdsRecord record2 = new ProducerIdsRecord()
             .setBrokerId(1)
             .setBrokerEpoch(2)
-            .setProducerIdsEnd(11000);
+            .setNextProducerId(11000);
         metadataNodeManager.handleMessage(record2);
 
         assertEquals(

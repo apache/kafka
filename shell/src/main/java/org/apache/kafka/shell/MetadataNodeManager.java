@@ -325,7 +325,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                 producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
                 producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
 
-                producerIds.create("nextBlockStartId").setContents(record.producerIdsEnd() + "");
+                producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
                 break;
             }
             default:
