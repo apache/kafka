@@ -26,19 +26,14 @@ import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestWithForwardingTest extends AbstractCreateTopicsRequestTest {
 
-  override def enableForwarding: Boolean = if (isKRaftTest()) true else false
+  override def enableForwarding: Boolean = true
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testForwardToController(quorum: String): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    if (isKRaftTest()) {
-      // With forwarding enabled, request could be forwarded to the active controller.
-      assertEquals(Map(Errors.NONE -> 1), response.errorCounts().asScala)
-    } else {
-      // Create table will fail until we support forwarding in zk mode
-      assertEquals(Map(Errors.NOT_CONTROLLER -> 1), response.errorCounts().asScala)
-    }
+    // With forwarding enabled, request could be forwarded to the active controller.
+    assertEquals(Map(Errors.NONE -> 1), response.errorCounts().asScala)
   }
 }
