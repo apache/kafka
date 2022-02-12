@@ -180,9 +180,11 @@ public class NamedTopologyIntegrationTest {
 
     private Properties props;
     private Properties props2;
+    private Properties props3;
 
     private KafkaStreamsNamedTopologyWrapper streams;
     private KafkaStreamsNamedTopologyWrapper streams2;
+    private KafkaStreamsNamedTopologyWrapper streams3;
 
     // builders for the 1st Streams instance (default)
     private NamedTopologyBuilder topology1Builder;
@@ -193,6 +195,10 @@ public class NamedTopologyIntegrationTest {
     // builders for the 2nd Streams instance
     private NamedTopologyBuilder topology1Builder2;
     private NamedTopologyBuilder topology2Builder2;
+
+    // builders for the 3rd Streams instance
+    private NamedTopologyBuilder topology1Builder3;
+    private NamedTopologyBuilder topology2Builder3;
 
     private Properties configProps(final String appId, final String host) {
         final Properties streamsConfiguration = new Properties();
@@ -237,6 +243,13 @@ public class NamedTopologyIntegrationTest {
         topology2Builder2 = streams2.newNamedTopologyBuilder(TOPOLOGY_2);
     }
 
+    private void setupThirdKafkaStreams() {
+        props3 = configProps(appId, "host3");
+        streams3 = new KafkaStreamsNamedTopologyWrapper(props3, clientSupplier);
+        topology1Builder3 = streams3.newNamedTopologyBuilder(TOPOLOGY_1);
+        topology2Builder3 = streams3.newNamedTopologyBuilder(TOPOLOGY_2);
+    }
+
     @After
     public void shutdown() throws Exception {
         if (streams != null) {
@@ -244,6 +257,9 @@ public class NamedTopologyIntegrationTest {
         }
         if (streams2 != null) {
             streams2.close(Duration.ofSeconds(30));
+        }
+        if (streams3 != null) {
+            streams3.close(Duration.ofSeconds(30));
         }
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
@@ -439,6 +455,45 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+    }
+
+    @Test
+    public void shouldAddNamedTopologyToWithThreeNodeApplication() throws Exception {
+        setupSecondKafkaStreams();
+        setupThirdKafkaStreams();
+        topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology1Builder2.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        topology1Builder3.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
+        streams.start(topology1Builder.build());
+        streams2.start(topology1Builder2.build());
+        streams3.start(topology1Builder3.build());
+
+        waitForApplicationState(asList(streams, streams2, streams3), State.RUNNING, Duration.ofSeconds(30));
+
+        topology2Builder.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+        topology2Builder2.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+        topology2Builder3.stream(INPUT_STREAM_2).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_2);
+
+        streams.addNamedTopology(topology2Builder.build()).all().get();
+
+        Thread.sleep(15 * 1000L);
+
+        waitForApplicationState(asList(streams, streams2, streams3), State.RUNNING, Duration.ofSeconds(30));
+
+        streams2.addNamedTopology(topology2Builder2.build()).all().get();
+
+        Thread.sleep(15 * 1000L);
+
+        waitForApplicationState(asList(streams, streams2, streams3), State.RUNNING, Duration.ofSeconds(30));
+
+        streams3.addNamedTopology(topology2Builder3.build()).all().get();
+
+        waitForApplicationState(asList(streams, streams2, streams3), State.RUNNING, Duration.ofSeconds(30));
+
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+        assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_2, 3), equalTo(COUNT_OUTPUT_DATA));
+
+
     }
 
     @Test
