@@ -2407,8 +2407,8 @@ class KafkaController(val config: KafkaConfig,
         case Left(error) => callback.apply(new AllocateProducerIdsResponseData().setErrorCode(error.code))
         case Right(pidBlock) => callback.apply(
           new AllocateProducerIdsResponseData()
-            .setProducerIdStart(pidBlock.producerIdStart())
-            .setProducerIdLen(pidBlock.producerIdLen()))
+            .setProducerIdStart(pidBlock.firstProducerId())
+            .setProducerIdLen(pidBlock.size()))
       }
     }
     eventManager.put(AllocateProducerIds(allocateProducerIdsRequest.brokerId,
