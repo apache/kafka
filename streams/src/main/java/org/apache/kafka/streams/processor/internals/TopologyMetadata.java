@@ -512,7 +512,7 @@ public class TopologyMetadata {
             builders.get(UNNAMED_TOPOLOGY) :
             builders.get(task.topologyName());
         if (builder == null) {
-            throw new UnknownTopologyException("Unable to locate topology builder" ,task.topologyName());
+            throw new UnknownTopologyException("Unable to locate topology builder", task.topologyName());
         } else {
             return builder;
         }
