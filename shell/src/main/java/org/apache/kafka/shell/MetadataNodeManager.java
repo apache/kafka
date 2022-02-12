@@ -46,7 +46,6 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -322,12 +321,11 @@ public final class MetadataNodeManager implements AutoCloseable {
             }
             case PRODUCER_IDS_RECORD: {
                 ProducerIdsRecord record = (ProducerIdsRecord) message;
-                DirectoryNode lastBlockNode = data.root.mkdirs("lastProducerIdBlock");
-                lastBlockNode.create("assignedBrokerId").setContents(record.brokerId() + "");
-                lastBlockNode.create("assignedBrokerEpoch").setContents(record.brokerEpoch() + "");
+                DirectoryNode producerIds = data.root.mkdirs("producerIds");
+                producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
+                producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
 
-                DirectoryNode producerIdsNode = data.root.mkdirs("nextProducerIdBlock");
-                producerIdsNode.create("firstProducerId").setContents(record.producerIdsEnd() + "");
+                producerIds.create("nextBlockStartId").setContents(record.producerIdsEnd() + "");
                 break;
             }
             default:

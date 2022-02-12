@@ -305,13 +305,13 @@ public class MetadataNodeManagerTest {
 
         assertEquals(
             "0",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerId").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("lastBlockBrokerId").contents());
         assertEquals(
             "1",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("lastBlockBrokerEpoch").contents());
         assertEquals(
             10000 + "",
-            metadataNodeManager.getData().root().directory("nextProducerIdBlock").file("firstProducerId").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("nextBlockStartId").contents());
 
         // generate another producerId record
         ProducerIdsRecord record2 = new ProducerIdsRecord()
@@ -322,12 +322,12 @@ public class MetadataNodeManagerTest {
 
         assertEquals(
             "1",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerId").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("lastBlockBrokerId").contents());
         assertEquals(
             "2",
-            metadataNodeManager.getData().root().directory("lastProducerIdBlock").file("assignedBrokerEpoch").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("lastBlockBrokerEpoch").contents());
         assertEquals(
             11000 + "",
-            metadataNodeManager.getData().root().directory("nextProducerIdBlock").file("firstProducerId").contents());
+            metadataNodeManager.getData().root().directory("producerIds").file("nextBlockStartId").contents());
     }
 }
