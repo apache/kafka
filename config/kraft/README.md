@@ -36,7 +36,7 @@ Formatting /tmp/kraft-combined-logs
 If you are using multiple nodes, then you should run the format command on each node.  Be sure to use the same cluster ID for each one.
 
 This example configures the node as both a broker and controller (i.e. `process.roles=broker,controller`). It is also possible to run the broker and controller nodes separately.
-please see [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker.properties) and [here](https://github.com/apache/kafka/blob/trunk/config/kraft/controller.properties) for example configurations.
+Please see [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker.properties) and [here](https://github.com/apache/kafka/blob/trunk/config/kraft/controller.properties) for example configurations.
 
 ## Start the Kafka Server
 Finally, you are ready to start the Kafka server on each node.
