@@ -18,18 +18,19 @@
 package kafka.test;
 
 import kafka.network.SocketServer;
+import kafka.server.MetadataCache;
 import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Properties;
 
 public interface ClusterInstance {
 
     enum ClusterType {
         ZK,
-        RAFT
+        KRAFT
     }
 
     /**
@@ -58,13 +59,13 @@ public interface ClusterInstance {
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
      * acting as the controller (since ZK controllers serve both broker and controller roles).
      */
-    Collection<SocketServer> brokerSocketServers();
+    Map<Integer, SocketServer> brokerSocketServers();
 
     /**
      * A collection of all controllers in the cluster. For ZK-based clusters, this will return the broker which is also
      * currently the active controller. For Raft-based clusters, this will return all controller servers.
      */
-    Collection<SocketServer> controllerSocketServers();
+    Map<Integer, SocketServer> controllerSocketServers();
 
     /**
      * Return any one of the broker servers. Throw an error if none are found
@@ -80,6 +81,8 @@ public interface ClusterInstance {
      * The underlying object which is responsible for setting up and tearing down the cluster.
      */
     Object getUnderlying();
+
+    Map<Integer, MetadataCache> brokerMetadataCaches();
 
     default <T> T getUnderlying(Class<T> asClass) {
         return asClass.cast(getUnderlying());

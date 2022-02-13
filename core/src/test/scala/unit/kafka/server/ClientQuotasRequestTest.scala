@@ -221,7 +221,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
           else
             InetAddress.getByName(entityName)
           var currentServerQuota = 0
-          currentServerQuota = cluster.brokerSocketServers().asScala.head.connectionQuotas.connectionRateForIp(entityIp)
+          currentServerQuota = cluster.brokerSocketServers().asScala.head._2.connectionQuotas.connectionRateForIp(entityIp)
           assertTrue(Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01,
             s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
         }

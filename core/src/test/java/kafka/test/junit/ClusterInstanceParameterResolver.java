@@ -46,7 +46,7 @@ public class ClusterInstanceParameterResolver implements ParameterResolver {
 
     @Override
     public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext extensionContext) {
-        if (!parameterContext.getParameter().getType().equals(ClusterInstance.class)) {
+        if (!ClusterInstance.class.isAssignableFrom(parameterContext.getParameter().getType())) {
             return false;
         }
 

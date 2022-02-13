@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head, listenerName)
+    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head._2, listenerName)
   }
 
   def controlPlaneListenerName = new ListenerName("CONTROLLER")
@@ -50,7 +50,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head._2, cluster.clientListener())
     try {
       val serializedBytes = Utils.toArray(
         RequestUtils.serialize(overrideHeader.data, overrideHeader.headerVersion, request.data, request.version))

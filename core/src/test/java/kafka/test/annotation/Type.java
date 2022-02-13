@@ -18,7 +18,7 @@
 package kafka.test.annotation;
 
 import kafka.test.ClusterConfig;
-import kafka.test.junit.RaftClusterInvocationContext;
+import kafka.test.junit.KRaftClusterInvocationContext;
 import kafka.test.junit.ZkClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
@@ -31,7 +31,7 @@ public enum Type {
     KRAFT {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+            invocationConsumer.accept(new KRaftClusterInvocationContext(config.copyOf()));
         }
     },
     ZK {
@@ -43,7 +43,7 @@ public enum Type {
     BOTH {
         @Override
         public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+            invocationConsumer.accept(new KRaftClusterInvocationContext(config.copyOf()));
             invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
         }
     },
