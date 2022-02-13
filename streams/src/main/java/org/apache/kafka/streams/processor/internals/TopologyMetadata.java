@@ -412,11 +412,13 @@ public class TopologyMetadata {
     }
 
     /**
-     * @return the subtopology built for this task, or null if the corresponding NamedTopology does not (yet) exist
+     * @return the {@link ProcessorTopology subtopology} built for this task, guaranteed to be non-null
+     *
+     * @throws UnknownTopologyException  if the task is from a named topology that this client isn't aware of
      */
     public ProcessorTopology buildSubtopology(final TaskId task) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(task);
-        return builder == null ? null : builder.buildSubtopology(task.subtopology());
+        return builder.buildSubtopology(task.subtopology());
     }
 
     public ProcessorTopology globalTaskTopology() {
@@ -507,6 +509,11 @@ public class TopologyMetadata {
         return copartitionGroups;
     }
 
+    /**
+     * @return the {@link InternalTopologyBuilder} for this task's topology, guaranteed to be non-null
+     *
+     * @throws UnknownTopologyException  if the task is from a named topology that this client isn't aware of
+     */
     private InternalTopologyBuilder lookupBuilderForTask(final TaskId task) {
         final InternalTopologyBuilder builder = task.topologyName() == null ?
             builders.get(UNNAMED_TOPOLOGY) :
@@ -517,6 +524,7 @@ public class TopologyMetadata {
             return builder;
         }
     }
+
 
     /**
      * @return the InternalTopologyBuilder for the NamedTopology with the given {@code topologyName}

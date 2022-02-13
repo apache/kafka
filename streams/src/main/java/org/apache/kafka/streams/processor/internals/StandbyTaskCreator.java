@@ -90,12 +90,13 @@ class StandbyTaskCreator {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
-            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
-            if (topology == null) {
-                // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 newUnknownTasks.put(taskId, partitions);
                 continue;
             }
+
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
