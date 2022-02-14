@@ -31,9 +31,9 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
 
 class ProducerStateManagerTest {
   private var logDir: File = null
@@ -960,10 +960,9 @@ class ProducerStateManagerTest {
     val producerId = 23423L
     val baseOffset = 15
 
-    val batch: RecordBatch = EasyMock.createMock(classOf[RecordBatch])
-    EasyMock.expect(batch.isControlBatch).andReturn(true).once
-    EasyMock.expect(batch.iterator).andReturn(Collections.emptyIterator[Record]).once
-    EasyMock.replay(batch)
+    val batch: RecordBatch = mock(classOf[RecordBatch])
+    when(batch.isControlBatch).thenReturn(true)
+    when(batch.iterator).thenReturn(Collections.emptyIterator[Record])
 
     // Appending the empty control batch should not throw and a new transaction shouldn't be started
     append(stateManager, producerId, baseOffset, batch, origin = AppendOrigin.Client)
@@ -1011,7 +1010,7 @@ class ProducerStateManagerTest {
   @Test
   def testRemoveAndMarkSnapshotForDeletion(): Unit = {
     UnifiedLog.producerSnapshotFile(logDir, 5).createNewFile()
-    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, time = time)
+    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
     val snapshot = manager.removeAndMarkSnapshotForDeletion(5).get
     assertTrue(snapshot.file.toPath.toString.endsWith(UnifiedLog.DeletedFileSuffix))
@@ -1029,7 +1028,7 @@ class ProducerStateManagerTest {
   def testRemoveAndMarkSnapshotForDeletionAlreadyDeleted(): Unit = {
     val file = UnifiedLog.producerSnapshotFile(logDir, 5)
     file.createNewFile()
-    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, time = time)
+    val manager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
     assertTrue(manager.latestSnapshotOffset.isDefined)
     Files.delete(file.toPath)
     assertTrue(manager.removeAndMarkSnapshotForDeletion(5).isEmpty)

@@ -60,6 +60,6 @@ public class ConfigInfo {
 
     @Override
     public String toString() {
-        return "[" + configKey.toString() + "," + configValue.toString() + "]";
+        return "[" + configKey + "," + configValue + "]";
     }
 }

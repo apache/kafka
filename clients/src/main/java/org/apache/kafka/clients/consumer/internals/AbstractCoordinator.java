@@ -189,8 +189,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * cleanup from the previous generation (such as committing offsets for the consumer)
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
+     * @return true If onJoinPrepare async commit succeeded, false otherwise
      */
-    protected abstract void onJoinPrepare(int generation, String memberId);
+    protected abstract boolean onJoinPrepare(int generation, String memberId);
 
     /**
      * Perform assignment for the group. This is used by the leader to push state to all the members
@@ -421,7 +422,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                onJoinPrepare(generation.generationId, generation.memberId);
+                // return false when onJoinPrepare is waiting for committing offset
+                if (!onJoinPrepare(generation.generationId, generation.memberId)) {
+                    needsJoinPrepare = true;
+                    //should not initiateJoinGroup if needsJoinPrepare still is true
+                    return false;
+                }
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();

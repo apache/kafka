@@ -46,11 +46,11 @@ public class ProducerIdsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(2).
             setBrokerEpoch(100).
-            setProducerIdsEnd(456), (short) 0));
+            setNextProducerId(456), (short) 0));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(3).
             setBrokerEpoch(100).
-            setProducerIdsEnd(789), (short) 0));
+            setNextProducerId(789), (short) 0));
 
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);

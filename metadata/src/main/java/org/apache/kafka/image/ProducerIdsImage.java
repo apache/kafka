@@ -34,23 +34,23 @@ import java.util.function.Consumer;
 public final class ProducerIdsImage {
     public final static ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
 
-    private final long highestSeenProducerId;
+    private final long nextProducerId;
 
-    public ProducerIdsImage(long highestSeenProducerId) {
-        this.highestSeenProducerId = highestSeenProducerId;
+    public ProducerIdsImage(long nextProducerId) {
+        this.nextProducerId = nextProducerId;
     }
 
     public long highestSeenProducerId() {
-        return highestSeenProducerId;
+        return nextProducerId;
     }
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        if (highestSeenProducerId >= 0) {
+        if (nextProducerId >= 0) {
             out.accept(Collections.singletonList(new ApiMessageAndVersion(
                 new ProducerIdsRecord().
                     setBrokerId(-1).
                     setBrokerEpoch(-1).
-                    setProducerIdsEnd(highestSeenProducerId), (short) 0)));
+                    setNextProducerId(nextProducerId), (short) 0)));
         }
     }
 
@@ -58,20 +58,20 @@ public final class ProducerIdsImage {
     public boolean equals(Object o) {
         if (!(o instanceof ProducerIdsImage)) return false;
         ProducerIdsImage other = (ProducerIdsImage) o;
-        return highestSeenProducerId == other.highestSeenProducerId;
+        return nextProducerId == other.nextProducerId;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(highestSeenProducerId);
+        return Objects.hash(nextProducerId);
     }
 
     @Override
     public String toString() {
-        return "ProducerIdsImage(highestSeenProducerId=" + highestSeenProducerId + ")";
+        return "ProducerIdsImage(highestSeenProducerId=" + nextProducerId + ")";
     }
 
     public boolean isEmpty() {
-        return highestSeenProducerId < 0;
+        return nextProducerId < 0;
     }
 }
