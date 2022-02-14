@@ -44,6 +44,8 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -134,10 +136,7 @@ public class RepartitionOptimizingTest {
         runTest(StreamsConfig.NO_OPTIMIZATION, FOUR_REPARTITION_TOPICS);
     }
 
-
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
-
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream =
@@ -258,8 +257,7 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class SimpleProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
+    private static class SimpleProcessor implements Processor<String, String, Void, Void> {
 
         final List<String> valueList;
 
@@ -268,8 +266,8 @@ public class RepartitionOptimizingTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            valueList.add(value);
+        public void process(final Record<String, String> record) {
+            valueList.add(record.value());
         }
     }
 

@@ -20,16 +20,16 @@ import java.io.File
 import java.util.Properties
 
 import kafka.cluster.Partition
-import kafka.log.{UnifiedLog, LogManager}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
 
 import scala.collection.Seq
 import scala.collection.mutable.{HashMap, Map}
@@ -58,9 +58,8 @@ class IsrExpirationTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
-    EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    EasyMock.replay(logManager)
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
@@ -110,7 +109,7 @@ class IsrExpirationTest {
     // now follower hasn't pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set(configs.last.brokerId), partition0OSR, "Replica 1 should be out of sync")
-    EasyMock.verify(log)
+    verify(log, atLeastOnce()).logEndOffset
   }
 
   /*
@@ -129,7 +128,7 @@ class IsrExpirationTest {
 
     val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set(configs.last.brokerId), partition0OSR, "Replica 1 should be out of sync")
-    EasyMock.verify(log)
+    verify(log, atLeastOnce()).logEndOffset
   }
 
   /*
@@ -184,8 +183,7 @@ class IsrExpirationTest {
     }
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
-
-    EasyMock.verify(log)
+    verify(log, atLeastOnce()).logEndOffset
   }
 
   /*
@@ -216,7 +214,7 @@ class IsrExpirationTest {
     // even though follower hasn't pulled any data for > replicaMaxLagTimeMs ms, the follower has already caught up. So it is not out-of-sync.
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
-    EasyMock.verify(log)
+    verify(log, atLeastOnce()).logEndOffset
   }
 
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
@@ -247,12 +245,8 @@ class IsrExpirationTest {
   }
 
   private def logMock: UnifiedLog = {
-    val log: UnifiedLog = EasyMock.createMock(classOf[UnifiedLog])
-    EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
-    EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLogEndOffset)).anyTimes()
-    EasyMock.expect(log.logEndOffset).andReturn(leaderLogEndOffset).anyTimes()
-    EasyMock.expect(log.highWatermark).andReturn(leaderLogHighWatermark).anyTimes()
-    EasyMock.replay(log)
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(leaderLogEndOffset)
     log
   }
 }

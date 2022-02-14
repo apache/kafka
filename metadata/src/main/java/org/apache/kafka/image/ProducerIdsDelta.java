@@ -21,18 +21,18 @@ import org.apache.kafka.common.metadata.ProducerIdsRecord;
 
 
 public final class ProducerIdsDelta {
-    private long highestSeenProducerId;
+    private long nextProducerId;
 
     public ProducerIdsDelta(ProducerIdsImage image) {
-        this.highestSeenProducerId = image.highestSeenProducerId();
+        this.nextProducerId = image.highestSeenProducerId();
     }
 
-    public void setHighestSeenProducerId(long highestSeenProducerId) {
-        this.highestSeenProducerId = highestSeenProducerId;
+    public void setNextProducerId(long highestSeenProducerId) {
+        this.nextProducerId = highestSeenProducerId;
     }
 
-    public long highestSeenProducerId() {
-        return highestSeenProducerId;
+    public long nextProducerId() {
+        return nextProducerId;
     }
 
     public void finishSnapshot() {
@@ -40,10 +40,10 @@ public final class ProducerIdsDelta {
     }
 
     public void replay(ProducerIdsRecord record) {
-        highestSeenProducerId = record.producerIdsEnd();
+        nextProducerId = record.nextProducerId();
     }
 
     public ProducerIdsImage apply() {
-        return new ProducerIdsImage(highestSeenProducerId);
+        return new ProducerIdsImage(nextProducerId);
     }
 }

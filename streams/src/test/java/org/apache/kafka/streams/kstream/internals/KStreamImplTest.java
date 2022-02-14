@@ -62,8 +62,9 @@ import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -100,12 +101,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
-
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override
@@ -1527,7 +1526,7 @@ public class KStreamImplTest {
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
         }
-        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockApiProcessor<String, String, Void, Void>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));

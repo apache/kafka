@@ -80,7 +80,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, principal = BrokerPrincipal)),
       new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL))
 
@@ -120,13 +120,13 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
 
     createTopic(topic)
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val producer = createProducer()
     producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
 
-    TestUtils.addAndVerifyAcls(servers.head,
+    TestUtils.addAndVerifyAcls(brokers,
       Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
       new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL))
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
