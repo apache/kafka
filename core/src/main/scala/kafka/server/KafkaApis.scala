@@ -1652,6 +1652,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setProtocolType(joinResult.protocolType.orNull)
             .setProtocolName(protocolName)
             .setLeader(joinResult.leaderId)
+            .setSkipAssignment(joinResult.skipAssignment)
             .setMemberId(joinResult.memberId)
             .setMembers(joinResult.members.asJava)
         )
@@ -1678,14 +1679,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
       // let the coordinator handle join-group
-      val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map(protocol =>
-        (protocol.name, protocol.metadata)).toList
+      val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map { protocol =>
+        (protocol.name, protocol.metadata)
+      }.toList
+
+      val supportSkippingAssignment = joinGroupRequest.version >= 9
 
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data.groupId,
         joinGroupRequest.data.memberId,
         groupInstanceId,
         requireKnownMemberId,
+        supportSkippingAssignment,
         request.header.clientId,
         request.context.clientAddress.toString,
         joinGroupRequest.data.rebalanceTimeoutMs,

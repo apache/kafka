@@ -63,6 +63,7 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
 
@@ -404,7 +405,7 @@ public class WorkerCoordinatorTest {
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState1 has 1 connector, 1 task
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -447,7 +448,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -490,7 +491,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -511,8 +512,24 @@ public class WorkerCoordinatorTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testSkippingAssignmentFails() {
+        // Connect does not support static membership so skipping assignment should
+        // never be set to true by the group coordinator. It is treated as an
+        // illegal state if it would.
+        EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
+        PowerMock.replayAll();
+
+        coordinator.metadata();
+
+        assertThrows(IllegalStateException.class,
+            () -> coordinator.onLeaderElected("leader", EAGER.protocol(), Collections.emptyList(), true));
+
+        PowerMock.verifyAll();
+    }
+
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
-                                           Map<String, Long> configOffsets, Errors error) {
+                                                      Map<String, Long> configOffsets, Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, Long> configStateEntry : configOffsets.entrySet()) {
             // We need a member URL, but it doesn't matter for the purposes of this test. Just set it to the member ID
