@@ -1241,7 +1241,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFails() throws Exception {
+    public void testTopicCreateFails() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1266,7 +1266,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() throws Exception {
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() {
         if (!enableTopicCreation)
             // should only test with topic creation enabled
             return;
@@ -1399,7 +1399,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
+    private void expectSendRecordSyncFailure(Throwable error) {
         expectConvertHeadersAndKeyValue(false);
         expectApplyTransformationChain(false);
 
@@ -1582,7 +1582,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             assertEquals(RECORDS.size(), metrics.currentMetricValueAsDouble(taskGroup, "batch-size-avg"), 0.000001d);
             assertTrue(pollRate > 0.0d);
         } else {
-            assertTrue(pollRate == 0.0d);
+            assertEquals(0.0d, pollRate, 0.0);
         }
         assertTrue(pollTotal >= minimumPollCountExpected);
 
@@ -1591,7 +1591,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         if (minimumPollCountExpected > 0) {
             assertTrue(writeRate > 0.0d);
         } else {
-            assertTrue(writeRate == 0.0d);
+            assertEquals(0.0d, writeRate, 0.0);
         }
         assertTrue(writeTotal >= minimumPollCountExpected);
 

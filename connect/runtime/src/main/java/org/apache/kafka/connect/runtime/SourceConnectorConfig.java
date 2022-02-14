@@ -58,7 +58,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
         }
     }
 
-    private static ConfigDef config = SourceConnectorConfig.configDef();
+    private static final ConfigDef CONFIG = SourceConnectorConfig.configDef();
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
 
     public static ConfigDef configDef() {
@@ -116,9 +116,9 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
-        super(plugins, config, props);
+        super(plugins, CONFIG, props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {
-            ConfigDef defaultConfigDef = embedDefaultGroup(config);
+            ConfigDef defaultConfigDef = embedDefaultGroup(CONFIG);
             // This config is only used to set default values for partitions and replication
             // factor from the default group and otherwise it remains unused
             AbstractConfig defaultGroup = new AbstractConfig(defaultConfigDef, props, false);
@@ -181,6 +181,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtml(4, config -> "sourceconnectorconfigs_" + config));
+        System.out.println(CONFIG.toHtml(4, config -> "sourceconnectorconfigs_" + config));
     }
 }

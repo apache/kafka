@@ -137,11 +137,6 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private int generation;
     private SharedTopicAdmin ownTopicAdmin;
 
-    @Deprecated
-    public KafkaStatusBackingStore(Time time, Converter converter) {
-        this(time, converter, null);
-    }
-
     public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier) {
         this.time = time;
         this.converter = converter;
@@ -153,7 +148,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     // visible for testing
     KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
-        this(time, converter);
+        this(time, converter, null);
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
     }
@@ -540,7 +535,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private void readConnectorStatus(String key, byte[] value) {
         String connector = parseConnectorStatusKey(key);
-        if (connector == null || connector.isEmpty()) {
+        if (connector.isEmpty()) {
             log.warn("Discarding record with invalid connector status key {}", key);
             return;
         }

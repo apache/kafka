@@ -34,6 +34,7 @@ import java.util.HashMap;
 
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -149,7 +150,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ByteBuffer leaderBuf = ConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
@@ -161,7 +162,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(memberBuf);
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("member", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
@@ -177,7 +178,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ByteBuffer leaderBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
@@ -191,7 +192,7 @@ public class ConnectProtocolCompatibilityTest {
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment =
                 IncrementalCooperativeConnectProtocol.deserializeAssignment(memberBuf);
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("member", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
@@ -207,7 +208,7 @@ public class ConnectProtocolCompatibilityTest {
         ByteBuffer leaderBuf = ConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment =
                 IncrementalCooperativeConnectProtocol.deserializeAssignment(leaderBuf);
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
@@ -220,7 +221,7 @@ public class ConnectProtocolCompatibilityTest {
         ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment =
                 IncrementalCooperativeConnectProtocol.deserializeAssignment(memberBuf);
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("member", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
@@ -236,7 +237,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ByteBuffer leaderBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
-        assertEquals(false, leaderAssignment.failed());
+        assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
@@ -249,7 +250,7 @@ public class ConnectProtocolCompatibilityTest {
 
         ByteBuffer memberBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment2);
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(memberBuf);
-        assertEquals(false, memberAssignment.failed());
+        assertFalse(memberAssignment.failed());
         assertEquals("member", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());

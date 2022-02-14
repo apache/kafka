@@ -85,8 +85,8 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
-    private ContextHandlerCollection handlers;
-    private Server jettyServer;
+    private final ContextHandlerCollection handlers;
+    private final Server jettyServer;
 
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
