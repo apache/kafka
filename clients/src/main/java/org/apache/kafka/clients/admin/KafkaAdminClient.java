@@ -1893,6 +1893,14 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
+
+                // Check if any topic's metadata failed to get updated
+                Map<String, Errors> errors = response.errors();
+                if (!errors.isEmpty()) {
+                    String destination = this.curNode().idString();
+                    log.warn("Error while fetching metadata with from source {} with errors : {}", destination, errors);
+                }
+
                 Map<String, TopicListing> topicListing = new HashMap<>();
                 for (MetadataResponse.TopicMetadata topicMetadata : response.topicMetadata()) {
                     String topicName = topicMetadata.topic();
