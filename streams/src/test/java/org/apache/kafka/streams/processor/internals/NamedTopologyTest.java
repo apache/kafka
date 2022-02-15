@@ -33,6 +33,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
@@ -134,6 +135,23 @@ public class NamedTopologyTest {
                 builder1.build(),
                 builder2.build()))
         );
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionWhenAddingNamedTopologyReadingFromSameInputTopic() {
+        builder1.stream("stream");
+        builder2.stream("stream");
+
+        streams.start();
+
+        streams.addNamedTopology(builder1.build());
+
+        final ExecutionException exception = assertThrows(
+            ExecutionException.class,
+            () -> streams.addNamedTopology(builder2.build()).all().get()
+        );
+
+        assertThat(exception.getCause().getClass(), equalTo(TopologyException.class));
     }
 
     @Test
