@@ -155,7 +155,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
     val future = deleteTopics(deleteTopicsRequest.data,
       request.context.apiVersion,
-      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME),
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.whenComplete { (results, exception) =>
@@ -314,7 +314,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val future = createTopics(createTopicsRequest.data(),
-        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
         names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity))
     future.whenComplete { (result, exception) =>
       requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
@@ -686,9 +686,15 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleCreatePartitions(request: RequestChannel.Request): Unit = {
-    val future = createPartitions(request.body[CreatePartitionsRequest].data,
-      authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME),
-      names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(n => n))
+    def filterAlterAuthorizedTopics(topics: Iterable[String]): Set[String] = {
+      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
+    }
+
+    val future = createPartitions(
+      request.body[CreatePartitionsRequest].data,
+      filterAlterAuthorizedTopics
+    )
+
     future.whenComplete { (responses, exception) =>
       if (exception != null) {
         requestHelper.handleError(request, exception)
@@ -703,10 +709,10 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def createPartitions(request: CreatePartitionsRequestData,
-                       hasClusterAuth: Boolean,
-                       getCreatableTopics: Iterable[String] => Set[String])
-                       : CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
+  def createPartitions(
+    request: CreatePartitionsRequestData,
+    getAlterAuthorizedTopics: Iterable[String] => Set[String]
+  ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
     val deadlineNs = time.nanoseconds() + NANOSECONDS.convert(request.timeoutMs, MILLISECONDS);
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
@@ -724,13 +730,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         setErrorMessage("Duplicate topic name."))
         topicNames.remove(topicName)
     }
-    val authorizedTopicNames = {
-      if (hasClusterAuth) {
-        topicNames.asScala
-      } else {
-        getCreatableTopics(topicNames.asScala)
-      }
-    }
+    val authorizedTopicNames = getAlterAuthorizedTopics(topicNames.asScala)
     val topics = new util.ArrayList[CreatePartitionsTopic]
     topicNames.forEach { topicName =>
       if (authorizedTopicNames.contains(topicName)) {

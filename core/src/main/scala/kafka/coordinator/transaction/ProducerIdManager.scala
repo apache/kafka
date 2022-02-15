@@ -76,13 +76,13 @@ object ZkProducerIdManager {
           val currProducerIdBlock = ProducerIdBlockZNode.parseProducerIdBlockData(data)
           logger.debug(s"Read current producerId block $currProducerIdBlock, Zk path version $zkVersion")
 
-          if (currProducerIdBlock.producerIdEnd > Long.MaxValue - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
+          if (currProducerIdBlock.lastProducerId > Long.MaxValue - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             // we have exhausted all producerIds (wow!), treat it as a fatal error
-            logger.fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.producerIdEnd})")
+            logger.fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.lastProducerId})")
             throw new KafkaException("Have exhausted all producerIds.")
           }
 
-          new ProducerIdsBlock(brokerId, currProducerIdBlock.producerIdEnd + 1L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
+          new ProducerIdsBlock(brokerId, currProducerIdBlock.nextBlockFirstId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
         case None =>
           logger.debug(s"There is no producerId block yet (Zk path version $zkVersion), creating the first block")
           new ProducerIdsBlock(brokerId, 0L, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
@@ -114,7 +114,7 @@ class ZkProducerIdManager(brokerId: Int,
   // grab the first block of producerIds
   this synchronized {
     allocateNewProducerIdBlock()
-    nextProducerId = currentProducerIdBlock.producerIdStart
+    nextProducerId = currentProducerIdBlock.firstProducerId
   }
 
   private def allocateNewProducerIdBlock(): Unit = {
@@ -126,9 +126,9 @@ class ZkProducerIdManager(brokerId: Int,
   def generateProducerId(): Long = {
     this synchronized {
       // grab a new block of producerIds if this block has been exhausted
-      if (nextProducerId > currentProducerIdBlock.producerIdEnd) {
+      if (nextProducerId > currentProducerIdBlock.lastProducerId) {
         allocateNewProducerIdBlock()
-        nextProducerId = currentProducerIdBlock.producerIdStart
+        nextProducerId = currentProducerIdBlock.firstProducerId
       }
       nextProducerId += 1
       nextProducerId - 1
@@ -158,13 +158,13 @@ class RPCProducerIdManager(brokerId: Int,
         nextProducerId += 1
 
         // Check if we need to fetch the next block
-        if (nextProducerId >= (currentProducerIdBlock.producerIdStart + currentProducerIdBlock.producerIdLen * ProducerIdManager.PidPrefetchThreshold)) {
+        if (nextProducerId >= (currentProducerIdBlock.firstProducerId + currentProducerIdBlock.size * ProducerIdManager.PidPrefetchThreshold)) {
           maybeRequestNextBlock()
         }
       }
 
       // If we've exhausted the current block, grab the next block (waiting if necessary)
-      if (nextProducerId > currentProducerIdBlock.producerIdEnd) {
+      if (nextProducerId > currentProducerIdBlock.lastProducerId) {
         val block = nextProducerIdBlock.poll(maxWaitMs, TimeUnit.MILLISECONDS)
         if (block == null) {
           throw Errors.REQUEST_TIMED_OUT.exception("Timed out waiting for next producer ID block")
@@ -172,7 +172,7 @@ class RPCProducerIdManager(brokerId: Int,
           block match {
             case Success(nextBlock) =>
               currentProducerIdBlock = nextBlock
-              nextProducerId = currentProducerIdBlock.producerIdStart
+              nextProducerId = currentProducerIdBlock.firstProducerId
             case Failure(t) => throw t
           }
         }
@@ -212,7 +212,7 @@ class RPCProducerIdManager(brokerId: Int,
       case Errors.NONE =>
         debug(s"Got next producer ID block from controller $data")
         // Do some sanity checks on the response
-        if (data.producerIdStart() < currentProducerIdBlock.producerIdEnd) {
+        if (data.producerIdStart() < currentProducerIdBlock.lastProducerId) {
           nextProducerIdBlock.put(Failure(new KafkaException(
             s"Producer ID block is not monotonic with current block: current=$currentProducerIdBlock response=$data")))
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MaxValue - data.producerIdLen()) {

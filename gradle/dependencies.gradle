@@ -27,8 +27,8 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.14'
-def defaultScala213Version = '2.13.6'
+def defaultScala212Version = '2.12.15'
+def defaultScala213Version = '2.13.8'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -58,31 +58,31 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.66",
+  bcpkix: "1.70",
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "7.2",
+  gradle: "7.3.3",
   grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",
-  jackson: "2.12.3",
+  jackson: "2.12.6",
   jacoco: "0.8.7",
   javassist: "3.27.0-GA",
   jetty: "9.4.44.v20210927",
   jersey: "2.34",
-  jline: "3.12.1",
-  jmh: "1.32",
+  jline: "3.21.0",
+  jmh: "1.34",
   hamcrest: "2.2",
   log4j: "1.2.17",
-  scalaLogging: "3.9.3",
+  scalaLogging: "3.9.4",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
-  jose4j: "0.7.8",
-  junit: "5.7.1",
-  jqwik: "1.5.0",
+  jose4j: "0.7.9",
+  junit: "5.8.2",
+  jqwik: "1.6.3",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
   kafka_0102: "0.10.2.2",
@@ -101,23 +101,23 @@ versions += [
   kafka_30: "3.0.0",
   kafka_31: "3.1.0",
   lz4: "1.8.0",
-  mavenArtifact: "3.8.1",
+  mavenArtifact: "3.8.4",
   metrics: "2.2.0",
-  mockito: "3.12.4",
+  mockito: "4.3.1",
   netty: "4.1.73.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
-  rocksDB: "6.22.1.1",
-  scalaCollectionCompat: "2.4.4",
+  rocksDB: "6.27.3",
+  scalaCollectionCompat: "2.6.0",
   scalafmt: "2.7.5",
-  scalaJava8Compat : "1.0.0",
-  scoverage: "1.4.1",
-  slf4j: "1.7.30",
+  scalaJava8Compat : "1.0.2",
+  scoverage: "1.4.11",
+  slf4j: "1.7.32",
   snappy: "1.1.8.4",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
   zookeeper: "3.6.3",
-  zstd: "1.5.0-4"
+  zstd: "1.5.2-1"
 ]
 libs += [
   activation: "javax.activation:activation:$versions.activation",

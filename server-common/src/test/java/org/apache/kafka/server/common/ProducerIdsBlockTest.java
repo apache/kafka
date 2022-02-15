@@ -14,39 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.server.common;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.zip.Checksum;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class Crc32Test {
+class ProducerIdsBlockTest {
 
     @Test
-    public void testUpdate() {
-        final byte[] bytes = "Any String you want".getBytes();
-        final int len = bytes.length;
-
-        Checksum crc1 = new Crc32();
-        Checksum crc2 = new Crc32();
-        Checksum crc3 = new Crc32();
-
-        crc1.update(bytes, 0, len);
-        for (int i = 0; i < len; i++)
-            crc2.update(bytes[i]);
-        crc3.update(bytes, 0, len / 2);
-        crc3.update(bytes, len / 2, len - len / 2);
-
-        assertEquals(crc1.getValue(), crc2.getValue(), "Crc values should be the same");
-        assertEquals(crc1.getValue(), crc3.getValue(), "Crc values should be the same");
+    public void testEmptyBlock() {
+        assertEquals(-1, ProducerIdsBlock.EMPTY.lastProducerId());
+        assertEquals(0, ProducerIdsBlock.EMPTY.nextBlockFirstId());
+        assertEquals(0, ProducerIdsBlock.EMPTY.size());
     }
 
     @Test
-    public void testValue() {
-        final byte[] bytes = "Some String".getBytes();
-        assertEquals(2021503672, Crc32.crc32(bytes));
+    public void testDynamicBlock() {
+        long firstId = 1309418324L;
+        int blockSize = 5391;
+        int brokerId = 5;
+
+        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, firstId, blockSize);
+        assertEquals(firstId, block.firstProducerId());
+        assertEquals(firstId + blockSize - 1, block.lastProducerId());
+        assertEquals(firstId + blockSize, block.nextBlockFirstId());
+        assertEquals(blockSize, block.size());
+        assertEquals(brokerId, block.assignedBrokerId());
     }
 
 }

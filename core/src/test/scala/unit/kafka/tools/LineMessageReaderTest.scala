@@ -222,6 +222,106 @@ class LineMessageReaderTest {
     runTest(props, input, expected)
   }
 
+  @Test
+  def testNullMarker(): Unit = {
+    val input =
+      "key\t\n" +
+      "key\t<NULL>\n" +
+      "key\t<NULL>value\n" +
+      "<NULL>\tvalue\n" +
+      "<NULL>\t<NULL>"
+
+    val props = defaultTestProps
+    props.put("null.marker", "<NULL>")
+    props.put("parse.headers", "false")
+    runTest(props, input,
+      record("key", ""),
+      record("key", null),
+      record("key", "<NULL>value"),
+      record(null, "value"),
+      record(null, null))
+
+    // If the null marker is not set
+    props.remove("null.marker")
+    runTest(props, input,
+      record("key", ""),
+      record("key", "<NULL>"),
+      record("key", "<NULL>value"),
+      record("<NULL>", "value"),
+      record("<NULL>", "<NULL>"))
+  }
+
+  @Test
+  def testNullMarkerWithHeaders(): Unit = {
+    val input =
+      "h0:v0,h1:v1\t<NULL>\tvalue\n" +
+      "<NULL>\tkey\t<NULL>\n" +
+      "h0:,h1:v1\t<NULL>\t<NULL>\n" +
+      "h0:<NULL>,h1:v1\tkey\t<NULL>\n" +
+      "h0:<NULL>,h1:<NULL>value\tkey\t<NULL>\n"
+    val header = "h1" -> "v1"
+
+    val props = defaultTestProps
+    props.put("null.marker", "<NULL>")
+    runTest(props, input,
+      record(null, "value", List("h0" -> "v0", header)),
+      record("key", null),
+      record(null, null, List("h0" -> "", header)),
+      record("key", null, List("h0" -> null, header)),
+      record("key", null, List("h0" -> null, "h1" -> "<NULL>value")))
+
+    // If the null marker is not set
+    val lineReader = new LineMessageReader()
+    props.remove("null.marker")
+    lineReader.init(new ByteArrayInputStream(input.getBytes), props)
+    assertRecordEquals(record("<NULL>", "value", List("h0" -> "v0", header)), lineReader.readMessage())
+    // line 2 is not valid anymore
+    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    assertEquals(
+      "No header key separator found in pair '<NULL>' on line number 2",
+      expectedException.getMessage
+    )
+    assertRecordEquals(record("<NULL>", "<NULL>", List("h0" -> "", header)), lineReader.readMessage())
+    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", header)), lineReader.readMessage())
+    assertRecordEquals(record("key", "<NULL>", List("h0" -> "<NULL>", "h1" -> "<NULL>value")), lineReader.readMessage())
+  }
+
+  @Test
+  def testNullMarkerHeaderKeyThrows(): Unit = {
+    val input = "<NULL>:v0,h1:v1\tkey\tvalue\n"
+
+    val props = defaultTestProps
+    props.put("null.marker", "<NULL>")
+    val lineReader = new LineMessageReader()
+    lineReader.init(new ByteArrayInputStream(input.getBytes), props)
+    val expectedException = assertThrows(classOf[KafkaException], () => lineReader.readMessage())
+    assertEquals(
+      "Header keys should not be equal to the null marker '<NULL>' as they can't be null",
+      expectedException.getMessage
+    )
+
+    // If the null marker is not set
+    props.remove("null.marker")
+    runTest(props, input, record("key", "value", List("<NULL>" -> "v0", "h1" -> "v1")))
+  }
+
+  @Test
+  def testInvalidNullMarker(): Unit = {
+    val props = defaultTestProps
+    props.put("headers.delimiter", "-")
+    props.put("headers.separator", ":")
+    props.put("headers.key.separator", "/")
+
+    props.put("null.marker", "-")
+    assertThrowsOnInvalidPatternConfig(props, "null.marker and headers.delimiter may not be equal")
+
+    props.put("null.marker", ":")
+    assertThrowsOnInvalidPatternConfig(props, "null.marker and headers.separator may not be equal")
+
+    props.put("null.marker", "/")
+    assertThrowsOnInvalidPatternConfig(props, "null.marker and headers.key.separator may not be equal")
+  }
+
   def runTest(props: Properties, input: String, expectedRecords: ProducerRecord[String, String]*): Unit = {
     val lineReader = new LineMessageReader
     lineReader.init(new ByteArrayInputStream(input.getBytes), props)

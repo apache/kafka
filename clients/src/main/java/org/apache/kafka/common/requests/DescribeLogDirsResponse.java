@@ -52,6 +52,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
+        errorCounts.put(Errors.forCode(data.errorCode()), 1);
         data.results().forEach(result -> {
             updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
         });

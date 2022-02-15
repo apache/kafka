@@ -44,6 +44,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.MetadataVersion
+import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
 import scala.jdk.CollectionConverters._
@@ -69,7 +70,7 @@ class ControllerServer(
   var status: ProcessStatus = SHUTDOWN
 
   var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
-  var authorizer: Option[Authorizer] = null
+  @volatile var authorizer: Option[Authorizer] = null
   var tokenCache: DelegationTokenCache = null
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
@@ -160,14 +161,11 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-
       val initialMetadataVersion = MetadataVersion.fromValue(metaProperties.initialMetadataVersion)
-
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
       val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
 
-      controller = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+      val controllerBuilder = new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefixAsString).
         setConfigDefs(configDefs).
@@ -182,8 +180,12 @@ class ControllerServer(
         setCreateTopicPolicy(createTopicPolicy.asJava).
         setAlterConfigPolicy(alterConfigPolicy.asJava).
         setConfigurationValidator(new ControllerConfigurationValidator()).
-        setInitialMetadataVersion(initialMetadataVersion).
-        build()
+        setInitialMetadataVersion(initialMetadataVersion)
+      authorizer match {
+        case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
+        case _ => // nothing to do
+      }
+      controller = controllerBuilder.build()
 
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,

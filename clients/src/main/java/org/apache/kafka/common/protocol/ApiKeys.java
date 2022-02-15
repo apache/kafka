@@ -267,6 +267,10 @@ public enum ApiKeys {
         return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
+    public static EnumSet<ApiKeys> controllerApis() {
+        return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
+    }
+
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
         return APIS_BY_LISTENER.get(listener);
     }

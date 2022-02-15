@@ -1652,6 +1652,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setProtocolType(joinResult.protocolType.orNull)
             .setProtocolName(protocolName)
             .setLeader(joinResult.leaderId)
+            .setSkipAssignment(joinResult.skipAssignment)
             .setMemberId(joinResult.memberId)
             .setMembers(joinResult.members.asJava)
         )
@@ -1678,14 +1679,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
       // let the coordinator handle join-group
-      val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map(protocol =>
-        (protocol.name, protocol.metadata)).toList
+      val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map { protocol =>
+        (protocol.name, protocol.metadata)
+      }.toList
+
+      val supportSkippingAssignment = joinGroupRequest.version >= 9
 
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data.groupId,
         joinGroupRequest.data.memberId,
         groupInstanceId,
         requireKnownMemberId,
+        supportSkippingAssignment,
         request.header.clientId,
         request.context.clientAddress.toString,
         joinGroupRequest.data.rebalanceTimeoutMs,
@@ -1998,7 +2003,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         notDuped)(_.name)
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
-        zkSupport.controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
+        zkSupport.controller.isTopicQueuedForDeletion(topic.name)
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
@@ -2891,7 +2896,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeLogDirsRequest(request: RequestChannel.Request): Unit = {
     val describeLogDirsDirRequest = request.body[DescribeLogDirsRequest]
-    val logDirInfos = {
+    val (logDirInfos, error) = {
       if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
         val partitions =
           if (describeLogDirsDirRequest.isAllTopicPartitions)
@@ -2901,14 +2906,15 @@ class KafkaApis(val requestChannel: RequestChannel,
               logDirTopic => logDirTopic.partitions.asScala.map(partitionIndex =>
                 new TopicPartition(logDirTopic.topic, partitionIndex))).toSet
 
-        replicaManager.describeLogDirs(partitions)
+        (replicaManager.describeLogDirs(partitions), Errors.NONE)
       } else {
-        List.empty[DescribeLogDirsResponseData.DescribeLogDirsResult]
+        (List.empty[DescribeLogDirsResponseData.DescribeLogDirsResult], Errors.CLUSTER_AUTHORIZATION_FAILED)
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
       .setThrottleTimeMs(throttleTimeMs)
-      .setResults(logDirInfos.asJava)))
+      .setResults(logDirInfos.asJava)
+      .setErrorCode(error.code)))
   }
 
   def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {

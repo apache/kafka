@@ -57,6 +57,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -287,6 +288,46 @@ public class AbstractHerderTest {
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
         assertFalse(mayBeRestartPlan.isPresent());
+    }
+
+    @Test()
+    public void testConfigValidationNullConfig() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+        replayAll();
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
+        config.put("name", "somename");
+        config.put("required", "value");
+        config.put("testKey", null);
+
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, false);
+
+        assertEquals(1, configInfos.errorCount());
+        assertErrorForKey(configInfos, "testKey");
+
+        verifyAll();
+    }
+
+    @Test
+    public void testConfigValidationMultipleNullConfig() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+        replayAll();
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
+        config.put("name", "somename");
+        config.put("required", "value");
+        config.put("testKey", null);
+        config.put("secondTestKey", null);
+
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, false);
+
+        assertEquals(2, configInfos.errorCount());
+        assertErrorForKey(configInfos, "testKey");
+        assertErrorForKey(configInfos, "secondTestKey");
+
+        verifyAll();
     }
 
     @Test
@@ -700,6 +741,17 @@ public class AbstractHerderTest {
         // The reverseTransformed result should not have TEST_KEY3 since newTaskConfigs does not have TEST_KEY3
         reverseTransformed = AbstractHerder.reverseTransform(CONN1, SNAPSHOT_NO_TASKS, newTaskConfigs);
         assertFalse(reverseTransformed.get(0).containsKey(TEST_KEY3));
+    }
+
+    private void assertErrorForKey(ConfigInfos configInfos, String testKey) {
+        final List<String> errorsForKey = configInfos.values().stream()
+                .map(ConfigInfo::configValue)
+                .filter(configValue -> configValue.name().equals(testKey))
+                .map(ConfigValueInfo::errors)
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
+
+        assertEquals(1, errorsForKey.size());
     }
 
     @Test

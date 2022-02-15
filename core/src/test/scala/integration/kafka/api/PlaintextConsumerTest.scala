@@ -35,6 +35,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
+import org.apache.kafka.clients.admin.NewPartitions
+import org.apache.kafka.clients.admin.NewTopic
 
 import scala.collection.mutable
 
@@ -1791,4 +1793,34 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(records2.count() == 1 && records2.records(tp).asScala.head.offset == 1,
       "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
   }
+
+  @Test
+  def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(): Unit = {
+    val foo = "foo"
+    val foo0 = new TopicPartition(foo, 0)
+    val foo1 = new TopicPartition(foo, 1)
+
+    val admin = createAdminClient()
+    admin.createTopics(Seq(new NewTopic(foo, 1, 1.toShort)).asJava).all.get
+
+    val consumerConfig = new Properties
+    consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group-id")
+    consumerConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "my-instance-id")
+
+    val consumer1 = createConsumer(configOverrides = consumerConfig)
+    consumer1.subscribe(Seq(foo).asJava)
+    awaitAssignment(consumer1, Set(foo0))
+    consumer1.close()
+
+    val consumer2 = createConsumer(configOverrides = consumerConfig)
+    consumer2.subscribe(Seq(foo).asJava)
+    awaitAssignment(consumer2, Set(foo0))
+
+    admin.createPartitions(Map(foo -> NewPartitions.increaseTo(2)).asJava).all.get
+
+    awaitAssignment(consumer2, Set(foo0, foo1))
+
+    consumer2.close()
+  }
 }
+

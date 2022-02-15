@@ -22,7 +22,6 @@ import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineLong;
 
 import java.util.ArrayList;
@@ -34,57 +33,52 @@ import java.util.List;
 public class ProducerIdControlManager {
 
     private final ClusterControlManager clusterControlManager;
-    private final TimelineLong lastProducerId;
-    private final TimelineInteger brokerId;
-    private final TimelineLong brokerEpoch;
+    private final TimelineLong nextProducerId; // Initializes to 0
 
     ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
         this.clusterControlManager = clusterControlManager;
-        this.lastProducerId = new TimelineLong(snapshotRegistry);
-        this.brokerId = new TimelineInteger(snapshotRegistry);
-        this.brokerEpoch = new TimelineLong(snapshotRegistry);
+        this.nextProducerId = new TimelineLong(snapshotRegistry);
     }
 
     ControllerResult<ProducerIdsBlock> generateNextProducerId(int brokerId, long brokerEpoch) {
         clusterControlManager.checkBrokerEpoch(brokerId, brokerEpoch);
 
-        long producerId = lastProducerId.get();
-
-        if (producerId > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
+        long firstProducerIdInBlock = nextProducerId.get();
+        if (firstProducerIdInBlock > Long.MAX_VALUE - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE) {
             throw new UnknownServerException("Exhausted all producerIds as the next block's end producerId " +
-                "is will has exceeded long type limit");
+                "has exceeded the int64 type limit");
         }
 
-        long nextProducerId = producerId + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE;
+        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, firstProducerIdInBlock, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
+        long newNextProducerId = block.nextBlockFirstId();
+
         ProducerIdsRecord record = new ProducerIdsRecord()
-            .setProducerIdsEnd(nextProducerId)
+            .setNextProducerId(newNextProducerId)
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
-        ProducerIdsBlock block = new ProducerIdsBlock(brokerId, producerId, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE);
         return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
     }
 
     void replay(ProducerIdsRecord record) {
-        long currentProducerId = lastProducerId.get();
-        if (record.producerIdsEnd() <= currentProducerId) {
-            throw new RuntimeException("Producer ID from record is not monotonically increasing");
+        long currentNextProducerId = nextProducerId.get();
+        if (record.nextProducerId() <= currentNextProducerId) {
+            throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
+                " is not greater than current next Producer ID (" + currentNextProducerId + ")");
         } else {
-            lastProducerId.set(record.producerIdsEnd());
-            brokerId.set(record.brokerId());
-            brokerEpoch.set(record.brokerEpoch());
+            nextProducerId.set(record.nextProducerId());
         }
     }
 
     Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
         List<ApiMessageAndVersion> records = new ArrayList<>(1);
 
-        long producerId = lastProducerId.get(epoch);
+        long producerId = nextProducerId.get(epoch);
         if (producerId > 0) {
             records.add(new ApiMessageAndVersion(
                 new ProducerIdsRecord()
-                    .setProducerIdsEnd(producerId)
-                    .setBrokerId(brokerId.get(epoch))
-                    .setBrokerEpoch(brokerEpoch.get(epoch)),
+                    .setNextProducerId(producerId)
+                    .setBrokerId(0)
+                    .setBrokerEpoch(0L),
                 (short) 0));
         }
         return Collections.singleton(records).iterator();

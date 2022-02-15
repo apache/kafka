@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 
 import scala.jdk.CollectionConverters._
 
@@ -122,8 +122,8 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
           topic.replicationFactor
 
         if (request.data.validateOnly) {
-          assertNotNull(metadataForTopic, s"Topic $topic should be created")
-          assertFalse(metadataForTopic.error == Errors.NONE, s"Error ${metadataForTopic.error} for topic $topic")
+          assertNotNull(metadataForTopic)
+          assertNotEquals(Errors.NONE, metadataForTopic.error, s"Topic $topic should not be created")
           assertTrue(metadataForTopic.partitionMetadata.isEmpty, "The topic should have no partitions")
         }
         else {

@@ -33,9 +33,9 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Demonstrates, using the high-level KStream DSL, how to implement an IoT demo application
- * which ingests temperature value processing the maximum value in the latest TEMPERATURE_WINDOW_SIZE seconds (which
- * is 5 seconds) sending a new message if it exceeds the TEMPERATURE_THRESHOLD (which is 20)
+ * This demo demonstrates, using the high-level KStream DSL, how to implement an IoT demo application
+ * which ingests temperature value to compute the maximum value in the latest TEMPERATURE_WINDOW_SIZE seconds (which
+ * is 5 seconds) and send a new message if it exceeds the TEMPERATURE_THRESHOLD (which is 20)
  *
  * In this example, the input stream reads from a topic named "iot-temperature", where the values of messages
  * represent temperature values; using a TEMPERATURE_WINDOW_SIZE seconds "tumbling" window, the maximum value is processed and
@@ -45,7 +45,7 @@ import java.util.concurrent.CountDownLatch;
  *
  * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
  *
- * and at same time the output topic for filtered values :
+ * and at same time create the output topic for filtered values :
  *
  * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
@@ -54,9 +54,9 @@ import java.util.concurrent.CountDownLatch;
  * bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic iot-temperature-max --from-beginning
  *
  * On the other side, a console producer can be used for sending temperature values (which needs to be integers)
- * to "iot-temperature" typing them on the console :
+ * to "iot-temperature" by typing them on the console :
  *
- * bin/kafka-console-producer.sh --broker-list localhost:9092 --topic iot-temperature
+ * bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic iot-temperature
  * > 10
  * > 15
  * > 22
@@ -77,7 +77,7 @@ public class TemperatureDemo {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
         final Duration duration24Hours = Duration.ofHours(24);
 

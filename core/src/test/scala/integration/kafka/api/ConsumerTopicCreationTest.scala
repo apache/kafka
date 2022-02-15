@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -45,6 +46,7 @@ class ConsumerTopicCreationTest {
     try testCase.test() finally testCase.tearDown()
   }
 
+  @Disabled("Enable after enable KIP-590 forwarding in KAFKA-12886")
   @ParameterizedTest
   @MethodSource(Array("parameters"))
   def testAutoTopicCreationWithForwarding(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {

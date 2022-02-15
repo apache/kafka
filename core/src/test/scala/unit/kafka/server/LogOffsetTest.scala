@@ -24,9 +24,9 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
@@ -256,16 +256,15 @@ class LogOffsetTest extends BaseRequestTest {
    * a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
-    val log: UnifiedLog = EasyMock.niceMock(classOf[UnifiedLog])
-    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
-    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
-      private val value = new AtomicInteger(0)
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val logSegment: LogSegment = mock(classOf[LogSegment])
+    when(logSegment.size).thenAnswer(_ => {
+      val value = new AtomicInteger(0)
       def answer: Int = value.getAndIncrement()
+      answer
     })
-    EasyMock.replay(logSegment)
     val logSegments = Seq(logSegment)
-    EasyMock.expect(log.logSegments).andStubReturn(logSegments)
-    EasyMock.replay(log)
+    when(log.logSegments).thenReturn(logSegments)
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
@@ -273,18 +272,15 @@ class LogOffsetTest extends BaseRequestTest {
    * different (simulating a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
-    val log: UnifiedLog = EasyMock.niceMock(classOf[UnifiedLog])
-    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
-    EasyMock.expect(log.logSegments).andStubAnswer {
-      new IAnswer[Iterable[LogSegment]] {
-        def answer = new Iterable[LogSegment] {
-          override def size = 2
-          def iterator = Seq(logSegment).iterator
-        }
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val logSegment: LogSegment = mock(classOf[LogSegment])
+    when(log.logSegments).thenAnswer { _ =>
+      def answer = new Iterable[LogSegment] {
+        override def size = 2
+        def iterator = Seq(logSegment).iterator
       }
+      answer
     }
-    EasyMock.replay(logSegment)
-    EasyMock.replay(log)
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 

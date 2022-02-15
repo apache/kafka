@@ -181,7 +181,6 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         assertEquals(expectedResult, result);
     }
 
-    @SuppressWarnings("deprecation")
     private static Properties getStreamsConfig() {
         final Properties streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "KTable-FKJ-Partitioner");

@@ -159,6 +159,14 @@ abstract class QuorumTestHarness extends Logging {
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
 
+  def controllerServers: Seq[ControllerServer] = {
+    if (isKRaftTest()) {
+      Seq(asKRaft().controllerServer)
+    } else {
+      Seq()
+    }
+  }
+
   // Note: according to the junit documentation: "JUnit Jupiter does not guarantee the execution
   // order of multiple @BeforeEach methods that are declared within a single test class or test
   // interface." Therefore, if you have things you would like to do before each test case runs, it
@@ -245,9 +253,9 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.NodeIdProp, "1000")
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
     val proto = controllerListenerSecurityProtocol.toString()
-    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${proto}:${proto}")
-    props.setProperty(KafkaConfig.ListenersProp, s"${proto}://localhost:0")
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, proto)
+    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
+    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
     val config = new KafkaConfig(props)
     val threadNamePrefix = "Controller_" + testInfo.getDisplayName
