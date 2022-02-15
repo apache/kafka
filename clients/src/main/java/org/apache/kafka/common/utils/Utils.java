@@ -763,6 +763,7 @@ public final class Utils {
      * @return Set
      */
     @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <T> Set<T> mkSet(T... elems) {
         return new HashSet<>(Arrays.asList(elems));
     }
@@ -774,6 +775,7 @@ public final class Utils {
      * @return SortedSet
      */
     @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <T extends Comparable<T>> SortedSet<T> mkSortedSet(T... elems) {
         return new TreeSet<>(Arrays.asList(elems));
     }
