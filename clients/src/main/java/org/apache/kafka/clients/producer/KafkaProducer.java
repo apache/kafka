@@ -60,6 +60,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -237,6 +239,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
+    private static Sensor msgSendLatencySensor = null;
 
     private final String clientId;
     // Visible for testing
@@ -357,6 +360,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.metrics.setReplaceOnDuplicateMetric(config.getBoolean(ProducerConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
+            msgSendLatencySensor = metrics.sensor("message-produce-latency-avg");
+            msgSendLatencySensor.add(metrics.metricName("message-produce-latency-avg",
+                PRODUCER_METRIC_GROUP_NAME,
+                "The average latency between record queuing and get acknowledged in ms",
+                Collections.singletonMap("client-id", clientId)), new Avg());
+            msgSendLatencySensor.add(metrics.metricName("message-produce-latency-max",
+                PRODUCER_METRIC_GROUP_NAME,
+                "The max latency between record queuing and get acknowledged in ms",
+                Collections.singletonMap("client-id", clientId)), new Max());
             this.partitioner = config.getConfiguredInstance(
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
                     Partitioner.class,
@@ -908,6 +920,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
+            long startTime = time.milliseconds();
             try {
                 clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
             } catch (KafkaException e) {
@@ -948,7 +961,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+            Callback interceptCallback = new InterceptorCallback<>(callback, startTime, time, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional()) {
                 transactionManager.failIfNotReadyForSend();
@@ -965,7 +978,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
                 // producer callback will make sure to call both 'callback' and interceptor callback
-                interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+                interceptCallback = new InterceptorCallback<>(callback, startTime, time, this.interceptors, tp);
 
                 result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
@@ -1331,6 +1344,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    public static void recordMsgProducingLatency(long start, long now) {
+        msgSendLatencySensor.record(now - start, now);
+    }
+
     private static class FutureFailure implements Future<RecordMetadata> {
 
         private final ExecutionException exception;
@@ -1374,16 +1391,27 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
         private final TopicPartition tp;
+        private final Time time;
+        private final long startTime;
 
         private InterceptorCallback(Callback userCallback, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
+            this(userCallback, Long.MIN_VALUE, null, interceptors, tp);
+        }
+
+        private InterceptorCallback(Callback userCallback, long startTime, Time time, ProducerInterceptors<K, V> interceptors, TopicPartition tp) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.tp = tp;
+            this.time = time;
+            this.startTime = startTime;
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             this.interceptors.onAcknowledgement(metadata, exception);
+            if (time != null) {
+                recordMsgProducingLatency(startTime, time.milliseconds());
+            }
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
