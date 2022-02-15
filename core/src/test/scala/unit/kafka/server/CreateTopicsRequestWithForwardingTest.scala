@@ -29,7 +29,7 @@ class CreateTopicsRequestWithForwardingTest extends AbstractCreateTopicsRequestT
   override def enableForwarding: Boolean = true
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testForwardToController(quorum: String): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
