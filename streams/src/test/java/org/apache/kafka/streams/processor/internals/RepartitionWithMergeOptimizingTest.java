@@ -93,7 +93,7 @@ public class RepartitionWithMergeOptimizingTest {
     @After
     public void tearDown() {
         topologyTestDriver.close();
-     }
+    }
 
     @Test
     public void shouldSendCorrectRecords_OPTIMIZED() {
