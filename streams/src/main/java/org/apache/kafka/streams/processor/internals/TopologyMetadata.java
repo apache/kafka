@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
@@ -56,7 +57,7 @@ import org.slf4j.LoggerFactory;
 import static java.util.Collections.emptySet;
 
 public class TopologyMetadata {
-    private final Logger log = LoggerFactory.getLogger(TopologyMetadata.class);
+    private Logger log;
 
     // the "__" (double underscore) string is not allowed for topology names, so it's safe to use to indicate
     // that it's not a named topology
@@ -104,13 +105,20 @@ public class TopologyMetadata {
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
                             final StreamsConfig config) {
-        version = new TopologyVersion();
+        this.version = new TopologyVersion();
         this.config = config;
+        this.log = LoggerFactory.getLogger(getClass());
+
 
         this.builders = builders;
         if (builders.isEmpty()) {
-            log.debug("Starting up empty KafkaStreams app with no topology");
+            log.info("Created an empty KafkaStreams app with no topology");
         }
+    }
+
+    // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
+    public void setLog(final LogContext logContext) {
+        log = logContext.logger(getClass());
     }
 
     public long topologyVersion() {
@@ -182,7 +190,7 @@ public class TopologyMetadata {
                         log.debug("Detected that the topology is currently empty, waiting for something to process");
                         version.topologyCV.await();
                     } catch (final InterruptedException e) {
-                        log.debug("StreamThread was interrupted while waiting on empty topology", e);
+                        log.error("StreamThread was interrupted while waiting on empty topology", e);
                     }
                 }
             } finally {
@@ -194,8 +202,7 @@ public class TopologyMetadata {
     /**
      * Adds the topology and registers a future that listens for all threads on the older version to see the update
      */
-    public KafkaFuture<Void> registerAndBuildNewTopology(final InternalTopologyBuilder newTopologyBuilder) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+    public void registerAndBuildNewTopology(final KafkaFutureImpl<Void> future, final InternalTopologyBuilder newTopologyBuilder) {
         try {
             lock();
             buildAndVerifyTopology(newTopologyBuilder);
@@ -206,31 +213,34 @@ public class TopologyMetadata {
             wakeupThreads();
             log.info("Added NamedTopology {} and updated topology version to {}", newTopologyBuilder.topologyName(), version.topologyVersion.get());
         } catch (final Throwable throwable) {
+            log.error("Failed to add NamedTopology {}, please retry the operation.", newTopologyBuilder.topologyName());
             future.completeExceptionally(throwable);
         } finally {
             unlock();
         }
-        return future;
     }
 
     /**
      * Removes the topology and registers a future that listens for all threads on the older version to see the update
      */
-    public KafkaFuture<Void> unregisterTopology(final String topologyName) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+    public KafkaFuture<Void> unregisterTopology(final KafkaFutureImpl<Void> removeTopologyFuture,
+                                                final String topologyName) {
         try {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
             version.topologyVersion.incrementAndGet();
-            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), future));
+            version.activeTopologyWaiters.add(new TopologyVersionWaiters(topologyVersion(), removeTopologyFuture));
             final InternalTopologyBuilder removedBuilder = builders.remove(topologyName);
             removedBuilder.fullSourceTopicNames().forEach(allInputTopics::remove);
             removedBuilder.allSourcePatternStrings().forEach(allInputTopics::remove);
             log.info("Finished removing NamedTopology {}, topology version was updated to {}", topologyName, version.topologyVersion.get());
+        } catch (final Throwable throwable) {
+            log.error("Failed to remove NamedTopology {}, please retry.", topologyName);
+            removeTopologyFuture.completeExceptionally(throwable);
         } finally {
             unlock();
         }
-        return future;
+        return removeTopologyFuture;
     }
 
     public TaskConfig getTaskConfigFor(final TaskId taskId) {
@@ -316,7 +326,7 @@ public class TopologyMetadata {
         return !builders.containsKey(UNNAMED_TOPOLOGY);
     }
 
-    Set<String> namedTopologiesView() {
+    public Set<String> namedTopologiesView() {
         return hasNamedTopologies() ? Collections.unmodifiableSet(builders.keySet()) : emptySet();
     }
 
