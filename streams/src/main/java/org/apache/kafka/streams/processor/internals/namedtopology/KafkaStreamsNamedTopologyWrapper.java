@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -44,7 +43,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -230,7 +228,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         if (resetOffsets) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
-                     removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully ": "successfully",
+                     removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
                      topologyToRemove, partitionsToReset
             );
             if (!partitionsToReset.isEmpty()) {
@@ -259,7 +257,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                 log.debug("The offsets have been reset by another client or the group has been deleted, no need to retry further.");
                                 break;
                             } else {
-                                 removeTopologyFuture.completeExceptionally(ex);
+                                removeTopologyFuture.completeExceptionally(ex);
                             }
                             deleteOffsetsResult = null;
                         }
@@ -269,7 +267,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                             ex.printStackTrace();
                         }
                     }
-                     removeTopologyFuture.complete(null);
+                    removeTopologyFuture.complete(null);
                 });
                 return new RemoveNamedTopologyResult(removeTopologyFuture,  removeTopologyFuture);
             }
