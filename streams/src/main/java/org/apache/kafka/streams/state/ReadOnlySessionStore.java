@@ -325,7 +325,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param key                    the key to fetch
      * @param sessionStartTime start timestamp of the session
      * @param sessionEndTime end timestamp of the session
-     * @return The value or {@code null} if no session associated with the key can be found
+     * @return The value or {@code null} if no session with the exact start and end timestamp exists
+     *         for the given key
      * @throws NullPointerException If {@code null} is used for any key.
      */
     default AGG fetchSession(final K key,
@@ -341,7 +342,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param key                    the key to fetch
      * @param sessionStartTime start timestamp of the session
      * @param sessionEndTime end timestamp of the session
-     * @return The value or {@code null} if no session associated with the key can be found
+     * @return The value or {@code null} if no session with the exact start and end timestamp exists
+     *         for the given key
      * @throws NullPointerException If {@code null} is used for any key.
      */
     default AGG fetchSession(final K key,
