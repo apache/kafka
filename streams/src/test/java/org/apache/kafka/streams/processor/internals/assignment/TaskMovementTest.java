@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
-import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
@@ -29,9 +29,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -58,17 +57,20 @@ public class TaskMovementTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = new HashMap<>();
+        final Map<TaskId, List<UUID>> tasksToClientByLag = new HashMap<>();
         for (final TaskId task : allTasks) {
             tasksToCaughtUpClients.put(task, mkSortedSet(UUID_1, UUID_2, UUID_3));
+            tasksToClientByLag.put(task, asList(UUID_1, UUID_2, UUID_3));
         }
 
-        final ClientState client1 = getClientStateWithActiveAssignment(asList(TASK_0_0, TASK_1_0));
-        final ClientState client2 = getClientStateWithActiveAssignment(asList(TASK_0_1, TASK_1_1));
-        final ClientState client3 = getClientStateWithActiveAssignment(asList(TASK_0_2, TASK_1_2));
+        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0, TASK_1_0), allTasks, allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1, TASK_1_1), allTasks, allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2, TASK_1_2), allTasks, allTasks);
 
         assertThat(
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
+                tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
@@ -80,10 +82,11 @@ public class TaskMovementTest {
     @Test
     public void shouldAssignAllTasksToClientsAndReturnFalseIfNoClientsAreCaughtUp() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
-        final ClientState client1 = getClientStateWithActiveAssignment(asList(TASK_0_0, TASK_1_0));
-        final ClientState client2 = getClientStateWithActiveAssignment(asList(TASK_0_1, TASK_1_1));
-        final ClientState client3 = getClientStateWithActiveAssignment(asList(TASK_0_2, TASK_1_2));
+        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0, TASK_1_0), mkSet(), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1, TASK_1_1), mkSet(), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2, TASK_1_2), mkSet(), allTasks);
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
             mkEntry(TASK_0_0, emptySortedSet()),
@@ -93,9 +96,18 @@ public class TaskMovementTest {
             mkEntry(TASK_1_1, emptySortedSet()),
             mkEntry(TASK_1_2, emptySortedSet())
         );
+        final Map<TaskId, List<UUID>> tasksToClientByLag = mkMap(
+            mkEntry(TASK_0_0, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_0_1, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_0_2, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_1_0, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_1_1, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_1_2, asList(UUID_1, UUID_2, UUID_3))
+        );
         assertThat(
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
+                tasksToClientByLag,
                 getClientStatesMap(client1, client2, client3),
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
@@ -107,9 +119,10 @@ public class TaskMovementTest {
     @Test
     public void shouldMoveTasksToCaughtUpClientsAndAssignWarmupReplicasInTheirPlace() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
-        final ClientState client1 = getClientStateWithActiveAssignment(singletonList(TASK_0_0));
-        final ClientState client2 = getClientStateWithActiveAssignment(singletonList(TASK_0_1));
-        final ClientState client3 = getClientStateWithActiveAssignment(singletonList(TASK_0_2));
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(TASK_0_0), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1), mkSet(TASK_0_2), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2), mkSet(TASK_0_1), allTasks);
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
@@ -117,11 +130,17 @@ public class TaskMovementTest {
             mkEntry(TASK_0_1, mkSortedSet(UUID_3)),
             mkEntry(TASK_0_2, mkSortedSet(UUID_2))
         );
+        final Map<TaskId, List<UUID>> tasksToClientByLag = mkMap(
+            mkEntry(TASK_0_0, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_0_1, asList(UUID_3, UUID_1, UUID_2)),
+            mkEntry(TASK_0_2, asList(UUID_2, UUID_1, UUID_3))
+        );
 
         assertThat(
             "should have assigned movements",
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
+                tasksToClientByLag,
                 clientStates,
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
@@ -142,9 +161,10 @@ public class TaskMovementTest {
     @Test
     public void shouldOnlyGetUpToMaxWarmupReplicasAndReturnTrue() {
         final int maxWarmupReplicas = 1;
-        final ClientState client1 = getClientStateWithActiveAssignment(singletonList(TASK_0_0));
-        final ClientState client2 = getClientStateWithActiveAssignment(singletonList(TASK_0_1));
-        final ClientState client3 = getClientStateWithActiveAssignment(singletonList(TASK_0_2));
+        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(TASK_0_0), allTasks);
+        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_1), mkSet(TASK_0_2), allTasks);
+        final ClientState client3 = getClientStateWithActiveAssignment(mkSet(TASK_0_2), mkSet(TASK_0_1), allTasks);
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
@@ -152,11 +172,17 @@ public class TaskMovementTest {
             mkEntry(TASK_0_1, mkSortedSet(UUID_3)),
             mkEntry(TASK_0_2, mkSortedSet(UUID_2))
         );
+        final Map<TaskId, List<UUID>> tasksToClientByLag = mkMap(
+            mkEntry(TASK_0_0, asList(UUID_1, UUID_2, UUID_3)),
+            mkEntry(TASK_0_1, asList(UUID_3, UUID_1, UUID_2)),
+            mkEntry(TASK_0_2, asList(UUID_2, UUID_1, UUID_3))
+        );
 
         assertThat(
             "should have assigned movements",
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
+                tasksToClientByLag,
                 clientStates,
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
@@ -182,19 +208,24 @@ public class TaskMovementTest {
     @Test
     public void shouldNotCountPreviousStandbyTasksTowardsMaxWarmupReplicas() {
         final int maxWarmupReplicas = 0;
-        final ClientState client1 = getClientStateWithActiveAssignment(emptyList());
+        final Set<TaskId> allTasks = mkSet(TASK_0_0);
+        final ClientState client1 = getClientStateWithActiveAssignment(mkSet(), mkSet(TASK_0_0), allTasks);
         client1.assignStandby(TASK_0_0);
-        final ClientState client2 = getClientStateWithActiveAssignment(singletonList(TASK_0_0));
+        final ClientState client2 = getClientStateWithActiveAssignment(mkSet(TASK_0_0), mkSet(), allTasks);
         final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = mkMap(
             mkEntry(TASK_0_0, mkSortedSet(UUID_1))
+        );
+        final Map<TaskId, List<UUID>> tasksToClientByLag = mkMap(
+            mkEntry(TASK_0_0, asList(UUID_1, UUID_2))
         );
 
         assertThat(
             "should have assigned movements",
             assignActiveTaskMovements(
                 tasksToCaughtUpClients,
+                tasksToClientByLag,
                 clientStates,
                 new TreeMap<>(),
                 new AtomicInteger(maxWarmupReplicas)
@@ -215,8 +246,18 @@ public class TaskMovementTest {
 
     }
 
-    private static ClientState getClientStateWithActiveAssignment(final Collection<TaskId> activeTasks) {
-        final ClientState client1 = new ClientState(1);
+    private static ClientState getClientStateWithActiveAssignment(final Set<TaskId> activeTasks,
+                                                                  final Set<TaskId> caughtUpTasks,
+                                                                  final Set<TaskId> allTasks) {
+        final Map<TaskId, Long> lags = new HashMap<>();
+        for (final TaskId task : allTasks) {
+            if (caughtUpTasks.contains(task)) {
+                lags.put(task, 0L);
+            } else {
+                lags.put(task, 10000L);
+            }
+        }
+        final ClientState client1 = new ClientState(activeTasks, emptySet(), lags, 1);
         client1.assignActiveTasks(activeTasks);
         return client1;
     }

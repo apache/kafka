@@ -22,8 +22,11 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -67,6 +70,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             configs.acceptableRecoveryLag
         );
 
+        final Map<TaskId, List<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
+
         // We temporarily need to know which standby tasks were intended as warmups
         // for active tasks, so that we don't move them (again) when we plan standby
         // task movements. We can then immediately treat warmups exactly the same as
@@ -76,6 +81,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final int neededActiveTaskMovements = assignActiveTaskMovements(
             tasksToCaughtUpClients,
+            tasksToClientByLag,
             clientStates,
             warmups,
             remainingWarmupReplicas
@@ -83,6 +89,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final int neededStandbyTaskMovements = assignStandbyTaskMovements(
             tasksToCaughtUpClients,
+            tasksToClientByLag,
             clientStates,
             remainingWarmupReplicas,
             warmups
@@ -250,6 +257,18 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
 
         return taskToCaughtUpClients;
+    }
+
+    private static Map<TaskId, List<UUID>> tasksToClientByLag(final Set<TaskId> statefulTasks,
+                                                              final Map<UUID, ClientState> clientStates) {
+        final Map<TaskId, List<UUID>> tasksToClientByLag = new HashMap<>();
+        for (final TaskId task : statefulTasks) {
+            final List<Map.Entry<UUID, ClientState>> clientLag = new ArrayList<>(clientStates.entrySet());
+            clientLag.sort(Comparator.<Map.Entry<UUID, ClientState>>comparingLong(
+                    a -> a.getValue().lagFor(task)).thenComparing(Map.Entry::getKey));
+            tasksToClientByLag.put(task, clientLag.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
+        }
+        return tasksToClientByLag;
     }
 
     private static boolean unbounded(final long acceptableRecoveryLag) {

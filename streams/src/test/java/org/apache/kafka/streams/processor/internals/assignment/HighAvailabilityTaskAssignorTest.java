@@ -420,21 +420,27 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
         final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), 1);
-        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), 1);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), 1);
         final Map<UUID, ClientState> clientStates = mkMap(
                 mkEntry(UUID_1, client1),
-                mkEntry(UUID_2, client2)
+                mkEntry(UUID_2, client2),
+                mkEntry(UUID_3, client3)
         );
 
         final boolean probingRebalanceNeeded =
                 new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
 
         assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
-        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_0)));
-        // we'll warm up task 0_0 on client1 because it's first in sorted order,
-        // although this isn't an optimal convergence
+        assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(UUID_3).activeTasks(), is(singleton(TASK_0_0)));
+
+        assertThat(clientStates.get(UUID_1).standbyTasks(), is(singleton(TASK_0_0))); // warm up
+        assertThat(clientStates.get(UUID_2).standbyTasks(), is(singleton(TASK_0_0))); // standby
+        assertThat(clientStates.get(UUID_3).standbyTasks(), is(emptySet()));
+
         assertThat(probingRebalanceNeeded, is(true));
-        assertValidAssignment(0, 1, allTasks, emptySet(), clientStates, new StringBuilder());
+        assertValidAssignment(1, 1, allTasks, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTasks, clientStates, new StringBuilder());
         assertBalancedTasks(clientStates);
