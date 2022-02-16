@@ -42,7 +42,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -67,7 +67,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNotNull;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -96,7 +95,7 @@ public class GlobalKTableIntegrationTest {
     private String streamTopic;
     private GlobalKTable<Long, String> globalTable;
     private KStream<String, Long> stream;
-    private MockProcessorSupplier<String, String> supplier;
+    private MockApiProcessorSupplier<String, String, Void, Void> supplier;
 
     @Rule
     public TestName testName = new TestName();
@@ -119,7 +118,7 @@ public class GlobalKTableIntegrationTest {
                                                   .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
-        supplier = new MockProcessorSupplier<>();
+        supplier = new MockApiProcessorSupplier<>();
     }
 
     @After

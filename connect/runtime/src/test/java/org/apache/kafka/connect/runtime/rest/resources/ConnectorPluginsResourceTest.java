@@ -97,7 +97,7 @@ public class ConnectorPluginsResourceTest {
 
         props = new HashMap<>(partialProps);
         props.put("connector.class", ConnectorPluginsResourceTestConnector.class.getSimpleName());
-        props.put("plugin.path", null);
+        props.put("plugin.path", "test.path");
     }
 
     private static final ConfigInfos CONFIG_INFOS;

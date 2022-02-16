@@ -32,7 +32,9 @@
   // Version 7 is the same as version 6.
   //
   // Version 8 adds the Reason field (KIP-800).
-  "validVersions": "0-8",
+  //
+  // Version 9 is the same as version 8.
+  "validVersions": "0-9",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

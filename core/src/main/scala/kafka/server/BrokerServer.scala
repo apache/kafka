@@ -407,9 +407,16 @@ class BrokerServer(
       lifecycleManager.initialCatchUpFuture.get()
 
       // Apply the metadata log changes that we've accumulated.
-      metadataPublisher = new BrokerMetadataPublisher(config, metadataCache,
-        logManager, replicaManager, groupCoordinator, transactionCoordinator,
-        clientQuotaMetadataManager, featureCache, dynamicConfigHandlers.toMap)
+      metadataPublisher = new BrokerMetadataPublisher(config,
+        metadataCache,
+        logManager,
+        replicaManager,
+        groupCoordinator,
+        transactionCoordinator,
+        clientQuotaMetadataManager,
+        featureCache,
+        dynamicConfigHandlers.toMap,
+        authorizer)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

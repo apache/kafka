@@ -42,11 +42,12 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.Mockito.{mock, verify}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
@@ -403,14 +404,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put("a.b", "10")
 
     // Create a mock ConfigHandler to record config changes it is asked to process
-    val entityArgument = EasyMock.newCapture[String]
-    val propertiesArgument = EasyMock.newCapture[Properties]
-    val handler: ConfigHandler = EasyMock.createNiceMock(classOf[ConfigHandler])
-    handler.processConfigChanges(
-      EasyMock.and(EasyMock.capture(entityArgument), EasyMock.isA(classOf[String])),
-      EasyMock.and(EasyMock.capture(propertiesArgument), EasyMock.isA(classOf[Properties])))
-    EasyMock.expectLastCall().once()
-    EasyMock.replay(handler)
+    val handler: ConfigHandler = mock(classOf[ConfigHandler])
 
     val configManager = new ZkConfigManager(zkClient, Map(ConfigType.Topic -> handler))
     // Notifications created using the old TopicConfigManager are ignored.
@@ -433,7 +427,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
 
     // Verify that processConfigChanges was only called once
-    EasyMock.verify(handler)
+    verify(handler).processConfigChanges(anyString, any[Properties])
   }
 
   @ParameterizedTest
