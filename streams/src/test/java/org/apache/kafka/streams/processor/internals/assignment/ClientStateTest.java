@@ -53,13 +53,14 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ClientStateTest {
-    private final ClientState client = new ClientState(1, EMPTY_CLIENT_TAGS);
-    private final ClientState zeroCapacityClient = new ClientState(0, EMPTY_CLIENT_TAGS);
+    private final ClientState client = new ClientState(1);
+    private final ClientState zeroCapacityClient = new ClientState(0);
 
     @Test
     public void previousStateConstructorShouldCreateAValidObject() {
@@ -101,61 +102,61 @@ public class ClientStateTest {
 
     @Test
     public void shouldRefuseDoubleActiveTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseActiveAndStandbyTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseDoubleStandbyTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseStandbyAndActiveTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.assignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignNotAssignedActiveTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignNotAssignedStandbyTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignActiveTaskAsStandby() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignActive(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignStandby(TASK_0_0));
     }
 
     @Test
     public void shouldRefuseToUnassignStandbyTaskAsActive() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignStandby(TASK_0_0);
         assertThrows(IllegalArgumentException.class, () -> clientState.unassignActive(TASK_0_0));
     }
 
     @Test
     public void shouldUnassignActiveTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignActive(TASK_0_0);
         assertThat(clientState, hasActiveTasks(1));
         clientState.unassignActive(TASK_0_0);
@@ -164,7 +165,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldUnassignStandbyTask() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         clientState.assignStandby(TASK_0_0);
         assertThat(clientState, hasStandbyTasks(1));
         clientState.unassignStandby(TASK_0_0);
@@ -173,7 +174,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyActiveView() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.activeTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasActiveTasks(0));
@@ -181,7 +182,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyStandbyView() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.standbyTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasStandbyTasks(0));
@@ -189,7 +190,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotModifyAssignedView() {
-        final ClientState clientState = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(1);
         final Set<TaskId> taskIds = clientState.assignedTasks();
         assertThrows(UnsupportedOperationException.class, () -> taskIds.add(TASK_0_0));
         assertThat(clientState, hasActiveTasks(0));
@@ -248,7 +249,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityTheSameButFewerAssignedTasks() {
-        final ClientState otherClient = new ClientState(1, EMPTY_CLIENT_TAGS);
+        final ClientState otherClient = new ClientState(1);
         client.assignActive(TASK_0_1);
         assertTrue(otherClient.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(otherClient));
@@ -256,14 +257,14 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityHigherAndSameAssignedTaskCount() {
-        final ClientState otherClient = new ClientState(2, EMPTY_CLIENT_TAGS);
+        final ClientState otherClient = new ClientState(2);
         assertTrue(otherClient.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(otherClient));
     }
 
     @Test
     public void shouldUseMultiplesOfCapacityToDetermineClientWithMoreAvailableCapacity() {
-        final ClientState otherClient = new ClientState(2, EMPTY_CLIENT_TAGS);
+        final ClientState otherClient = new ClientState(2);
 
         for (int i = 0; i < 7; i++) {
             otherClient.assignActive(new TaskId(0, i));
@@ -278,8 +279,8 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityIsTheSameButAssignedTasksIsLess() {
-        final ClientState client = new ClientState(3, EMPTY_CLIENT_TAGS);
-        final ClientState otherClient = new ClientState(3, EMPTY_CLIENT_TAGS);
+        final ClientState client = new ClientState(3);
+        final ClientState otherClient = new ClientState(3);
         for (int i = 0; i < 4; i++) {
             client.assignActive(new TaskId(0, i));
             otherClient.assignActive(new TaskId(0, i));
@@ -530,6 +531,17 @@ public class ClientStateTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfAssignedTasksForConsumerToNonClientAssignActive() {
         assertThrows(IllegalStateException.class, () -> client.assignActiveToConsumer(TASK_0_0, "c1"));
+    }
+
+    @Test
+    public void shouldReturnClientTags() {
+        final Map<String, String> clientTags = mkMap(mkEntry("k1", "v1"));
+        assertEquals(clientTags, new ClientState(0, clientTags).clientTags());
+    }
+
+    @Test
+    public void shouldReturnEmptyClientTagsMapByDefault() {
+        assertTrue(new ClientState().clientTags().isEmpty());
     }
 
 }

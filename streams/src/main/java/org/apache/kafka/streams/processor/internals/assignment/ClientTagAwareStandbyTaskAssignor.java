@@ -29,20 +29,26 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.computeTasksToRemainingStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.shouldBalanceLoad;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
 
 /**
- * Distributes standby tasks over different tag dimensions.
- * Only tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags} are taken into account.
- * Standby task distribution is on a best-effort basis. For example, if there's not enough capacity on the clients
- * with different tag dimensions compared to an active and corresponding standby task,
- * in that case, the algorithm will fall back to distributing tasks on least-loaded clients.
+ * Distributes standby tasks over different tag dimensions. Standby task distribution is on a best-effort basis.
+ * If rack aware standby task assignment is not possible, implementation fall backs to distributing standby tasks on least-loaded clients.
+ *
+ * @see DefaultStandbyTaskAssignor
  */
 class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(ClientTagAwareStandbyTaskAssignor.class);
 
+    /**
+     * The algorithm distributes standby tasks for the {@param statefulTaskIds} over different tag dimensions.
+     * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas}.
+     * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags}.
+     * Ideally, all standby tasks for any given stateful task will be located on different tag dimensions to have the best possible distribution.
+     * However, if the ideal distribution is impossible, the algorithm will fall back to the least-loaded clients without considering rack awareness constraints into consideration.
+     * The least-loaded clients are determined based on the total number of tasks (active and standby tasks) assigned to the client.
+     */
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
@@ -66,8 +72,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             client -> clients.get(client).assignedTaskLoad()
         );
 
-        final Map<TaskId, Integer> pendingStandbyTaskToNumberRemainingStandbys = new HashMap<>();
-        final Map<TaskId, UUID> pendingStandbyTaskToClientId = new HashMap<>();
+        final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
 
         for (final TaskId statefulTaskId : statefulTaskIds) {
             for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
@@ -75,9 +80,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                 final ClientState clientState = entry.getValue();
 
                 if (clientState.activeTasks().contains(statefulTaskId)) {
-                    final int numberOfRemainingStandbys = assignStandbyTasksForActiveTask(
+                    final int numberOfRemainingStandbys = assignStandbyTasksToClientsWithDifferentTags(
                         standbyTaskClientsByTaskLoad,
-                        numStandbyReplicas,
                         statefulTaskId,
                         clientId,
                         rackAwareAssignmentTags,
@@ -88,20 +92,26 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                     );
 
                     if (numberOfRemainingStandbys > 0) {
-                        pendingStandbyTaskToNumberRemainingStandbys.put(statefulTaskId, numberOfRemainingStandbys);
-                        pendingStandbyTaskToClientId.put(statefulTaskId, clientId);
+                        pendingStandbyTasksToClientId.put(statefulTaskId, clientId);
+                    } else {
+                        tasksToRemainingStandbys.remove(statefulTaskId);
                     }
                 }
             }
         }
 
-        if (!pendingStandbyTaskToNumberRemainingStandbys.isEmpty()) {
+        if (!tasksToRemainingStandbys.isEmpty()) {
+            log.debug("Rack aware standby task assignment was not able to assign all standby tasks. " +
+                      "tasksToRemainingStandbys=[{}], pendingStandbyTasksToClientId=[{}]. " +
+                      "Will distribute the remaining standby tasks to least loaded clients.",
+                      tasksToRemainingStandbys, pendingStandbyTasksToClientId);
+
             assignPendingStandbyTasksToLeastLoadedClients(clients,
                                                           numStandbyReplicas,
                                                           rackAwareAssignmentTags,
                                                           standbyTaskClientsByTaskLoad,
-                                                          pendingStandbyTaskToNumberRemainingStandbys,
-                                                          pendingStandbyTaskToClientId);
+                                                          tasksToRemainingStandbys,
+                                                          pendingStandbyTasksToClientId);
         }
 
         // returning false, because standby task assignment will never require a follow-up probing rebalance.
@@ -169,30 +179,48 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         }
     }
 
-    private static int assignStandbyTasksForActiveTask(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                       final int numStandbyReplicas,
-                                                       final TaskId activeTaskId,
-                                                       final UUID activeTaskClient,
-                                                       final Set<String> rackAwareAssignmentTags,
-                                                       final Map<UUID, ClientState> clientStates,
-                                                       final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                       final Map<String, Set<String>> tagKeyToValues,
-                                                       final Map<TagEntry, Set<UUID>> tagEntryToClients) {
-
-        final Set<UUID> usedClients = new HashSet<>();
-
+    private static int assignStandbyTasksToClientsWithDifferentTags(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                                    final TaskId activeTaskId,
+                                                                    final UUID activeTaskClient,
+                                                                    final Set<String> rackAwareAssignmentTags,
+                                                                    final Map<UUID, ClientState> clientStates,
+                                                                    final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                                    final Map<String, Set<String>> tagKeyToValues,
+                                                                    final Map<TagEntry, Set<UUID>> tagEntryToClients) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
+        // We set numberOfUsedClients as 1 because client where active task is located has to be considered as used.
+        int numberOfUsedClients = 1;
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
 
-        usedClients.add(activeTaskClient);
-
-        final Set<UUID> clientsOnAlreadyUsedTagDimensions = new HashSet<>();
+        final Set<UUID> clientsOnAlreadyUsedTagDimensions = new HashSet<>(
+            findClientsOnUsedClientTagDimensions(
+                activeTaskClient,
+                numberOfUsedClients,
+                rackAwareAssignmentTags,
+                clientStates,
+                tagEntryToClients,
+                tagKeyToValues
+            )
+        );
 
         while (numRemainingStandbys > 0) {
+            final UUID clientOnUnusedTagDimensions = standbyTaskClientsByTaskLoad.poll(
+                activeTaskId, uuid -> !clientsOnAlreadyUsedTagDimensions.contains(uuid)
+            );
+
+            if (clientOnUnusedTagDimensions == null) {
+                break;
+            }
+
+            clientStates.get(clientOnUnusedTagDimensions).assignStandby(activeTaskId);
+
+            numberOfUsedClients++;
+
             clientsOnAlreadyUsedTagDimensions.addAll(
-                findClientsOnUsedTagDimensions(
-                    usedClients,
+                findClientsOnUsedClientTagDimensions(
+                    clientOnUnusedTagDimensions,
+                    numberOfUsedClients,
                     rackAwareAssignmentTags,
                     clientStates,
                     tagEntryToClients,
@@ -200,65 +228,43 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                 )
             );
 
-            final UUID polledClient = standbyTaskClientsByTaskLoad.poll(
-                activeTaskId, uuid -> !clientsOnAlreadyUsedTagDimensions.contains(uuid)
-            );
-
-            if (polledClient == null) {
-                break;
-            }
-
-            final ClientState standbyTaskClient = clientStates.get(polledClient);
-
-            if (shouldBalanceLoad(clientStates.values(), standbyTaskClient)) {
-                final Map<String, String> standbyClientTags = standbyTaskClient.clientTags();
-                log.warn("Can't assign {} of {} standby task for task [{}]. " +
-                         "There is not enough capacity on client(s) with {} tag dimensions. " +
-                         "To have a proper distribution of standby tasks across different tag dimensions, " +
-                         "increase the number of application instances with [{}] tag dimensions.",
-                         numRemainingStandbys, numStandbyReplicas, activeTaskId, standbyClientTags, standbyClientTags);
-                break;
-            }
-
-            standbyTaskClient.assignStandby(activeTaskId);
-
-            usedClients.add(polledClient);
-
             numRemainingStandbys--;
         }
 
         return numRemainingStandbys;
     }
 
-    private static Set<UUID> findClientsOnUsedTagDimensions(final Set<UUID> usedClients,
-                                                            final Set<String> rackAwareAssignmentTags,
-                                                            final Map<UUID, ClientState> clientStates,
-                                                            final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                                            final Map<String, Set<String>> tagKeyToValues) {
+    private static Set<UUID> findClientsOnUsedClientTagDimensions(final UUID usedClient,
+                                                                  final int numberOfUsedClients,
+                                                                  final Set<String> rackAwareAssignmentTags,
+                                                                  final Map<UUID, ClientState> clientStates,
+                                                                  final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                                  final Map<String, Set<String>> tagKeyToValues) {
         final Set<UUID> filteredClients = new HashSet<>();
 
-        for (final UUID usedClientId : usedClients) {
-            final Map<String, String> usedClientTags = clientStates.get(usedClientId).clientTags();
+        final Map<String, String> usedClientTags = clientStates.get(usedClient).clientTags();
 
-            for (final Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
-                final String tagKey = usedClientTagEntry.getKey();
+        for (final Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
+            final String tagKey = usedClientTagEntry.getKey();
 
-                if (!rackAwareAssignmentTags.contains(tagKey)) {
-                    continue;
-                }
-
-                final Set<String> allTagValues = tagKeyToValues.get(tagKey);
-                final String tagValue = usedClientTagEntry.getValue();
-
-                // If we have used more clients than all the tag's unique values,
-                // we can't filter out clients located on that tag.
-                if (allTagValues.size() <= usedClients.size()) {
-                    continue;
-                }
-
-                final Set<UUID> clientsOnUsedTagValue = tagEntryToClients.get(new TagEntry(tagKey, tagValue));
-                filteredClients.addAll(clientsOnUsedTagValue);
+            if (!rackAwareAssignmentTags.contains(tagKey)) {
+                log.warn("Client tag with key [{}] will be ignored when computing rack aware standby " +
+                         "task assignment because it is not part of the configured rack awareness [{}].",
+                         tagKey, rackAwareAssignmentTags);
+                continue;
             }
+
+            final Set<String> allTagValues = tagKeyToValues.get(tagKey);
+            final String tagValue = usedClientTagEntry.getValue();
+
+            // If we have used more clients than all the tag's unique values,
+            // we can't filter out clients located on that tag.
+            if (allTagValues.size() <= numberOfUsedClients) {
+                continue;
+            }
+
+            final Set<UUID> clientsOnUsedTagValue = tagEntryToClients.get(new TagEntry(tagKey, tagValue));
+            filteredClients.addAll(clientsOnUsedTagValue);
         }
 
         return filteredClients;

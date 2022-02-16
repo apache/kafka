@@ -175,6 +175,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove)
+                                                // When ClientTagAwareStandbyTaskAssignor is used, we need to make sure that
+                                                // sourceClient tags matches destinationClient tags.
                                                 && taskMovementAttemptPredicate.test(sourceClientState, destinationClientState);
                         if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);

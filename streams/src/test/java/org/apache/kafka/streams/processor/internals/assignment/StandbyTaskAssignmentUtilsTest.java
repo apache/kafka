@@ -27,27 +27,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_0;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClientStatesMap;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.computeTasksToRemainingStandbys;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.hasClientsWithMoreAvailableCapacity;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtils.shouldBalanceLoad;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.computeTasksToRemainingStandbys;
+import static org.apache.kafka.streams.processor.internals.assignment.StandbyTaskAssignmentUtils.pollClientAndMaybeAssignRemainingStandbyTasks;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class TaskAssignmentUtilsTest {
+public class StandbyTaskAssignmentUtilsTest {
     private static final Set<TaskId> ACTIVE_TASKS = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
     private Map<UUID, ClientState> clients;
@@ -55,40 +45,12 @@ public class TaskAssignmentUtilsTest {
 
     @Before
     public void setup() {
-        clients = getClientStatesMap(ACTIVE_TASKS.stream().map(TaskAssignmentUtilsTest::mkState).toArray(ClientState[]::new));
+        clients = getClientStatesMap(ACTIVE_TASKS.stream().map(StandbyTaskAssignmentUtilsTest::mkState).toArray(ClientState[]::new));
         clientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> !clients.get(client).hasAssignedTask(task),
             client -> clients.get(client).assignedTaskLoad()
         );
         clientsByTaskLoad.offerAll(clients.keySet());
-    }
-
-    @Test
-    public void shouldReturnCorrectBalanceLoadResult() {
-        final ClientState client1 = clients.get(UUID_1);
-
-        final ClientState client4 = mkState(2, TASK_1_0);
-        clients.put(UUID_4, client4);
-        assertTrue(shouldBalanceLoad(clients.values(), client1));
-
-        client4.assignActive(TASK_1_1);
-        client4.assignStandby(TASK_0_0);
-        assertFalse(shouldBalanceLoad(clients.values(), client1));
-
-        client4.unassignActive(TASK_1_1);
-        client4.unassignStandby(TASK_0_0);
-        final ClientState client5 = mkState(1);
-        clients.put(UUID_5, client5);
-        assertFalse(shouldBalanceLoad(clients.values(), client5));
-    }
-
-    @Test
-    public void shouldReturnHasClientWithMoreAvailableCapacityResultCorrectly() {
-        final ClientState client = clients.get(UUID_1);
-        assertFalse(hasClientsWithMoreAvailableCapacity(clients.values(), client));
-
-        client.assignActive(TASK_0_3);
-        assertTrue(hasClientsWithMoreAvailableCapacity(clients.values(), client));
     }
 
     @Test
@@ -153,7 +115,7 @@ public class TaskAssignmentUtilsTest {
     }
 
     private static ClientState mkState(final int capacity, final TaskId... activeTasks) {
-        final ClientState clientState = new ClientState(capacity, EMPTY_CLIENT_TAGS);
+        final ClientState clientState = new ClientState(capacity);
         for (final TaskId activeTask : activeTasks) {
             clientState.assignActive(activeTask);
         }
