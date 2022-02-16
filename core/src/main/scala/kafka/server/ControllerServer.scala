@@ -187,6 +187,7 @@ class ControllerServer(
       }
       controller = controllerBuilder.build()
 
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
