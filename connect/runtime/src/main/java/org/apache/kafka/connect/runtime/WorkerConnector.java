@@ -171,7 +171,9 @@ public class WorkerConnector implements Runnable {
                 SinkConnectorConfig.validate(config);
                 connector.initialize(new WorkerSinkConnectorContext());
             } else {
+                Objects.requireNonNull(offsetStore, "Offset store cannot be null for source connectors");
                 Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
+                offsetStore.start();
                 connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
@@ -281,7 +283,9 @@ public class WorkerConnector implements Runnable {
             Utils.closeQuietly(ctx, "connector context for " + connName);
             Utils.closeQuietly(metrics, "connector metrics for " + connName);
             Utils.closeQuietly(offsetStorageReader, "offset reader for " + connName);
-            Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
+            if (offsetStore != null) {
+                Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
+            }
         }
     }
 
