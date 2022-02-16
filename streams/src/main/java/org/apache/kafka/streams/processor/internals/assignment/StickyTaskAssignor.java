@@ -173,9 +173,9 @@ public class StickyTaskAssignor implements TaskAssignor {
             return leastLoaded(taskId, clientsWithin);
         }
 
-        if (shouldBalanceLoad(clients.values(), previous)) {
+        if (shouldBalanceLoad(previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
-            if (standby == null || shouldBalanceLoad(clients.values(), previous)) {
+            if (standby == null || shouldBalanceLoad(previous)) {
                 return leastLoaded(taskId, clientsWithin);
             }
             return standby;
@@ -184,12 +184,12 @@ public class StickyTaskAssignor implements TaskAssignor {
         return previous;
     }
 
-    static boolean shouldBalanceLoad(final Collection<ClientState> clientStates, final ClientState client) {
-        return client.reachedCapacity() && hasClientsWithMoreAvailableCapacity(clientStates, client);
+    private boolean shouldBalanceLoad(final ClientState client) {
+        return client.reachedCapacity() && hasClientsWithMoreAvailableCapacity(client);
     }
 
-    static boolean hasClientsWithMoreAvailableCapacity(final Collection<ClientState> clientStates, final ClientState client) {
-        for (final ClientState clientState : clientStates) {
+    private boolean hasClientsWithMoreAvailableCapacity(final ClientState client) {
+        for (final ClientState clientState : clients.values()) {
             if (clientState.hasMoreAvailableCapacityThan(client)) {
                 return true;
             }
