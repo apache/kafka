@@ -102,7 +102,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
   protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
-  protected def enableForwarding: Boolean = false
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -290,7 +289,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     brokerList = if (startup) TestUtils.bootstrapServers(_brokers, listenerName) else null
   }
 
-  private def createBrokerFromConfig(config: KafkaConfig) = {
+  private def createBrokerFromConfig(config: KafkaConfig): KafkaBroker = {
     if (isKRaftTest()) {
       createBroker(config, brokerTime(config.brokerId), startup = false)
     } else {
@@ -298,7 +297,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         config,
         time = brokerTime(config.brokerId),
         threadNamePrefix = None,
-        enableForwarding,
         startup = false
       )
     }
