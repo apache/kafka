@@ -1095,37 +1095,29 @@ public class TopologyTestDriver implements Closeable {
      * Close the driver, its topology, and all processors.
      */
     public void close() {
-        try {
-            if (task != null) {
-                task.suspend();
-                task.prepareCommit();
-                task.postCommit(true);
-                task.closeClean();
-            }
-            if (globalStateTask != null) {
-                try {
-                    globalStateTask.close(false);
-                } catch (final IOException e) {
-                    // ignore
-                }
-            }
-            completeAllProcessableWork();
-            if (task != null && task.hasRecordsQueued()) {
-                log.warn("Found some records that cannot be processed due to the" +
-                                " {} configuration during TopologyTestDriver#close().",
-                        StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
-            }
-            if (processingMode == AT_LEAST_ONCE) {
-                producer.close();
-            }
-            stateDirectory.clean();
-        } catch (final RuntimeException rex) {
-            if (OperatingSystem.IS_WINDOWS) {
-                log.warn("Ignoring exception for windows, issue may be similar to resolved issue: https://issues.apache.org/jira/browse/KAFKA-6647", rex);
-            } else {
-                throw rex;
+        if (task != null) {
+            task.suspend();
+            task.prepareCommit();
+            task.postCommit(true);
+            task.closeClean();
+        }
+        if (globalStateTask != null) {
+            try {
+                globalStateTask.close(false);
+            } catch (final IOException e) {
+                // ignore
             }
         }
+        completeAllProcessableWork();
+        if (task != null && task.hasRecordsQueued()) {
+            log.warn("Found some records that cannot be processed due to the" +
+                         " {} configuration during TopologyTestDriver#close().",
+                     StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        }
+        if (processingMode == AT_LEAST_ONCE) {
+            producer.close();
+        }
+        stateDirectory.clean();
     }
 
     static class MockChangelogRegister implements ChangelogRegister {
