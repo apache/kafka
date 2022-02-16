@@ -196,6 +196,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     List<SourceRecord> toSend;
     protected Map<String, String> taskConfig;
     protected boolean started = false;
+    private volatile boolean producerClosed = false;
 
     protected AbstractWorkerSourceTask(ConnectorTaskId id,
                                        SourceTask task,
@@ -315,6 +316,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     private void closeProducer(Duration duration) {
         if (producer != null) {
+            producerClosed = true;
             Utils.closeQuietly(() -> producer.close(duration), "source task producer");
         }
     }
@@ -397,7 +399,11 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                     producerRecord,
                     (recordMetadata, e) -> {
                         if (e != null) {
-                            log.debug("{} failed to send record to {}: ", AbstractWorkerSourceTask.this, topic, e);
+                            if (producerClosed) {
+                                log.trace("{} failed to send record to {}; this is expected as the producer has already been closed", AbstractWorkerSourceTask.this, topic, e);
+                            } else {
+                                log.error("{} failed to send record to {}: ", AbstractWorkerSourceTask.this, topic, e);
+                            }
                             log.trace("{} Failed record: {}", AbstractWorkerSourceTask.this, preTransformRecord);
                             producerSendFailed(false, producerRecord, preTransformRecord, e);
                         } else {

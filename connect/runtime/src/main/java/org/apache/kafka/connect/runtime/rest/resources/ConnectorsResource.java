@@ -340,6 +340,7 @@ public class ConnectorsResource {
 
     @PUT
     @Path("/{connector}/fence")
+    @Operation(hidden = true, summary = "This operation is only for inter-worker communications")
     public void fenceZombies(final @PathParam("connector") String connector,
                              final @Context HttpHeaders headers,
                              final @QueryParam("forward") Boolean forward,
