@@ -19,6 +19,19 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.metadata.MetadataRecordType;
 
+/**
+ * This functional interface is used by {@link MetadataVersion} to provide a mechanism to determine the appropriate
+ * record version for a given metadata version.
+ *
+ * For example,
+ *
+ * <pre>
+ *
+ *     MetadataVersion.V1.recordVersion(MetadataRecordType.FEATURE_LEVEL_RECORD);
+ * </pre>
+ *
+ * returns the version of FeatureLevelRecord to use at metadata.version 1.
+ */
 @FunctionalInterface
 public interface MetadataRecordVersionResolver {
     short recordVersion(MetadataRecordType type);
