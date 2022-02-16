@@ -71,6 +71,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.SnapshotGenerator.Section;
+import org.apache.kafka.metadata.FeatureLevelListener;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
@@ -959,17 +960,14 @@ public final class QuorumController implements Controller {
             if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!isFeatureSupported) {
                     if (isActiveController) {
-                        // TODO if we get here, somehow the active controller wrote an unsupported version to the log
-                        //      how could this happen? What should we do?
                         log.error("Active controller cannot support metadata.version {}", finalizedMaxVersion);
                     } else {
                         log.error("Standby controller cannot support metadata.version {}, shutting down.", finalizedMaxVersion);
-                        beginShutdown();
                     }
+                    beginShutdown();
                 } else {
                     log.info("Setting our metadata.version to {}", finalizedMaxVersion);
                     activeMetadataVersion = finalizedMaxVersion;
-                    // TODO other synchronous controller stuff here.
                 }
             }
             // In the future, handle other feature flags that are relevant to the controller here.

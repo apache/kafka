@@ -15,8 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metadata;
 
+/**
+ * A callback for changes to feature levels. Currently, this is only used by the controller to receive a callback
+ * when committed FeatureLevelRecords are being replayed.
+ */
 public interface FeatureLevelListener {
     void handle(String featureName, short finalizedVersion);
 }
