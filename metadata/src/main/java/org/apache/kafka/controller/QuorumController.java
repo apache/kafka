@@ -1200,7 +1200,8 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControl;
 
     /**
-     * TODO
+     * A callback that the controller registers with the FeatureControlManager to learn when feature updates
+     * occur.
      */
     private final QuorumFeatureListener featureListener;
 

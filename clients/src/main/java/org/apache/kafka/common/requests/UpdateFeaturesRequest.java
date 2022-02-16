@@ -22,9 +22,39 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.stream.Collectors;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
+
+    public static class FeatureUpdateItem {
+        private final String featureName;
+        private final short featureLevel;
+        private final FeatureUpdate.DowngradeType downgradeType;
+
+        public FeatureUpdateItem(String featureName, short featureLevel, FeatureUpdate.DowngradeType downgradeType) {
+            this.featureName = featureName;
+            this.featureLevel = featureLevel;
+            this.downgradeType = downgradeType;
+        }
+
+        public String feature() {
+            return featureName;
+        }
+
+        public short versionLevel() {
+            return featureLevel;
+        }
+
+        public FeatureUpdate.DowngradeType downgradeType() {
+            return downgradeType;
+        }
+
+        public boolean isDeleteRequest() {
+            return featureLevel < 1 && !downgradeType.equals(FeatureUpdate.DowngradeType.NONE);
+        }
+    }
 
     public static class Builder extends AbstractRequest.Builder<UpdateFeaturesRequest> {
 
@@ -53,16 +83,23 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public FeatureUpdate.DowngradeType downgradeType(UpdateFeaturesRequestData.FeatureUpdateKey update) {
+    public FeatureUpdateItem getFeature(String name) {
+        UpdateFeaturesRequestData.FeatureUpdateKey update = data.featureUpdates().find(name);
         if (super.version() == 0) {
             if (update.allowDowngrade()) {
-                return FeatureUpdate.DowngradeType.SAFE;
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.SAFE);
             } else {
-                return FeatureUpdate.DowngradeType.NONE;
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.NONE);
             }
         } else {
-            return FeatureUpdate.DowngradeType.fromCode(update.downgradeType());
+            return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.DowngradeType.fromCode(update.downgradeType()));
         }
+    }
+
+    public Collection<FeatureUpdateItem> featureUpdates() {
+        return data.featureUpdates().stream()
+            .map(update -> getFeature(update.feature()))
+            .collect(Collectors.toList());
     }
 
     @Override
@@ -81,9 +118,5 @@ public class UpdateFeaturesRequest extends AbstractRequest {
 
     public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
         return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    public static boolean isDeleteRequest(short versionLevel, FeatureUpdate.DowngradeType downgradeType) {
-        return versionLevel < 1 && !downgradeType.equals(FeatureUpdate.DowngradeType.NONE);
     }
 }
