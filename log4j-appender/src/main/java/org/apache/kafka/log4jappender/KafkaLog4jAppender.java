@@ -74,9 +74,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String kerb5ConfPath;
     private Integer maxBlockMs;
     private String sslEngineFactoryClass;
+    private Integer requiredNumAcks;
 
     private int retries = Integer.MAX_VALUE;
-    private int requiredNumAcks = 1;
     private int deliveryTimeoutMs = 120000;
     private int lingerMs = 0;
     private int batchSize = 16384;
@@ -285,7 +285,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (compressionType != null)
             props.put(COMPRESSION_TYPE_CONFIG, compressionType);
 
-        props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
+        if (requiredNumAcks != null)
+            props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
+
         props.put(RETRIES_CONFIG, retries);
         props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
         props.put(LINGER_MS_CONFIG, lingerMs);
