@@ -68,7 +68,8 @@ public class ClientStateTest {
             mkSet(TASK_0_0, TASK_0_1),
             mkSet(TASK_0_2, TASK_0_3),
             mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
-            EMPTY_CLIENT_TAGS, 4
+            EMPTY_CLIENT_TAGS,
+            4
         );
 
         // all the "next assignment" fields should be empty
