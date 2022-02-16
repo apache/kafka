@@ -24,7 +24,8 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkConnectorContext;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceConnectorContext;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.easymock.Capture;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
@@ -65,7 +66,8 @@ public class WorkerConnectorTest extends EasyMockSupport {
     @Mock Connector connector;
     @Mock CloseableConnectorContext ctx;
     @Mock ConnectorStatus.Listener listener;
-    @Mock OffsetStorageReader offsetStorageReader;
+    @Mock CloseableOffsetStorageReader offsetStorageReader;
+    @Mock ConnectorOffsetBackingStore offsetStore;
     @Mock ClassLoader classLoader;
 
     @Before
@@ -99,9 +101,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertFailedMetric(workerConnector);
@@ -134,13 +142,19 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.anyObject(Exception.class), EasyMock.isNull());
         expectLastCall();
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertFailedMetric(workerConnector);
@@ -177,13 +191,19 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.STARTED));
         expectLastCall();
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSourceMetric(workerConnector);
@@ -223,6 +243,12 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.STARTED));
         expectLastCall();
@@ -231,7 +257,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSinkMetric(workerConnector);
@@ -273,6 +299,12 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.PAUSED));
         expectLastCall();
@@ -281,7 +313,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSourceMetric(workerConnector);
@@ -316,13 +348,19 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.PAUSED));
         expectLastCall();
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSinkMetric(workerConnector);
@@ -358,13 +396,19 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.anyObject(Exception.class), EasyMock.isNull());
         expectLastCall();
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSinkMetric(workerConnector);
@@ -407,9 +451,15 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSourceMetric(workerConnector);
@@ -447,13 +497,19 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.STARTED));
         expectLastCall().times(2);
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSourceMetric(workerConnector);
@@ -495,6 +551,12 @@ public class WorkerConnectorTest extends EasyMockSupport {
         ctx.close();
         expectLastCall();
 
+        offsetStorageReader.close();
+        expectLastCall();
+
+        offsetStore.stop();
+        expectLastCall();
+
         Callback<TargetState> onStateChange = createStrictMock(Callback.class);
         onStateChange.onCompletion(EasyMock.isNull(), EasyMock.eq(TargetState.STARTED));
         expectLastCall();
@@ -503,7 +565,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         assertInitializedSourceMetric(workerConnector);
@@ -531,7 +593,7 @@ public class WorkerConnectorTest extends EasyMockSupport {
 
         replayAll();
 
-        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, classLoader);
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
 
         workerConnector.initialize();
         Throwable e = exceptionCapture.getValue();
