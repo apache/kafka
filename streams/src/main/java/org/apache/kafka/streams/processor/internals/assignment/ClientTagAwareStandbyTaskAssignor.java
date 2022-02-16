@@ -189,14 +189,14 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                                                                     final Map<TagEntry, Set<UUID>> tagEntryToClients) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
-        // We set numberOfUsedClients as 1 because client where active task is located has to be considered as used.
-        int numberOfUsedClients = 1;
+        // We set countOfUsedClients as 1 because client where active task is located has to be considered as used.
+        int countOfUsedClients = 1;
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
 
         final Set<UUID> clientsOnAlreadyUsedTagDimensions = new HashSet<>(
             findClientsOnUsedClientTagDimensions(
                 activeTaskClient,
-                numberOfUsedClients,
+                countOfUsedClients,
                 rackAwareAssignmentTags,
                 clientStates,
                 tagEntryToClients,
@@ -215,12 +215,12 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
             clientStates.get(clientOnUnusedTagDimensions).assignStandby(activeTaskId);
 
-            numberOfUsedClients++;
+            countOfUsedClients++;
 
             clientsOnAlreadyUsedTagDimensions.addAll(
                 findClientsOnUsedClientTagDimensions(
                     clientOnUnusedTagDimensions,
-                    numberOfUsedClients,
+                    countOfUsedClients,
                     rackAwareAssignmentTags,
                     clientStates,
                     tagEntryToClients,
