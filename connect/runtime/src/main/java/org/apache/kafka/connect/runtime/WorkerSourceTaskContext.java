@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 

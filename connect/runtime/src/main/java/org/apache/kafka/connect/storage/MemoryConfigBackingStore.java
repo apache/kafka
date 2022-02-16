@@ -20,7 +20,6 @@ import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collections;
