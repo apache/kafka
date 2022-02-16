@@ -114,7 +114,7 @@ public class SaslServerAuthenticatorTest {
     @Test
     public void testLatestApiVersionsRequest() throws IOException {
         testApiVersionsRequest(ApiKeys.API_VERSIONS.latestVersion(),
-            "apache-kafka-java", AppInfoParser.getVersion());
+            "linkedin-kafka-java", AppInfoParser.getVersion());
     }
 
     private void testApiVersionsRequest(short version, String expectedSoftwareName,

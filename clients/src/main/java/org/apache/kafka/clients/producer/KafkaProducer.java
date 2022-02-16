@@ -478,7 +478,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 true,
                 apiVersions,
                 throttleTimeSensor,
-                logContext);
+                logContext,
+                producerConfig.getString(ProducerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG));
         short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,

@@ -757,7 +757,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     true,
                     apiVersions,
                     throttleTimeSensor,
-                    logContext);
+                    logContext,
+                    config.getString(ConsumerConfig.LI_CLIENT_SOFTWARE_NAME_AND_COMMIT_CONFIG));
+
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,

@@ -270,7 +270,7 @@ class SocketServerTest {
   def testClientInformationWithLatestApiVersionsRequest(): Unit = {
     testClientInformation(
       ApiKeys.API_VERSIONS.latestVersion,
-      "apache-kafka-java",
+      "linkedin-kafka-java",
       AppInfoParser.getVersion
     )
   }
