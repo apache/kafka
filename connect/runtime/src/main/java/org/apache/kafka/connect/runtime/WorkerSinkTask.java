@@ -82,11 +82,11 @@ class WorkerSinkTask extends WorkerTask {
     private final TransformationChain<SinkRecord> transformationChain;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private final boolean isTopicTrackingEnabled;
-    private KafkaConsumer<byte[], byte[]> consumer;
+    private final KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
-    private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
-    private Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> currentOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> origOffsets;
     private RuntimeException rebalanceException;
     private long nextCommit;

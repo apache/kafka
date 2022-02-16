@@ -24,9 +24,9 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import java.util.Objects;
 
 public class ConnectorPluginInfo {
-    private String className;
-    private ConnectorType type;
-    private String version;
+    private final String className;
+    private final ConnectorType type;
+    private final String version;
 
     @JsonCreator
     public ConnectorPluginInfo(

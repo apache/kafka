@@ -496,7 +496,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         }
 
         public static class Builder {
-            private String withWorker;
+            private final String withWorker;
             private Collection<String> withConnectors;
             private Collection<ConnectorTaskId> withTasks;
 
