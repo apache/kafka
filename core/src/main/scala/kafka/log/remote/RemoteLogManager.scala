@@ -158,6 +158,9 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
       s"and followers: $followerTopicPartitions")
 
     if (leaderTopicPartitions.nonEmpty || followerTopicPartitions.nonEmpty) {
+      leaderTopicPartitions.foreach(x => topicPartitionIds.put(x.topicPartition(), x.topicId()))
+      followerTopicPartitions.foreach(x => topicPartitionIds.put(x.topicPartition(), x.topicId()))
+
       remoteLogMetadataManager.onPartitionLeadershipChanges(leaderTopicPartitions.asJava, followerTopicPartitions.asJava)
     }
   }
@@ -254,7 +257,8 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
     // Get the respective epoch in which the starting offset exists.
     var maybeEpoch = leaderEpochCache.epochForOffset(startingOffset);
     while (maybeEpoch.nonEmpty) {
-      remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), maybeEpoch.get).asScala
+      val epoch = maybeEpoch.get
+      remoteLogMetadataManager.listRemoteLogSegments(new TopicIdPartition(topicId, tp), epoch).asScala
         .foreach(rlsMetadata =>
           if (rlsMetadata.maxTimestampMs() >= timestamp && rlsMetadata.endOffset() >= startingOffset) {
             val timestampOffset = lookupTimestamp(rlsMetadata, timestamp, startingOffset)
@@ -264,7 +268,7 @@ class RemoteLogManager(rlmConfig: RemoteLogManagerConfig,
         )
 
       // Move to the next epoch if not found with the current epoch.
-      maybeEpoch = leaderEpochCache.findNextEpoch(maybeEpoch.get)
+      maybeEpoch = leaderEpochCache.nextEpoch(epoch)
     }
     None
   }

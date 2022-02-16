@@ -42,23 +42,6 @@ class LeaderEpochFileCacheTest {
   private val cache = new LeaderEpochFileCache(tp, checkpoint)
 
   @Test
-  def testPreviousEpoch(): Unit = {
-    assertEquals(None, cache.previousEpoch)
-
-    cache.assign(epoch = 2, startOffset = 10)
-    assertEquals(None, cache.previousEpoch)
-
-    cache.assign(epoch = 4, startOffset = 15)
-    assertEquals(Some(2), cache.previousEpoch)
-
-    cache.assign(epoch = 10, startOffset = 20)
-    assertEquals(Some(4), cache.previousEpoch)
-
-    cache.truncateFromEnd(18)
-    assertEquals(Some(2), cache.previousEpoch)
-  }
-
-  @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
     //When
     cache.assign(epoch = 2, startOffset = 10)
@@ -585,8 +568,8 @@ class LeaderEpochFileCacheTest {
     cache.assign(3, 500L)
     cache.assign(5, 1000L)
 
-    assertEquals(EpochEntry(2, 100L), cache.getEpochEntry(2).get)
-    assertEquals(EpochEntry(3, 500L), cache.getEpochEntry(3).get)
-    assertEquals(EpochEntry(5, 1000L), cache.getEpochEntry(5).get)
+    assertEquals(EpochEntry(2, 100L), cache.epochEntry(2).get)
+    assertEquals(EpochEntry(3, 500L), cache.epochEntry(3).get)
+    assertEquals(EpochEntry(5, 1000L), cache.epochEntry(5).get)
   }
 }

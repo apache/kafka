@@ -41,7 +41,7 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile private var indexFile: File) extends CleanableIndex(indexFile)
+class TransactionIndex(val startOffset: Long, @volatile private var indexFile: File) extends BaseIndex(indexFile)
   with Logging {
 
   // note that the file is not created until we need it

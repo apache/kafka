@@ -27,10 +27,10 @@ import org.apache.kafka.common.utils.Utils
  * @param _file index file
  * @see [[AbstractIndex]], [[OffsetIndex]], [[TimeIndex]], [[TransactionIndex]]
  */
-abstract class CleanableIndex(@volatile var _file: File) extends Closeable {
+abstract class BaseIndex(@volatile var _file: File) extends Closeable {
 
   /**
-   * Rename the file that backs this offset index
+   * Rename the file that backs this index
    *
    * @throws IOException if rename fails
    */

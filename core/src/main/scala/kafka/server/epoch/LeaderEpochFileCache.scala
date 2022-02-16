@@ -153,12 +153,6 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     latestEntry.map(_.epoch)
   }
 
-  def previousEpoch: Option[Int] = {
-    inReadLock(lock) {
-      latestEntry.flatMap(entry => Option(epochs.lowerEntry(entry.epoch))).map(_.getKey)
-    }
-  }
-
   /**
    * Get the earliest cached entry if one exists.
    */
@@ -168,19 +162,19 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
-  def findPreviousEpoch(epoch: Int): Option[Int] = {
+  def previousEpoch(epoch: Int): Option[Int] = {
     inReadLock(lock) {
       Option(epochs.lowerKey(epoch))
     }
   }
 
-  def findNextEpoch(epoch: Int): Option[Int] = {
+  def nextEpoch(epoch: Int): Option[Int] = {
     inReadLock(lock) {
       Option(epochs.higherKey(epoch))
     }
   }
 
-  def getEpochEntry(epoch: Int): Option[EpochEntry] = {
+  def epochEntry(epoch: Int): Option[EpochEntry] = {
     inReadLock(lock) {
       Option.apply(epochs.get(epoch))
     }
@@ -287,23 +281,17 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 
   def epochForOffset(offset: Long): Option[Int] = {
     inReadLock(lock) {
-      var previousEpoch = earliestEntry.map(_.epoch)
+      var previousEpoch: Option[Int] = None
       epochs.values().asScala.foreach {
         case EpochEntry(epoch, startOffset) =>
           if (startOffset == offset)
             return Some(epoch)
           if (startOffset > offset)
             return previousEpoch
+
           previousEpoch = Some(epoch)
       }
       previousEpoch
-    }
-  }
-
-  def writeTo(leaderEpochCheckpoint: LeaderEpochCheckpoint): LeaderEpochFileCache = {
-    inReadLock(lock) {
-      leaderEpochCheckpoint.write(epochEntries)
-      new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint)
     }
   }
 

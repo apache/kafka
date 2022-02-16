@@ -36,7 +36,7 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
  * @param maxIndexSize The maximum index size in bytes.
  */
 abstract class AbstractIndex(@volatile private var indexFile: File, val baseOffset: Long, val maxIndexSize: Int = -1,
-                             val writable: Boolean) extends CleanableIndex(indexFile) {
+                             val writable: Boolean) extends BaseIndex(indexFile) {
   import AbstractIndex._
 
   // Length of the index file

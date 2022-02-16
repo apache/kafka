@@ -322,7 +322,7 @@ class ReplicaFetcherThread(name: String,
         }
 
       } else {
-        // Truncate the existing local log  and start from leader's localLogStartOffset.
+        // Truncate the existing local log and start from leader's localLogStartOffset.
         truncateFullyAndStartAt(partition, leaderLocalLogStartOffset)
         leaderLocalLogStartOffset
       }

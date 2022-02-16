@@ -122,22 +122,24 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
     setDaemon(true)
 
     override def doWork(): Unit = {
-      val entry = expiredIndexes.take()
-      info(s"Cleaning up index entry $entry")
-      try {
-        entry.cleanup()
-      } catch {
-        case ex: Exception => error("Error occurred while fetching/cleaning up expired entry", ex)
+      while (!closed) {
+        try {
+          val entry = expiredIndexes.take()
+          info(s"Cleaning up index entry $entry")
+          entry.cleanup()
+        } catch {
+          case ex: Exception => error("Error occurred while fetching/cleaning up expired entry", ex)
+        }
       }
     }
   }
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
-    def loadIndexFile[T <: CleanableIndex](fileName: String,
-                                           suffix: String,
-                                           fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
-                                           readIndex: File => T): T = {
+    def loadIndexFile[T <: BaseIndex](fileName: String,
+                                      suffix: String,
+                                      fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
+                                      readIndex: File => T): T = {
       val indexFile = new File(cacheDir, fileName + suffix)
 
       def fetchAndCreateIndex(): T = {

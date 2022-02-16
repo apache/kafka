@@ -1308,7 +1308,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val earliestLocalLogEpochEntry = leaderEpochCache.flatMap(cache =>
-          cache.epochForOffset(localLogStartOffset).flatMap(cache.getEpochEntry))
+          cache.epochForOffset(localLogStartOffset).flatMap(cache.epochEntry))
         val epochOpt = earliestLocalLogEpochEntry match {
           case Some(entry) if entry.startOffset <= localLogStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()

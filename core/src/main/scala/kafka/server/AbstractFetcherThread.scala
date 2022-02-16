@@ -89,6 +89,16 @@ abstract class AbstractFetcherThread(name: String,
 
   protected val isOffsetForLeaderEpochSupported: Boolean
 
+  /**
+   * Builds the required remote log auxiliary state for the given topic partition on this follower replica and returns
+   * the offset to be fetched from the leader replica.
+   *
+   * @param partition topic partition
+   * @param currentLeaderEpoch current leader epoch maintained by this follower replica.
+   * @param fetchOffset offset to be fetched from the leader.
+   * @param epochForFetchOffset respective leader epoch for the given fetch pffset.
+   * @param leaderLogStartOffset log-start-offset on the leader.
+   */
   protected def buildRemoteLogAuxState(partition: TopicPartition,
                                        currentLeaderEpoch: Int,
                                        fetchOffset: Long,
@@ -388,12 +398,11 @@ abstract class AbstractFetcherThread(name: String,
                       markPartitionFailed(topicPartition)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
-                  if (handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch))
+                  if (!handleOutOfRangeError(topicPartition, currentFetchState, fetchPartitionData.currentLeaderEpoch))
                     partitionsWithError += topicPartition
                 case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
-                  debug(s"Received error related to offsets out of rage or moved to tiered storage, error code: ${partitionData.errorCode()}"
-                    + s", and fetch offset: ${currentFetchState.fetchOffset}")
-                  if (handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState,
+                  debug(s"Received error related to offset moved to tiered storage, fetch offset: ${currentFetchState.fetchOffset}")
+                  if (!handleOffsetsMovedToTieredStorage(topicPartition, currentFetchState,
                     fetchPartitionData.currentLeaderEpoch, partitionData.logStartOffset()))
                     partitionsWithError += topicPartition
                 case Errors.UNKNOWN_LEADER_EPOCH =>
@@ -694,7 +703,7 @@ abstract class AbstractFetcherThread(name: String,
         if (leaderStartOffset > replicaEndOffset) {
           // Only truncate log when current leader's log start offset (local log start offset if >= 3.2 version incaseof
           // OffsetMovedToTieredStorage error) is greater than follower's log end offset.
-          // truncateAndBuild returns optional offset value from which it needs to start fetching.
+          // truncateAndBuild returns offset value from which it needs to start fetching.
           truncateAndBuild(epoch, leaderStartOffset)
         } else {
           replicaEndOffset
@@ -724,47 +733,62 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   /**
-   * Handle the out of range error. Return false if
-   * 1) the request succeeded or
-   * 2) was fenced and this thread haven't received new epoch,
-   * which means we need not backoff and retry. True if there was a retriable error.
+   * Handles the out of range error for the given topic partition.
+   *
+   * Returns true if
+   *    - the request succeeded or
+   *    - it was fenced and this thread haven't received new epoch, which means we need not backoff and retry as the
+   *    partition is moved to failed state.
+   *
+   * Returns false if there was a retriable error.
+   *
+   * @param topicPartition topic partition
+   * @param fetchState current fetch state
+   * @param leaderEpochInRequest current leader epoch sent in the fetch request.
    */
   private def handleOutOfRangeError(topicPartition: TopicPartition,
                                     fetchState: PartitionFetchState,
-                                    requestEpoch: Optional[Integer]): Boolean = {
+                                    leaderEpochInRequest: Optional[Integer]): Boolean = {
     try {
       val newFetchState = fetchOffsetAndTruncate(topicPartition, fetchState.topicId, fetchState.currentLeaderEpoch)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range, which typically implies a leader change. Reset fetch offset to ${newFetchState.fetchOffset}")
-      false
+      true
     } catch {
       case _: FencedLeaderEpochException =>
-        onPartitionFenced(topicPartition, requestEpoch)
+        onPartitionFenced(topicPartition, leaderEpochInRequest)
 
       case e@(_: UnknownTopicOrPartitionException |
               _: UnknownLeaderEpochException |
               _: NotLeaderOrFollowerException) =>
         info(s"Could not fetch offset for $topicPartition due to error: ${e.getMessage}")
-        true
+        false
 
       case e: Throwable =>
         error(s"Error getting offset for partition $topicPartition", e)
-        true
+        false
     }
   }
 
   /**
-   * Handle the offset out of range error or offset moved to tiered storage error.
+   * Handles the offset moved to tiered storage error for the given topic partition.
    *
-   * Return false if
-   * 1) it is able to build the required remote log auxiliary state or
-   * 2) was fenced and this thread haven't received new epoch,
-   * which means we need not backoff and retry. True if there was a retriable error.
+   * Returns true if
+   *    - the request succeeded or
+   *    - it was fenced and this thread haven't received new epoch, which means we need not backoff and retry as the
+   *    partition is moved to failed state.
+   *
+   * Returns false if there was a retriable error.
+   *
+   * @param topicPartition topic partition
+   * @param fetchState current partition fetch state.
+   * @param leaderEpochInRequest current leader epoch sent in the fetch request.
+   * @param leaderLogStartOffset log-start-offset in the leader replica.
    */
   private def handleOffsetsMovedToTieredStorage(topicPartition: TopicPartition,
                                                 fetchState: PartitionFetchState,
-                                                requestEpoch: Optional[Integer],
+                                                leaderEpochInRequest: Optional[Integer],
                                                 leaderLogStartOffset: Long): Boolean = {
     try {
       val newFetchState = fetchOffsetAndApplyTruncateAndBuild(topicPartition, fetchState.topicId, fetchState.currentLeaderEpoch,
@@ -773,18 +797,18 @@ abstract class AbstractFetcherThread(name: String,
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
       debug(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range or moved to remote tier. Reset fetch offset to ${newFetchState.fetchOffset}")
-      false
+      true
     } catch {
       case _: FencedLeaderEpochException =>
-        onPartitionFenced(topicPartition, requestEpoch)
+        onPartitionFenced(topicPartition, leaderEpochInRequest)
       case e@(_: UnknownTopicOrPartitionException |
               _: UnknownLeaderEpochException |
               _: NotLeaderOrFollowerException) =>
         info(s"Could not build remote log auxiliary state for $topicPartition due to error: ${e.getMessage}")
-        true
+        false
       case e: Throwable =>
         error(s"Error building remote log auxiliary state for $topicPartition", e)
-        true
+        false
     }
   }
 
