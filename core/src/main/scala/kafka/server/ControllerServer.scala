@@ -94,7 +94,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = metaProperties.clusterId.toString
+  def clusterId: String = metaProperties.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return

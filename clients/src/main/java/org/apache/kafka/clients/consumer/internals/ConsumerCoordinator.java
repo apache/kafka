@@ -213,6 +213,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata.requestUpdate();
     }
 
+    // package private for testing
+    boolean isLeader() {
+        return this.isLeader;
+    }
+
+    // package private for testing
+    SubscriptionState subscriptionState() {
+        return this.subscriptions;
+    }
+
     @Override
     public String protocolType() {
         return ConsumerProtocol.PROTOCOL_TYPE;
@@ -626,9 +636,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                        String assignmentStrategy,
-                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
+    protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                      String assignmentStrategy,
+                                                      List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
+                                                      boolean skipAssignment) {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -654,6 +665,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
+        if (skipAssignment) {
+            log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
+                "will continue with its existing assignment.", generation().generationId);
+            assignmentSnapshot = metadataSnapshot;
+            return Collections.emptyMap();
+        }
+
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
@@ -666,6 +684,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
 
+        // metadataSnapshot could be updated when the subscription is updated therefore
+        // we must take the assignment snapshot after.
         assignmentSnapshot = metadataSnapshot;
 
         log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);

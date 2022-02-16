@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -923,12 +922,6 @@ class KafkaApisTest {
   def testDeleteTopicsWithForwarding(): Unit = {
     val requestBuilder = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData())
     testForwardableApi(ApiKeys.DELETE_TOPICS, requestBuilder)
-  }
-
-  @Test
-  def testUpdateFeaturesWithForwarding(): Unit = {
-    val requestBuilder = new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
-    testForwardableApi(ApiKeys.UPDATE_FEATURES, requestBuilder)
   }
 
   @Test
@@ -2480,7 +2473,6 @@ class KafkaApisTest {
     val protocolType = "consumer"
     val rebalanceTimeoutMs = 10
     val sessionTimeoutMs = 5
-
     val capturedProtocols: ArgumentCaptor[List[(String, Array[Byte])]] = ArgumentCaptor.forClass(classOf[List[(String, Array[Byte])]])
 
     createKafkaApis().handleJoinGroupRequest(
@@ -2504,6 +2496,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(groupId),
       ArgumentMatchers.eq(memberId),
       ArgumentMatchers.eq(None),
+      ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(clientId),
       ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
@@ -2559,6 +2552,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(memberId),
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(if (version >= 4) true else false),
+      ArgumentMatchers.eq(if (version >= 9) true else false),
       ArgumentMatchers.eq(clientId),
       ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
       ArgumentMatchers.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
@@ -2625,6 +2619,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(memberId),
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(if (version >= 4) true else false),
+      ArgumentMatchers.eq(if (version >= 9) true else false),
       ArgumentMatchers.eq(clientId),
       ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
       ArgumentMatchers.eq(if (version >= 1) rebalanceTimeoutMs else sessionTimeoutMs),
@@ -2642,6 +2637,7 @@ class KafkaApisTest {
       protocolType = Some(protocolType),
       protocolName = Some(protocolName),
       leaderId = memberId,
+      skipAssignment = true,
       error = Errors.NONE
     ))
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
@@ -2654,6 +2650,7 @@ class KafkaApisTest {
     assertEquals(memberId, response.data.leader)
     assertEquals(protocolName, response.data.protocolName)
     assertEquals(protocolType, response.data.protocolType)
+    assertTrue(response.data.skipAssignment)
   }
 
   @Test

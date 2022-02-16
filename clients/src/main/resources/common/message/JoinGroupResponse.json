@@ -33,7 +33,9 @@
   // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-559).
   //
   // Version 8 is the same as version 7.
-  "validVersions": "0-8",
+  //
+  // Version 9 adds the SkipAssignment field.
+  "validVersions": "0-9",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
@@ -49,6 +51,8 @@
       "about": "The group protocol selected by the coordinator." },
     { "name": "Leader", "type": "string", "versions": "0+",
       "about": "The leader of the group." },
+    { "name": "SkipAssignment", "type": "bool", "versions": "9+", "default": "false",
+      "about": "True if the leader must skip running the assignment." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID assigned by the group coordinator." },
     { "name": "Members", "type": "[]JoinGroupResponseMember", "versions": "0+", "fields": [
