@@ -78,9 +78,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
                             + "or used to parse the input if the input is a string.")
             .define(UNIX_PRECISION_CONFIG, ConfigDef.Type.STRING, UNIX_PRECISION_DEFAULT, ConfigDef.Importance.LOW,
-                    "The desired unix precision for the timestamp. Used to generate the output when type=unix " +
+                    "The desired Unix precision for the timestamp. Used to generate the output when type=unix " +
                             "or used to parse the input if the input is a Long." +
-                            "Note: This SMT will cause precision loss during conversions from and to values with sub-milliseconds components.");
+                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
 
 
     private static final String PURPOSE = "converting timestamp formats";
