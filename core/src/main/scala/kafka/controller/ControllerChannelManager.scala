@@ -563,15 +563,30 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setRack(broker.rack.orNull)
     }.toBuffer
 
-    val maxBrokerEpoch = controllerContext.maxBrokerEpoch
+    val topicIds = partitionStates.map(_.topicName())
+      .distinct
+      .filter(controllerContext.topicIds.contains)
+      .map(topic => (topic, controllerContext.topicIds(topic))).toMap
+
+    var commonUpdateMetadataRequestBuilder: UpdateMetadataRequest.Builder = null
+
+    def getUpdateMetadataRequestBuilder(brokerEpoch: Long): UpdateMetadataRequest.Builder = {
+      if (updateMetadataRequestVersion >= 6) {
+        if (commonUpdateMetadataRequestBuilder == null) {
+          val maxBrokerEpoch = controllerContext.maxBrokerEpoch
+          commonUpdateMetadataRequestBuilder =  new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
+            controllerId, controllerEpoch, AbstractControlRequest.UNKNOWN_BROKER_EPOCH, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava, topicIds.asJava)
+        }
+        commonUpdateMetadataRequestBuilder
+      } else {
+        new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
+          controllerId, controllerEpoch, brokerEpoch, AbstractControlRequest.UNKNOWN_BROKER_EPOCH, partitionStates.asJava, liveBrokers.asJava, topicIds.asJava)
+      }
+    }
+
     updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
-      val topicIds = partitionStates.map(_.topicName())
-        .distinct
-        .filter(controllerContext.topicIds.contains)
-        .map(topic => (topic, controllerContext.topicIds(topic))).toMap
-      val updateMetadataRequestBuilder = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
-        controllerId, controllerEpoch, brokerEpoch, maxBrokerEpoch, partitionStates.asJava, liveBrokers.asJava, topicIds.asJava)
+      val updateMetadataRequestBuilder = getUpdateMetadataRequestBuilder(brokerEpoch)
       sendRequest(broker, updateMetadataRequestBuilder, (r: AbstractResponse) => {
         val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
         sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
