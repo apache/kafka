@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -663,17 +664,28 @@ public class TopicAdmin implements AutoCloseable {
         if (partitions == null || partitions.isEmpty()) {
             return Collections.emptyMap();
         }
+
+        System.out.println("balbaba");
         Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap);
         // Get the individual result for each topic partition so we have better error messages
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition partition : partitions) {
+
+            System.out.println("balbabadddddd: " + partition.topic());
             try {
+                System.out.println("0");
                 ListOffsetsResultInfo info = resultFuture.partitionResult(partition).get();
+                System.out.println("1");
+
                 result.put(partition, info.offset());
             } catch (ExecutionException e) {
+                System.out.println("topicexception");
+
                 Throwable cause = e.getCause();
                 String topic = partition.topic();
+                System.out.println("topic");
+
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
                     throw new ConnectException(msg, e);
@@ -684,6 +696,8 @@ public class TopicAdmin implements AutoCloseable {
                     throw new UnsupportedVersionException(msg, e);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    System.out.println("retriable");
+
                     throw new TimeoutException(msg, e);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers());
@@ -699,8 +713,44 @@ public class TopicAdmin implements AutoCloseable {
                 String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers());
                 throw new RetriableException(msg, e);
             }
+            System.out.println("next");
         }
+        System.out.println("@@");
         return result;
+    }
+
+    protected Map<TopicPartition, Long> retryEndOffsets(Set<TopicPartition> partitions) {
+        int maxRetries = Integer.parseInt(adminConfig.getOrDefault(AdminClientConfig.RETRIES_CONFIG, 10).toString());
+        long retryBackoffMs = Long.parseLong(adminConfig.getOrDefault(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, 100L).toString());
+
+        Throwable lastError = null;
+        int retries = 0;
+
+        while (retries++ < maxRetries) {
+            System.out.println("@@");
+            try {
+                return endOffsets(partitions);
+            } catch (TimeoutException e) {
+                log.warn("Timeout while reading end offsets for topic partitions. Retrying automatically up to {} more times. " +
+                        "This may occur when brokers are unavailable or unreachable. Reason: {}", maxRetries - retries, e.getMessage());
+                lastError = e;
+            } catch (org.apache.kafka.common.errors.RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
+                log.warn("Retriable error while reading end offsets for topic partitions. Retrying automatically up to {} more times. " +
+                        "Reason: {}", maxRetries - retries, e.getMessage());
+                lastError = e;
+            } catch (WakeupException e) {
+                // ignore
+                lastError = e;
+            } catch (Exception e) {
+                // throw if exception is not retriable
+                log.warn("Non-retriable exception caught while reading end offsets for topic partitions. Reason: {}", e.getMessage());
+                throw e;
+            }
+            log.info("Backing off {} ms, before retry", retryBackoffMs);
+            System.out.println("retrying");
+            Utils.sleep(retryBackoffMs);
+        }
+        throw new ConnectException("Failed to read offsets for topic partitions " + partitions + " after " + maxRetries + " attempts", lastError);
     }
 
     @Override
