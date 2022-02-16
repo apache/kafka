@@ -59,7 +59,7 @@ final class TaskMovement {
                                                                                      final Map<UUID, ClientState> clientStates,
                                                                                      final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
                                                                                      final Map<TaskId, List<UUID>> tasksToClientByLag) {
-        final List<UUID> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized map");
+        final List<UUID> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized list");
         if (taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)) {
             return false;
         }
