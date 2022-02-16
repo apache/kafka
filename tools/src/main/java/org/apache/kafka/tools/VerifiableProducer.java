@@ -248,8 +248,6 @@ public class VerifiableProducer implements AutoCloseable {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
-        // No producer retries
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
         if (configFile != null) {
             try {
                 producerProps.putAll(loadProps(configFile));
