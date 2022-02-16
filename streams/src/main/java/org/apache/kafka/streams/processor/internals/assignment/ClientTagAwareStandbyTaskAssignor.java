@@ -235,7 +235,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     private static Set<UUID> findClientsOnUsedClientTagDimensions(final UUID usedClient,
-                                                                  final int numberOfUsedClients,
+                                                                  final int countOfUsedClients,
                                                                   final Set<String> rackAwareAssignmentTags,
                                                                   final Map<UUID, ClientState> clientStates,
                                                                   final Map<TagEntry, Set<UUID>> tagEntryToClients,
@@ -259,7 +259,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
             // If we have used more clients than all the tag's unique values,
             // we can't filter out clients located on that tag.
-            if (allTagValues.size() <= numberOfUsedClients) {
+            if (allTagValues.size() <= countOfUsedClients) {
                 continue;
             }
 
