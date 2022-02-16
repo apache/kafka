@@ -196,7 +196,8 @@ Found problem:
   @Test
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    assertTrue(namespace.getString("metadata_version").toShort > 0,
+    val mv = StorageTool.getMetadataVersion(namespace)
+    assertTrue(mv.version() > 0,
       "Expected the default metadata.version to be non-zero")
   }
 }

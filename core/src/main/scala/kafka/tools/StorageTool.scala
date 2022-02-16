@@ -46,9 +46,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = Option(namespace.getString("metadata_version")).
-            map(mv => MetadataVersion.fromValue(mv.toShort)).
-            getOrElse(MetadataVersion.stable())
+          val metadataVersion = getMetadataVersion(namespace)
           val metaProperties = buildMetadataProperties(clusterId, config.get, metadataVersion.version)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -110,6 +108,12 @@ object StorageTool extends Logging {
   }
 
   def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
+
+  def getMetadataVersion(namespace: Namespace): MetadataVersion = {
+    Option(namespace.getString("metadata_version")).
+      map(mv => MetadataVersion.fromValue(mv.toShort)).
+      getOrElse(MetadataVersion.stable())
+  }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
