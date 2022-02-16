@@ -175,7 +175,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         if (shouldBalanceLoad(previous)) {
             final ClientState standby = findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
-            if (standby == null || shouldBalanceLoad(previous)) {
+            if (standby == null || shouldBalanceLoad(standby)) {
                 return leastLoaded(taskId, clientsWithin);
             }
             return standby;
