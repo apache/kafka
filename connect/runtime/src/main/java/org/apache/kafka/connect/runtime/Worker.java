@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -35,6 +38,8 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -77,7 +82,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * <p>
@@ -582,6 +589,60 @@ public class Worker {
         }
     }
 
+    /**
+     * Using the admin principal for this connector, perform a round of zombie fencing that disables transactional producers
+     * for the specified number of source tasks from sending any more records.
+     * @param connName the name of the connector
+     * @param numTasks the number of tasks to fence out
+     * @param connProps the configuration of the connector; may not be null
+     * @return a {@link KafkaFuture} that will complete when the producers have all been fenced out, or the attempt has failed
+     */
+    public KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps) {
+        return fenceZombies(connName, numTasks, connProps, Admin::create);
+    }
+
+    // Allows us to mock out the Admin client for testing
+    KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps, Function<Map<String, Object>, Admin> adminFactory) {
+        log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+            String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+            try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+                final SourceConnectorConfig connConfig = new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
+                final Class<? extends Connector> connClass = plugins.connectorClass(
+                        connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+
+                Map<String, Object> adminConfig = adminConfigs(
+                        connName,
+                        "connector-worker-adminclient-" + connName,
+                        config,
+                        connConfig,
+                        connClass,
+                        connectorClientConfigOverridePolicy,
+                        kafkaClusterId,
+                        ConnectorType.SOURCE);
+                final Admin admin = adminFactory.apply(adminConfig);
+
+                try {
+                    Collection<String> transactionalIds = IntStream.range(0, numTasks)
+                            .mapToObj(i -> new ConnectorTaskId(connName, i))
+                            .map(this::taskTransactionalId)
+                            .collect(Collectors.toList());
+                    FenceProducersOptions fencingOptions = new FenceProducersOptions()
+                            .timeoutMs((int) ConnectorsResource.REQUEST_TIMEOUT_MS);
+                    return admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
+                        if (error != null)
+                            log.debug("Finished fencing out {} task producers for source connector {}", numTasks, connName);
+                        Utils.closeQuietly(admin, "Zombie fencing admin for connector " + connName);
+                    });
+                } catch (Exception e) {
+                    Utils.closeQuietly(admin, "Zombie fencing admin for connector " + connName);
+                    throw e;
+                }
+            }
+        }
+    }
+
     private WorkerTask buildWorkerTask(ClusterConfigState configState,
                                        ConnectorConfig connConfig,
                                        ConnectorTaskId id,
@@ -610,14 +671,14 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, sourceConfig, connectorClass,
+            Map<String, Object> producerProps = producerConfigs(id.connector(), "connector-producer-" + id, config, sourceConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy, kafkaClusterId);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             TopicAdmin admin;
             Map<String, TopicCreationGroup> topicCreationGroups;
             if (config.topicCreationEnable() && sourceConfig.usesTopicCreation()) {
-                Map<String, Object> adminProps = adminConfigs(id, "connector-adminclient-" + id, config,
-                        sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
+                Map<String, Object> adminProps = adminConfigs(id.connector(), "connector-adminclient-" + id, config,
+                        sourceConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SOURCE);
                 admin = new TopicAdmin(adminProps);
                 topicCreationGroups = TopicCreationGroup.configuredGroups(sourceConfig);
             } else {
@@ -649,7 +710,7 @@ public class Worker {
         }
     }
 
-    static Map<String, Object> producerConfigs(ConnectorTaskId id,
+    static Map<String, Object> producerConfigs(String connName,
                                                String defaultClientId,
                                                WorkerConfig config,
                                                ConnectorConfig connConfig,
@@ -657,7 +718,7 @@ public class Worker {
                                                ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                String clusterId) {
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
@@ -680,7 +741,7 @@ public class Worker {
 
         // Connector-specified overrides
         Map<String, Object> producerOverrides =
-            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+            connectorClientConfigOverrides(connName, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
                                            ConnectorType.SOURCE, ConnectorClientConfigRequest.ClientType.PRODUCER,
                                            connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
@@ -712,7 +773,7 @@ public class Worker {
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         // Connector-specified overrides
         Map<String, Object> consumerOverrides =
-            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+            connectorClientConfigOverrides(id.connector(), connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.CONSUMER,
                                            connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
@@ -720,13 +781,14 @@ public class Worker {
         return consumerProps;
     }
 
-    static Map<String, Object> adminConfigs(ConnectorTaskId id,
+    static Map<String, Object> adminConfigs(String connName,
                                             String defaultClientId,
                                             WorkerConfig config,
                                             ConnectorConfig connConfig,
                                             Class<? extends Connector> connectorClass,
                                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                                            String clusterId) {
+                                            String clusterId,
+                                            ConnectorType connectorType) {
         Map<String, Object> adminProps = new HashMap<>();
         // Use the top-level worker configs to retain backwards compatibility with older releases which
         // did not require a prefix for connector admin client configs in the worker configuration file
@@ -734,12 +796,11 @@ public class Worker {
         // and those that begin with "producer." and "consumer.", since we know they aren't intended for
         // the admin client
         Map<String, Object> nonPrefixedWorkerConfigs = config.originals().entrySet().stream()
-            .filter(e -> !e.getKey().startsWith("admin.")
-                && !e.getKey().startsWith("producer.")
-                && !e.getKey().startsWith("consumer."))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-            Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+                .filter(e -> !e.getKey().startsWith("admin.")
+                        && !e.getKey().startsWith("producer.")
+                        && !e.getKey().startsWith("consumer."))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
         adminProps.putAll(nonPrefixedWorkerConfigs);
 
@@ -748,9 +809,9 @@ public class Worker {
 
         // Connector-specified overrides
         Map<String, Object> adminOverrides =
-            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
-                                           ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
-                                           connectorClientConfigOverridePolicy);
+                connectorClientConfigOverrides(connName, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                        connectorType, ConnectorClientConfigRequest.ClientType.ADMIN,
+                        connectorClientConfigOverridePolicy);
         adminProps.putAll(adminOverrides);
 
         //add client metrics.context properties
@@ -759,7 +820,7 @@ public class Worker {
         return adminProps;
     }
 
-    private static Map<String, Object> connectorClientConfigOverrides(ConnectorTaskId id,
+    private static Map<String, Object> connectorClientConfigOverrides(String connName,
                                                                       ConnectorConfig connConfig,
                                                                       Class<? extends Connector> connectorClass,
                                                                       String clientConfigPrefix,
@@ -768,7 +829,7 @@ public class Worker {
                                                                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         Map<String, Object> clientOverrides = connConfig.originalsWithPrefix(clientConfigPrefix);
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            id.connector(),
+            connName,
             connectorType,
             connectorClass,
             clientOverrides,
@@ -782,6 +843,14 @@ public class Worker {
             throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
         }
         return clientOverrides;
+    }
+
+    private String taskTransactionalId(ConnectorTaskId id) {
+        return taskTransactionalId(config.groupId(), id.connector(), id.task());
+    }
+
+    public static String taskTransactionalId(String groupId, String connector, int taskId) {
+        return String.format("%s-%s-%d", groupId, connector, taskId);
     }
 
     ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
@@ -798,9 +867,9 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
-                                                                connectorClientConfigOverridePolicy, kafkaClusterId);
-            Map<String, Object> adminProps = adminConfigs(id, "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId);
+            Map<String, Object> producerProps = producerConfigs(id.connector(), "connector-dlq-producer-" + id, config, connConfig, connectorClass,
+                    connectorClientConfigOverridePolicy, kafkaClusterId);
+            Map<String, Object> adminProps = adminConfigs(id.connector(), "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
 
             reporters.add(reporter);

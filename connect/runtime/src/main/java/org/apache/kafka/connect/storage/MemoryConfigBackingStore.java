@@ -74,8 +74,12 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
-                configTransformer);
+                Collections.emptySet(),
+                configTransformer
+        );
     }
 
     @Override
@@ -152,6 +156,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     @Override
     public void putRestartRequest(RestartRequest restartRequest) {
+        // no-op
+    }
+
+    @Override
+    public void putTaskCountRecord(String connector, int taskCount) {
         // no-op
     }
 

@@ -157,6 +157,9 @@ public class WorkerCoordinatorTest {
                 Collections.singletonMap(connectorId1, new HashMap<>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
                 Collections.singletonMap(taskId1x0, new HashMap<>()),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
 
@@ -180,6 +183,9 @@ public class WorkerCoordinatorTest {
                 configState2ConnectorConfigs,
                 configState2TargetStates,
                 configState2TaskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
 
@@ -206,6 +212,9 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
                 configStateSingleTaskConnectorsTaskConfigs,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet()
         );
     }

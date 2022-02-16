@@ -70,6 +70,9 @@ public class WorkerTestUtils {
                 connectorConfigs(1, connectorNum),
                 connectorTargetStates(1, connectorNum, TargetState.STARTED),
                 taskConfigs(0, connectorNum, connectorNum * taskNum),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
                 Collections.emptySet());
     }
 

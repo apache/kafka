@@ -364,6 +364,9 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
         worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
@@ -402,6 +405,9 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
         worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
@@ -572,6 +578,9 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
         worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
@@ -635,6 +644,9 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
         worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
@@ -878,7 +890,6 @@ public class StandaloneHerderTest {
         Capture<Callback<TargetState>> onStart = EasyMock.newCapture();
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
-        // EasyMock.expectLastCall().andReturn(true);
         EasyMock.expectLastCall().andAnswer(() -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
@@ -902,6 +913,9 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
         worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);

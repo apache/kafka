@@ -18,8 +18,11 @@ package org.apache.kafka.connect.runtime;
 
 import java.util.Collection;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
@@ -33,6 +36,7 @@ import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverrid
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
@@ -84,7 +88,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
+import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
@@ -968,7 +976,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("client.id", "connector-producer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
         assertEquals(expectedConfigs,
-                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                     Worker.producerConfigs(TASK_ID.connector(), "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
@@ -989,7 +997,7 @@ public class WorkerTest extends ThreadedTest {
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+            Worker.producerConfigs(TASK_ID.connector(), "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
 
@@ -1015,7 +1023,7 @@ public class WorkerTest extends ThreadedTest {
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(connConfig);
 
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+            Worker.producerConfigs(TASK_ID.connector(), "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
@@ -1121,8 +1129,8 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX)).thenReturn(connConfig);
-        assertEquals(expectedConfigs, Worker.adminConfigs(new ConnectorTaskId("test", 1), "", configWithOverrides, connectorConfig,
-                                                             null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+        assertEquals(expectedConfigs, Worker.adminConfigs(CONNECTOR_ID, "", configWithOverrides, connectorConfig,
+                                                            null, allConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SOURCE));
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX);
     }
@@ -1137,8 +1145,8 @@ public class WorkerTest extends ThreadedTest {
         Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX)).thenReturn(connConfig);
-        assertThrows(ConnectException.class, () -> Worker.adminConfigs(new ConnectorTaskId("test", 1),
-            "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
+        assertThrows(ConnectException.class, () -> Worker.adminConfigs(
+            CONNECTOR_ID, "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SOURCE));
 
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX);
     }
@@ -1226,7 +1234,47 @@ public class WorkerTest extends ThreadedTest {
         verify(executorService, times(1)).shutdownNow();
         verify(executorService, times(1)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
         verifyNoMoreInteractions(executorService);
+    }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testZombieFencing() {
+        Admin admin = mock(Admin.class);
+        FenceProducersResult fenceProducersResult = mock(FenceProducersResult.class);
+        KafkaFuture<Void> fenceProducersFuture = mock(KafkaFuture.class);
+        KafkaFuture<Void> expectedZombieFenceFuture = mock(KafkaFuture.class);
+        when(admin.fenceProducers(any(), any())).thenReturn(fenceProducersResult);
+        when(fenceProducersResult.all()).thenReturn(fenceProducersFuture);
+        when(fenceProducersFuture.whenComplete(any())).thenReturn(expectedZombieFenceFuture);
+
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(anyString())).thenReturn(pluginLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        Map<String, String> connectorConfig = anyConnectorConfigMap();
+        connectorConfig.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + RETRY_BACKOFF_MS_CONFIG, "4761");
+
+        AtomicReference<Map<String, Object>> adminConfig = new AtomicReference<>();
+        Function<Map<String, Object>, Admin> mockAdminConstructor = actualAdminConfig -> {
+            adminConfig.set(actualAdminConfig);
+            return admin;
+        };
+
+        KafkaFuture<Void> actualZombieFenceFuture =
+                worker.fenceZombies(CONNECTOR_ID, 12, connectorConfig, mockAdminConstructor);
+
+        assertEquals(expectedZombieFenceFuture, actualZombieFenceFuture);
+        assertNotNull(adminConfig.get());
+        assertEquals("Admin should be configured with user-specified overrides",
+                "4761",
+                adminConfig.get().get(RETRY_BACKOFF_MS_CONFIG)
+        );
     }
 
     private void assertStatusMetrics(long expected, String metricName) {
@@ -1330,7 +1378,6 @@ public class WorkerTest extends ThreadedTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
     }
-
 
     private static class TestSourceTask extends SourceTask {
         public TestSourceTask() {
