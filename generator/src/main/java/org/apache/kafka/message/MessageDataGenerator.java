@@ -663,8 +663,54 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.WRITABLE_CLASS);
         headerGenerator.addImport(MessageGenerator.OBJECT_SERIALIZATION_CACHE_CLASS);
-        buffer.printf("@Override%n");
-        buffer.printf("public void write(Writable _writable, ObjectSerializationCache _cache, short _version) {%n");
+        if (className.equals("UpdateMetadataRequestData")) {
+            // Probably the UpdateMetadataRequest is the only request type that bears the same payload
+            // for all brokers, which is the prerequisite for effective caching.
+            headerGenerator.addImport("java.util.concurrent.locks.ReentrantLock");
+            headerGenerator.addImport("java.nio.ByteBuffer");
+            headerGenerator.addImport("org.apache.kafka.common.protocol.ByteBufferAccessor");
+
+            buffer.printf("private final ReentrantLock bodyBufferLock = new ReentrantLock();%n");
+            buffer.printf("private ByteBuffer bodyBuffer = null;%n");
+            buffer.printf("@Override%n");
+            buffer.printf("public void write(Writable _writable, ObjectSerializationCache _cache, short _version) {%n");
+            buffer.incrementIndent();
+            buffer.printf("bodyBufferLock.lock();%n");
+
+            buffer.printf("try {%n");
+            buffer.incrementIndent();
+            buffer.printf("if (bodyBuffer == null) {%n");
+            buffer.incrementIndent();
+            buffer.printf("ObjectSerializationCache serializationCache = new ObjectSerializationCache();%n");
+            buffer.printf("MessageSizeAccumulator messageSize = new MessageSizeAccumulator();%n");
+            buffer.printf("addSize(messageSize, serializationCache, _version);%n");
+
+            buffer.printf("bodyBuffer = ByteBuffer.allocate(messageSize.totalSize());%n");
+            buffer.printf("doWrite(new ByteBufferAccessor(bodyBuffer), _cache, _version);%n");
+            buffer.printf("bodyBuffer.flip();%n");
+            buffer.decrementIndent(); // if (bodyBuffer == null)
+            buffer.printf("}%n");
+            buffer.decrementIndent(); // for try {
+            buffer.printf("} finally {%n");
+            buffer.incrementIndent();
+            buffer.printf("bodyBufferLock.unlock();%n");
+            buffer.decrementIndent(); // for finally {
+            buffer.printf("}%n");
+
+            buffer.printf("_writable.writeByteBuffer(bodyBuffer);%n");
+            buffer.decrementIndent(); // for write {
+            buffer.printf("}%n");
+        } else {
+            buffer.printf("@Override%n");
+            buffer.printf("public void write(Writable _writable, ObjectSerializationCache _cache, short _version) {%n");
+            buffer.incrementIndent();
+            buffer.printf("doWrite(_writable, _cache, _version);%n");
+            buffer.decrementIndent(); // for write {
+            buffer.printf("}%n");
+        }
+
+        buffer.printf("%n");
+        buffer.printf("public void doWrite(Writable _writable, ObjectSerializationCache _cache, short _version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(struct.versions(), parentVersions).
             allowMembershipCheckAlwaysFalse(false).
