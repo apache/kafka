@@ -806,6 +806,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 threadTaskCounts
             );
 
+            // Combine activeTaskStatefulAssignment and activeTaskStatelessAssignment together into
+            // activeTaskStatelessAssignment
             final Map<String, List<TaskId>> activeTaskAssignment = activeTaskStatefulAssignment;
             for (final Map.Entry<String, List<TaskId>> threadEntry : activeTaskStatelessAssignment.entrySet()) {
                 activeTaskAssignment.get(threadEntry.getKey()).addAll(threadEntry.getValue());
@@ -1072,11 +1074,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // First assign tasks to previous owner, up to the min expected tasks/thread
             for (final String consumer : consumers) {
                 final List<TaskId> threadAssignment = assignment.get(consumer);
+                // The number of tasks we have to assign here to hit minTasksPerThread
+                final int tasksTargetCount = minTasksPerThread - threadLoad.getOrDefault(consumer, 0);
 
                 for (final TaskId task : state.prevTasksByLag(consumer)) {
                     if (unassignedTasks.contains(task)) {
-                        final int threadTaskCount = threadAssignment.size() + threadLoad.getOrDefault(consumer, 0);
-                        if (threadTaskCount < minTasksPerThread) {
+                        final int threadTaskCount = threadAssignment.size();
+                        if (threadTaskCount < tasksTargetCount) {
                             threadAssignment.add(task);
                             unassignedTasks.remove(task);
                         } else {
@@ -1085,8 +1089,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     }
                 }
 
-                final int threadTaskCount = threadAssignment.size() + threadLoad.getOrDefault(consumer, 0);
-                if (threadTaskCount < minTasksPerThread) {
+                final int threadTaskCount = threadAssignment.size();
+                if (threadTaskCount < tasksTargetCount) {
                     consumersToFill.offer(consumer);
                 }
             }
@@ -1107,9 +1111,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 }
             }
 
-            // At this point all consumers are at the min or min + 1 capacity,
-            // the tasks still remaining that should now be distributed over the consumers that are still
-            // at min capacity
+            // At this point all consumers are at the min or min + 1 capacity.
+            // The min + 1 case can occur for standbys where there's fewer standbys than consumers and after assigning
+            // the active tasks some consumers already have min + 1 one tasks assigned.
+            // The tasks still remaining should now be distributed over the consumers that are still at min capacity
             if (!unassignedTasks.isEmpty()) {
                 for (final String consumer : consumers) {
                     final int taskCount = assignment.get(consumer).size() + threadLoad.getOrDefault(consumer, 0);
@@ -1194,13 +1199,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final String consumer = consumersToFill.poll();
             assignment.get(consumer).add(task);
             consumersToFill.offer(consumer);
-        }
-
-        // Update threadLoad
-        for (final Map.Entry<String, List<TaskId>> taskEntry : assignment.entrySet()) {
-            final String consumer = taskEntry.getKey();
-            final int totalCount = threadLoad.getOrDefault(consumer, 0) + taskEntry.getValue().size();
-            threadLoad.put(consumer, totalCount);
         }
 
         return assignment;

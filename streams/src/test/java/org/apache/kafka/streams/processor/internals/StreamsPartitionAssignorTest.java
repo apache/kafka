@@ -1005,45 +1005,28 @@ public class StreamsPartitionAssignorTest {
 
         final List<String> topics = asList("topic1");
 
-        final Set<TaskId> prevTasks00 = mkSet(TASK_0_0);
-        final Set<TaskId> standbyTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
-
-        createMockTaskManager(prevTasks00, standbyTasks);
+        createMockTaskManager(EMPTY_TASKS, EMPTY_TASKS);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
                 singletonList(APPLICATION_ID + "-store1-changelog"),
                 singletonList(3))
         );
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
-        subscriptions.put("consumer10",
-                new Subscription(
-                        topics,
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
-        subscriptions.put("consumer11",
-                new Subscription(
-                        emptyList(),
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
-        subscriptions.put("consumer12",
-                new Subscription(
-                        emptyList(),
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
-        subscriptions.put("consumer13",
-                new Subscription(
-                        emptyList(),
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
-        subscriptions.put("consumer20",
-                new Subscription(
-                        topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
-        subscriptions.put("consumer21",
-                new Subscription(
-                        topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
-        subscriptions.put("consumer22",
-                new Subscription(
-                        topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode()));
+        final List<String> client1Consumers = asList("consumer10", "consumer11", "consumer12", "consumer13");
+        final List<String> client2Consumers = asList("consumer20", "consumer21", "consumer22");
 
+        for (final String consumerId : client1Consumers) {
+            subscriptions.put(consumerId,
+                    new Subscription(
+                            topics,
+                            getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        }
+        for (final String consumerId : client2Consumers) {
+            subscriptions.put(consumerId,
+                    new Subscription(
+                            topics,
+                            getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode()));
+        }
 
         final Map<String, Assignment> assignments =
                 partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -1058,14 +1041,13 @@ public class StreamsPartitionAssignorTest {
         final AssignmentInfo info22 = AssignmentInfo.decode(assignments.get("consumer22").userData());
 
         // Check each consumer has no more than 1 task
-        // (client 1 has more consumers than needed so consumer13 won't get a task)
-        assertEquals(1, info10.activeTasks().size() + info10.standbyTasks().size());
-        assertEquals(1, info11.activeTasks().size() + info11.standbyTasks().size());
-        assertEquals(1, info12.activeTasks().size() + info12.standbyTasks().size());
-        assertEquals(0, info13.activeTasks().size() + info13.standbyTasks().size());
-        assertEquals(1, info20.activeTasks().size() + info20.standbyTasks().size());
-        assertEquals(1, info21.activeTasks().size() + info21.standbyTasks().size());
-        assertEquals(1, info22.activeTasks().size() + info22.standbyTasks().size());
+        assertTrue(info10.activeTasks().size() + info10.standbyTasks().size() <= 1);
+        assertTrue(info11.activeTasks().size() + info11.standbyTasks().size() <= 1);
+        assertTrue(info12.activeTasks().size() + info12.standbyTasks().size() <= 1);
+        assertTrue(info13.activeTasks().size() + info13.standbyTasks().size() <= 1);
+        assertTrue(info20.activeTasks().size() + info20.standbyTasks().size() <= 1);
+        assertTrue(info21.activeTasks().size() + info21.standbyTasks().size() <= 1);
+        assertTrue(info22.activeTasks().size() + info22.standbyTasks().size() <= 1);
     }
 
     @Test
