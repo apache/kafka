@@ -69,20 +69,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String UNIX_PRECISION_CONFIG = "unix.precision";
     private static final String UNIX_PRECISION_DEFAULT = "milliseconds";
 
-    public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
-                    "The field containing the timestamp, or empty if the entire value is a timestamp")
-            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
-                    "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
-            .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
-                    "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
-                            + "or used to parse the input if the input is a string.")
-            .define(UNIX_PRECISION_CONFIG, ConfigDef.Type.STRING, UNIX_PRECISION_DEFAULT, ConfigDef.Importance.LOW,
-                    "The desired Unix precision for the timestamp. Used to generate the output when type=unix " +
-                            "or used to parse the input if the input is a Long." +
-                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
-
-
     private static final String PURPOSE = "converting timestamp formats";
 
     private static final String TYPE_STRING = "string";
@@ -104,6 +90,23 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final Schema OPTIONAL_DATE_SCHEMA = org.apache.kafka.connect.data.Date.builder().optional().schema();
     public static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().schema();
     public static final Schema OPTIONAL_TIME_SCHEMA = Time.builder().optional().schema();
+
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
+                    "The field containing the timestamp, or empty if the entire value is a timestamp")
+            .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH,
+                    "The desired timestamp representation: string, unix, Date, Time, or Timestamp")
+            .define(FORMAT_CONFIG, ConfigDef.Type.STRING, FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM,
+                    "A SimpleDateFormat-compatible format for the timestamp. Used to generate the output when type=string "
+                            + "or used to parse the input if the input is a string.")
+            .define(UNIX_PRECISION_CONFIG, ConfigDef.Type.STRING, UNIX_PRECISION_DEFAULT,
+                    ConfigDef.ValidString.in(
+                            UNIX_PRECISION_NANOS, UNIX_PRECISION_MICROS,
+                            UNIX_PRECISION_MILLIS, UNIX_PRECISION_SECONDS),
+                    ConfigDef.Importance.LOW,
+                    "The desired Unix precision for the timestamp. Used to generate the output when type=unix " +
+                            "or used to parse the input if the input is a Long." +
+                            "Note: This SMT will cause precision loss during conversions from, and to, values with sub-millisecond components.");
 
     private interface TimestampTranslator {
         /**
@@ -308,10 +311,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                 throw new ConfigException("TimestampConverter requires a SimpleDateFormat-compatible pattern for string timestamps: "
                         + formatPattern, e);
             }
-        }
-        if (!VALID_UNIX_PRECISIONS.contains(unixPrecision)) {
-            throw new ConfigException("Unknown unix precision in TimestampConverter: " + unixPrecision + ". Valid values are "
-                    + Utils.join(VALID_UNIX_PRECISIONS, ", ") + ".");
         }
         config = new Config(field, type, format, unixPrecision);
     }
