@@ -17,9 +17,8 @@
 
 package kafka.tools
 
-import java.io.PrintStream
+import java.io.{PrintStream, PrintWriter}
 import java.nio.file.{Files, Paths}
-
 import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawMetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
@@ -55,6 +54,11 @@ object StorageTool extends Logging {
         help("The cluster ID to use.")
       formatParser.addArgument("--ignore-formatted", "-g").
         action(storeTrue())
+
+      if (args.length == 0 || args.contains("--help")) {
+        parser.printHelp(new PrintWriter(System.err, true))
+        Exit.exit(1)
+      }
 
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")
