@@ -220,12 +220,12 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.stop();
     }
 
+    @Test
     public void testInvalidFile() throws InterruptedException {
+        replay();
         config.put(FileStreamSourceConnector.FILE_CONFIG, "bogusfilename");
         task.start(config);
-        // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
-        for (int i = 0; i < 100; i++)
-            assertNull(task.poll());
+        assertNull(task.poll());
     }
 
 
