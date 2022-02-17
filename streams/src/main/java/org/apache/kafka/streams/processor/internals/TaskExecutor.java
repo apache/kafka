@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
@@ -46,10 +47,12 @@ public class TaskExecutor {
 
     private final Logger log;
 
+    private final ProcessingMode processingMode;
     private final Tasks tasks;
 
-    public TaskExecutor(final Tasks tasks, final LogContext logContext) {
+    public TaskExecutor(final Tasks tasks, final ProcessingMode processingMode, final LogContext logContext) {
         this.tasks = tasks;
+        this.processingMode = processingMode;
         this.log = logContext.logger(getClass());
     }
 
@@ -152,7 +155,7 @@ public class TaskExecutor {
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
         if (!offsetsPerTask.isEmpty()) {
-            if (tasks.topologyMetadata().processingMode() == EXACTLY_ONCE_ALPHA) {
+            if (processingMode == EXACTLY_ONCE_ALPHA) {
                 for (final Map.Entry<Task, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                     final Task task = taskToCommit.getKey();
                     try {
@@ -171,7 +174,7 @@ public class TaskExecutor {
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                if (tasks.topologyMetadata().processingMode() == EXACTLY_ONCE_V2) {
+                if (processingMode == EXACTLY_ONCE_V2) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, tasks.mainConsumer().groupMetadata());
                         updateTaskCommitMetadata(allOffsets);

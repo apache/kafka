@@ -715,6 +715,7 @@ public class StreamThreadTest {
         EasyMock.replay(consumer, consumerGroupMetadata);
 
         final AtomicBoolean committed = new AtomicBoolean(false);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         final TaskManager taskManager = new TaskManager(
             null,
             null,
@@ -723,7 +724,7 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
+            topologyMetadata,
             null,
             null
         ) {
@@ -735,7 +736,6 @@ public class StreamThreadTest {
                 return 1;
             }
         };
-        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
 

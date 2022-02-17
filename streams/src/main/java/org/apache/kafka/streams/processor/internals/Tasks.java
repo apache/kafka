@@ -319,10 +319,6 @@ class Tasks {
         return mainConsumer;
     }
 
-    TopologyMetadata topologyMetadata() {
-        return topologyMetadata;
-    }
-
     // for testing only
     void addTask(final Task task) {
         if (task.isActive()) {
