@@ -27,10 +27,11 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchRequest
-import org.easymock.EasyMock
-import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.{AdditionalMatchers, ArgumentMatchers}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 
@@ -56,10 +57,10 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
     val followerReplicaId = configs.last.brokerId
 
-    val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded).andReturn(false).once()
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    replay(quota)
+    val quota = mockQuota()
+    when(quota.isQuotaExceeded)
+      .thenReturn(false)
+      .thenReturn(true)
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = followerReplicaId,
@@ -82,10 +83,10 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
     val followerReplicaId = configs.last.brokerId
 
-    val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    replay(quota)
+    val quota = mockQuota()
+    when(quota.isQuotaExceeded)
+      .thenReturn(true)
+      .thenReturn(true)
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = followerReplicaId,
@@ -107,10 +108,10 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
     val followerReplicaId = configs.last.brokerId
 
-    val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded).andReturn(false).once()
-    expect(quota.isQuotaExceeded).andReturn(false).once()
-    replay(quota)
+    val quota = mockQuota()
+    when(quota.isQuotaExceeded)
+      .thenReturn(false)
+      .thenReturn(false)
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = followerReplicaId,
@@ -132,10 +133,10 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo, bothReplicasInSync = true)
     val followerReplicaId = configs.last.brokerId
 
-    val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded).andReturn(false).once()
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    replay(quota)
+    val quota = mockQuota()
+    when(quota.isQuotaExceeded)
+      .thenReturn(false)
+      .thenReturn(true)
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = followerReplicaId,
@@ -157,10 +158,8 @@ class ReplicaManagerQuotasTest {
   def shouldIncludeThrottledReplicasForConsumerFetch(): Unit = {
     setUpMocks(fetchInfo)
 
-    val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    expect(quota.isQuotaExceeded).andReturn(true).once()
-    replay(quota)
+    val quota = mockQuota()
+    when(quota.isQuotaExceeded).thenReturn(true)
 
     val fetch = replicaManager.readFromLocalLog(
       replicaId = FetchRequest.CONSUMER_REPLICA_ID,
@@ -184,24 +183,23 @@ class ReplicaManagerQuotasTest {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
       val endOffsetMetadata = LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
-      val partition: Partition = EasyMock.createMock(classOf[Partition])
+      val partition: Partition = mock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
         logStartOffset = 0L,
         logEndOffset = endOffsetMetadata,
         highWatermark = endOffsetMetadata,
         lastStableOffset = endOffsetMetadata)
-      EasyMock.expect(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
-          .andReturn(offsetSnapshot)
+      when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
+          .thenReturn(offsetSnapshot)
 
-      val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
-      EasyMock.expect(replicaManager.getPartitionOrException(EasyMock.anyObject[TopicPartition]))
-        .andReturn(partition).anyTimes()
+      val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+      when(replicaManager.getPartitionOrException(any[TopicPartition]))
+        .thenReturn(partition)
 
-      EasyMock.expect(replicaManager.shouldLeaderThrottle(EasyMock.anyObject[ReplicaQuota], EasyMock.anyObject[Partition], EasyMock.anyObject[Int]))
-        .andReturn(!isReplicaInSync).anyTimes()
-      EasyMock.expect(partition.getReplica(1)).andReturn(None)
-      EasyMock.replay(replicaManager, partition)
+      when(replicaManager.shouldLeaderThrottle(any[ReplicaQuota], any[Partition], anyInt))
+        .thenReturn(!isReplicaInSync)
+      when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
@@ -233,21 +231,19 @@ class ReplicaManagerQuotasTest {
         LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
       else
         LogOffsetMetadata(messageOffset = 150L, segmentBaseOffset = 50L, relativePositionInSegment = 500)
-      val partition: Partition = EasyMock.createMock(classOf[Partition])
+      val partition: Partition = mock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
         logStartOffset = 0L,
         logEndOffset = endOffsetMetadata,
         highWatermark = endOffsetMetadata,
         lastStableOffset = endOffsetMetadata)
-      EasyMock.expect(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
-        .andReturn(offsetSnapshot)
+      when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
+        .thenReturn(offsetSnapshot)
 
-      val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
-      EasyMock.expect(replicaManager.getPartitionOrException(EasyMock.anyObject[TopicPartition]))
-        .andReturn(partition).anyTimes()
-
-      EasyMock.replay(replicaManager, partition)
+      val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+      when(replicaManager.getPartitionOrException(any[TopicPartition]))
+        .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
@@ -273,47 +269,45 @@ class ReplicaManagerQuotasTest {
 
   def setUpMocks(fetchInfo: Seq[(TopicIdPartition, PartitionData)], record: SimpleRecord = this.record,
                  bothReplicasInSync: Boolean = false): Unit = {
-    val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
+    val scheduler: KafkaScheduler = mock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log: UnifiedLog = createNiceMock(classOf[UnifiedLog])
-    expect(log.logStartOffset).andReturn(0L).anyTimes()
-    expect(log.logEndOffset).andReturn(20L).anyTimes()
-    expect(log.highWatermark).andReturn(5).anyTimes()
-    expect(log.lastStableOffset).andReturn(5).anyTimes()
-    expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(20L)).anyTimes()
-    expect(log.topicId).andReturn(Some(topicId)).anyTimes()
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log.logStartOffset).thenReturn(0L)
+    when(log.logEndOffset).thenReturn(20L)
+    when(log.highWatermark).thenReturn(5)
+    when(log.lastStableOffset).thenReturn(5)
+    when(log.logEndOffsetMetadata).thenReturn(LogOffsetMetadata(20L))
+    when(log.topicId).thenReturn(Some(topicId))
 
     //if we ask for len 1 return a message
-    expect(log.read(anyObject(),
-      maxLength = geq(1),
-      isolation = anyObject(),
-      minOneMessage = anyBoolean())).andReturn(
+    when(log.read(anyLong,
+      maxLength = AdditionalMatchers.geq(1),
+      isolation = any[FetchIsolation],
+      minOneMessage = anyBoolean)).thenReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
-      )).anyTimes()
+      ))
 
     //if we ask for len = 0, return 0 messages
-    expect(log.read(anyObject(),
-      maxLength = EasyMock.eq(0),
-      isolation = anyObject(),
-      minOneMessage = anyBoolean())).andReturn(
+    when(log.read(anyLong,
+      maxLength = ArgumentMatchers.eq(0),
+      isolation = any[FetchIsolation],
+      minOneMessage = anyBoolean)).thenReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
-      )).anyTimes()
-    replay(log)
+      ))
 
     //Create log manager
-    val logManager: LogManager = createMock(classOf[LogManager])
+    val logManager: LogManager = mock(classOf[LogManager])
 
     //Return the same log for each partition as it doesn't matter
-    expect(logManager.getLog(anyObject(), anyBoolean())).andReturn(Some(log)).anyTimes()
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(logManager)
+    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Some(log))
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
-    val alterIsrManager: AlterIsrManager = createMock(classOf[AlterIsrManager])
+    val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
@@ -351,9 +345,9 @@ class ReplicaManagerQuotasTest {
     metrics.close()
   }
 
-  def mockQuota(bound: Long): ReplicaQuota = {
-    val quota: ReplicaQuota = createMock(classOf[ReplicaQuota])
-    expect(quota.isThrottled(anyObject())).andReturn(true).anyTimes()
+  def mockQuota(): ReplicaQuota = {
+    val quota: ReplicaQuota = mock(classOf[ReplicaQuota])
+    when(quota.isThrottled(any[TopicPartition])).thenReturn(true)
     quota
   }
 }

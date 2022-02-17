@@ -59,10 +59,21 @@ class DumpLogSegmentsTest {
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
-    log = UnifiedLog(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
+    log = UnifiedLog(
+      dir = logDir,
+      config = LogConfig(props),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
   }
 
   def addSimpleRecords(): Unit = {

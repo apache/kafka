@@ -30,10 +30,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Properties;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
@@ -50,7 +49,6 @@ import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
  * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder()} method.
  */
-@SuppressWarnings("deprecation")
 public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
@@ -60,11 +58,6 @@ public class TopologyConfig extends AbstractConfig {
                      null,
                      Importance.LOW,
                      BUFFERED_RECORDS_PER_PARTITION_DOC)
-            .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     null,
@@ -123,30 +116,14 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
             log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
         } else {
-            maxBufferedSize = globalAppConfigs.originals().containsKey(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG)
-                    ? globalAppConfigs.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG) : -1;
+            maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         }
 
-        if (isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides) ||
-                isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-
-            if (isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides) && isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
-                log.info("Topology {} is using both {} and deprecated config {}. overriding {} to {}",
-                        topologyName,
-                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        cacheSize);
-            } else if (isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-                cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
-                log.info("Topology {} is using deprecated config {}. overriding {} to {}", topologyName, CACHE_MAX_BYTES_BUFFERING_CONFIG, CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSize);
-            } else {
-                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
-                log.info("Topology {} is overriding {} to {}", topologyName, STATESTORE_CACHE_MAX_BYTES_CONFIG, cacheSize);
-            }
+        if (isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
+            cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSize);
         } else {
-            cacheSize = globalAppConfigs.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+            cacheSize = globalAppConfigs.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
         }
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {

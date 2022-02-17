@@ -75,6 +75,8 @@ object KafkaServer {
       KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslCrlEnableProp, config.ZkSslCrlEnable.toString)
       KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslOcspEnableProp, config.ZkSslOcspEnable.toString)
     }
+    // The zk sasl is enabled by default so it can produce false error when broker does not intend to use SASL.
+    if (!JaasUtils.isZkSaslEnabled) clientConfig.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
     clientConfig
   }
 
@@ -254,9 +256,15 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        _logManager = LogManager(config, initialOfflineDirs,
-          new ZkConfigRepository(new AdminZkClient(zkClient)),
-          kafkaScheduler, time, brokerTopicStats, logDirFailureChannel, config.usesTopicId)
+        _logManager = LogManager(
+          config,
+          initialOfflineDirs,
+          configRepository,
+          kafkaScheduler,
+          time,
+          brokerTopicStats,
+          logDirFailureChannel,
+          config.usesTopicId)
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 

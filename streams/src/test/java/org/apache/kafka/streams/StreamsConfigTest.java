@@ -1124,36 +1124,6 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 100);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10);
-    }
-
-    @Test
-    public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10);
-    }
-
-    @Test
-    public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10 * 1024 * 1024);
-    }
-
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {

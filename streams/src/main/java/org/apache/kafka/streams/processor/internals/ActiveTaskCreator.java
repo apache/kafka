@@ -160,12 +160,13 @@ class ActiveTaskCreator {
 
             final LogContext logContext = getLogContext(taskId);
 
-            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
-            if (topology == null) {
-                // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 newUnknownTasks.put(taskId, partitions);
                 continue;
             }
+
+            final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,

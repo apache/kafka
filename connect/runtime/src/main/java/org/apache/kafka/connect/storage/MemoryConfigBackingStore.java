@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
-    private Map<String, ConnectorState> connectors = new HashMap<>();
+    private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
     private WorkerConfigTransformer configTransformer;
 

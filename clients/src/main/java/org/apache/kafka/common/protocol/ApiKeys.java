@@ -98,7 +98,7 @@ public enum ApiKeys {
     END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, true),
     ALTER_ISR(ApiMessageType.ALTER_ISR, true),
-    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
+    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
@@ -265,6 +265,10 @@ public enum ApiKeys {
 
     public static EnumSet<ApiKeys> zkBrokerApis() {
         return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
+    }
+
+    public static EnumSet<ApiKeys> controllerApis() {
+        return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {

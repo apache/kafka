@@ -44,8 +44,8 @@ import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -61,12 +61,11 @@ public class KStreamKTableJoinTest {
     private TestInputTopic<Integer, String> inputTableTopic;
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String> processor;
+    private MockApiProcessor<Integer, String, Void, Void> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
-    private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setUp() {
         builder = new StreamsBuilder();

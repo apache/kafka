@@ -90,9 +90,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values,
                             final Callback<Void> callback) {
         return executor.submit(() -> {
-            for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
-                data.put(entry.getKey(), entry.getValue());
-            }
+            data.putAll(values);
             save();
             if (callback != null)
                 callback.onCompletion(null, null);

@@ -55,7 +55,7 @@ public class MockSourceTask extends SourceTask {
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
             if (now - startTimeMs > failureDelayMs) {

@@ -125,7 +125,7 @@ public class ConnectorRestartApiIntegrationTest {
     @AfterClass
     public static void close() {
         // stop all Connect, Kafka and Zk threads.
-        connectClusterMap.values().forEach(c -> c.stop());
+        connectClusterMap.values().forEach(EmbeddedConnectCluster::stop);
     }
 
     @Test

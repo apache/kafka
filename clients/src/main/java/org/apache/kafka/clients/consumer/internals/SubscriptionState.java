@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.TreeSet;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -132,7 +133,7 @@ public class SubscriptionState {
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = new HashSet<>();
+        this.subscription = new TreeSet<>(); // use a sorted set for better logging
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;

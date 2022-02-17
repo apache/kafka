@@ -312,7 +312,7 @@ public class ConnectorConfig extends AbstractConfig {
             @SuppressWarnings("rawtypes")
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
-                return (Set) plugins.transformations();
+                return plugins.transformations();
             }
 
             @Override
@@ -362,7 +362,7 @@ public class ConnectorConfig extends AbstractConfig {
                 (Class) Predicate.class, props, requireFullConfig) {
             @Override
             protected Set<PluginDesc<Predicate<?>>> plugins() {
-                return (Set) plugins.predicates();
+                return plugins.predicates();
             }
 
             @Override

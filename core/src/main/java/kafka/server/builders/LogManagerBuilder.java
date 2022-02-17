@@ -26,11 +26,11 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.metadata.ConfigRepository;
 import kafka.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
-import scala.collection.JavaConverters;
 
 
 public class LogManagerBuilder {
@@ -44,6 +44,7 @@ public class LogManagerBuilder {
     private long flushRecoveryOffsetCheckpointMs = 10000L;
     private long flushStartOffsetCheckpointMs = 10000L;
     private long retentionCheckMs = 1000L;
+    private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private int maxPidExpirationMs = 60000;
     private ApiVersion interBrokerProtocolVersion = ApiVersion.latestVersion();
     private Scheduler scheduler = null;
@@ -102,6 +103,11 @@ public class LogManagerBuilder {
         return this;
     }
 
+    public LogManagerBuilder setMaxTransactionTimeoutMs(int maxTransactionTimeoutMs) {
+        this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
+        return this;
+    }
+
     public LogManagerBuilder setMaxPidExpirationMs(int maxPidExpirationMs) {
         this.maxPidExpirationMs = maxPidExpirationMs;
         return this;
@@ -156,6 +162,7 @@ public class LogManagerBuilder {
                               flushRecoveryOffsetCheckpointMs,
                               flushStartOffsetCheckpointMs,
                               retentionCheckMs,
+                              maxTransactionTimeoutMs,
                               maxPidExpirationMs,
                               interBrokerProtocolVersion,
                               scheduler,

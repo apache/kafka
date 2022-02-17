@@ -38,9 +38,9 @@ import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
-import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
+import org.mockito.Mockito.mock
 import org.mockito.{ArgumentCaptor, Mockito}
 
 import scala.collection.{Map, Seq}
@@ -287,9 +287,9 @@ class RequestChannelTest {
     new network.RequestChannel.Request(processor = 1,
       requestContext,
       startTimeNanos = 0,
-      createNiceMock(classOf[MemoryPool]),
+      mock(classOf[MemoryPool]),
       buffer,
-      createNiceMock(classOf[RequestChannel.Metrics])
+      mock(classOf[RequestChannel.Metrics])
     )
   }
 
