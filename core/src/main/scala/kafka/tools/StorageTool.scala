@@ -55,7 +55,7 @@ object StorageTool extends Logging {
       formatParser.addArgument("--ignore-formatted", "-g").
         action(storeTrue())
 
-      if (args.length == 0 || args.contains("--help")) {
+      if (args.length == 0 || args.contains("--help") || args.contains("-h")) {
         parser.printHelp(new PrintWriter(System.err, true))
         Exit.exit(1)
       }
