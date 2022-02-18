@@ -30,6 +30,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -37,6 +38,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 
@@ -62,9 +64,16 @@ public class TaskExecutor {
      */
     int process(final int maxNumRecords, final Time time) {
         int totalProcessed = 0;
-
-        for (final Task task : tasks.activeTasks()) {
-            totalProcessed += processTask(task, maxNumRecords, time);
+        Task lastProcessed = null;
+        try {
+            for (final Task task : tasks.activeTasks()) {
+                lastProcessed = task;
+                totalProcessed += processTask(task, maxNumRecords, time);
+            }
+        } catch (final Exception e) {
+            tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+            commitSuccessfullyProcessedTasks();
+            throw e;
         }
 
         return totalProcessed;
@@ -79,6 +88,9 @@ public class TaskExecutor {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
                 processed++;
+            }
+            if (processingMode == AT_LEAST_ONCE) {
+                tasks.addToSuccessfullyProcessed(task);
             }
         } catch (final TimeoutException timeoutException) {
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
@@ -138,8 +150,6 @@ public class TaskExecutor {
         }
         return committed;
     }
-
-
 
     /**
      * Caution: do not invoke this directly if it's possible a rebalance is occurring, as the commit will fail. If
@@ -232,6 +242,15 @@ public class TaskExecutor {
                 }
             }
         }
+    }
+
+    private void commitSuccessfullyProcessedTasks() {
+        if (processingMode == AT_LEAST_ONCE && !tasks.successfullyProcessed().isEmpty()) {
+            log.error("Streams encountered an error when processing tasks." +
+                " Will commit all previously successfully processed tasks");
+            commitTasksAndMaybeUpdateCommittableOffsets(tasks.successfullyProcessed(), new HashMap<>());
+        }
+        tasks.clearSuccessfullyProcessed();
     }
 
     /**
