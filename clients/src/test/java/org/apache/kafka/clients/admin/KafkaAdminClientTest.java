@@ -814,6 +814,7 @@ public class KafkaAdminClientTest {
 
         try (AdminClientUnitTestEnv env = mockClientEnv(time,
             AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+    ;
 
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 

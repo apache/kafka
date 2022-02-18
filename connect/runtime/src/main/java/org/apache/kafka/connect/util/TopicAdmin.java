@@ -656,7 +656,7 @@ public class TopicAdmin implements AutoCloseable {
      * @throws TimeoutException if the offset metadata could not be fetched before the amount of time allocated
      *         by {@code request.timeout.ms} expires, and this call can be retried
      * @throws LeaderNotAvailableException if the leader was not available and this call can be retried
-     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting 
+     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting
      *         to perform this operation
      * @throws ConnectException if a non retriable error occurs
      */
@@ -665,26 +665,18 @@ public class TopicAdmin implements AutoCloseable {
             return Collections.emptyMap();
         }
 
-        System.out.println("balbaba");
         Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap);
         // Get the individual result for each topic partition so we have better error messages
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition partition : partitions) {
 
-            System.out.println("balbabadddddd: " + partition.topic());
             try {
-                System.out.println("0");
                 ListOffsetsResultInfo info = resultFuture.partitionResult(partition).get();
-                System.out.println("1");
-
                 result.put(partition, info.offset());
             } catch (ExecutionException e) {
-                System.out.println("topicexception");
-
                 Throwable cause = e.getCause();
                 String topic = partition.topic();
-                System.out.println("topic");
 
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
@@ -696,7 +688,6 @@ public class TopicAdmin implements AutoCloseable {
                     throw new UnsupportedVersionException(msg, e);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
-                    System.out.println("retriable");
 
                     throw new TimeoutException(msg, e);
                 } else if (cause instanceof LeaderNotAvailableException) {
@@ -713,9 +704,7 @@ public class TopicAdmin implements AutoCloseable {
                 String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers());
                 throw new RetriableException(msg, e);
             }
-            System.out.println("next");
         }
-        System.out.println("@@");
         return result;
     }
 
@@ -727,7 +716,6 @@ public class TopicAdmin implements AutoCloseable {
         int retries = 0;
 
         while (retries++ < maxRetries) {
-            System.out.println("@@");
             try {
                 return endOffsets(partitions);
             } catch (TimeoutException e) {
@@ -747,7 +735,6 @@ public class TopicAdmin implements AutoCloseable {
                 throw e;
             }
             log.info("Backing off {} ms, before retry", retryBackoffMs);
-            System.out.println("retrying");
             Utils.sleep(retryBackoffMs);
         }
         throw new ConnectException("Failed to read offsets for topic partitions " + partitions + " after " + maxRetries + " attempts", lastError);
