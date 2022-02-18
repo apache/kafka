@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
@@ -65,6 +67,7 @@ public class TopologyMetadata {
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
 
     private final StreamsConfig config;
+    private final ProcessingMode processingMode;
     private final TopologyVersion version;
 
     private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability
@@ -94,7 +97,9 @@ public class TopologyMetadata {
     public TopologyMetadata(final InternalTopologyBuilder builder,
                             final StreamsConfig config) {
         version = new TopologyVersion();
+        processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
+
         builders = new ConcurrentSkipListMap<>();
         if (builder.hasNamedTopology()) {
             builders.put(builder.topologyName(), builder);
@@ -106,6 +111,7 @@ public class TopologyMetadata {
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
                             final StreamsConfig config) {
         this.version = new TopologyVersion();
+        this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
         this.log = LoggerFactory.getLogger(getClass());
 
@@ -119,6 +125,10 @@ public class TopologyMetadata {
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix
     public void setLog(final LogContext logContext) {
         log = logContext.logger(getClass());
+    }
+    
+    public ProcessingMode processingMode() {
+        return processingMode;
     }
 
     public long topologyVersion() {

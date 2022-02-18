@@ -65,13 +65,12 @@ class Tasks {
 
     private Consumer<byte[], byte[]> mainConsumer;
 
-    Tasks(final String logPrefix,
+    Tasks(final LogContext logContext,
           final TopologyMetadata topologyMetadata,
           final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
-        final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
         this.topologyMetadata = topologyMetadata;
@@ -314,6 +313,10 @@ class Tasks {
 
     Set<String> producerClientIds() {
         return activeTaskCreator.producerClientIds();
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
     }
 
     // for testing only

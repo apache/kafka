@@ -29,6 +29,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -405,7 +406,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            StreamThread.eosEnabled(streamsConfig),
+            StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(
