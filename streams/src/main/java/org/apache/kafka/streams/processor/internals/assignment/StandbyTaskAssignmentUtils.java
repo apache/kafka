@@ -26,8 +26,7 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {
-    }
+    private StandbyTaskAssignmentUtils() {}
 
     static int pollClientAndMaybeAssignRemainingStandbyTasks(final Map<UUID, ClientState> clients,
                                                              final Map<TaskId, Integer> tasksToRemainingStandbys,

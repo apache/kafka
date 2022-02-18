@@ -499,7 +499,8 @@ public class HighAvailabilityTaskAssignorTest {
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 0,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L,
-                                          EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+            )
         );
 
 
@@ -527,7 +528,8 @@ public class HighAvailabilityTaskAssignorTest {
                 /*maxWarmupReplicas*/ 1,
                 /*numStandbyReplicas*/ 1,
                 /*probingRebalanceIntervalMs*/ 60 * 1000L,
-                                          EMPTY_RACK_AWARE_ASSIGNMENT_TAGS)
+                /*rackAwareAssignmentTags*/ EMPTY_RACK_AWARE_ASSIGNMENT_TAGS
+            )
         );
 
         assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));

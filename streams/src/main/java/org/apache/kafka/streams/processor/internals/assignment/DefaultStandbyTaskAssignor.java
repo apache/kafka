@@ -30,7 +30,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StandbyTas
 /**
  * Default standby task assignor that distributes standby tasks to the least loaded clients.
  *
- * @see org.apache.kafka.streams.processor.internals.assignment.ClientTagAwareStandbyTaskAssignor
+ * @see ClientTagAwareStandbyTaskAssignor
  */
 class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(DefaultStandbyTaskAssignor.class);

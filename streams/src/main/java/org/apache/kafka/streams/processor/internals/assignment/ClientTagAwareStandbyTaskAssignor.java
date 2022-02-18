@@ -46,7 +46,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
      * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas}.
      * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags}.
      * Ideally, all standby tasks for any given stateful task will be located on different tag dimensions to have the best possible distribution.
-     * However, if the ideal distribution is impossible, the algorithm will fall back to the least-loaded clients without considering rack awareness constraints into consideration.
+     * However, if the ideal distribution is impossible, the algorithm will fall back to the least-loaded clients without taking rack awareness constraints into consideration.
      * The least-loaded clients are determined based on the total number of tasks (active and standby tasks) assigned to the client.
      */
     @Override
