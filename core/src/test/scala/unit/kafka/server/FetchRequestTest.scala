@@ -365,7 +365,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     val msgValueLen = 100 * 1000
     val batchSize = 4 * msgValueLen
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(
+      bootstrapServers(),
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue,
       batchSize = batchSize,
@@ -426,7 +427,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       retries = 5,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer,
@@ -614,7 +615,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce messages (v2)
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -661,7 +662,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce GZIP compressed messages (v2)
-    val producer1 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer1 = TestUtils.createProducer(bootstrapServers(),
       compressionType = GZIPCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
@@ -669,7 +670,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
       "key1", "value1")).get
     producer1.close()
     // Produce ZSTD compressed messages (v2)
-    val producer2 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer2 = TestUtils.createProducer(bootstrapServers(),
       compressionType = ZStdCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)

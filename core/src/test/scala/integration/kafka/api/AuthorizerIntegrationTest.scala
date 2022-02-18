@@ -1716,7 +1716,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService.describeGroups()

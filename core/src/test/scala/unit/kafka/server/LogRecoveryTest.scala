@@ -68,7 +68,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     if (producer != null)
       producer.close()
     producer = TestUtils.createProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
+      TestUtils.bootstrapServers(servers),
       keySerializer = new IntegerSerializer,
       valueSerializer = new StringSerializer
     )

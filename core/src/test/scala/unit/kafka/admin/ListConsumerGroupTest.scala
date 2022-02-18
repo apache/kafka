@@ -32,7 +32,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedGroups = Set(group, simpleGroup)
@@ -45,7 +45,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--list")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
@@ -55,7 +55,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedListing = Set(
@@ -105,19 +105,19 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     addConsumerGroupExecutor(numConsumers = 1)
     var out = ""
 
-    var cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    var cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
     }, s"Expected to find $simpleGroup, $group and no header, but found $out")
 
-    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
     }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
-    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state", "Stable")
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")

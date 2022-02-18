@@ -88,14 +88,14 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     def createProducer(broker: KafkaBroker): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(Seq(broker)),
+        bootstrapServers(),
         keySerializer = new IntegerSerializer,
         valueSerializer = new StringSerializer
       )
 
     def createConsumer(broker: KafkaBroker): KafkaConsumer[Integer, String] =
       TestUtils.createConsumer(
-        TestUtils.getBrokerListStrFromServers(Seq(broker)),
+        bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,
         keyDeserializer = new IntegerDeserializer,
         valueDeserializer = new StringDeserializer

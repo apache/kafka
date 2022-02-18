@@ -58,7 +58,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
-  var brokerList: String = null
   var alive: Array[Boolean] = null
 
   /**
@@ -95,6 +94,10 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
 
   def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+
+  def bootstrapServers(listenerName: ListenerName = listenerName): String = {
+    TestUtils.bootstrapServers(_brokers, listenerName)
+  }
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
@@ -267,7 +270,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
       _brokers(i).startup()
       alive(i) = true
     }
-    brokerList = TestUtils.bootstrapServers(_brokers, listenerName)
   }
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
@@ -334,7 +336,6 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         alive(_brokers.length - 1) = true
       }
     }
-    brokerList = if (startup) TestUtils.bootstrapServers(_brokers, listenerName) else null
   }
 
   private def createBrokerFromConfig(config: KafkaConfig): KafkaBroker = {

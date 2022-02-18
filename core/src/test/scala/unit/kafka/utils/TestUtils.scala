@@ -220,17 +220,10 @@ object TestUtils extends Logging {
     }
   }
 
-  def getBrokerListStrFromServers[B <: KafkaBroker](
-      brokers: Seq[B],
-      protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
-    brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.find(_.securityProtocol == protocol).getOrElse(
-        sys.error(s"Could not find listener with security protocol $protocol"))
-      formatAddress(listener.host, boundPort(s, protocol))
-    }.mkString(",")
-  }
-
-  def bootstrapServers[B <: KafkaBroker](brokers: Seq[B], listenerName: ListenerName): String = {
+  def bootstrapServers[B <: KafkaBroker](
+    brokers: Seq[B],
+    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+  ): String = {
     brokers.map { s =>
       val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
         sys.error(s"Could not find listener with name ${listenerName.value}"))
@@ -386,7 +379,9 @@ object TestUtils extends Logging {
     listenerName: ListenerName,
     adminConfig: Properties
   ): Admin = {
-    val adminClientProperties = new Properties(adminConfig)
+    println(adminConfig)
+    val adminClientProperties = new Properties()
+    adminClientProperties.putAll(adminConfig)
     if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
       adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers, listenerName))
     }
@@ -1353,7 +1348,7 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
       acks: Int = -1): Unit = {
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(brokers), acks = acks)
+    val producer = createProducer(TestUtils.bootstrapServers(brokers), acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -1386,7 +1381,7 @@ object TestUtils extends Logging {
       timestamp: java.lang.Long = null,
       deliveryTimeoutMs: Int = 30 * 1000,
       requestTimeoutMs: Int = 20 * 1000): Unit = {
-    val producer = createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = createProducer(TestUtils.bootstrapServers(brokers),
       deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
     try {
       producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
@@ -1639,7 +1634,7 @@ object TestUtils extends Logging {
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
       waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(brokers, securityProtocol),
+    val consumer = createConsumer(TestUtils.bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
       groupId = groupId,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile)
@@ -1699,7 +1694,7 @@ object TestUtils extends Logging {
       requestTimeoutMs: Int = 30000,
       maxInFlight: Int = 5): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
@@ -1719,7 +1714,7 @@ object TestUtils extends Logging {
       brokers: Seq[B]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers))
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {

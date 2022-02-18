@@ -59,7 +59,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   override def createPrivilegedAdminClient() = {
-    createAdminClient(brokerList, securityProtocol, trustStoreFile, clientSaslProperties,
+    createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
       kafkaClientSaslMechanism, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
@@ -142,7 +142,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   @Test
   def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val adminClient = Admin.create(props)
 
     def describeTopic(): Unit = {
@@ -203,7 +203,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
     finally propsStream.close()
 
-    val cgcArgs = Array("--bootstrap-server", brokerList,
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(),
                         "--describe",
                         "--group", "test.group",
                         "--command-config", propsFile.getAbsolutePath)
