@@ -118,10 +118,13 @@ class FetcherEventManager(name: String,
     future
   }
 
-  def close(): Unit = {
+  def initShutdown(): Unit = {
+    thread.initiateShutdown()
+    fetcherEventBus.close()
+  }
+
+  def awaitShutdown(): Unit = {
     try {
-      thread.initiateShutdown()
-      fetcherEventBus.close()
       thread.awaitShutdown()
     } finally {
       removeMetric(EventQueueTimeMetricName)
@@ -132,6 +135,10 @@ class FetcherEventManager(name: String,
     processor.close()
   }
 
+  def close(): Unit = {
+    initShutdown()
+    awaitShutdown()
+  }
 
   class FetcherEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     logIdent = s"[FetcherEventThread fetcherId=$name] "

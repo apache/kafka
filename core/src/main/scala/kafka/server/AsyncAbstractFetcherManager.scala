@@ -25,7 +25,6 @@ import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Map, Set, mutable}
-import scala.collection.mutable.ArrayBuffer
 
 abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: String, clientId: String, numFetchers: Int)
   extends FetcherManagerTrait with Logging with KafkaMetricsGroup {
@@ -241,9 +240,11 @@ abstract class AsyncAbstractFetcherManager[T <: FetcherEventManager](val name: S
   def closeAllFetchers(): Unit = {
     lock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
-        fetcher.close()
+        fetcher.initShutdown()
       }
-
+      for ( (_, fetcher) <- fetcherThreadMap) {
+        fetcher.awaitShutdown()
+      }
       fetcherThreadMap.clear()
     }
   }
