@@ -36,6 +36,8 @@ public class MetadataRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
         private static final MetadataRequestData ALL_TOPICS_REQUEST_DATA = new MetadataRequestData().
             setTopics(null).setAllowAutoTopicCreation(true);
+        private static final MetadataRequestData ALL_TOPICS_ONLY_REQUEST_DATA = new MetadataRequestData().
+                setTopics(null).setAllowAutoTopicCreation(false).setExcludePartitions(true);
 
         private final MetadataRequestData data;
 
@@ -69,6 +71,10 @@ public class MetadataRequest extends AbstractRequest {
             // This never causes auto-creation, but we set the boolean to true because that is the default value when
             // deserializing V2 and older. This way, the value is consistent after serialization and deserialization.
             return new Builder(ALL_TOPICS_REQUEST_DATA);
+        }
+
+        public static Builder allTopicsOnly() {
+            return new Builder(ALL_TOPICS_ONLY_REQUEST_DATA);
         }
 
         public boolean emptyTopicList() {
@@ -163,6 +169,10 @@ public class MetadataRequest extends AbstractRequest {
 
     public boolean allowAutoTopicCreation() {
         return data.allowAutoTopicCreation();
+    }
+
+    public boolean excludePartitions() {
+        return data.excludePartitions();
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, short version) {

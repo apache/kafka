@@ -1887,7 +1887,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
-                return MetadataRequest.Builder.allTopics();
+                return MetadataRequest.Builder.allTopicsOnly();
             }
 
             @Override

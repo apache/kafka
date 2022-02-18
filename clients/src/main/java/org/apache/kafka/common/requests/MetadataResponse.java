@@ -282,6 +282,14 @@ public class MetadataResponse extends AbstractResponse {
             this(error, topic, Uuid.ZERO_UUID, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
+        private static final List<PartitionMetadata> EMPTY_PARTITION_METADATA = Collections.emptyList();
+
+        public TopicMetadata(Errors error,
+                             String topic,
+                             boolean isInternal) {
+            this(error, topic, isInternal, EMPTY_PARTITION_METADATA);
+        }
+
         public Errors error() {
             return error;
         }

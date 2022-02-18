@@ -81,9 +81,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+
 
 /**
  * Logic to handle the various Kafka requests
@@ -1132,6 +1134,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def getTopicMetadata(
     request: RequestChannel.Request,
     fetchAllTopics: Boolean,
+    excludePartitions: Boolean,
     allowAutoTopicCreation: Boolean,
     topics: Set[String],
     listenerName: ListenerName,
@@ -1140,8 +1143,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
-
-    if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
+    if (excludePartitions) {
+      val topicsOnlyMetadata = new ArrayBuffer[MetadataResponseTopic](topics.size)
+      for (t <- topicResponses) {
+        topicsOnlyMetadata +=
+          new MetadataResponseTopic()
+            .setErrorCode(Errors.NONE.code)
+            .setName(t.name)
+            .setTopicId(t.topicId)
+            .setIsInternal(t.isInternal)
+      }
+      topicsOnlyMetadata
+    } else if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
     } else {
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
@@ -1236,7 +1249,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val errorUnavailableListeners = requestVersion >= 6
 
     val allowAutoCreation = config.autoCreateTopicsEnable && metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
-    val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, allowAutoCreation, authorizedTopics,
+    val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, metadataRequest.excludePartitions, allowAutoCreation, authorizedTopics,
       request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
 
     var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
