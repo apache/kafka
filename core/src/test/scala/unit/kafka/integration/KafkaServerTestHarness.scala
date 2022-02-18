@@ -141,25 +141,51 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     createBrokers(startup)
   }
 
+  def createOffsetsTopic(
+    listenerName: ListenerName = listenerName,
+    adminClientConfig: Properties = new Properties
+  ): Unit = {
+    if (isKRaftTest()) {
+      TestUtils.withAdmin(brokers, listenerName, adminClientConfig) { admin =>
+        TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
+      }
+    } else {
+      TestUtils.createOffsetsTopic(zkClient, servers)
+    }
+  }
+
   /**
    * Create a topic.
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(topic: String,
-                  numPartitions: Int = 1,
-                  replicationFactor: Int = 1,
-                  topicConfig: Properties = new Properties,
-                  adminClientConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
+  def createTopic(
+    topic: String,
+    numPartitions: Int = 1,
+    replicationFactor: Int = 1,
+    topicConfig: Properties = new Properties,
+    listenerName: ListenerName = listenerName
+  ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
-      TestUtils.createTopicWithAdmin(topic = topic,
-        brokers = brokers,
+      TestUtils.withAdmin(brokers, listenerName) { admin =>
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          brokers = brokers,
+          numPartitions = numPartitions,
+          replicationFactor = replicationFactor,
+          topicConfig = topicConfig
+        )
+      }
+    } else {
+      TestUtils.createTopic(
+        zkClient = zkClient,
+        topic = topic,
         numPartitions = numPartitions,
         replicationFactor = replicationFactor,
-        topicConfig = topicConfig,
-        adminConfig = adminClientConfig)
-    } else {
-      TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, topicConfig)
+        servers = servers,
+        topicConfig = topicConfig
+      )
     }
   }
 
@@ -168,18 +194,40 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): scala.collection.immutable.Map[Int, Int] =
+  def createTopicWithAssignment(
+    topic: String,
+    partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+    listenerName: ListenerName = listenerName
+  ): scala.collection.immutable.Map[Int, Int] =
     if (isKRaftTest()) {
-      TestUtils.createTopicWithAdmin(topic = topic,
-        replicaAssignment = partitionReplicaAssignment,
-        brokers = brokers)
+      TestUtils.withAdmin(brokers, listenerName) { admin =>
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          replicaAssignment = partitionReplicaAssignment,
+          brokers = brokers
+        )
+      }
     } else {
-      TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers)
+      TestUtils.createTopic(
+        zkClient,
+        topic,
+        partitionReplicaAssignment,
+        servers
+      )
     }
 
-  def deleteTopic(topic: String): Unit = {
+  def deleteTopic(
+    topic: String,
+    listenerName: ListenerName = listenerName
+  ): Unit = {
     if (isKRaftTest()) {
-      TestUtils.deleteTopicWithAdmin(topic, brokers)
+      TestUtils.withAdmin(brokers, listenerName) { admin =>
+        TestUtils.deleteTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          brokers = brokers)
+      }
     } else {
       adminZkClient.deleteTopic(topic)
     }

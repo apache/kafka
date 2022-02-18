@@ -518,7 +518,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val foo1 = new TopicPartition("foo", 1)
     // topicNames can be empty because we are using old requests
     val topicNames = Map[Uuid, String]().asJava
-    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    createTopicWithAssignment("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val bar0 = new TopicPartition("bar", 0)
     val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
     val resp1 = sendFetchRequest(0, req1)
@@ -542,7 +542,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertFalse(responseData2.containsKey(foo1))
     assertTrue(responseData2.containsKey(bar0))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, responseData2.get(bar0).errorCode)
-    createTopic("bar", Map(0 -> List(0, 1)))
+    createTopicWithAssignment("bar", Map(0 -> List(0, 1)))
     val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
     val resp3 = sendFetchRequest(0, req3)
     assertEquals(Errors.NONE, resp3.error())
@@ -576,7 +576,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
-    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    createTopicWithAssignment("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val topicIds = getTopicIds()
     val topicIdsWithUnknown = topicIds ++ Map("bar" -> Uuid.randomUuid())
     val bar0 = new TopicPartition("bar", 0)

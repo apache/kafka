@@ -370,8 +370,9 @@ object TestUtils extends Logging {
   }
 
   def createAdminClient[B <: KafkaBroker](
-      brokers: Seq[B],
-      adminConfig: Properties): Admin = {
+    brokers: Seq[B],
+    adminConfig: Properties
+  ): Admin = {
     val adminClientProperties = new Properties(adminConfig)
     if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
       adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
@@ -380,49 +381,74 @@ object TestUtils extends Logging {
     Admin.create(adminClientProperties)
   }
 
+  def createAdminClient[B <: KafkaBroker](
+    brokers: Seq[B],
+    listenerName: ListenerName,
+    adminConfig: Properties
+  ): Admin = {
+    val adminClientProperties = new Properties(adminConfig)
+    if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+      adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(brokers, listenerName))
+    }
+    Admin.create(adminClientProperties)
+  }
+
+  def withAdmin[B <: KafkaBroker, T](
+    brokers: Seq[B],
+    listenerName: ListenerName,
+    adminConfig: Properties = new Properties
+  )(
+    fn: Admin => T
+  ): T = {
+    val admin = createAdminClient(brokers, listenerName, adminConfig)
+    try {
+      fn(admin)
+    } finally {
+      admin.close()
+    }
+  }
+
   def createTopicWithAdmin[B <: KafkaBroker](
-      topic: String,
-      brokers: Seq[B],
-      numPartitions: Int = 1,
-      replicationFactor: Int = 1,
-      replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-      topicConfig: Properties = new Properties,
-      adminConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
+    admin: Admin,
+    topic: String,
+    brokers: Seq[B],
+    numPartitions: Int = 1,
+    replicationFactor: Int = 1,
+    replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
+    topicConfig: Properties = new Properties,
+  ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
     } else {
       replicaAssignment.size
     }
-    val adminClient = createAdminClient(brokers, adminConfig)
+
+    val configsMap = new util.HashMap[String, String]()
+    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
     try {
-      val configsMap = new util.HashMap[String, String]()
-      topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
-      try {
-        val result = if (replicaAssignment.isEmpty) {
-          adminClient.createTopics(Collections.singletonList(new NewTopic(
-            topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
-        } else {
-          val assignment = new util.HashMap[Integer, util.List[Integer]]()
-          replicaAssignment.forKeyValue { case (k, v) =>
-            val replicas = new util.ArrayList[Integer]
-            v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
-            assignment.put(k.asInstanceOf[Integer], replicas)
-          }
-          adminClient.createTopics(Collections.singletonList(new NewTopic(
-            topic, assignment).configs(configsMap)))
+      val result = if (replicaAssignment.isEmpty) {
+        admin.createTopics(Collections.singletonList(new NewTopic(
+          topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+      } else {
+        val assignment = new util.HashMap[Integer, util.List[Integer]]()
+        replicaAssignment.forKeyValue { case (k, v) =>
+          val replicas = new util.ArrayList[Integer]
+          v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
+          assignment.put(k.asInstanceOf[Integer], replicas)
         }
-        result.all().get()
-      } catch {
-        case e: ExecutionException => if (!(e.getCause != null &&
-            e.getCause.isInstanceOf[TopicExistsException] &&
-            topicHasSameNumPartitionsAndReplicationFactor(adminClient, topic,
-              effectiveNumPartitions, replicationFactor))) {
-          throw e
-        }
+        admin.createTopics(Collections.singletonList(new NewTopic(
+          topic, assignment).configs(configsMap)))
       }
-    } finally {
-      adminClient.close()
+      result.all().get()
+    } catch {
+      case e: ExecutionException => if (!(e.getCause != null &&
+          e.getCause.isInstanceOf[TopicExistsException] &&
+          topicHasSameNumPartitionsAndReplicationFactor(admin, topic,
+            effectiveNumPartitions, replicationFactor))) {
+        throw e
+      }
     }
+
     // wait until we've propagated all partitions metadata to all brokers
     val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
 
@@ -445,24 +471,27 @@ object TestUtils extends Logging {
   }
 
   def createOffsetsTopicWithAdmin[B <: KafkaBroker](
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties) = {
+    admin: Admin,
+    brokers: Seq[B]
+  ): Map[Int, Int] = {
     val broker = brokers.head
-    createTopicWithAdmin(topic = Topic.GROUP_METADATA_TOPIC_NAME,
+    createTopicWithAdmin(
+      admin = admin,
+      topic = Topic.GROUP_METADATA_TOPIC_NAME,
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
       topicConfig = broker.groupCoordinator.offsetsTopicConfigs,
-      adminConfig = adminConfig)
+    )
   }
 
   def deleteTopicWithAdmin[B <: KafkaBroker](
-      topic: String,
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties): Unit = {
-    val adminClient = createAdminClient(brokers, adminConfig)
+    admin: Admin,
+    topic: String,
+    brokers: Seq[B],
+  ): Unit = {
     try {
-      adminClient.deleteTopics(Collections.singletonList(topic)).all().get()
+      admin.deleteTopics(Collections.singletonList(topic)).all().get()
     } catch {
       case e: ExecutionException => if (e.getCause != null &&
           e.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
@@ -470,8 +499,6 @@ object TestUtils extends Logging {
       } else {
         throw e
       }
-    } finally {
-      adminClient.close()
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
   }

@@ -204,7 +204,7 @@ class BrokerMetadataListener(
       batch.records().forEach { messageAndVersion =>
         if (isTraceEnabled) {
           trace("Metadata batch %d: processing [%d/%d]: %s.".format(batch.lastOffset, index + 1,
-            batch.records().size(), messageAndVersion.message().toString()))
+            batch.records().size(), messageAndVersion.message()))
         }
 
         _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
