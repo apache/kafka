@@ -362,24 +362,11 @@ object TestUtils extends Logging {
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
   }
 
-  def createAdminClient[B <: KafkaBroker](
-    brokers: Seq[B],
-    adminConfig: Properties
-  ): Admin = {
-    val adminClientProperties = new Properties(adminConfig)
-    if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-      adminClientProperties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-        bootstrapServers(brokers, brokers.head.config.interBrokerListenerName))
-    }
-    Admin.create(adminClientProperties)
-  }
-
-  def createAdminClient[B <: KafkaBroker](
+ def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
     adminConfig: Properties
   ): Admin = {
-    println(adminConfig)
     val adminClientProperties = new Properties()
     adminClientProperties.putAll(adminConfig)
     if (!adminClientProperties.containsKey(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)) {
@@ -1782,24 +1769,6 @@ object TestUtils extends Logging {
     }
   }
 
-  def fetchEntityConfigWithAdmin[B <: KafkaBroker](
-        configResource: ConfigResource,
-        brokers: Seq[B],
-        adminConfig: Properties = new Properties): Properties = {
-    val properties = new Properties()
-    val adminClient = createAdminClient(brokers, adminConfig)
-    try {
-      val result = adminClient.describeConfigs(Collections.singletonList(configResource)).all().get()
-      val config = result.get(configResource)
-      if (config != null) {
-        config.entries().forEach(e => properties.setProperty(e.name(), e.value()))
-      }
-    } finally {
-      adminClient.close()
-    }
-    properties
-  }
-
   def incrementalAlterConfigs[B <: KafkaBroker](
       servers: Seq[B],
       adminClient: Admin,
@@ -1841,40 +1810,6 @@ object TestUtils extends Logging {
       val nodes = client.describeCluster().nodes().get()
       nodes.asScala.exists(_.id == brokerId)
     }, s"Timed out waiting for brokerId $brokerId to come online")
-  }
-
-  /**
-   * Get the replica assignment for some topics. Topics which don't exist will be ignored.
-   */
-  def getReplicaAssignmentForTopics[B <: KafkaBroker](
-      topicNames: Seq[String],
-      brokers: Seq[B],
-      adminConfig: Properties = new Properties): Map[TopicPartition, Seq[Int]] = {
-    val adminClient = createAdminClient(brokers, adminConfig)
-    val results = new mutable.HashMap[TopicPartition, Seq[Int]]
-    try {
-      adminClient.describeTopics(topicNames.toList.asJava).topicNameValues().forEach {
-        case (topicName, future) =>
-          try {
-            val description = future.get()
-            description.partitions().forEach {
-              case partition =>
-                val topicPartition = new TopicPartition(topicName, partition.partition())
-                results.put(topicPartition, partition.replicas().asScala.map(_.id))
-            }
-          } catch {
-            case e: ExecutionException => if (e.getCause != null &&
-              e.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
-              // ignore
-            } else {
-              throw e
-            }
-          }
-      }
-    } finally {
-      adminClient.close()
-    }
-    results
   }
 
   def waitForLeaderToBecome(
