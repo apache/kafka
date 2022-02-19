@@ -2439,7 +2439,9 @@ project(':connect:runtime') {
     testImplementation libs.junitVintageEngine
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
+    testImplementation libs.mockitoCore
     testImplementation libs.mockitoInline
+    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
