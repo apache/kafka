@@ -476,7 +476,7 @@ public class ProducerConfig extends AbstractConfig {
                 if (userConfiguredIdempotence) {
                     throw new ConfigException("Must set " + RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
                 }
-                log.warn("`enable.idempotence` will be disabled because {} config is set to 0.", RETRIES_CONFIG, retries);
+                log.info("`enable.idempotence` will be disabled because {} config is set to 0.", RETRIES_CONFIG, retries);
                 shouldDisableIdempotence = true;
             }
 
@@ -487,7 +487,7 @@ public class ProducerConfig extends AbstractConfig {
                     throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
                 }
-                log.warn("`enable.idempotence` will be disabled because {} config is set to {}, not set to 'all'.", ACKS_CONFIG, acks);
+                log.info("`enable.idempotence` will be disabled because {} config is set to {}, not set to 'all'.", ACKS_CONFIG, acks);
                 shouldDisableIdempotence = true;
             }
 
@@ -498,7 +498,8 @@ public class ProducerConfig extends AbstractConfig {
                     throw new ConfigException("Must set " + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                         " to use the idempotent producer.");
                 }
-                log.warn("`enable.idempotence` will be disabled because {} config is set to {}, which is greater than 5.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
+                log.warn("`enable.idempotence` will be disabled because {} config is set to {}, which is greater than 5. " +
+                    "Please note that in v4.0.0 and onward, this will become an error.", MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
                 shouldDisableIdempotence = true;
             }
         }
