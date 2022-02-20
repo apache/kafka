@@ -103,7 +103,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
-import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignStatefulTasksToThreads;
+import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignTasksToThreads;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
@@ -317,8 +317,9 @@ public class StreamsPartitionAssignorTest {
 
         assertEquivalentAssignment(
             previousAssignment,
-            assignStatefulTasksToThreads(
+            assignTasksToThreads(
                 allTasks,
+                true,
                 consumers,
                 state,
                 new HashMap<>()
@@ -351,8 +352,9 @@ public class StreamsPartitionAssignorTest {
         state.assignActiveTasks(allTasks);
 
         final Map<String, List<TaskId>> newAssignment =
-            assignStatefulTasksToThreads(
+            assignTasksToThreads(
                 allTasks,
+                true,
                 consumers,
                 state,
                 new HashMap<>()
@@ -384,8 +386,9 @@ public class StreamsPartitionAssignorTest {
         // Consumer 3 leaves the group
         consumers.remove(CONSUMER_3);
 
-        final Map<String, List<TaskId>> assignment = assignStatefulTasksToThreads(
+        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
             allTasks,
+            true,
             consumers,
             state,
             new HashMap<>()
@@ -424,8 +427,9 @@ public class StreamsPartitionAssignorTest {
         state.initializePrevTasks(emptyMap());
         state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
 
-        final Map<String, List<TaskId>> assignment = assignStatefulTasksToThreads(
+        final Map<String, List<TaskId>> assignment = assignTasksToThreads(
             allTasks,
+            true,
             consumers,
             state,
             new HashMap<>()
@@ -464,8 +468,9 @@ public class StreamsPartitionAssignorTest {
         Collections.shuffle(allTasks);
 
         final Map<String, List<TaskId>> interleavedTaskIds =
-            assignStatefulTasksToThreads(
+            assignTasksToThreads(
                 allTasks,
+                true,
                 consumers,
                 state,
                 new HashMap<>()

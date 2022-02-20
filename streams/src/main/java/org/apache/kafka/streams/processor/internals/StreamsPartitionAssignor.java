@@ -60,7 +60,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -786,23 +785,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final SortedSet<String> consumers = clientMetadata.consumers;
             final Map<String, Integer> threadTaskCounts = new HashMap<>();
 
-            final Map<String, List<TaskId>> activeTaskStatefulAssignment = assignStatefulTasksToThreads(
+            final Map<String, List<TaskId>> activeTaskStatefulAssignment = assignTasksToThreads(
                 state.statefulActiveTasks(),
+                true,
                 consumers,
                 state,
                 threadTaskCounts
             );
 
-            final Map<String, List<TaskId>> standbyTaskAssignment = assignStatefulTasksToThreads(
+            final Map<String, List<TaskId>> standbyTaskAssignment = assignTasksToThreads(
                 state.standbyTasks(),
+                true,
                 consumers,
                 state,
                 threadTaskCounts
             );
 
-            final Map<String, List<TaskId>> activeTaskStatelessAssignment = assignStatelessTasksToThreads(
+            final Map<String, List<TaskId>> activeTaskStatelessAssignment = assignTasksToThreads(
                 state.statelessActiveTasks(),
+                false,
                 consumers,
+                state,
                 threadTaskCounts
             );
 
@@ -1042,16 +1045,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * Generate an assignment that tries to preserve thread-level stickiness of stateful tasks without violating
-     * balance. The tasks are balanced across threads. Tasks without previous owners will be interleaved by
+     * Generate an assignment that tries to preserve thread-level stickiness for stateful tasks without violating
+     * balance. The tasks are balanced across threads. Stateful tasks without previous owners will be interleaved by
      * group id to spread subtopologies across threads and further balance the workload.
      * threadLoad is a map that keeps track of task load per thread across multiple calls so actives and standbys
      * are evenly distributed
      */
-    static Map<String, List<TaskId>> assignStatefulTasksToThreads(final Collection<TaskId> tasksToAssign,
-                                                                  final SortedSet<String> consumers,
-                                                                  final ClientState state,
-                                                                  final Map<String, Integer> threadLoad) {
+    static Map<String, List<TaskId>> assignTasksToThreads(final Collection<TaskId> tasksToAssign,
+                                                          final boolean isStateful,
+                                                          final SortedSet<String> consumers,
+                                                          final ClientState state,
+                                                          final Map<String, Integer> threadLoad) {
         final Map<String, List<TaskId>> assignment = new HashMap<>();
         for (final String consumer : consumers) {
             assignment.put(consumer, new ArrayList<>());
@@ -1071,19 +1075,21 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, String> unassignedTaskToPreviousOwner = new TreeMap<>();
 
         if (!unassignedTasks.isEmpty()) {
-            // First assign tasks to previous owner, up to the min expected tasks/thread
+            // First assign tasks to previous owner, up to the min expected tasks/thread if these are stateful
             for (final String consumer : consumers) {
                 final List<TaskId> threadAssignment = assignment.get(consumer);
                 // The number of tasks we have to assign here to hit minTasksPerThread
                 final int tasksTargetCount = minTasksPerThread - threadLoad.getOrDefault(consumer, 0);
 
-                for (final TaskId task : state.prevTasksByLag(consumer)) {
-                    if (unassignedTasks.contains(task)) {
-                        if (threadAssignment.size() < tasksTargetCount) {
-                            threadAssignment.add(task);
-                            unassignedTasks.remove(task);
-                        } else {
-                            unassignedTaskToPreviousOwner.put(task, consumer);
+                if (isStateful) {
+                    for (final TaskId task : state.prevTasksByLag(consumer)) {
+                        if (unassignedTasks.contains(task)) {
+                            if (threadAssignment.size() < tasksTargetCount) {
+                                threadAssignment.add(task);
+                                unassignedTasks.remove(task);
+                            } else {
+                                unassignedTaskToPreviousOwner.put(task, consumer);
+                            }
                         }
                     }
                 }
@@ -1146,57 +1152,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final String consumer = taskEntry.getKey();
             final int totalCount = threadLoad.getOrDefault(consumer, 0) + taskEntry.getValue().size();
             threadLoad.put(consumer, totalCount);
-        }
-
-        return assignment;
-    }
-
-    static Map<String, List<TaskId>> assignStatelessTasksToThreads(final Collection<TaskId> statelessTasksToAssign,
-                                                                  final SortedSet<String> consumers,
-                                                                  final Map<String, Integer> threadLoad) {
-        final List<TaskId> tasksToAssign = new ArrayList<>(statelessTasksToAssign);
-        Collections.sort(tasksToAssign);
-        final Map<String, List<TaskId>> assignment = new HashMap<>();
-        for (final String consumer : consumers) {
-            assignment.put(consumer, new ArrayList<>());
-        }
-
-        int maxThreadLoad = 0;
-        for (final int load : threadLoad.values()) {
-            maxThreadLoad = Integer.max(maxThreadLoad, load);
-        }
-
-        final Queue<String> consumersToFill = new LinkedList<>();
-
-        for (final String consumer : consumers) {
-            if (threadLoad.getOrDefault(consumer, 0) < maxThreadLoad) {
-                consumersToFill.offer(consumer);
-            }
-        }
-
-        final Iterator<TaskId> unassignedStatelessTasksIter = tasksToAssign.iterator();
-
-        // There must be at least one consumer still at min capacity while all the others are at min
-        // capacity + 1, so start distributing stateless tasks to get all consumers back to the same count
-        while (unassignedStatelessTasksIter.hasNext()) {
-            final String consumer = consumersToFill.poll();
-            if (consumer != null) {
-                final TaskId task = unassignedStatelessTasksIter.next();
-                unassignedStatelessTasksIter.remove();
-                assignment.get(consumer).add(task);
-            } else {
-                break;
-            }
-        }
-
-        // Now just distribute tasks while circling through all the consumers
-        consumersToFill.addAll(consumers);
-
-        while (unassignedStatelessTasksIter.hasNext()) {
-            final TaskId task = unassignedStatelessTasksIter.next();
-            final String consumer = consumersToFill.poll();
-            assignment.get(consumer).add(task);
-            consumersToFill.offer(consumer);
         }
 
         return assignment;
