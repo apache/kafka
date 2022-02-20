@@ -1079,8 +1079,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
                 for (final TaskId task : state.prevTasksByLag(consumer)) {
                     if (unassignedTasks.contains(task)) {
-                        final int threadTaskCount = threadAssignment.size();
-                        if (threadTaskCount < tasksTargetCount) {
+                        if (threadAssignment.size() < tasksTargetCount) {
                             threadAssignment.add(task);
                             unassignedTasks.remove(task);
                         } else {
@@ -1089,8 +1088,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     }
                 }
 
-                final int threadTaskCount = threadAssignment.size();
-                if (threadTaskCount < tasksTargetCount) {
+                if (threadAssignment.size() < tasksTargetCount) {
                     consumersToFill.offer(consumer);
                 }
             }
