@@ -76,7 +76,7 @@ import java.util.stream.Collectors;
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
-    private static final String UNDEFINED_VERSION = "undefined";
+    public static final String UNDEFINED_VERSION = "undefined";
 
     private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final ConcurrentMap<String, String> aliases;
@@ -254,7 +254,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         } catch (IOException e) {
             log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
         } catch (ReflectiveOperationException e) {
-            log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
+            log.error("Could not instantiate plugins in: {}. Ignoring.", path, e);
         }
     }
 
@@ -419,7 +419,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
     }
 
-    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
+    public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         // Temporary workaround until all the plugins are versioned.
         return Connector.class.isAssignableFrom(pluginKlass) ?
             versionFor(pluginKlass.getDeclaredConstructor().newInstance()) : UNDEFINED_VERSION;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -155,6 +156,10 @@ public class Plugins {
         return delegatingLoader.converters();
     }
 
+    public Set<PluginDesc<HeaderConverter>> headerConverters() {
+        return delegatingLoader.headerConverters();
+    }
+
     public Set<PluginDesc<Transformation<?>>> transformations() {
         return delegatingLoader.transformations();
     }
@@ -165,6 +170,44 @@ public class Plugins {
 
     public Connector newConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
+        return newPlugin(klass);
+    }
+
+    public Converter newConverter(String className) throws ClassNotFoundException {
+        Class<? extends Converter> klass = pluginClass(
+                delegatingLoader,
+                className,
+                Converter.class
+        );
+        return newPlugin(klass);
+    }
+
+    public HeaderConverter newHeaderConverter(String className) throws ClassNotFoundException {
+        Class<? extends HeaderConverter> klass = pluginClass(
+                delegatingLoader,
+                className,
+                HeaderConverter.class
+        );
+        return newPlugin(klass);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public Predicate newPredicate(String className) throws ClassNotFoundException {
+        Class<? extends Predicate> klass = pluginClass(
+                delegatingLoader,
+                className,
+                Predicate.class
+        );
+        return newPlugin(klass);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <R extends ConnectRecord<R>> Transformation<R> newTransformation(String className) throws ClassNotFoundException {
+        Class<? extends Transformation> klass = pluginClass(
+                delegatingLoader,
+                className,
+                Transformation.class
+        );
         return newPlugin(klass);
     }
 

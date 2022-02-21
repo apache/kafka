@@ -29,6 +29,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -613,7 +614,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+    public static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
         return convertConfigKey(configKey, "");
     }
 
@@ -748,6 +749,40 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
         return keys;
+    }
+
+    @Override
+    public List<ConfigKeyInfo> connectorPluginConfig(PluginType pluginType, String pluginName) {
+        List<ConfigKeyInfo> results = new ArrayList<>();
+        ConfigDef configDefs;
+        try {
+            switch (pluginType) {
+                case SINK:
+                case SOURCE:
+                    configDefs = plugins().newConnector(pluginName).config();
+                    break;
+                case CONVERTER:
+                    configDefs = plugins().newConverter(pluginName).config();
+                    break;
+                case HEADER_CONVERTER:
+                    configDefs = plugins().newHeaderConverter(pluginName).config();
+                    break;
+                case TRANSFORMATION:
+                    configDefs = plugins().newTransformation(pluginName).config();
+                    break;
+                case PREDICATE:
+                    configDefs = plugins().newPredicate(pluginName).config();
+                    break;
+                default:
+                    throw new BadRequestException("Invalid plugin type " + pluginType + ". Valid types are sink, source, converter, header_converter, transformation, predicate.");
+            }
+        } catch (ClassNotFoundException cnfe) {
+            throw new BadRequestException("Unknown plugin " + pluginName + ".");
+        }
+        for (ConfigDef.ConfigKey configKey : configDefs.configKeys().values()) {
+            results.add(AbstractHerder.convertConfigKey(configKey));
+        }
+        return results;
     }
 
 }
