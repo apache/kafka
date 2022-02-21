@@ -1049,7 +1049,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * balance. The tasks are balanced across threads. Stateful tasks without previous owners will be interleaved by
      * group id to spread subtopologies across threads and further balance the workload.
      * Stateless tasks are simply spread across threads without taking into account previous ownership.
-     * threadLoad is a map that keeps track of task load per thread across multiple calls so actives and standbys
+     * threadLoad is a map that keeps track of task load per thread across multiple calls so active and standby
      * tasks are evenly distributed
      */
     static Map<String, List<TaskId>> assignTasksToThreads(final Collection<TaskId> tasksToAssign,
